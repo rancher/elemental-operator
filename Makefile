@@ -2,14 +2,14 @@ GIT_COMMIT?=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
-REPO?=quay.io/costoolkit/ros-operator-ci
+REPO?=quay.io/costoolkit/rancheros-operator-ci
 HELM_VERSION?=0.0.0-dev
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=`find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print`
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o build/ros-operator
+	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o build/rancheros-operator
 
 .PHONY: build-docker
 build-docker:

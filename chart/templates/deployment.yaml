@@ -32,13 +32,13 @@ spec:
         name: rancheros-operator
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
         command:
-        - /usr/sbin/ros-operator
+        - /usr/sbin/rancheros-operator
       {{- if .Values.hostbin }}
       volumes:
         - name: sbin
           hostPath:
             type: File
-            path: /usr/sbin/ros-operator
+            path: /usr/sbin/rancheros-operator
       {{- end }}
       serviceAccountName: rancheros-operator
       {{- with .Values.tolerations }}
