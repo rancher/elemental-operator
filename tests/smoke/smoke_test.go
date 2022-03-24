@@ -1,23 +1,13 @@
 package smoke_test
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/rancher-sandbox/ros-operator/tests/sut"
+	"github.com/rancher-sandbox/rancheros-operator/tests/sut"
 )
-
-func systemdUnitIsStarted(s string, st *sut.SUT) {
-	out, _ := st.Command(fmt.Sprintf("systemctl status %s", s))
-
-	Expect(out).To(And(
-		ContainSubstring(fmt.Sprintf("%s.service; enabled", s)),
-		ContainSubstring("status=0/SUCCESS"),
-	))
-}
 
 var _ = Describe("os2 Smoke tests", func() {
 	var s *sut.SUT
@@ -40,7 +30,6 @@ var _ = Describe("os2 Smoke tests", func() {
 
 			s.GatherAllLogs(
 				[]string{
-					"ros-installer",
 					"cos-setup-boot",
 					"cos-setup-network",
 					"rancherd",
