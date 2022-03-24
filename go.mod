@@ -35,6 +35,7 @@ require (
 	github.com/google/certificate-transparency-go v1.1.2
 	github.com/google/go-attestation v0.4.3
 	github.com/gorilla/websocket v1.5.0
+	github.com/onsi/ginkgo/v2 v2.1.3 // indirect
 	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7

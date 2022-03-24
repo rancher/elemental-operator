@@ -33,8 +33,8 @@ chart:
 
 .PHONY: test_deps
 test_deps:
-	go get github.com/onsi/ginkgo/v2/ginkgo
-	go get github.com/onsi/gomega/...
+	go install github.com/onsi/ginkgo/v2/ginkgo
+	go install github.com/onsi/gomega/...
 
 .PHONY: test_vm_up
 test_vm_up:
@@ -49,4 +49,5 @@ integration-tests: test_vm_up
 	cd $(ROOT_DIR)/tests && ginkgo -r -v ./smoke
 
 .PHONY: unit-tests
-unit-tests:
+unit-tests: test_deps
+	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
