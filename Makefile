@@ -5,6 +5,7 @@ TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
 REPO?=quay.io/costoolkit/rancheros-operator-ci
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=$(shell find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print)
+CHART_VERSION?=$(subst v,,$(GIT_TAG))
 
 .PHONY: build
 build:
@@ -26,7 +27,7 @@ chart:
 	cp -rf $(ROOT_DIR)/chart $(ROOT_DIR)/build/chart
 	sed -i -e 's/tag:.*/tag: '${TAG}'/' $(ROOT_DIR)/build/chart/values.yaml
 	sed -i -e 's|repository:.*|repository: '${REPO}'|' $(ROOT_DIR)/build/chart/values.yaml
-	helm package --version ${GIT_TAG} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
+	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
 	rm -Rf $(ROOT_DIR)/build/chart
 
 .PHONY: test_deps
