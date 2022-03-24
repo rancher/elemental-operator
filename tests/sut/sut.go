@@ -1,11 +1,9 @@
 package sut
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,72 +11,30 @@ import (
 
 	"github.com/bramvdbogaerde/go-scp"
 
-	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
-	ssh "golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh"
 )
-
-const (
-	grubSwapOnce = "grub2-editenv /oem/grubenv set next_entry=%s"
-	grubSwap     = "grub2-editenv /oem/grubenv set saved_entry=%s"
-
-	Passive     = 0
-	Active      = iota
-	Recovery    = iota
-	LiveCD      = iota
-	UnknownBoot = iota
-
-	TimeoutRawDiskTest = 600 // Timeout to connect for recovery_raw_disk_test
-
-	Ext2 = "ext2"
-	Ext3 = "ext3"
-	Ext4 = "ext4"
-)
-
-// DiskLayout is the struct that contains the disk output from lsblk
-type DiskLayout struct {
-	BlockDevices []PartitionEntry `json:"blockdevices"`
-}
-
-// PartitionEntry represents a partition entry
-type PartitionEntry struct {
-	Label  string `json:"label,omitempty"`
-	Size   int    `json:"size,omitempty"`
-	FsType string `json:"fstype,omitempty"`
-}
-
-func (d DiskLayout) GetPartition(label string) (PartitionEntry, error) {
-	for _, device := range d.BlockDevices {
-		if device.Label == label {
-			return device, nil
-		}
-	}
-	return PartitionEntry{}, nil
-}
 
 type SUT struct {
-	Host        string
-	Username    string
-	Password    string
-	Timeout     int
-	GreenRepo   string
-	TestVersion string
-	CDLocation  string
+	Host     string
+	Username string
+	Password string
+	Timeout  int
 }
 
 func NewSUT() *SUT {
 
-	user := os.Getenv("COS_USER")
+	user := os.Getenv("TEST_USER")
 	if user == "" {
-		user = "root"
+		user = "vagrant"
 	}
-	pass := os.Getenv("COS_PASS")
+	pass := os.Getenv("TEST_PASS")
 	if pass == "" {
-		pass = "cos"
+		pass = "vagrant"
 	}
 
-	host := os.Getenv("COS_HOST")
+	host := os.Getenv("TEST_HOST")
 	if host == "" {
 		host = "127.0.0.1:2222"
 	}
@@ -91,116 +47,11 @@ func NewSUT() *SUT {
 	}
 
 	return &SUT{
-		Host:        host,
-		Username:    user,
-		Password:    pass,
-		Timeout:     timeout,
-		GreenRepo:   "quay.io/costoolkit/releases-green",
-		TestVersion: "0.7.11-5",
-		CDLocation:  "",
+		Host:     host,
+		Username: user,
+		Password: pass,
+		Timeout:  timeout,
 	}
-}
-
-func (s *SUT) ChangeBoot(b int) error {
-
-	var bootEntry string
-
-	switch b {
-	case Active:
-		bootEntry = "cos"
-	case Passive:
-		bootEntry = "fallback"
-	case Recovery:
-		bootEntry = "recovery"
-	}
-
-	_, err := s.command(fmt.Sprintf(grubSwap, bootEntry), false)
-	Expect(err).ToNot(HaveOccurred())
-
-	return nil
-}
-
-func (s *SUT) ChangeBootOnce(b int) error {
-
-	var bootEntry string
-
-	switch b {
-	case Active:
-		bootEntry = "cos"
-	case Passive:
-		bootEntry = "fallback"
-	case Recovery:
-		bootEntry = "recovery"
-	}
-
-	_, err := s.command(fmt.Sprintf(grubSwapOnce, bootEntry), false)
-	Expect(err).ToNot(HaveOccurred())
-
-	return nil
-}
-
-// Reset runs reboots cOS into Recovery and runs cos-reset.
-// It will boot back the system from the Active partition afterwards
-func (s *SUT) Reset() {
-	if s.BootFrom() != Recovery {
-		By("Reboot to recovery before reset")
-		err := s.ChangeBootOnce(Recovery)
-		Expect(err).ToNot(HaveOccurred())
-		s.Reboot()
-		Expect(s.BootFrom()).To(Equal(Recovery))
-	}
-
-	By("Running cos-reset")
-	out, err := s.command("cos-reset", false)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(out).Should(ContainSubstring("Installing"))
-
-	By("Reboot to active after cos-reset")
-	s.Reboot()
-	ExpectWithOffset(1, s.BootFrom()).To(Equal(Active))
-}
-
-// BootFrom returns the booting partition of the SUT
-func (s *SUT) BootFrom() int {
-	out, err := s.command("cat /proc/cmdline", false)
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-
-	switch {
-	case strings.Contains(out, "COS_ACTIVE"):
-		return Active
-	case strings.Contains(out, "COS_PASSIVE"):
-		return Passive
-	case strings.Contains(out, "COS_RECOVERY"), strings.Contains(out, "COS_SYSTEM"):
-		return Recovery
-	case strings.Contains(out, "live:CDLABEL"):
-		return LiveCD
-	default:
-		return UnknownBoot
-	}
-}
-
-// SquashFSRecovery returns true if we are in recovery mode and booting from squashfs
-func (s *SUT) SquashFSRecovery() bool {
-	out, err := s.command("cat /proc/cmdline", false)
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-
-	return strings.Contains(out, "rd.live.squashimg")
-}
-
-func (s *SUT) GetOSRelease(ss string) string {
-	out, err := s.Command(fmt.Sprintf("source /etc/os-release && echo $%s", ss))
-	Expect(err).ToNot(HaveOccurred())
-	Expect(out).ToNot(Equal(""))
-
-	return strings.TrimSpace(out)
-}
-
-func (s *SUT) GetArch() string {
-	out, err := s.Command("uname -p")
-	Expect(err).ToNot(HaveOccurred())
-	Expect(out).ToNot(Equal(""))
-
-	return strings.TrimSpace(out)
 }
 
 func (s *SUT) EventuallyConnects(t ...int) {
@@ -214,7 +65,7 @@ func (s *SUT) EventuallyConnects(t ...int) {
 			return nil
 		}
 		return err
-	}, time.Duration(time.Duration(dur)*time.Second), time.Duration(5*time.Second)).ShouldNot(HaveOccurred())
+	}, time.Duration(dur)*time.Second, 5*time.Second).ShouldNot(HaveOccurred())
 }
 
 // Command sends a command to the SUIT and waits for reply
@@ -240,14 +91,6 @@ func (s *SUT) command(cmd string, timeout bool) (string, error) {
 	}
 
 	return string(out), err
-}
-
-// Reboot reboots the system under test
-func (s *SUT) Reboot(t ...int) {
-	By("Reboot")
-	s.command("reboot", true)
-	time.Sleep(10 * time.Second)
-	s.EventuallyConnects(t...)
 }
 
 func (s *SUT) clientConfig() *ssh.ClientConfig {
@@ -391,52 +234,6 @@ func (s SUT) GatherLog(logPath string) {
 
 }
 
-// EmptyDisk will try to trash the disk given so on reboot the disk is empty and we are forced to use the cd to boot
-// used mainly for installer testing booting from iso
-func (s *SUT) EmptyDisk(disk string) {
-	By(fmt.Sprintf("Trashing %s to restore VM to a blank state", disk))
-	_, _ = s.Command(fmt.Sprintf("wipefs -af %s*", disk))
-	_, _ = s.Command("sync")
-	_, _ = s.Command("sleep 5")
-}
-
-// SetCOSCDLocation gets the location of the iso attached to the vbox vm and stores it for later remount
-func (s *SUT) SetCOSCDLocation() {
-	By("Store CD location")
-	out, err := exec.Command("bash", "-c", "VBoxManage list dvds|grep Location|cut -d ':' -f 2|xargs").CombinedOutput()
-	Expect(err).To(BeNil())
-	s.CDLocation = strings.TrimSpace(string(out))
-}
-
-// EjectCOSCD force removes the DVD so we can boot from disk directly on EFI VMs
-func (s *SUT) EjectCOSCD() {
-	// first store the cd location
-	s.SetCOSCDLocation()
-	By("Ejecting the CD")
-	_, err := exec.Command("bash", "-c", "VBoxManage storageattach 'test' --storagectl 'sata controller' --port 1 --device 0 --type dvddrive --medium emptydrive --forceunmount").CombinedOutput()
-	Expect(err).To(BeNil())
-}
-
-// RestoreCOSCD reattaches the cOS iso to the VM
-func (s *SUT) RestoreCOSCD() {
-	By("Restoring the CD")
-	out, err := exec.Command("bash", "-c", fmt.Sprintf("VBoxManage storageattach 'test' --storagectl 'sata controller' --port 1 --device 0 --type dvddrive --medium %s --forceunmount", s.CDLocation)).CombinedOutput()
-	fmt.Printf(string(out))
-	Expect(err).To(BeNil())
-}
-
-func (s SUT) GetDiskLayout(disk string) DiskLayout {
-	// -b size in bytes
-	// -n no headings
-	// -J json output
-	diskLayout := DiskLayout{}
-	out, err := s.Command(fmt.Sprintf("lsblk %s -o LABEL,SIZE,FSTYPE -b -n -J", disk))
-	Expect(err).To(BeNil())
-	err = json.Unmarshal([]byte(strings.TrimSpace(out)), &diskLayout)
-	Expect(err).To(BeNil())
-	return diskLayout
-}
-
 // DialWithDeadline Dials SSH with a deadline to avoid Read timeouts
 func DialWithDeadline(network string, addr string, config *ssh.ClientConfig, timeout bool) (*ssh.Client, error) {
 	conn, err := net.DialTimeout(network, addr, config.Timeout)
@@ -474,4 +271,11 @@ func (s *SUT) WriteInlineFile(content, path string) {
 ` + content + `
 EOF`)
 	Expect(err).ToNot(HaveOccurred())
+}
+
+func (s *SUT) HasRunningPodByAppLabel(namespace string, applabel string) bool {
+	// Get out and use kubectl to get the pod in the proper namespace
+	cmd := strings.Join([]string{"k3s", "kubectl", "get", "pod", "-n", namespace, ""}, " ")
+	s.Command(cmd)
+	return true
 }

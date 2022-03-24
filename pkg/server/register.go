@@ -26,7 +26,7 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "github.com/rancher-sandbox/os2/pkg/apis/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"

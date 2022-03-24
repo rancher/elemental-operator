@@ -19,7 +19,7 @@ limitations under the License.
 package provisioning
 
 import (
-	v1 "github.com/rancher-sandbox/os2/pkg/generated/controllers/provisioning.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/provisioning.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
 )
 

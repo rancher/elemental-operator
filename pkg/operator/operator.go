@@ -19,12 +19,12 @@ package operator
 import (
 	"context"
 
-	v1 "github.com/rancher-sandbox/os2/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/os2/pkg/clients"
-	"github.com/rancher-sandbox/os2/pkg/controllers/inventory"
-	"github.com/rancher-sandbox/os2/pkg/controllers/managedos"
-	"github.com/rancher-sandbox/os2/pkg/controllers/registration"
-	"github.com/rancher-sandbox/os2/pkg/server"
+	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/inventory"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedos"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/registration"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/sirupsen/logrus"

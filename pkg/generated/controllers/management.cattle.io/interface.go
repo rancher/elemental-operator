@@ -19,7 +19,7 @@ limitations under the License.
 package management
 
 import (
-	v3 "github.com/rancher-sandbox/os2/pkg/generated/controllers/management.cattle.io/v3"
+	v3 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/lasso/pkg/controller"
 )
 

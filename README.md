@@ -1,58 +1,168 @@
-# Architecture
+# Operator
 
-RancherOS v2 is an immutable Linux distribution built to run Rancher and
-it's corresponding Kubernetes distributions [RKE2](https://rke2.io) 
-and [k3s](https://k3s.io). It is built using the [cOS-toolkit](https://rancher-sandbox.github.io/cos-toolkit-docs/docs/)
-and based on openSUSE. Initial node configurations is done using a
-cloud-init style approach and all further maintenance is done using
-Kubernetes operators.
+The RancherOS operator is responsible for managing the RancherOS versions
+and maintaining a machine inventory to assist with edge or baremetal installations.
 
-## Use Cases
+## Installation
 
-RancherOS is intended to be ran as the operating system beneath a Rancher Multi-Cluster 
-Management server or as a node in a Kubernetes cluster managed by Rancher. RancherOS
-also allows you to build stand alone Kubernetes clusters that run an embedded
-and smaller version of Rancher to manage the local cluster. A key attribute of RancherOS
-is that it is managed by Rancher and thus Rancher will exist either locally in the cluster
-or centrally with Rancher Multi-Cluster Manager.
+The RancherOS operator can be added to a cluster running Rancher Multi Cluster
+Management server.  It is a helm chart and can be installed as follows:
 
-## OCI Image based
-
-RancherOS v2 is an image based distribution with an A/B style update mechanism. One first runs
-on a read-only image A and to do an upgrade pulls a new read only image
-B and then reboots the system to run on B. What is unique about
-RancherOS v2 is that the runtime images come from OCI Images. Not an
-OCI Image containing special artifacts, but an actual Docker runnable
-image that is built using standard Docker build processes. RancherOS is
-built using normal `docker build` and if you wish to customize the OS
-image all you need to do is create a new `Dockerfile`.
-
-## rancherd
-
-RancherOS v2 includes no container runtime, Kubernetes distribution,
-or Rancher itself. All of these assests are dynamically pulled at runtime. All that
-is included in RancherOS is [rancherd](https://github.com/rancher/rancherd) which
-is responsible for bootstrapping RKE2/k3s and Rancher from an OCI registry. This means
-an update to containerd, k3s, RKE2, or Rancher does not require an OS upgrade
-or node reboot.
-
-## cloud-init
-
-RancherOS v2 is initially configured using a simple version of `cloud-init`.
-It is not expected that one will need to do a lot of customization to RancherOS
-as the core OS's sole purpose is to run Rancher and Kubernetes and not serve as
-a generic Linux distribution.
-
-## RancherOS Operator
-
-RancherOS v2 includes an operator that is responsible for managing OS upgrades
-and managing a secure device inventory to assist with zero touch provisioning.
+```bash
+helm -n cattle-rancheros-operator-system install --create-namespace rancheros-operator https://github.com/rancher/os2/releases/download/v0.1.0-alpha12/rancheros-operator-0.1.0-alpha12-amd64.tgz
+```
 
 
-## openSUSE Leap
+## Managing Upgrades
 
-RancherOS v2 is based off of openSUSE Leap.  There is no specific dependency on
-openSUSE beyond that RancherOS assumes the underlying distribution is
-based on systemd. We choose openSUSE for obvious reasons, but beyond
-that openSUSE Leap provides a stable layer to build upon that is well
-tested and has paths to commercial support, if one chooses.
+The RancherOS operator will manage the upgrade of the local cluster where the operator
+is running and also any downstream cluster managed by Rancher Multi-Cluster
+Manager.
+
+### ManagedOSImage
+
+The ManagedOSImage kind used to define what version of RancherOS should be
+running on each node. The simplest example of this type would be to change
+the version of the local nodes.
+
+```bash
+kubectl edit -n fleet-local default-os-image
+```
+```yaml
+apiVersion: rancheros.cattle.io/v1
+kind: ManagedOSImage
+metadata:
+  name: default-os-image
+  namespace: fleet-local
+spec:
+  osImage: rancher/os2:v0.0.0
+```
+
+
+#### Reference
+
+Below is reference of the full type
+
+```yaml
+apiVersion: rancheros.cattle.io/v1
+kind: ManagedOSImage
+metadata:
+  name: arbitrary
+  
+  # There are two special namespaces to consider.  If you wish to manage
+  # nodes on the local cluster this namespace must be `fleet-local`. If
+  # you wish to manage nodes in Rancher MCM managed clusters then the
+  # namespace must match the namespace of the clusters.provisioning.cattle.io resource
+  # which is typically fleet-default.
+  namespace: fleet-local
+spec:
+  # The image name to pull for the OS
+  osImage: rancher/os2:v0.0.0
+  
+  # The selector for which nodes will be select.  If null then all nodes
+  # will be selected
+  nodeSelector:
+    matchLabels: {}
+    
+  # How many nodes in parallel to update.  If empty the default is 1 and
+  # if set to 0 the rollout will be paused
+  concurrency: 2
+    
+  # Arbitrary action to perform on the node prior to upgrade
+  prepare:
+    image: ubuntu
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+    env:
+    - name: TEST_ENV
+      value: testValue
+      
+  # Parameters to control the drain behavior.  If null no draining will happen
+  # on the node.
+  drain:
+    # Refer to kubectl drain --help for the definition of these values
+    timeout: 5m
+    gracePeriod: 5m
+    deleteLocalData: false
+    ignoreDaemonSets: true
+    force: false
+    disableEviction: false
+    skipWaitForDeleteTimeout: 5
+    
+  # Which clusters to target
+  # This is used if you are running Rancher MCM and managing
+  # multiple clusters.  The syntax of this field matches the
+  # Fleet targets and is described at https://fleet.rancher.io/gitrepo-targets/
+  targets: []
+
+  # Overrides the default container created for running the upgrade with a custom one
+  # This is optional and used only if specific upgrading mechanisms needs to be applied
+  # in place of the default behavior.
+  # The image used here overrides ones specified in osImage, depending on the upgrade strategy.
+  upgradeContainer:
+    image: ubuntu
+    command: ["/bin/sh"]
+    args: ["-c", "true"]
+    env:
+    - name: TEST_ENV
+      value: testValue
+```
+
+## Inventory Management
+
+The RancherOS operator can hold an inventory of machines and
+the mapping of the machine to it's configuration and assigned cluster.
+
+### MachineInventory
+
+#### Reference
+
+```yaml
+apiVersion: rancheros.cattle.io/v1
+kind: MachineInventory
+metadata:
+  name: machine-a
+  # The namespace must match the namespace of the cluster
+  # assigned to the clusters.provisioning.cattle.io resource
+  namespace: fleet-default
+spec:
+  # The cluster that this machine is assigned to
+  clusterName: some-cluster
+  # The hash of the TPM EK public key. This is used if you are
+  # using TPM2 to identifiy nodes.  You can obtain the TPM by
+  # running `rancherd get-tpm-hash` on the node. Or nodes can
+  # report their TPM hash by using the MachineRegister
+  tpm: d68795c6192af9922692f050b...
+  # Generic SMBIOS fields that are typically populated with
+  # the MachineRegister approach
+  smbios: {}
+  # A reference to a secret that contains a shared secret value to
+  # identify a node.  The secret must be of type "rancheros.cattle.io/token"
+  # and have on field "token" which is the value of the shared secret
+  machineTokenSecretName: some-secret-name
+  # Arbitrary cloud config that will be added to the machines cloud config
+  # during the rancherd bootstrap phase.  The one important field that should
+  # be set is the role.
+  config:
+    role: server
+```
+
+### MachineRegistration
+
+#### Reference
+
+```yaml
+kind: MachineRegistration
+metadata:
+  name: machine-registration
+  # The namespace must match the namespace of the cluster
+  # assigned to the clusters.provisioning.cattle.io resource
+  namespace: fleet-default
+spec:
+  # Labels to be added to the created MachineInventory object
+  machineInventoryLabels: {}
+  # Annotations to be added to the created MachineInventory object
+  machineInventoryAnnotations: {}
+  # The cloud config that will be used to provision the node
+  cloudConfig: {}
+```

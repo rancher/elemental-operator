@@ -1,10 +1,1 @@
-/.dapper
-/.cache
-/bin
-/dist
-/build
-*.swp
-.idea
-/tests/build
-/tests/.vagrant
-/tests/build-box
+build/

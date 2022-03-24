@@ -29,7 +29,7 @@ import (
 func main() {
 	os.Unsetenv("GOPATH")
 	controllergen.Run(args.Options{
-		OutputPackage: "github.com/rancher-sandbox/os2/pkg/generated",
+		OutputPackage: "github.com/rancher-sandbox/rancheros-operator/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
 			"provisioning.cattle.io": {

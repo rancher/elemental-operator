@@ -1,123 +1,52 @@
-.DEFAULT_GOAL := package
-REPO?=quay.io/costoolkit/os2
-REPO_ROS_OPERATOR?=quay.io/costoolkit/ros-operator
-TAG?=dev
-IMAGE=${REPO}:${TAG}
-ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-
-.dapper:
-	@echo Downloading dapper
-	@curl -sL https://releases.rancher.com/dapper/latest/dapper-$$(uname -s)-$$(uname -m) > .dapper.tmp
-	@@chmod +x .dapper.tmp
-	@./.dapper.tmp -v
-	@mv .dapper.tmp .dapper
-
-.PHONY: ci
-ci: .dapper
-	./.dapper ci
-
-.PHONY: package
-package: .dapper
-	./.dapper package
-
-.PHONY: clean
-clean:
-	rm -rf build dist
-
-.PHONY: build-framework
-build-framework:
-	docker build \
-		--build-arg CACHEBUST=${CACHEBUST} \
-		--build-arg IMAGE_TAG=${TAG} \
-		--build-arg IMAGE_REPO=${REPO}-framework \
-		--target framework \
-		-t ${REPO}-framework:${TAG} .
-
-.PHONY: build-ros-operator
-build-ros-operator:
-	docker build \
-		--build-arg CACHEBUST=${CACHEBUST} \
-		--build-arg IMAGE_TAG=${TAG} \
-		--build-arg IMAGE_REPO=${REPO_ROS_OPERATOR} \
-		--target ros-operator \
-		-t ${REPO_ROS_OPERATOR}:${TAG} .
+GIT_COMMIT?=$(shell git rev-parse HEAD)
+GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
+GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
+TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
+REPO?=quay.io/costoolkit/ros-operator-ci
+HELM_VERSION?=0.0.0-dev
+export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+ROS_CHART?=`find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print`
 
 .PHONY: build
 build:
-	docker build \
-		--build-arg CACHEBUST=${CACHEBUST} \
-		--build-arg IMAGE_TAG=${TAG} \
-		--build-arg IMAGE_REPO=${REPO} \
-		--target $$([ ${TAG} = dev ] && echo os || echo default) \
-		-t ${IMAGE} .
+	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s" -o build/ros-operator
 
-.PHONY: push
-push:
-	docker push ${IMAGE}
+.PHONY: build-docker
+build-docker:
+	DOCKER_BUILDKIT=1 docker build \
+		--target ros-operator \
+		-t ${REPO}:${TAG} .
 
-.PHONY: push
-push-framework: build-framework
-	docker push ${REPO}-framework:${TAG}
+.PHONY: build-docker-push
+build-docker-push: build-docker
+	docker push ${REPO}:${TAG}
 
-.PHONY: push-ros-operator
-push-ros-operator: build-ros-operator
-	docker push ${REPO_ROS_OPERATOR}:${TAG}
+.PHONY: chart
+chart:
+	mkdir -p  $(ROOT_DIR)/build
+	cp -rf $(ROOT_DIR)/chart $(ROOT_DIR)/build/chart
+	sed -i -e 's/version:.*/version: '${HELM_VERSION}'/' -e 's/appVersion:.*/appVersion: '${TAG}'/' $(ROOT_DIR)/build/chart/Chart.yaml
+	sed -i -e 's/tag:.*/tag: '${TAG}'/' $(ROOT_DIR)/build/chart/values.yaml
+	sed -i -e 's|repository:.*|repository: '${REPO}'|' $(ROOT_DIR)/build/chart/values.yaml
+	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
+	rm -Rf $(ROOT_DIR)/build/chart
 
-.PHONY: iso
-iso:
-	./ros-image-build ${IMAGE} iso
-	@echo "INFO: ISO available at build/output.iso"
-
-.PHONY: qcow
-qcow:
-	./ros-image-build ${IMAGE} qcow
-	@echo "INFO: QCOW image available at build/output.qcow.gz"
-
-.PHONY: ami-%
-ami-%:
-	AWS_DEFAULT_REGION=$* ./ros-image-build ${IMAGE} ami
-
-.PHONY: ami
-ami:
-	./ros-image-build ${IMAGE} ami
-
-.PHONY: run
-run:
-	./scripts/run
-
-.PHONY: run
-pxe:
-	./scripts/run pxe
-
-serve-docs: mkdocs
-	docker run -p 8000:8000 --rm -it -v $${PWD}:/docs mkdocs serve -a 0.0.0.0:8000
-
-mkdocs:
-	docker build -t mkdocs -f Dockerfile.docs .
-
-all-amis: \
-	ami-us-west-1 \
-	ami-us-west-2
-	#ami-ap-east-1 \
-	#ami-ap-northeast-1 \
-	#ami-ap-northeast-2 \
-	#ami-ap-northeast-3 \
-	#ami-ap-southeast-1 \
-	#ami-ap-southeast-2 \
-	#ami-ca-central-1 \
-	#ami-eu-central-1 \
-	#ami-eu-south-1 \
-	#ami-eu-west-1 \
-	#ami-eu-west-2 \
-	#ami-eu-west-3 \
-	#ami-me-south-1 \
-	#ami-sa-east-1 \
-	#ami-us-east-1 \
-	#ami-us-east-2 \
-
-deps: 
+.PHONY: test_deps
+test_deps:
 	go get github.com/onsi/ginkgo/v2/ginkgo
 	go get github.com/onsi/gomega/...
 
-integration-tests: 
-	$(MAKE) -C tests/ integration-tests
+.PHONY: test_vm_up
+test_vm_up:
+	cd $(ROOT_DIR)/tests && vagrant up
+
+.PHONY: test_vm_down
+test_vm_down:
+	cd $(ROOT_DIR)/tests && vagrant destroy -f
+
+.PHONY: integration-tests
+integration-tests: test_vm_up
+	cd $(ROOT_DIR)/tests && ginkgo -r -v ./smoke
+
+.PHONY: unit-tests
+unit-tests:
