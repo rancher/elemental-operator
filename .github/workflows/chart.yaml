@@ -1,4 +1,4 @@
-name: Build chart
+name: Build and publish chart
 on:
   pull_request:
   push:
@@ -24,3 +24,22 @@ jobs:
           GHR_COMPRESS: tgz
           GHR_PATH: build/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Helm
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.7.1
+      - name: Build index
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          helm repo index --url https://rancher-sandbox.github.io/rancheros-operator .
+      - name: Remove .gitignore  # so we can add the files under the build dir
+        if: startsWith(github.ref, 'refs/tags/')
+        run: rm .gitignore
+      - name: Add & Commit
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: EndBug/add-and-commit@v9.0.0
+        with:
+          add: '["index.yaml", "build/*"]'
+          push: true
+          new_branch: gh-pages
