@@ -32,21 +32,15 @@ chart:
 
 .PHONY: test_deps
 test_deps:
-	go install github.com/onsi/ginkgo/v2/ginkgo
+	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo
 	go install github.com/onsi/gomega/...
-
-.PHONY: test_vm_up
-test_vm_up:
-	cd $(ROOT_DIR)/tests && vagrant up
-
-.PHONY: test_vm_down
-test_vm_down:
-	cd $(ROOT_DIR)/tests && vagrant destroy -f
-
-.PHONY: integration-tests
-integration-tests: test_vm_up
-	cd $(ROOT_DIR)/tests && ginkgo -r -v ./smoke
 
 .PHONY: unit-tests
 unit-tests: test_deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
+
+e2e-tests:
+	kind delete cluster --name "ros-e2e"
+	kind create cluster --name "ros-e2e"
+	kubectl cluster-info --context kind-ros-e2e
+	cd $(ROOT_DIR)/tests && EXTERNAL_IP=$(shell kubectl get nodes -o json | jq -r '.items[].status.addresses[] | select(.type == "InternalIP").address') ginkgo -r -v ./e2e
