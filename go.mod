@@ -35,9 +35,10 @@ require (
 	github.com/google/certificate-transparency-go v1.1.2
 	github.com/google/go-attestation v0.4.3
 	github.com/gorilla/websocket v1.5.0
-	github.com/onsi/ginkgo/v2 v2.1.3 // indirect
-	github.com/onsi/gomega v1.18.1 // indirect
+	github.com/onsi/ginkgo/v2 v2.1.3
+	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
+	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220329110207-c162ffefbf59
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210927195558-4aaa778d23dd
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
@@ -46,12 +47,10 @@ require (
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20210929162341-5e6e996d9486
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/sirupsen/logrus v1.8.1
-	golang.org/x/oauth2 v0.0.0-20210805134026-6f1e6394065a // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.22.2
 	k8s.io/apimachinery v0.22.2
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/gengo v0.0.0-20201214224949-b6c5ce23f027 // indirect
 	sigs.k8s.io/controller-runtime v0.9.0-beta.0
 )

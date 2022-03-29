@@ -3,7 +3,7 @@ GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
 REPO?=quay.io/costoolkit/rancheros-operator-ci
-ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=$(shell find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 
@@ -32,21 +32,12 @@ chart:
 
 .PHONY: test_deps
 test_deps:
-	go install github.com/onsi/ginkgo/v2/ginkgo
+	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo
 	go install github.com/onsi/gomega/...
-
-.PHONY: test_vm_up
-test_vm_up:
-	cd $(ROOT_DIR)/tests && vagrant up
-
-.PHONY: test_vm_down
-test_vm_down:
-	cd $(ROOT_DIR)/tests && vagrant destroy -f
-
-.PHONY: integration-tests
-integration-tests: test_vm_up
-	cd $(ROOT_DIR)/tests && ginkgo -r -v ./smoke
 
 .PHONY: unit-tests
 unit-tests: test_deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
+
+e2e-tests:
+	$(ROOT_DIR)/scripts/e2e-tests.sh

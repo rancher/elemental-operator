@@ -1,11 +1,10 @@
-name: Integration tests
+name: e2e tests
 on:
   pull_request:
   push:
     branches:
-      - main
 concurrency:
-  group: integration-tests=full-${{ github.head_ref || github.ref }}-${{ github.repository }}
+  group: e2e-tests=full-${{ github.head_ref || github.ref }}-${{ github.repository }}
   cancel-in-progress: true
 jobs:
   push-docker:
@@ -60,20 +59,12 @@ jobs:
         with:
           name: chart
           path: build/*.tgz
-  integration-tests:
-    runs-on: macos-10.15
+  e2e-tests:
+    runs-on: ubuntu-latest
     needs: push-docker
     env:
-      VAGRANT_CPU: 3
-      VAGRANT_MEMORY: 10240
       ROS_CHART: ${{ github.workspace }}/build/${{ needs.push-docker.outputs.chart_name }}
     steps:
-      - name: Cache Vagrant boxes
-        uses: actions/cache@v2
-        with:
-          path: ~/.vagrant.d/boxes
-          key: ${{ runner.os }}-vagrant-${{ hashFiles('Vagrantfile') }}
-          restore-keys: ${{ runner.os }}-vagrant-
       - uses: actions/checkout@v2
       - name: Download chart
         uses: actions/download-artifact@v2
@@ -86,5 +77,9 @@ jobs:
           go-version: '^1.17'
       - name: Deps
         run: make test_deps
-      - name: Integration tests
-        run: make integration-tests
+      - uses: engineerd/setup-kind@v0.5.0
+        with:
+          version: "v0.11.1"
+          skipClusterCreation: "true"
+      - name: e2e tests
+        run: make e2e-tests
