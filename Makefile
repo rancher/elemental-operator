@@ -3,7 +3,7 @@ GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
 REPO?=quay.io/costoolkit/rancheros-operator-ci
-ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=$(shell find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 
@@ -40,7 +40,4 @@ unit-tests: test_deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
 
 e2e-tests:
-	kind delete cluster --name "ros-e2e"
-	kind create cluster --name "ros-e2e"
-	kubectl cluster-info --context kind-ros-e2e
-	cd $(ROOT_DIR)/tests && EXTERNAL_IP=$(shell kubectl get nodes -o json | jq -r '.items[].status.addresses[] | select(.type == "InternalIP").address') ginkgo -r -v ./e2e
+	$(ROOT_DIR)/scripts/e2e-tests.sh
