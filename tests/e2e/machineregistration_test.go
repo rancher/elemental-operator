@@ -31,6 +31,11 @@ import (
 var _ = Describe("MachineRegistration e2e tests", func() {
 	k := kubectl.New()
 	Context("registration", func() {
+
+		AfterEach(func() {
+			kubectl.New().Delete("machineregistration", "-n", "fleet-default", "machine-registration")
+		})
+
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 			mr := catalog.NewMachineRegistration("machine-registration", map[string]interface{}{
 				"install":   map[string]string{"device": "/dev/vda"},
