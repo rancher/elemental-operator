@@ -35,8 +35,9 @@ import (
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
-		bundleCache:   clients.Fleet.Bundle().Cache(),
-		settingsCache: clients.Rancher.Setting().Cache(),
+		bundleCache:         clients.Fleet.Bundle().Cache(),
+		settingsCache:       clients.Rancher.Setting().Cache(),
+		managedVersionCache: clients.OS.ManagedOSVersion().Cache(),
 	}
 
 	relatedresource.Watch(ctx,
@@ -58,8 +59,9 @@ func Register(ctx context.Context, clients *clients.Clients) {
 }
 
 type handler struct {
-	bundleCache   fleetcontrollers.BundleCache
-	settingsCache ranchercontrollers.SettingCache
+	bundleCache         fleetcontrollers.BundleCache
+	settingsCache       ranchercontrollers.SettingCache
+	managedVersionCache oscontrollers.ManagedOSVersionCache
 }
 
 func (h *handler) defaultRegistry() (string, error) {
@@ -83,7 +85,7 @@ func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSIm
 		return nil, status, err
 	}
 
-	objs, err := objects(mos, prefix)
+	objs, err := h.objects(mos, prefix)
 	if err != nil {
 		return nil, status, err
 	}

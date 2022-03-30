@@ -17,7 +17,11 @@ limitations under the License.
 package managedos
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
+
+	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 
 	osv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
@@ -40,7 +44,7 @@ func cloudConfig(mos *osv1.ManagedOSImage) ([]byte, error) {
 	return append([]byte("#cloud-config\n"), data...), nil
 }
 
-func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
+func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
 	cloudConfig, err := cloudConfig(mos)
 	if err != nil {
 		return nil, err
@@ -56,7 +60,25 @@ func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) 
 		cordon = *mos.Spec.Cordon
 	}
 
-	image := strings.SplitN(mos.Spec.OSImage, ":", 2)
+	baseImage := mos.Spec.OSImage
+	m := &fleet.GenericMap{Data: make(map[string]interface{})}
+	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
+		// ns, name
+		v, err := h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
+		if err != nil {
+			return []runtime.Object{}, err
+		}
+
+		m = v.Spec.Metadata
+		upgradeImage, ok := m.Data["upgrade_image"]
+		if !ok {
+			return []runtime.Object{}, err
+		}
+		// TODO: improve this to error type checking
+		baseImage = fmt.Sprint(upgradeImage)
+	}
+
+	image := strings.SplitN(baseImage, ":", 2)
 	version := "latest"
 	if len(image) == 2 {
 		version = image[1]
@@ -76,6 +98,15 @@ func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) 
 			},
 		}
 	}
+
+	// Encode metadata as environment in the upgrade spec pod
+	// todo: check if envs are already set (?)
+	envs := []corev1.EnvVar{}
+	for k, v := range m.Data {
+		j, _ := json.Marshal(v)
+		envs = append(envs, corev1.EnvVar{Name: k, Value: string(j)})
+	}
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, envs...)
 
 	return []runtime.Object{
 		&rbacv1.ClusterRole{

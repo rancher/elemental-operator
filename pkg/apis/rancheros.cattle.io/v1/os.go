@@ -39,10 +39,11 @@ type ManagedOSImageSpec struct {
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 	Concurrency  *int64                `json:"concurrency,omitempty"`
 
-	Prepare          *upgradev1.ContainerSpec `json:"prepare,omitempty"`
-	Cordon           *bool                    `json:"cordon,omitempty"`
-	Drain            *upgradev1.DrainSpec     `json:"drain,omitempty"`
-	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
+	Prepare              *upgradev1.ContainerSpec `json:"prepare,omitempty"`
+	Cordon               *bool                    `json:"cordon,omitempty"`
+	Drain                *upgradev1.DrainSpec     `json:"drain,omitempty"`
+	UpgradeContainer     *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
+	ManagedOSVersionName string                   `json:"managedOSVersionName,omitempty"`
 
 	ClusterRolloutStrategy *fleet.RolloutStrategy `json:"clusterRolloutStrategy,omitempty"`
 	Targets                []fleet.BundleTarget   `json:"clusterTargets,omitempty"`
