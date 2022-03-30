@@ -140,6 +140,14 @@ var _ = BeforeSuite(func() {
 			kubectl.DeleteNamespace("cattle-rancheros-operator-system")
 			waitNamespaceDeletion("cattle-rancheros-operator-system")
 			deployOperator(k)
+			// Somehow rancher needs to be restarted after a ros-operator upgrade
+			// to get machineregistration working
+			pods, _ := k.GetPodNames("cattle-system", "")
+			for _, p := range pods {
+				k.Delete("pod", "-n", "cattle-system", p)
+			}
+
+			waitNamespace("cattle-system", "app=rancher")
 		})
 		return
 	}
