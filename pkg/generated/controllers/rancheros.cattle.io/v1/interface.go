@@ -33,6 +33,7 @@ type Interface interface {
 	MachineInventory() MachineInventoryController
 	MachineRegistration() MachineRegistrationController
 	ManagedOSImage() ManagedOSImageController
+	ManagedOSVersion() ManagedOSVersionController
 }
 
 func New(controllerFactory controller.SharedControllerFactory) Interface {
@@ -53,4 +54,7 @@ func (c *version) MachineRegistration() MachineRegistrationController {
 }
 func (c *version) ManagedOSImage() ManagedOSImageController {
 	return NewManagedOSImageController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSImage"}, "managedosimages", true, c.controllerFactory)
+}
+func (c *version) ManagedOSVersion() ManagedOSVersionController {
+	return NewManagedOSVersionController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSVersion"}, "managedosversions", true, c.controllerFactory)
 }
