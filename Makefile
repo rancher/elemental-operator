@@ -6,6 +6,7 @@ REPO?=quay.io/costoolkit/rancheros-operator-ci
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=$(shell find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
+KUBE_VERSION?="v1.22.7"
 
 .PHONY: build
 build:
@@ -40,4 +41,4 @@ unit-tests: test_deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
 
 e2e-tests:
-	$(ROOT_DIR)/scripts/e2e-tests.sh
+	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/e2e-tests.sh
