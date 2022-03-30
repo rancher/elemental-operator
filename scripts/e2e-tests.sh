@@ -1,6 +1,8 @@
 #!/bin/bash
-set -ex
 
+
+CLUSTER_NAME="${CLUSTER_NAME:-ros-e2e}"
+if ! kind get clusters | grep "$CLUSTER_NAME"; then
 cat << EOF > kind.config
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
@@ -13,12 +15,13 @@ nodes:
           kubeletExtraArgs:
             node-labels: "ingress-ready=true"
 EOF
+    kind create cluster --name $CLUSTER_NAME --config kind.config
+    rm -rf kind.config
+fi
 
-kind delete cluster --name "ros-e2e"
-kind create cluster --name "ros-e2e" --config kind.config
-rm -rf kind.config
+set -e
 
-kubectl cluster-info --context kind-ros-e2e
+kubectl cluster-info --context kind-$CLUSTER_NAME
 echo "Sleep to give times to node to populate with all info"
 sleep 10
 export EXTERNAL_IP=$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}')

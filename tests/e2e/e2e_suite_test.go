@@ -34,6 +34,8 @@ var (
 	magicDNS   string
 )
 
+var testResources = []string{"machineregistration"}
+
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "ros-operator e2e test Suite")
@@ -77,9 +79,22 @@ var _ = BeforeSuite(func() {
 	if chart == "" {
 		Fail("No ROS_CHART provided, a ros operator helm chart is required to run e2e tests")
 	}
+
 	externalIP = os.Getenv("EXTERNAL_IP")
 	if externalIP == "" {
 		Fail("No EXTERNAL_IP provided, a known (reachable) node external ip it is required to run e2e tests")
+	}
+
+	if os.Getenv("NO_SETUP") != "" {
+		By("No setup")
+		return
+	}
+
+	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
+	Expect(err).ToNot(HaveOccurred())
+	if len(pods) > 0 {
+		By("rancher-os already deployed, skipping setup")
+		return
 	}
 
 	By("Deploying ros-operator chart dependencies", func() {
@@ -137,4 +152,11 @@ var _ = BeforeSuite(func() {
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
 	})
+})
+
+var _ = AfterSuite(func() {
+	// Note, this prevents concurrent tests on same cluster, but makes sure we don't leave any dangling resources from the e2e tests
+	for _, r := range testResources {
+		kubectl.New().Delete(r, "--all", "--all-namespaces")
+	}
 })

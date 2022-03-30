@@ -943,6 +943,8 @@ github.com/qri-io/starlib v0.4.2-0.20200213133954-ff2e8cd5ef8d/go.mod h1:7DPO4do
 github.com/rackspace/gophercloud v0.0.0-20150408191457-ce0f487f6747/go.mod h1:4bJ1FwuaBZ6dt1VcDX5/O662mwR8GWqS4l68H6hkoYQ=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220329110207-c162ffefbf59 h1:wZjCTTRwc6fEiKQSXWtVPAphA02V4z8Js19SpC1dz3E=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220329110207-c162ffefbf59/go.mod h1:tBG6E0pF89pslQvva2lKhL/6ShpqAkjwFhdUfevTR6o=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220330115330-796e6c45c1e3 h1:/gFn/iCimEoHSCZWgDUwTAx40Of4Cu89AGiSHNY4JYY=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220330115330-796e6c45c1e3/go.mod h1:tBG6E0pF89pslQvva2lKhL/6ShpqAkjwFhdUfevTR6o=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7 h1:+Yq4bfEJBV35QFNQFhvRsjwOIfxU0SAPZDCefAM8jy4=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7/go.mod h1:cUw+h4wm01VdavMOjUMVQ5m/b2oiOjZ7gweI8AlybO4=
 github.com/rancher/aks-operator v1.0.2 h1:R6niUq/IlhzKpzRFmRR9YMiMePJh1flEqFO86us7OMY=
