@@ -41,6 +41,30 @@ func TestE2e(t *testing.T) {
 	RunSpecs(t, "ros-operator e2e test Suite")
 }
 
+func waitNamespacePodsDelete(namespace string) {
+	k := kubectl.New()
+
+	Eventually(func() bool {
+		pods, err := k.GetPodNames(namespace, "")
+		Expect(err).ToNot(HaveOccurred())
+
+		if len(pods) > 0 {
+			return false
+		}
+		return true
+	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
+}
+
+func waitNamespaceDeletion(namespace string) {
+	Eventually(func() bool {
+		phase, _ := kubectl.GetData(namespace, "namespace", namespace, `jsonpath={.status.phase}`)
+		if string(phase) == "" {
+			return true
+		}
+
+		return false
+	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
+}
 func waitNamespace(namespace, label string) {
 	k := kubectl.New()
 
@@ -61,6 +85,31 @@ func waitNamespace(namespace, label string) {
 	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
 }
 
+func isOperatorInstalled(k *kubectl.Kubectl) bool {
+	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
+	Expect(err).ToNot(HaveOccurred())
+	if len(pods) > 0 {
+		return true
+	}
+	return false
+}
+
+func deployOperator(k *kubectl.Kubectl) {
+	By("Deploying ros-operator chart", func() {
+		err := kubectl.RunHelmBinaryWithCustomErr(
+			"-n", "cattle-rancheros-operator-system", "install", "--create-namespace", "rancheros-operator", chart)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
+		Expect(err).ToNot(HaveOccurred())
+
+		waitNamespace("cattle-rancheros-operator-system", "app=rancheros-operator")
+
+		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
+		Expect(err).ToNot(HaveOccurred())
+	})
+}
+
 var _ = BeforeSuite(func() {
 
 	k := kubectl.New()
@@ -75,14 +124,24 @@ var _ = BeforeSuite(func() {
 		rancherVersion = "2.6.3"
 	}
 
-	chart = os.Getenv("ROS_CHART")
-	if chart == "" {
-		Fail("No ROS_CHART provided, a ros operator helm chart is required to run e2e tests")
-	}
-
 	externalIP = os.Getenv("EXTERNAL_IP")
 	if externalIP == "" {
 		Fail("No EXTERNAL_IP provided, a known (reachable) node external ip it is required to run e2e tests")
+	}
+
+	chart = os.Getenv("ROS_CHART")
+	if chart == "" && !isOperatorInstalled(k) {
+		Fail("No ROS_CHART provided, a ros operator helm chart is required to run e2e tests")
+	} else if isOperatorInstalled(k) {
+		//
+		// Upgrade/delete of operator only goes here
+		// (no further bootstrap is required)
+		By("Upgrading the operator only", func() {
+			kubectl.DeleteNamespace("cattle-rancheros-operator-system")
+			waitNamespaceDeletion("cattle-rancheros-operator-system")
+			deployOperator(k)
+		})
+		return
 	}
 
 	if os.Getenv("NO_SETUP") != "" {
@@ -90,9 +149,7 @@ var _ = BeforeSuite(func() {
 		return
 	}
 
-	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
-	Expect(err).ToNot(HaveOccurred())
-	if len(pods) > 0 {
+	if isOperatorInstalled(k) {
 		By("rancher-os already deployed, skipping setup")
 		return
 	}
@@ -139,19 +196,7 @@ var _ = BeforeSuite(func() {
 		})
 	})
 
-	By("Deploying ros-operator chart", func() {
-		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n", "cattle-rancheros-operator-system", "install", "--create-namespace", "rancheros-operator", chart)
-		Expect(err).ToNot(HaveOccurred())
-
-		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
-		Expect(err).ToNot(HaveOccurred())
-
-		waitNamespace("cattle-rancheros-operator-system", "app=rancheros-operator")
-
-		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
-		Expect(err).ToNot(HaveOccurred())
-	})
+	deployOperator(k)
 })
 
 var _ = AfterSuite(func() {
