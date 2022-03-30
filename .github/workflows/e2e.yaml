@@ -3,6 +3,7 @@ on:
   pull_request:
   push:
     branches:
+      - main
 concurrency:
   group: e2e-tests=full-${{ github.head_ref || github.ref }}-${{ github.repository }}
   cancel-in-progress: true
