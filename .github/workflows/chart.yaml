@@ -29,17 +29,15 @@ jobs:
         uses: azure/setup-helm@v1
         with:
           version: v3.7.1
-      - name: Build index
+      - name: Build and push index
         if: startsWith(github.ref, 'refs/tags/')
         run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+          git checkout gh-pages
+          rm index.yaml
           helm repo index --url https://rancher-sandbox.github.io/rancheros-operator .
-      - name: Remove .gitignore  # so we can add the files under the build dir
-        if: startsWith(github.ref, 'refs/tags/')
-        run: rm .gitignore
-      - name: Add & Commit
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: EndBug/add-and-commit@v9.0.0
-        with:
-          add: '["index.yaml", "build/*"]'
-          push: true
-          new_branch: gh-pages
+          git add index.yaml build/ -f
+          git commit -m "Updating helm repo to main commit ${{ github.sha }}"
+          git push --set-upstream origin gh-pages
+          
