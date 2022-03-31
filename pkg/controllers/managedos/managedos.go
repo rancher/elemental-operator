@@ -76,7 +76,7 @@ func (h *handler) defaultRegistry() (string, error) {
 }
 
 func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSImageStatus) ([]runtime.Object, provv1.ManagedOSImageStatus, error) {
-	if mos.Spec.OSImage == "" {
+	if mos.Spec.OSImage == "" && mos.Spec.ManagedOSVersionName == "" {
 		return nil, status, nil
 	}
 
