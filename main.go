@@ -19,8 +19,10 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 )
@@ -40,7 +42,7 @@ func main() {
 
 	if err := operator.Run(ctx,
 		operator.WithNamespace(*namespace),
-		operator.WithServices(),
+		operator.WithServices(services.UpgradeChannelSync(1*time.Minute, *namespace)),
 	); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}

@@ -86,8 +86,8 @@ func Run(ctx context.Context, settings ...Setting) error {
 	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "rancheros-operator", server.New(clients))
 
 	for _, s := range o.services {
-		go s(ctx,clients)
+		go s(ctx, clients)
 	}
-	
+
 	return clients.Start(ctx)
 }
