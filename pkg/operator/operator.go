@@ -60,6 +60,10 @@ func Run(ctx context.Context, namespace string) error {
 			SchemaObject: v1.MachineRegistration{},
 			Status:       true,
 		},
+		crd.CRD{
+			SchemaObject: v1.ManagedOSVersion{},
+			Status:       true,
+		},
 	).BatchWait()
 	if err != nil {
 		logrus.Fatalf("Failed to create CRDs: %v", err)

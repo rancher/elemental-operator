@@ -31,6 +31,7 @@ var (
 	MachineInventoryResourceName    = "machineinventories"
 	MachineRegistrationResourceName = "machineregistrations"
 	ManagedOSImageResourceName      = "managedosimages"
+	ManagedOSVersionResourceName    = "managedosversions"
 )
 
 // SchemeGroupVersion is group version used to register these objects
@@ -60,6 +61,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&MachineRegistrationList{},
 		&ManagedOSImage{},
 		&ManagedOSImageList{},
+		&ManagedOSVersion{},
+		&ManagedOSVersionList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

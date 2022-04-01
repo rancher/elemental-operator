@@ -17,7 +17,10 @@ limitations under the License.
 package managedos
 
 import (
+	"encoding/json"
 	"strings"
+
+	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 
 	osv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
@@ -40,7 +43,7 @@ func cloudConfig(mos *osv1.ManagedOSImage) ([]byte, error) {
 	return append([]byte("#cloud-config\n"), data...), nil
 }
 
-func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
+func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
 	cloudConfig, err := cloudConfig(mos)
 	if err != nil {
 		return nil, err
@@ -56,7 +59,29 @@ func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) 
 		cordon = *mos.Spec.Cordon
 	}
 
-	image := strings.SplitN(mos.Spec.OSImage, ":", 2)
+	// XXX Issues currently standing:
+	// - minVersion is not respected:
+	//	 gate minVersion that are not passing validation checks with the version reported
+	// - Monitoring upgrade status from the fleet bundles (reconcile to update the status to report what is the current version )
+	// - Enforce a ManagedOSImage "version" that is applied to a one node only. Or check out if either fleet is already doing that
+	baseImage := mos.Spec.OSImage
+	m := &fleet.GenericMap{Data: make(map[string]interface{})}
+	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
+		// ns, name
+		v, err := h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
+		if err != nil {
+			return []runtime.Object{}, err
+		}
+
+		m, err := v.Metadata()
+		if err != nil {
+			return []runtime.Object{}, err
+		}
+
+		baseImage = m.ImageURI
+	}
+
+	image := strings.SplitN(baseImage, ":", 2)
 	version := "latest"
 	if len(image) == 2 {
 		version = image[1]
@@ -76,6 +101,14 @@ func objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) 
 			},
 		}
 	}
+
+	// Encode metadata as environment in the upgrade spec pod
+	envs := []corev1.EnvVar{}
+	for k, v := range m.Data {
+		j, _ := json.Marshal(v)
+		envs = append(envs, corev1.EnvVar{Name: k, Value: string(j)})
+	}
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, envs...)
 
 	return []runtime.Object{
 		&rbacv1.ClusterRole{
