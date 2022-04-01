@@ -16,18 +16,21 @@ limitations under the License.
 
 package catalog
 
+type ManagedOSVersionSpec struct {
+	Type             string                 `json:"type" yaml:"type"`
+	Version          string                 `json:"version" yaml:"version"`
+	MinVersion       string                 `json:"minVersion" yaml:"minVersion"`
+	Metadata         map[string]interface{} `json:"metadata" yaml:"metadata"`
+	UpgradeContainer ContainerSpec          `json:"upgradeContainer" yaml:"upgradeContainer"`
+}
+
 type ManagedOSVersion struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	Kind       string `json:"kind" yaml:"kind"`
 	Metadata   struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
-	Spec struct {
-		Version          string                 `json:"version" yaml:"version"`
-		MinVersion       string                 `json:"minVersion" yaml:"minVersion"`
-		Metadata         map[string]interface{} `json:"metadata" yaml:"metadata"`
-		UpgradeContainer ContainerSpec          `json:"upgradeContainer" yaml:"upgradeContainer"`
-	}
+	Spec ManagedOSVersionSpec
 }
 
 type ContainerSpec struct {
@@ -43,12 +46,8 @@ func NewManagedOSVersion(name string, version string, minVersion string, metadat
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},
 		Kind: "ManagedOSVersion",
-		Spec: struct {
-			Version          string                 "json:\"version\" yaml:\"version\""
-			MinVersion       string                 "json:\"minVersion\" yaml:\"minVersion\""
-			Metadata         map[string]interface{} "json:\"metadata\" yaml:\"metadata\""
-			UpgradeContainer ContainerSpec          "json:\"upgradeContainer\" yaml:\"upgradeContainer\""
-		}{
+		Spec: ManagedOSVersionSpec{
+			Type:             "container",
 			Version:          version,
 			MinVersion:       minVersion,
 			Metadata:         metadata,

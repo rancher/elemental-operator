@@ -70,7 +70,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 			ov := catalog.NewManagedOSVersion(
 				"osversion", "v1.0", "0.0.0",
-				map[string]interface{}{"upgrade_image": "registry.com/repository/image:v1.0"},
+				map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"},
 				catalog.ContainerSpec{},
 			)
 

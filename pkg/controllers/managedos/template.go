@@ -18,7 +18,6 @@ package managedos
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -60,6 +59,11 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		cordon = *mos.Spec.Cordon
 	}
 
+	// XXX Issues currently standing:
+	// - minVersion is not respected:
+	//	 gate minVersion that are not passing validation checks with the version reported
+	// - Monitoring upgrade status from the fleet bundles (reconcile to update the status to report what is the current version )
+	// - Enforce a ManagedOSImage "version" that is applied to a one node only. Or check out if either fleet is already doing that
 	baseImage := mos.Spec.OSImage
 	m := &fleet.GenericMap{Data: make(map[string]interface{})}
 	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
@@ -69,12 +73,12 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 			return []runtime.Object{}, err
 		}
 
-		m = v.Spec.Metadata
-		upgradeImage, ok := m.Data["upgrade_image"].(string)
-		if !ok {
-			return []runtime.Object{}, fmt.Errorf("Invalid or inexistent 'upgrade_image' value")
+		m, err := v.Metadata()
+		if err != nil {
+			return []runtime.Object{}, err
 		}
-		baseImage = upgradeImage
+
+		baseImage = m.ImageURI
 	}
 
 	image := strings.SplitN(baseImage, ":", 2)
