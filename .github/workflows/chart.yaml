@@ -14,9 +14,14 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Build chart
+      - name: Build chart for CI
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
           make chart
+      - name: Build chart for release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          REPO=quay.io/costoolkit/rancheros-operator TAG=${GITHUB_REF##*/} make chart
       - name: Publish chart to release
         uses: fnkr/github-action-ghr@v1
         if: startsWith(github.ref, 'refs/tags/')
