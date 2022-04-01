@@ -37,7 +37,11 @@ func main() {
 	if os.Getenv("NAMESPACE") != "" {
 		*namespace = os.Getenv("NAMESPACE")
 	}
-	if err := operator.Run(ctx, *namespace); err != nil {
+
+	if err := operator.Run(ctx,
+		operator.WithNamespace(*namespace),
+		operator.WithServices(),
+	); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}
 

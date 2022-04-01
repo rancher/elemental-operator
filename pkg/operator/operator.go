@@ -31,7 +31,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-func Run(ctx context.Context, namespace string) error {
+func Run(ctx context.Context, settings ...Setting) error {
+	o := &options{}
+
+	if err := o.apply(settings...); err != nil {
+		return err
+	}
+
 	restConfig, err := config.GetConfig()
 	if err != nil {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
@@ -64,6 +70,10 @@ func Run(ctx context.Context, namespace string) error {
 			SchemaObject: v1.ManagedOSVersion{},
 			Status:       true,
 		},
+		crd.CRD{
+			SchemaObject: v1.ManagedOSVersionChannel{},
+			Status:       true,
+		},
 	).BatchWait()
 	if err != nil {
 		logrus.Fatalf("Failed to create CRDs: %v", err)
@@ -73,6 +83,11 @@ func Run(ctx context.Context, namespace string) error {
 	inventory.Register(ctx, clients)
 	registration.Register(ctx, clients)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), namespace, "rancheros-operator", server.New(clients))
+	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "rancheros-operator", server.New(clients))
+
+	for _, s := range o.services {
+		go s(ctx,clients)
+	}
+	
 	return clients.Start(ctx)
 }
