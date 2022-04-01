@@ -29,13 +29,14 @@ import (
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
 func UpgradeChannelSync(interval time.Duration, namespace string) func(context.Context, *clients.Clients) error {
+	fmt.Println("Starting syncer service")
 	return func(ctx context.Context, c *clients.Clients) error {
 		ticker := time.NewTicker(interval)
 
+		fmt.Println("Ticker starting")
 		for {
 			select {
 			case <-ctx.Done():
-
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
 				err := sync(c, namespace)
@@ -44,15 +45,19 @@ func UpgradeChannelSync(interval time.Duration, namespace string) func(context.C
 				}
 			}
 		}
+		return nil
 	}
 }
 
 func sync(c *clients.Clients, namespace string) error {
 
+	fmt.Printf("sync from service: %s\n", namespace)
 	list, err := c.OS.ManagedOSVersionChannel().List(namespace, v1.ListOptions{})
 	if err != nil {
 		return err
 	}
+
+	fmt.Println(list.Items)
 
 	//TODO collect all errors
 	versions := []provv1.ManagedOSVersion{}
@@ -64,7 +69,7 @@ func sync(c *clients.Clients, namespace string) error {
 
 		vers, err := s.sync()
 		if err != nil {
-			return nil
+			return err
 		}
 		versions = append(versions, vers...)
 	}

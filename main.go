@@ -40,9 +40,10 @@ func main() {
 		*namespace = os.Getenv("NAMESPACE")
 	}
 
+	//TODO check the proper namespace configuration, should it be the same namespace as the rancheros-operator?
 	if err := operator.Run(ctx,
 		operator.WithNamespace(*namespace),
-		operator.WithServices(services.UpgradeChannelSync(1*time.Minute, *namespace)),
+		operator.WithServices(services.UpgradeChannelSync(10*time.Second, "fleet-default")),
 	); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}
