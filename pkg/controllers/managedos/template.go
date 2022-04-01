@@ -70,12 +70,11 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		}
 
 		m = v.Spec.Metadata
-		upgradeImage, ok := m.Data["upgrade_image"]
+		upgradeImage, ok := m.Data["upgrade_image"].(string)
 		if !ok {
-			return []runtime.Object{}, err
+			return []runtime.Object{}, fmt.Errorf("Invalid or inexistent 'upgrade_image' value")
 		}
-		// TODO: improve this to error type checking
-		baseImage = fmt.Sprint(upgradeImage)
+		baseImage = upgradeImage
 	}
 
 	image := strings.SplitN(baseImage, ":", 2)
@@ -100,7 +99,6 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	}
 
 	// Encode metadata as environment in the upgrade spec pod
-	// todo: check if envs are already set (?)
 	envs := []corev1.EnvVar{}
 	for k, v := range m.Data {
 		j, _ := json.Marshal(v)
