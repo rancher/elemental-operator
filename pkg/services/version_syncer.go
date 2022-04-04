@@ -38,22 +38,18 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
 				if len(namespace) == 0 {
-					fmt.Println("No namespaces to watch defined")
-					list, err := c.Core.Namespace().List(v1.ListOptions{})
+					logrus.Debug("Listing all namespaces")
+					err := sync(c, "")
 					if err != nil {
-						fmt.Println(err.Error())
+						logrus.Warn(err)
 					}
-					fmt.Println(list)
-					for _, l := range list.Items {
-						namespace = append(namespace, l.Name)
-					}
+					continue
 				}
 
-				fmt.Println(namespace)
 				for _, n := range namespace {
 					err := sync(c, n)
 					if err != nil {
-						fmt.Println(err.Error())
+						logrus.Warn(err)
 					}
 				}
 			}
@@ -63,16 +59,13 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 
 func sync(c *clients.Clients, namespace string) error {
 
-	fmt.Printf("sync from service: %s\n", namespace)
 	list, err := c.OS.ManagedOSVersionChannel().List(namespace, v1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(list.Items)
-
 	//TODO collect all errors
-	versions := []provv1.ManagedOSVersion{}
+	versions := map[string][]provv1.ManagedOSVersion{}
 	for _, c := range list.Items {
 		s, err := NewManagedOSVersionChannelSyncer(c.Spec)
 		if err != nil {
@@ -83,24 +76,29 @@ func sync(c *clients.Clients, namespace string) error {
 		if err != nil {
 			return err
 		}
-		versions = append(versions, vers...)
+		if _, ok := versions[c.Namespace]; !ok {
+			versions[c.Namespace] = []provv1.ManagedOSVersion{}
+		}
+
+		versions[c.Namespace] = append(versions[c.Namespace], vers...)
 	}
 
 	// TODO: collect all errors
-	for _, v := range versions {
-		cli := c.OS.ManagedOSVersion()
+	for ns, vv := range versions {
+		for _, v := range vv {
+			cli := c.OS.ManagedOSVersion()
 
-		_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
-		if err == nil {
-			//TODO some warning message would be nice
-			fmt.Println("There is already a version defined")
-			continue
-		}
-		vcpy := v.DeepCopy()
-		vcpy.ObjectMeta.Namespace = namespace
-		_, err = cli.Create(vcpy)
-		if err != nil {
-			return err
+			_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
+			if err == nil {
+				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
+				continue
+			}
+			vcpy := v.DeepCopy()
+			vcpy.ObjectMeta.Namespace = ns
+			_, err = cli.Create(vcpy)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
