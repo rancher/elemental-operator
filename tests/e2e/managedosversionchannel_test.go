@@ -91,7 +91,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			b, err := json.Marshal(versions)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			http.Server(ctx, ":9999", string(b))
+			http.Server(ctx, bridgeIP+":9999", string(b))
 
 			By("Create a ManagedOSVersionChannel")
 			ui := catalog.NewManagedOSVersionChannel(
@@ -100,13 +100,22 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
 			)
 
-			k.ApplyYAML("fleet-default", "testchannel", ui)
+			err = k.ApplyYAML("fleet-default", "testchannel", ui)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			r, err := kubectl.GetData("fleet-default", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			Expect(string(r)).To(Equal("json"))
 
 			Eventually(func() string {
 				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				if err != nil {
 					fmt.Println(err)
 				}
+
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),

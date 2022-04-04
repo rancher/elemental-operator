@@ -49,21 +49,14 @@ func waitNamespacePodsDelete(namespace string) {
 		pods, err := k.GetPodNames(namespace, "")
 		Expect(err).ToNot(HaveOccurred())
 
-		if len(pods) > 0 {
-			return false
-		}
-		return true
+		return len(pods) <= 0
 	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
 }
 
 func waitNamespaceDeletion(namespace string) {
 	Eventually(func() bool {
 		phase, _ := kubectl.GetData(namespace, "namespace", namespace, `jsonpath={.status.phase}`)
-		if string(phase) == "" {
-			return true
-		}
-
-		return false
+		return string(phase) == ""
 	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
 }
 func waitNamespace(namespace, label string) {
@@ -89,10 +82,7 @@ func waitNamespace(namespace, label string) {
 func isOperatorInstalled(k *kubectl.Kubectl) bool {
 	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
 	Expect(err).ToNot(HaveOccurred())
-	if len(pods) > 0 {
-		return true
-	}
-	return false
+	return len(pods) > 0
 }
 
 func deployOperator(k *kubectl.Kubectl) {
