@@ -23,6 +23,7 @@ import (
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -37,15 +38,18 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
 				if len(namespace) == 0 {
+					fmt.Println("No namespaces to watch defined")
 					list, err := c.Core.Namespace().List(v1.ListOptions{})
 					if err != nil {
 						fmt.Println(err.Error())
 					}
+					fmt.Println(list)
 					for _, l := range list.Items {
 						namespace = append(namespace, l.Name)
 					}
 				}
 
+				fmt.Println(namespace)
 				for _, n := range namespace {
 					err := sync(c, n)
 					if err != nil {
@@ -89,12 +93,13 @@ func sync(c *clients.Clients, namespace string) error {
 		_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
 		if err == nil {
 			//TODO some warning message would be nice
+			fmt.Println("There is already a version defined")
 			continue
 		}
 		vcpy := v.DeepCopy()
 		vcpy.ObjectMeta.Namespace = namespace
 		_, err = cli.Create(vcpy)
-		if err == nil {
+		if err != nil {
 			return err
 		}
 	}

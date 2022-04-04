@@ -122,7 +122,7 @@ var _ = BeforeSuite(func() {
 
 	bridgeIP = os.Getenv("BRIDGE_IP")
 	if bridgeIP == "" {
-		bridgeIP = externalIP
+		bridgeIP = "172.17.0.1"
 	}
 
 	chart = os.Getenv("ROS_CHART")

@@ -38,6 +38,6 @@ func NewManagedOSVersionChannelSyncer(spec provv1.ManagedOSVersionChannelSpec) (
 		}
 		return j, nil
 	default:
-		return nil, fmt.Errorf("Unknown version channel type '%s'", spec.Type)
+		return nil, fmt.Errorf("unknown version channel type '%s'", spec.Type)
 	}
 }

@@ -47,7 +47,7 @@ func main() {
 		*namespaces = os.Getenv("WATCH_NAMESPACE")
 	}
 
-	if *namespace != "" {
+	if *namespaces != "" {
 		ns = strings.Split(*namespaces, ",")
 	}
 

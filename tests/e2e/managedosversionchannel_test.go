@@ -93,6 +93,8 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			http.Server(ctx, bridgeIP+":9999", string(b))
 
+			//time.Sleep(9000 * time.Second)
+
 			By("Create a ManagedOSVersionChannel")
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",

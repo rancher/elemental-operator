@@ -47,11 +47,11 @@ func (j *JSONSyncer) sync() ([]provv1.ManagedOSVersion, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
 	res := []provv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf, &res)
