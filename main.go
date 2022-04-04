@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
@@ -28,7 +29,8 @@ import (
 )
 
 var (
-	namespace = flag.String("namespace", "cattle-rancheros-operator-system", "Namespace of the pod")
+	namespace  = flag.String("namespace", "cattle-rancheros-operator-system", "Namespace of the pod")
+	namespaces = flag.String("namespaces", "", "A comma separated list of namespaces to watch")
 )
 
 func main() {
@@ -40,10 +42,19 @@ func main() {
 		*namespace = os.Getenv("NAMESPACE")
 	}
 
+	var ns []string
+	if os.Getenv("WATCH_NAMESPACE") != "" {
+		*namespaces = os.Getenv("WATCH_NAMESPACE")
+	}
+
+	if *namespace != "" {
+		ns = strings.Split(*namespaces, ",")
+	}
+
 	//TODO check the proper namespace configuration, should it be the same namespace as the rancheros-operator?
 	if err := operator.Run(ctx,
 		operator.WithNamespace(*namespace),
-		operator.WithServices(services.UpgradeChannelSync(10*time.Second, "fleet-default")),
+		operator.WithServices(services.UpgradeChannelSync(10*time.Second, ns...)),
 	); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}

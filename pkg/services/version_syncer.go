@@ -28,20 +28,29 @@ import (
 )
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, namespace string) func(context.Context, *clients.Clients) error {
-	fmt.Println("Starting syncer service")
+func UpgradeChannelSync(interval time.Duration, namespace ...string) func(context.Context, *clients.Clients) error {
 	return func(ctx context.Context, c *clients.Clients) error {
 		ticker := time.NewTicker(interval)
-
-		fmt.Println("Ticker starting")
 		for {
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
-				err := sync(c, namespace)
-				if err != nil {
-					fmt.Println(err.Error())
+				if len(namespace) == 0 {
+					list, err := c.Core.Namespace().List(v1.ListOptions{})
+					if err != nil {
+						fmt.Println(err.Error())
+					}
+					for _, l := range list.Items {
+						namespace = append(namespace, l.Name)
+					}
+				}
+
+				for _, n := range namespace {
+					err := sync(c, n)
+					if err != nil {
+						fmt.Println(err.Error())
+					}
 				}
 			}
 		}
@@ -76,7 +85,7 @@ func sync(c *clients.Clients, namespace string) error {
 	// TODO: collect all errors
 	for _, v := range versions {
 		cli := c.OS.ManagedOSVersion()
-		
+
 		_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
 		if err == nil {
 			//TODO some warning message would be nice

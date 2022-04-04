@@ -34,7 +34,7 @@ var (
 	magicDNS   string
 )
 
-var testResources = []string{"machineregistration"}
+var testResources = []string{"machineregistration", "managedosversionchannel"}
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
