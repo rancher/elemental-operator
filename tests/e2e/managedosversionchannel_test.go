@@ -97,7 +97,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",
 				"json",
-				map[string]interface{}{"uri": "http://" + externalIP + ":9999"},
+				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
 			)
 
 			k.ApplyYAML("fleet-default", "testchannel", ui)

@@ -32,6 +32,7 @@ var (
 	chart      string
 	externalIP string
 	magicDNS   string
+	bridgeIP   string
 )
 
 var testResources = []string{"machineregistration", "managedosversionchannel"}
@@ -127,6 +128,11 @@ var _ = BeforeSuite(func() {
 	externalIP = os.Getenv("EXTERNAL_IP")
 	if externalIP == "" {
 		Fail("No EXTERNAL_IP provided, a known (reachable) node external ip it is required to run e2e tests")
+	}
+
+	bridgeIP = os.Getenv("BRIDGE_IP")
+	if bridgeIP == "" {
+		bridgeIP = externalIP
 	}
 
 	chart = os.Getenv("ROS_CHART")

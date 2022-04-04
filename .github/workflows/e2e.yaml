@@ -69,6 +69,7 @@ jobs:
     env:
       ROS_CHART: ${{ github.workspace }}/build/${{ needs.push-docker.outputs.chart_name }}
       KUBE_VERSION: ${{ matrix.kubernetes }}
+      BRIDGE_IP: "172.17.0.1"
     steps:
       - uses: actions/checkout@v2
       - name: Download chart
