@@ -45,7 +45,6 @@ func UpgradeChannelSync(interval time.Duration, namespace string) func(context.C
 				}
 			}
 		}
-		return nil
 	}
 }
 

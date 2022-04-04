@@ -17,44 +17,47 @@ limitations under the License.
 package services
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
+	"time"
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type JSONSyncer struct {
-	URL string `json:"url"`
+	URI     string `json:"uri"`
+	Timeout string `json:"timeout"`
 }
 
-func (*JSONSyncer) sync() ([]provv1.ManagedOSVersion, error) {
-	fmt.Println("Synching")
-	return []provv1.ManagedOSVersion{
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "v1"},
-			Spec: provv1.ManagedOSVersionSpec{
-				Version:    "v1",
-				Type:       "container",
-				MinVersion: "0.0.0",
-				Metadata: &fleet.GenericMap{
-					Data: map[string]interface{}{
-						"upgradeImage": "registry.com/repository/image:v1",
-					},
-				},
-			},
-		}, {
-			ObjectMeta: metav1.ObjectMeta{Name: "v2"},
-			Spec: provv1.ManagedOSVersionSpec{
-				Version:    "v2",
-				Type:       "container",
-				MinVersion: "0.0.0",
-				Metadata: &fleet.GenericMap{
-					Data: map[string]interface{}{
-						"upgradeImage": "registry.com/repository/image:v2",
-					},
-				},
-			},
-		},
-	}, nil
+func (j *JSONSyncer) sync() ([]provv1.ManagedOSVersion, error) {
+	timeout := time.Duration(time.Second * 30)
+	if j.Timeout != "" {
+		var err error
+		timeout, err = time.ParseDuration(j.Timeout)
+		if err != nil {
+			return nil, err
+		}
+	}
+	client := &http.Client{
+		Timeout: timeout,
+	}
+
+	resp, err := client.Get(j.URI)
+	if err != nil {
+		return nil, err
+	}
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	res := []provv1.ManagedOSVersion{}
+
+	err = json.Unmarshal(buf, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
