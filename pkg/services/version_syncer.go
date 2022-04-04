@@ -76,6 +76,7 @@ func sync(c *clients.Clients, namespace string) error {
 	// TODO: collect all errors
 	for _, v := range versions {
 		cli := c.OS.ManagedOSVersion()
+		
 		_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
 		if err == nil {
 			//TODO some warning message would be nice

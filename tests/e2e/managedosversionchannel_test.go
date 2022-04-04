@@ -17,11 +17,18 @@ limitations under the License.
 package e2e_test
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
 	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
@@ -49,17 +56,70 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 		})
 
 		It("Creates a list of ManagedOSVersion", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			versions := []provv1.ManagedOSVersion{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "v1"},
+					Spec: provv1.ManagedOSVersionSpec{
+						Version:    "v1",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: &fleet.GenericMap{
+							Data: map[string]interface{}{
+								"upgradeImage": "registry.com/repository/image:v1",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "v2"},
+					Spec: provv1.ManagedOSVersionSpec{
+						Version:    "v2",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: &fleet.GenericMap{
+							Data: map[string]interface{}{
+								"upgradeImage": "registry.com/repository/image:v2",
+							},
+						},
+					},
+				},
+			}
+
+			b, err := json.Marshal(versions)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			http.Server(ctx, ":9999", string(b))
+
+			By("Create a ManagedOSVersionChannel")
+			ui := catalog.NewManagedOSVersionChannel(
+				"testchannel",
+				"json",
+				map[string]interface{}{"uri": "http://" + externalIP + ":9999"},
+			)
+
+			k.ApplyYAML("fleet-default", "testchannel", ui)
+
 			Eventually(func() string {
-				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "--all", `jsonpath={.item[*]}`)
+				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				if err != nil {
 					fmt.Println(err)
 				}
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
-				And(
-					ContainSubstring(`"version":"v1.0"`),
-					ContainSubstring(`"image":"my.registry.com/image/repository"`),
-				),
+				Equal("registry.com/repository/image:v1"),
+			)
+
+			Eventually(func() string {
+				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return string(r)
+			}, 1*time.Minute, 2*time.Second).Should(
+				Equal("registry.com/repository/image:v2"),
 			)
 		})
 	})
