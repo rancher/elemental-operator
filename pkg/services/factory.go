@@ -25,13 +25,21 @@ import (
 )
 
 const (
-	jsonType = "json"
+	jsonType   = "json"
+	customType = "custom"
 )
 
 func NewManagedOSVersionChannelSyncer(spec provv1.ManagedOSVersionChannelSpec) (syncer, error) {
 	switch strings.ToLower(spec.Type) {
 	case jsonType:
 		j := &JSONSyncer{}
+		err := object.Render(spec.Options.Data, j)
+		if err != nil {
+			return nil, err
+		}
+		return j, nil
+	case customType:
+		j := &CustomSyncer{}
 		err := object.Render(spec.Options.Data, j)
 		if err != nil {
 			return nil, err

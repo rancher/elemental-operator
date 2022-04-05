@@ -18,8 +18,9 @@ package services
 
 import (
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 )
 
 type syncer interface {
-	sync() ([]provv1.ManagedOSVersion, error)
+	sync(provv1.ManagedOSVersionChannel, *clients.Clients) ([]provv1.ManagedOSVersion, error)
 }

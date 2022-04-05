@@ -25,7 +25,6 @@ import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
@@ -59,36 +58,37 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 
 func sync(c *clients.Clients, namespace string) error {
 
-	list, err := c.OS.ManagedOSVersionChannel().List(namespace, v1.ListOptions{})
+	list, err := c.OS.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 
 	//TODO collect all errors
 	versions := map[string][]provv1.ManagedOSVersion{}
-	for _, c := range list.Items {
-		s, err := NewManagedOSVersionChannelSyncer(c.Spec)
+	for _, cc := range list.Items {
+		s, err := NewManagedOSVersionChannelSyncer(cc.Spec)
 		if err != nil {
 			return err
 		}
 
-		vers, err := s.sync()
+		vers, err := s.sync(cc, c)
 		if err != nil {
-			return err
+			logrus.Error(err)
+			continue
 		}
 
-		if _, ok := versions[c.Namespace]; !ok {
-			versions[c.Namespace] = []provv1.ManagedOSVersion{}
+		if _, ok := versions[cc.Namespace]; !ok {
+			versions[cc.Namespace] = []provv1.ManagedOSVersion{}
 		}
 
 		blockDel := false
 		for _, v := range vers {
 			vcpy := v.DeepCopy()
-			vcpy.ObjectMeta.Namespace = c.Namespace
-			ownRef := *metav1.NewControllerRef(&c, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
+			vcpy.ObjectMeta.Namespace = cc.Namespace
+			ownRef := *metav1.NewControllerRef(&cc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
 			ownRef.BlockOwnerDeletion = &blockDel
 			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
-			versions[c.Namespace] = append(versions[c.Namespace], *vcpy)
+			versions[cc.Namespace] = append(versions[cc.Namespace], *vcpy)
 		}
 	}
 

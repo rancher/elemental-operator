@@ -12,6 +12,21 @@ rules:
   - 'watch'
   - 'list'
 - apiGroups:
+  - ""
+  resources:
+  - 'pods'
+  verbs:
+  - 'get'
+  - 'create'
+  - 'delete'
+  - 'list'
+- apiGroups:
+  - ""
+  resources:
+  - 'pods/log'
+  verbs:
+  - 'get'
+- apiGroups:
   - rancheros.cattle.io
   resources:
   - '*'
