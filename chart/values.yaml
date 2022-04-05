@@ -17,6 +17,9 @@ global:
 # Use ros-operator binary from the host
 hostbin: false
 
+# default sync interval for upgrade channel
+sync_interval: "10s"
+
 nodeSelector:
   kubernetes.io/os: linux
 

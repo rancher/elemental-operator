@@ -33,6 +33,7 @@ spec:
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
         command:
         - /usr/sbin/rancheros-operator
+        args: ["-sync-interval {{.Values.sync_interval}}"]
       {{- if .Values.hostbin }}
       volumes:
         - name: sbin

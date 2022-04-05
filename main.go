@@ -31,6 +31,7 @@ import (
 var (
 	namespace  = flag.String("namespace", "cattle-rancheros-operator-system", "Namespace of the pod")
 	namespaces = flag.String("namespaces", "", "A comma separated list of namespaces to watch")
+	interval   = flag.String("sync-interval", "10s", "Interval for the upgrade channel ticker")
 )
 
 func main() {
@@ -51,10 +52,14 @@ func main() {
 		ns = strings.Split(*namespaces, ",")
 	}
 
-	//TODO check the proper namespace configuration, should it be the same namespace as the rancheros-operator?
+	ticker, err := time.ParseDuration(*interval)
+	if err != nil {
+		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
+	}
+
 	if err := operator.Run(ctx,
 		operator.WithNamespace(*namespace),
-		operator.WithServices(services.UpgradeChannelSync(10*time.Second, ns...)),
+		operator.WithServices(services.UpgradeChannelSync(ticker, ns...)),
 	); err != nil {
 		logrus.Fatalf("Error starting: %s", err.Error())
 	}
