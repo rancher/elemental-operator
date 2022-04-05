@@ -18,7 +18,7 @@ global:
 hostbin: false
 
 # default sync interval for upgrade channel
-sync_interval: "10s"
+sync_interval: "60m"
 
 nodeSelector:
   kubernetes.io/os: linux

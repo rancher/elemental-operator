@@ -31,7 +31,7 @@ import (
 var (
 	namespace  = flag.String("namespace", "cattle-rancheros-operator-system", "Namespace of the pod")
 	namespaces = flag.String("namespaces", "", "A comma separated list of namespaces to watch")
-	interval   = flag.String("sync-interval", "10s", "Interval for the upgrade channel ticker")
+	interval   = flag.String("sync-interval", "60m", "Interval for the upgrade channel ticker")
 )
 
 func main() {
