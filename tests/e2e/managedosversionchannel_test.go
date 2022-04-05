@@ -37,12 +37,12 @@ import (
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 	var k *kubectl.Kubectl
 
-	Context("Create ManagedOSVersions from JSON", func() {
+	Context("Create ManagedOSVersions", func() {
 		BeforeEach(func() {
 			k = kubectl.New()
 		})
 
-		It("Creates a list of ManagedOSVersion from a JSON server", func() {
+		It("creates a list of ManagedOSVersion from a JSON server", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -135,7 +135,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			)
 		})
 
-		It("Creates a list of ManagedOSVersion from a custom hook", func() {
+		It("creates a list of ManagedOSVersion from a custom hook", func() {
 
 			versions := []provv1.ManagedOSVersion{
 				{

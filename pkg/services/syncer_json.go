@@ -32,8 +32,8 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) sync(s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
-	logrus.Infof("Syncing '%s/%s' (JSON)",s.Namespace, s.Name)
+func (j *JSONSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
+	logrus.Infof("Syncing '%s/%s' (JSON)", s.Namespace, s.Name)
 
 	timeout := time.Duration(time.Second * 30)
 	if j.Timeout != "" {

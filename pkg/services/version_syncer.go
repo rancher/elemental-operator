@@ -29,6 +29,24 @@ import (
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
 func UpgradeChannelSync(interval time.Duration, namespace ...string) func(context.Context, *clients.Clients) error {
+	requeuer := make(chan interface{}, 10)
+	requeue := func(c *clients.Clients) {
+		if len(namespace) == 0 {
+			logrus.Debug("Listing all namespaces")
+			err := sync(requeuer, c, "")
+			if err != nil {
+				logrus.Warn(err)
+			}
+			return
+		}
+
+		for _, n := range namespace {
+			err := sync(requeuer, c, n)
+			if err != nil {
+				logrus.Warn(err)
+			}
+		}
+	}
 	return func(ctx context.Context, c *clients.Clients) error {
 		ticker := time.NewTicker(interval)
 		for {
@@ -36,27 +54,15 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 			case <-ctx.Done():
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
-				if len(namespace) == 0 {
-					logrus.Debug("Listing all namespaces")
-					err := sync(c, "")
-					if err != nil {
-						logrus.Warn(err)
-					}
-					continue
-				}
-
-				for _, n := range namespace {
-					err := sync(c, n)
-					if err != nil {
-						logrus.Warn(err)
-					}
-				}
+				requeue(c)
+			case <-requeuer:
+				requeue(c)
 			}
 		}
 	}
 }
 
-func sync(c *clients.Clients, namespace string) error {
+func sync(r chan interface{}, c *clients.Clients, namespace string) error {
 
 	list, err := c.OS.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
 	if err != nil {
@@ -71,7 +77,7 @@ func sync(c *clients.Clients, namespace string) error {
 			return err
 		}
 
-		vers, err := s.sync(cc, c)
+		vers, err := s.sync(r, cc, c)
 		if err != nil {
 			logrus.Error(err)
 			continue

@@ -52,7 +52,7 @@ func (j *CustomSyncer) toContainers() []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) sync(s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
+func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
 
 	serviceAccount := false
@@ -92,6 +92,7 @@ func (j *CustomSyncer) sync(s provv1.ManagedOSVersionChannel, c *clients.Clients
 		})
 
 		// Requeueing
+		r <- nil
 		return nil, err
 	}
 

@@ -22,5 +22,5 @@ import (
 )
 
 type syncer interface {
-	sync(provv1.ManagedOSVersionChannel, *clients.Clients) ([]provv1.ManagedOSVersion, error)
+	sync(chan interface{}, provv1.ManagedOSVersionChannel, *clients.Clients) ([]provv1.ManagedOSVersion, error)
 }
