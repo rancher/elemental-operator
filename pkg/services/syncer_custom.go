@@ -55,6 +55,7 @@ func (j *CustomSyncer) toContainers() []corev1.Container {
 func (j *CustomSyncer) sync(s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
 
+	serviceAccount := false
 	p, err := c.Core.Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
 	if err != nil {
 		_, err = c.Core.Pod().Create(&corev1.Pod{
@@ -70,8 +71,9 @@ func (j *CustomSyncer) sync(s provv1.ManagedOSVersionChannel, c *clients.Clients
 				},
 			},
 			Spec: corev1.PodSpec{
-				RestartPolicy:  corev1.RestartPolicyOnFailure,
-				InitContainers: j.toContainers(),
+				RestartPolicy:                corev1.RestartPolicyOnFailure,
+				AutomountServiceAccountToken: &serviceAccount,
+				InitContainers:               j.toContainers(),
 				Volumes: []corev1.Volume{{
 					Name:         "output",
 					VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
