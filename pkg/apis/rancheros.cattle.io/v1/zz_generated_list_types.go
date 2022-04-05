@@ -91,3 +91,20 @@ func NewManagedOSVersion(namespace, name string, obj ManagedOSVersion) *ManagedO
 	obj.Namespace = namespace
 	return &obj
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ManagedOSVersionChannelList is a list of ManagedOSVersionChannel resources
+type ManagedOSVersionChannelList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []ManagedOSVersionChannel `json:"items"`
+}
+
+func NewManagedOSVersionChannel(namespace, name string, obj ManagedOSVersionChannel) *ManagedOSVersionChannel {
+	obj.APIVersion, obj.Kind = SchemeGroupVersion.WithKind("ManagedOSVersionChannel").ToAPIVersionAndKind()
+	obj.Name = name
+	obj.Namespace = namespace
+	return &obj
+}

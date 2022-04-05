@@ -7,6 +7,7 @@ export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROS_CHART?=$(shell find $(ROOT_DIR) -type f  -name "rancheros-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 KUBE_VERSION?="v1.22.7"
+CLUSTER_NAME?="ros-e2e"
 
 .PHONY: build
 build:
@@ -42,3 +43,7 @@ unit-tests: test_deps
 
 e2e-tests:
 	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/e2e-tests.sh
+
+kind-e2e-tests: build-docker chart
+	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
+	ROS_CHART=${ROOT_DIR}/build/rancheros-operator-${CHART_VERSION}.tgz $(MAKE) e2e-tests

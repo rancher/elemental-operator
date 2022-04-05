@@ -32,9 +32,10 @@ var (
 	chart      string
 	externalIP string
 	magicDNS   string
+	bridgeIP   string
 )
 
-var testResources = []string{"machineregistration"}
+var testResources = []string{"machineregistration", "managedosversionchannel"}
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -48,21 +49,14 @@ func waitNamespacePodsDelete(namespace string) {
 		pods, err := k.GetPodNames(namespace, "")
 		Expect(err).ToNot(HaveOccurred())
 
-		if len(pods) > 0 {
-			return false
-		}
-		return true
+		return len(pods) <= 0
 	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
 }
 
 func waitNamespaceDeletion(namespace string) {
 	Eventually(func() bool {
 		phase, _ := kubectl.GetData(namespace, "namespace", namespace, `jsonpath={.status.phase}`)
-		if string(phase) == "" {
-			return true
-		}
-
-		return false
+		return string(phase) == ""
 	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
 }
 func waitNamespace(namespace, label string) {
@@ -88,10 +82,7 @@ func waitNamespace(namespace, label string) {
 func isOperatorInstalled(k *kubectl.Kubectl) bool {
 	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
 	Expect(err).ToNot(HaveOccurred())
-	if len(pods) > 0 {
-		return true
-	}
-	return false
+	return len(pods) > 0
 }
 
 func deployOperator(k *kubectl.Kubectl) {
@@ -127,6 +118,11 @@ var _ = BeforeSuite(func() {
 	externalIP = os.Getenv("EXTERNAL_IP")
 	if externalIP == "" {
 		Fail("No EXTERNAL_IP provided, a known (reachable) node external ip it is required to run e2e tests")
+	}
+
+	bridgeIP = os.Getenv("BRIDGE_IP")
+	if bridgeIP == "" {
+		bridgeIP = "172.17.0.1"
 	}
 
 	chart = os.Getenv("ROS_CHART")
