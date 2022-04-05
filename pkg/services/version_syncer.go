@@ -76,15 +76,24 @@ func sync(c *clients.Clients, namespace string) error {
 		if err != nil {
 			return err
 		}
+
 		if _, ok := versions[c.Namespace]; !ok {
 			versions[c.Namespace] = []provv1.ManagedOSVersion{}
 		}
 
-		versions[c.Namespace] = append(versions[c.Namespace], vers...)
+		blockDel := false
+		for _, v := range vers {
+			vcpy := v.DeepCopy()
+			vcpy.ObjectMeta.Namespace = c.Namespace
+			ownRef := *metav1.NewControllerRef(&c, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
+			ownRef.BlockOwnerDeletion = &blockDel
+			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
+			versions[c.Namespace] = append(versions[c.Namespace], *vcpy)
+		}
 	}
 
 	// TODO: collect all errors
-	for ns, vv := range versions {
+	for _, vv := range versions {
 		for _, v := range vv {
 			cli := c.OS.ManagedOSVersion()
 
@@ -93,9 +102,7 @@ func sync(c *clients.Clients, namespace string) error {
 				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
 				continue
 			}
-			vcpy := v.DeepCopy()
-			vcpy.ObjectMeta.Namespace = ns
-			_, err = cli.Create(vcpy)
+			_, err = cli.Create(&v)
 			if err != nil {
 				return err
 			}

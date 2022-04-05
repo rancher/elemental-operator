@@ -35,24 +35,11 @@ import (
 )
 
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
-	k := kubectl.New()
+	var k *kubectl.Kubectl
+
 	Context("Create ManagedOSVersions from JSON", func() {
-
 		BeforeEach(func() {
-			By("Create a ManagedOSVersionChannel")
-			ui := catalog.NewManagedOSVersionChannel(
-				"testchannel",
-				"json",
-				map[string]interface{}{},
-			)
-
-			Eventually(func() error {
-				return k.ApplyYAML("fleet-default", "testchannel", ui)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			kubectl.New().Delete("managedosversionchannel", "-n", "fleet-default", "testchannel")
+			k = kubectl.New()
 		})
 
 		It("Creates a list of ManagedOSVersion", func() {
@@ -93,8 +80,6 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			http.Server(ctx, bridgeIP+":9999", string(b))
 
-			//time.Sleep(9000 * time.Second)
-
 			By("Create a ManagedOSVersionChannel")
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",
@@ -104,6 +89,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			err = k.ApplyYAML("fleet-default", "testchannel", ui)
 			Expect(err).ShouldNot(HaveOccurred())
+			defer k.Delete("managedosversionchannel", "-n", "fleet-default", "testchannel")
 
 			r, err := kubectl.GetData("fleet-default", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
 			if err != nil {
@@ -112,6 +98,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			Expect(string(r)).To(Equal("json"))
 
+			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
 				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				if err != nil {
@@ -131,6 +118,20 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
+			)
+
+			err = k.Delete("managedosversionchannel", "-n", "fleet-default", "testchannel")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			By("Check ManagedOSVersions are deleted on channel clean up")
+			Eventually(func() string {
+				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "v2", `jsonpath={}`)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return string(r)
+			}, 1*time.Minute, 2*time.Second).Should(
+				Equal(""),
 			)
 		})
 	})
