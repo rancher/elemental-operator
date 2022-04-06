@@ -36,29 +36,29 @@ func main() {
 		Usage:       "",
 		Description: "",
 		Copyright:   "",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:     "namespace",
-				EnvVar:   "NAMESPACE",
-				Usage:    "Namespace of the pod",
-				Required: true,
-			},
-			&cli.StringSliceFlag{
-				Name:     "sync-namespaces",
-				EnvVar:   "SYNC_NAMESPACE",
-				Usage:    "List of namespaces to watch",
-				Required: false,
-			},
-			&cli.StringFlag{
-				Name:     "sync-interval",
-				EnvVar:   "SYNC_INTERVAL",
-				Usage:    "Interval for the upgrade channel sync daemon",
-				Value:    "60m",
-				Required: true,
-			},
-		},
 		Commands: []cli.Command{
 			{
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "namespace",
+						EnvVar:   "NAMESPACE",
+						Usage:    "Namespace of the pod",
+						Required: true,
+					},
+					&cli.StringSliceFlag{
+						Name:     "sync-namespaces",
+						EnvVar:   "SYNC_NAMESPACE",
+						Usage:    "List of namespaces to watch",
+						Required: false,
+					},
+					&cli.StringFlag{
+						Name:     "sync-interval",
+						EnvVar:   "SYNC_INTERVAL",
+						Usage:    "Interval for the upgrade channel sync daemon",
+						Value:    "60m",
+						Required: true,
+					},
+				},
 				Name:   "start-operator",
 				Action: runOperator,
 			},
@@ -74,17 +74,20 @@ func main() {
 
 func runOperator(c *cli.Context) error {
 
-	logrus.Info("Starting controller")
 	ctx := signals.SetupSignalContext()
 
-	ticker, err := time.ParseDuration(c.String("sync-interval"))
+	interval := c.String("sync-interval")
+	namespace := c.String("namespace")
+
+	logrus.Infof("Starting controller at namespace %s. Upgrade sync interval at: %s", namespace, interval)
+
+	ticker, err := time.ParseDuration(interval)
 	if err != nil {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
-	//TODO check the proper namespace configuration, should it be the same namespace as the rancheros-operator?
 	if err := operator.Run(ctx,
-		operator.WithNamespace(c.String("namespace")),
+		operator.WithNamespace(namespace),
 		operator.WithServices(services.UpgradeChannelSync(ticker, c.StringSlice("sync-namespaces")...)),
 	); err != nil {
 		return err
