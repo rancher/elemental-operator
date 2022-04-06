@@ -174,9 +174,11 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				"testchannel2",
 				"custom",
 				map[string]interface{}{
-					"image":   "opensuse/tumbleweed",
-					"command": []string{"/bin/bash", "-c", "--"},
-					"args":    []string{fmt.Sprintf("echo '%s' > /output/data", string(b))},
+					"image":      "opensuse/tumbleweed",
+					"command":    []string{"/bin/bash", "-c", "--"},
+					"mountPath":  "/output",      // This defaults to /data
+					"outputFile": "/output/data", // This defaults to /data/output
+					"args":       []string{fmt.Sprintf("echo '%s' > /output/data", string(b))},
 				},
 			)
 

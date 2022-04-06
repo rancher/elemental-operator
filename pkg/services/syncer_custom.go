@@ -34,13 +34,16 @@ import (
 
 type CustomSyncer struct {
 	upgradev1.ContainerSpec
+
+	MountPath  string `json:"mountPath"`
+	OutputFile string `json:"outputFile"`
 }
 
-func (j *CustomSyncer) toContainers() []corev1.Container {
+func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	return []corev1.Container{
 		{
 			VolumeMounts: []corev1.VolumeMount{{Name: "output",
-				MountPath: "/output",
+				MountPath: mount,
 			}},
 			Name:    "runner",
 			Image:   j.Image,
@@ -54,6 +57,15 @@ func (j *CustomSyncer) toContainers() []corev1.Container {
 
 func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
+
+	mountDir := j.MountPath
+	outFile := j.OutputFile
+	if mountDir == "" {
+		mountDir = "/data"
+	}
+	if outFile == "" {
+		outFile = "/data/output"
+	}
 
 	serviceAccount := false
 	p, err := c.Core.Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
@@ -73,19 +85,20 @@ func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel
 			Spec: corev1.PodSpec{
 				RestartPolicy:                corev1.RestartPolicyOnFailure,
 				AutomountServiceAccountToken: &serviceAccount,
-				InitContainers:               j.toContainers(),
+				InitContainers:               j.toContainers(mountDir),
 				Volumes: []corev1.Volume{{
 					Name:         "output",
 					VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 				}},
 				Containers: []corev1.Container{{
-					VolumeMounts: []corev1.VolumeMount{{Name: "output",
-						MountPath: "/output",
+					VolumeMounts: []corev1.VolumeMount{{
+						Name:      "output",
+						MountPath: mountDir,
 					}},
 					Name:    "pause",
 					Image:   "busybox",
 					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{"cat /output/data && sleep 9000000000"},
+					Args:    []string{fmt.Sprintf("cat %s && sleep 9999999999", outFile)},
 				},
 				},
 			},
@@ -103,6 +116,8 @@ func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel
 		p.Status.InitContainerStatuses[0].State.Terminated != nil && p.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
 	if !terminated {
 		logrus.Infof("Waiting for '%s/%s' to finish", p.Namespace, p.Name)
+
+		r <- nil
 		return nil, err
 	} else if failed {
 		// reattempt
