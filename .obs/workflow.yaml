@@ -1,0 +1,13 @@
+workflow:
+  steps:
+    - trigger_services:
+        project: home:kwk:elemental
+        package: rancheros-operator
+    - rebuild_package:
+        project: home:kwk:elemental
+        package: rancheros-operator
+  filters:
+    event: push
+    branches:
+      only:
+        - main
