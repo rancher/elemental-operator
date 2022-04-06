@@ -88,7 +88,7 @@ func isOperatorInstalled(k *kubectl.Kubectl) bool {
 func deployOperator(k *kubectl.Kubectl) {
 	By("Deploying ros-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n", "cattle-rancheros-operator-system", "install", "--create-namespace", "rancheros-operator", chart)
+			"-n", "cattle-rancheros-operator-system", "install", "--set", "sync_interval=10s", "--create-namespace", "rancheros-operator", chart)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
