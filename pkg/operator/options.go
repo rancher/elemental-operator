@@ -17,8 +17,9 @@ limitations under the License.
 package operator
 
 type options struct {
-	namespace string
-	services  []service
+	namespace     string
+	services      []service
+	operatorImage string
 }
 
 // Setting are settings for the operator
@@ -38,6 +39,14 @@ func (o *options) apply(settings ...Setting) error {
 func WithNamespace(s string) Setting {
 	return func(o *options) error {
 		o.namespace = s
+		return nil
+	}
+}
+
+// WithOperatorImage sets the operator image
+func WithOperatorImage(s string) Setting {
+	return func(o *options) error {
+		o.operatorImage = s
 		return nil
 	}
 }

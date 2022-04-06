@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package services
+package types
 
 import (
 	"encoding/json"
@@ -23,7 +23,7 @@ import (
 	"time"
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,7 +32,7 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
+func (j *JSONSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s' (JSON)", s.Namespace, s.Name)
 
 	timeout := time.Duration(time.Second * 30)

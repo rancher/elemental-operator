@@ -14,13 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package services
+package config
 
 import (
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 )
 
-type syncer interface {
-	sync(chan interface{}, provv1.ManagedOSVersionChannel, *clients.Clients) ([]provv1.ManagedOSVersion, error)
+type Config struct {
+	Requeuer      chan interface{}
+	Clients       *clients.Clients
+	OperatorImage string
+}
+
+func (c Config) Requeue() {
+	c.Requeuer <- nil
 }

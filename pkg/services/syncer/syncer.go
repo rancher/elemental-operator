@@ -14,26 +14,36 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package services
+package syncer
 
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/object"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/types"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, namespace ...string) func(context.Context, *clients.Clients) error {
+func UpgradeChannelSync(interval time.Duration, image string, namespace ...string) func(context.Context, *clients.Clients) error {
 	requeuer := make(chan interface{}, 10)
+
 	requeue := func(c *clients.Clients) {
+		config := config.Config{
+			Requeuer:      requeuer,
+			OperatorImage: image,
+			Clients:       c,
+		}
 		if len(namespace) == 0 {
 			logrus.Debug("Listing all namespaces")
-			err := sync(requeuer, c, "")
+			err := syncNamespace(config, "")
 			if err != nil {
 				logrus.Warn(err)
 			}
@@ -41,7 +51,7 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 		}
 
 		for _, n := range namespace {
-			err := sync(requeuer, c, n)
+			err := syncNamespace(config, n)
 			if err != nil {
 				logrus.Warn(err)
 			}
@@ -56,15 +66,16 @@ func UpgradeChannelSync(interval time.Duration, namespace ...string) func(contex
 			case <-ticker.C:
 				requeue(c)
 			case <-requeuer:
+				// Delay few seconds between requeues
+				time.Sleep(5 * time.Second)
 				requeue(c)
 			}
 		}
 	}
 }
 
-func sync(r chan interface{}, c *clients.Clients, namespace string) error {
-
-	list, err := c.OS.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
+func syncNamespace(config config.Config, namespace string) error {
+	list, err := config.Clients.OS.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -72,12 +83,12 @@ func sync(r chan interface{}, c *clients.Clients, namespace string) error {
 	//TODO collect all errors
 	versions := map[string][]provv1.ManagedOSVersion{}
 	for _, cc := range list.Items {
-		s, err := NewManagedOSVersionChannelSyncer(cc.Spec)
+		s, err := newManagedOSVersionChannelSyncer(cc.Spec)
 		if err != nil {
 			return err
 		}
 
-		vers, err := s.sync(r, cc, c)
+		vers, err := s.Sync(config, cc)
 		if err != nil {
 			logrus.Error(err)
 			continue
@@ -101,7 +112,7 @@ func sync(r chan interface{}, c *clients.Clients, namespace string) error {
 	// TODO: collect all errors
 	for _, vv := range versions {
 		for _, v := range vv {
-			cli := c.OS.ManagedOSVersion()
+			cli := config.Clients.OS.ManagedOSVersion()
 
 			_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
 			if err == nil {
@@ -115,4 +126,34 @@ func sync(r chan interface{}, c *clients.Clients, namespace string) error {
 		}
 	}
 	return nil
+}
+
+type syncer interface {
+	Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error)
+}
+
+const (
+	jsonType   = "json"
+	customType = "custom"
+)
+
+func newManagedOSVersionChannelSyncer(spec provv1.ManagedOSVersionChannelSpec) (syncer, error) {
+	switch strings.ToLower(spec.Type) {
+	case jsonType:
+		j := &types.JSONSyncer{}
+		err := object.Render(spec.Options.Data, j)
+		if err != nil {
+			return nil, err
+		}
+		return j, nil
+	case customType:
+		j := &types.CustomSyncer{}
+		err := object.Render(spec.Options.Data, j)
+		if err != nil {
+			return nil, err
+		}
+		return j, nil
+	default:
+		return nil, fmt.Errorf("unknown version channel type '%s'", spec.Type)
+	}
 }

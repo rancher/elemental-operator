@@ -18,11 +18,14 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -39,6 +42,24 @@ func main() {
 		Commands: []cli.Command{
 			{
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "file",
+						EnvVar:   "FILE",
+						Usage:    "File to display",
+						Required: true,
+					},
+				},
+				Name:   "display",
+				Action: display,
+			},
+			{
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "operator-image",
+						EnvVar:   "OPERATOR_IMAGE",
+						Usage:    "Image of the operator",
+						Required: true,
+					},
 					&cli.StringFlag{
 						Name:     "namespace",
 						EnvVar:   "NAMESPACE",
@@ -72,6 +93,29 @@ func main() {
 	}
 }
 
+func display(c *cli.Context) error {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	go func() {
+		<-sigc
+		os.Exit(0)
+	}()
+
+	b, err := ioutil.ReadFile(c.String("file"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(b))
+	for {
+		time.Sleep(time.Duration(int64(^uint64(0) >> 1)))
+	}
+}
+
 func runOperator(c *cli.Context) error {
 
 	ctx := signals.SetupSignalContext()
@@ -88,7 +132,7 @@ func runOperator(c *cli.Context) error {
 
 	if err := operator.Run(ctx,
 		operator.WithNamespace(namespace),
-		operator.WithServices(services.UpgradeChannelSync(ticker, c.StringSlice("sync-namespaces")...)),
+		operator.WithServices(syncer.UpgradeChannelSync(ticker, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
 	); err != nil {
 		return err
 	}

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package services
+package types
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
 )
 
 type CustomSyncer struct {
@@ -55,7 +55,7 @@ func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel, c *clients.Clients) ([]provv1.ManagedOSVersion, error) {
+func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
 
 	mountDir := j.MountPath
@@ -68,9 +68,9 @@ func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel
 	}
 
 	serviceAccount := false
-	p, err := c.Core.Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
+	p, err := c.Clients.Core.Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
 	if err != nil {
-		_, err = c.Core.Pod().Create(&corev1.Pod{
+		_, err = c.Clients.Core.Pod().Create(&corev1.Pod{
 			TypeMeta: v1.TypeMeta{
 				APIVersion: "v1",
 				Kind:       "Pod",
@@ -96,41 +96,45 @@ func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel
 						MountPath: mountDir,
 					}},
 					Name:    "pause",
-					Image:   "busybox",
-					Command: []string{"/bin/sh", "-c"},
-					Args:    []string{fmt.Sprintf("cat %s && sleep 9999999999", outFile)},
+					Image:   c.OperatorImage,
+					Command: []string{"/usr/sbin/rancheros-operator"},
+					Args:    []string{"display"},
+					Env: []corev1.EnvVar{{
+						Name:  "FILE",
+						Value: outFile,
+					}},
 				},
 				},
 			},
 		})
 
 		// Requeueing
-		r <- nil
+		c.Requeue()
 		return nil, err
 	}
 
-	// TODO Check container state before getting logs.
 	terminated := len(p.Status.InitContainerStatuses) > 0 && p.Status.InitContainerStatuses[0].Name == "runner" &&
-		p.Status.InitContainerStatuses[0].State.Terminated != nil && p.Status.InitContainerStatuses[0].State.Terminated.ExitCode == 0
-	failed := len(p.Status.InitContainerStatuses) > 0 && p.Status.InitContainerStatuses[0].Name == "runner" &&
-		p.Status.InitContainerStatuses[0].State.Terminated != nil && p.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
+		p.Status.InitContainerStatuses[0].State.Terminated != nil
+
+	failed := terminated && p.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
+
 	if !terminated {
 		logrus.Infof("Waiting for '%s/%s' to finish", p.Namespace, p.Name)
 
-		r <- nil
+		c.Requeue()
 		return nil, err
 	} else if failed {
 		// reattempt
 		logrus.Infof("'%s/%s' failed, retrying", p.Namespace, p.Name)
 
-		err = c.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
+		err = c.Clients.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
 		if err != nil {
 			return nil, err
 		}
 		return nil, err
 	}
 
-	req := c.K8s.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
+	req := c.Clients.K8s.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
 	podLogs, err := req.Stream(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("error in opening stream")
@@ -143,7 +147,7 @@ func (j *CustomSyncer) sync(r chan interface{}, s provv1.ManagedOSVersionChannel
 		return nil, fmt.Errorf("error in copy information from podLogs to buf")
 	}
 
-	err = c.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
+	err = c.Clients.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
 	if err != nil {
 		return nil, err
 	}
