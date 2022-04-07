@@ -130,9 +130,11 @@ func runOperator(c *cli.Context) error {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
+	requeuer := make(chan interface{}, 10)
 	if err := operator.Run(ctx,
+		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(namespace),
-		operator.WithServices(syncer.UpgradeChannelSync(ticker, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
+		operator.WithServices(syncer.UpgradeChannelSync(ticker, requeuer, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
 	); err != nil {
 		return err
 	}

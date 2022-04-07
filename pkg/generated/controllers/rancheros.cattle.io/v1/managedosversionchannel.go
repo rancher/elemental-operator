@@ -263,9 +263,9 @@ func (c *managedOSVersionChannelCache) GetByIndex(indexName, key string) (result
 	return result, nil
 }
 
-type ManagedOSVersionChannelStatusHandler func(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSImageStatus) (v1.ManagedOSImageStatus, error)
+type ManagedOSVersionChannelStatusHandler func(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSVersionChannelSpecStatus) (v1.ManagedOSVersionChannelSpecStatus, error)
 
-type ManagedOSVersionChannelGeneratingHandler func(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSImageStatus) ([]runtime.Object, v1.ManagedOSImageStatus, error)
+type ManagedOSVersionChannelGeneratingHandler func(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSVersionChannelSpecStatus) ([]runtime.Object, v1.ManagedOSVersionChannelSpecStatus, error)
 
 func RegisterManagedOSVersionChannelStatusHandler(ctx context.Context, controller ManagedOSVersionChannelController, condition condition.Cond, name string, handler ManagedOSVersionChannelStatusHandler) {
 	statusHandler := &managedOSVersionChannelStatusHandler{
@@ -359,7 +359,7 @@ func (a *managedOSVersionChannelGeneratingHandler) Remove(key string, obj *v1.Ma
 		ApplyObjects()
 }
 
-func (a *managedOSVersionChannelGeneratingHandler) Handle(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSImageStatus) (v1.ManagedOSImageStatus, error) {
+func (a *managedOSVersionChannelGeneratingHandler) Handle(obj *v1.ManagedOSVersionChannel, status v1.ManagedOSVersionChannelSpecStatus) (v1.ManagedOSVersionChannelSpecStatus, error) {
 	if !obj.DeletionTimestamp.IsZero() {
 		return status, nil
 	}

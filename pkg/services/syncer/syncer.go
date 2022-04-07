@@ -32,9 +32,7 @@ import (
 )
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, image string, namespace ...string) func(context.Context, *clients.Clients) error {
-	requeuer := make(chan interface{}, 10)
-
+func UpgradeChannelSync(interval time.Duration, requeuer chan interface{}, image string, namespace ...string) func(context.Context, *clients.Clients) error {
 	requeue := func(c *clients.Clients) {
 		config := config.Config{
 			Requeuer:      requeuer,
