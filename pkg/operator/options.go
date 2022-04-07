@@ -16,11 +16,13 @@ limitations under the License.
 
 package operator
 
+import "github.com/rancher-sandbox/rancheros-operator/pkg/types"
+
 type options struct {
 	namespace     string
 	services      []service
 	operatorImage string
-	requeuer      chan interface{}
+	requeuer      types.Requeuer
 }
 
 // Setting are settings for the operator
@@ -45,7 +47,7 @@ func WithNamespace(s string) Setting {
 }
 
 // WithRequeuer sets the operator requeuer channel for ManagedOSVersions syncs
-func WithRequeuer(c chan interface{}) Setting {
+func WithRequeuer(c types.Requeuer) Setting {
 	return func(o *options) error {
 		o.requeuer = c
 		return nil

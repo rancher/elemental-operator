@@ -18,14 +18,11 @@ package config
 
 import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
 )
 
 type Config struct {
-	Requeuer      chan interface{}
+	Requeuer      types.Requeuer
 	Clients       *clients.Clients
 	OperatorImage string
-}
-
-func (c Config) Requeue() {
-	c.Requeuer <- nil
 }

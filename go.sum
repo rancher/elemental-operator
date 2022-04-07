@@ -943,8 +943,6 @@ github.com/pseudomuto/protoc-gen-doc v1.5.0/go.mod h1:exDTOVwqpp30eV/EDPFLZy3Pwr
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
 github.com/qri-io/starlib v0.4.2-0.20200213133954-ff2e8cd5ef8d/go.mod h1:7DPO4domFU579Ga6E61sB9VFNaniPVwJP5C4bBCu3wA=
 github.com/rackspace/gophercloud v0.0.0-20150408191457-ce0f487f6747/go.mod h1:4bJ1FwuaBZ6dt1VcDX5/O662mwR8GWqS4l68H6hkoYQ=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220404080514-8d32d4d75a67 h1:L/1Yx1wP7k0EftJHx8eR8vsmNTIReGgpdDe7ek2pQis=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220404080514-8d32d4d75a67/go.mod h1:tBG6E0pF89pslQvva2lKhL/6ShpqAkjwFhdUfevTR6o=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220407110407-bb1edfe6bb21 h1:IE/UokaiSdQEK7CuzMkl/l5XgE17gMsH7XJol87kSOs=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220407110407-bb1edfe6bb21/go.mod h1:tBG6E0pF89pslQvva2lKhL/6ShpqAkjwFhdUfevTR6o=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7 h1:+Yq4bfEJBV35QFNQFhvRsjwOIfxU0SAPZDCefAM8jy4=
@@ -1103,7 +1101,6 @@ github.com/urfave/cli v0.0.0-20171014202726-7bc6a0acffa5/go.mod h1:70zkFmudgCuE/
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli v1.22.2/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
-github.com/urfave/cli v1.22.4 h1:u7tSpNPPswAFymm8IehJhy4uJMlUuU/GmqSkvJ1InXA=
 github.com/urfave/cli v1.22.4/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/urfave/cli v1.22.5 h1:lNq9sAHXK2qfdI8W+GRItjCEkI+2oR4d+MEHy1CKXoU=
 github.com/urfave/cli v1.22.5/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=

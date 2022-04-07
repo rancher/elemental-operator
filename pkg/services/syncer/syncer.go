@@ -29,11 +29,13 @@ import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/types"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	rosTypes "github.com/rancher-sandbox/rancheros-operator/pkg/types"
 )
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, requeuer chan interface{}, image string, namespace ...string) func(context.Context, *clients.Clients) error {
-	requeue := func(c *clients.Clients) {
+func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, namespace ...string) func(context.Context, *clients.Clients) error {
+	reSync := func(c *clients.Clients) {
 		config := config.Config{
 			Requeuer:      requeuer,
 			OperatorImage: image,
@@ -62,11 +64,11 @@ func UpgradeChannelSync(interval time.Duration, requeuer chan interface{}, image
 			case <-ctx.Done():
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
-				requeue(c)
-			case <-requeuer:
+				reSync(c)
+			case <-requeuer.Dequeue():
 				// Delay few seconds between requeues
 				time.Sleep(5 * time.Second)
-				requeue(c)
+				reSync(c)
 			}
 		}
 	}

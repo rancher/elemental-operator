@@ -22,6 +22,7 @@ import (
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -32,17 +33,18 @@ import (
 
 const controllerAgentName = "mos-sync"
 
-func Register(ctx context.Context, r chan interface{}, c *clients.Clients) {
+// Register registers the ManagedOSVersionChannel controller to the clients with the given options
+func Register(ctx context.Context, r types.Requeuer, c *clients.Clients) {
 	h := &handler{
 		requer:        r,
 		clients:       c,
 		eventRecorder: buildEventRecorder(c.Events),
 	}
-	c.OS.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.OnChange)
+	c.OS.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.onChange)
 }
 
 type handler struct {
-	requer        chan interface{}
+	requer        types.Requeuer
 	clients       *clients.Clients
 	eventRecorder record.EventRecorder
 }
@@ -57,7 +59,7 @@ func buildEventRecorder(events corev1Typed.EventInterface) record.EventRecorder 
 	return eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 }
 
-func (h *handler) OnChange(s string, moc *provv1.ManagedOSVersionChannel) (*provv1.ManagedOSVersionChannel, error) {
+func (h *handler) onChange(s string, moc *provv1.ManagedOSVersionChannel) (*provv1.ManagedOSVersionChannel, error) {
 
 	if moc == nil {
 		return nil, nil
@@ -73,7 +75,7 @@ func (h *handler) OnChange(s string, moc *provv1.ManagedOSVersionChannel) (*prov
 
 	logrus.Info("Requeueing sync from controller")
 
-	h.requer <- nil
+	h.requer.Requeue()
 
 	return nil, nil
 }

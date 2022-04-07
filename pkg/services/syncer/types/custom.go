@@ -109,7 +109,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 		})
 
 		// Requeueing
-		c.Requeue()
+		c.Requeuer.Requeue()
 		return nil, err
 	}
 
@@ -121,7 +121,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 	if !terminated {
 		logrus.Infof("Waiting for '%s/%s' to finish", p.Namespace, p.Name)
 
-		c.Requeue()
+		c.Requeuer.Requeue()
 		return nil, err
 	} else if failed {
 		// reattempt

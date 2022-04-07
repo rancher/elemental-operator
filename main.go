@@ -26,6 +26,7 @@ import (
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -130,7 +131,8 @@ func runOperator(c *cli.Context) error {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
-	requeuer := make(chan interface{}, 10)
+	requeuer := types.ConcurrentRequeuer(10)
+
 	if err := operator.Run(ctx,
 		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(namespace),
