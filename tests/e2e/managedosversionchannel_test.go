@@ -223,7 +223,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				}
 
 				return string(r)
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
@@ -233,7 +233,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 					fmt.Println(err)
 				}
 				return string(r)
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
 			)
 		})

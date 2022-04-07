@@ -24,14 +24,32 @@ import (
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
+	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/object"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/types"
-	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	rosTypes "github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	corev1Typed "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	"k8s.io/client-go/tools/record"
 )
+
+const controllerAgentName = "mos-sync"
+
+func buildEventRecorder(events corev1Typed.EventInterface) record.EventRecorder {
+	// Create event broadcaster
+	utilruntime.Must(rosscheme.AddToScheme(scheme.Scheme))
+	logrus.Info("Creating event broadcaster for " + controllerAgentName)
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(logrus.Infof)
+	eventBroadcaster.StartRecordingToSink(&corev1Typed.EventSinkImpl{Interface: events})
+	return eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
+}
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
 func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, namespace ...string) func(context.Context, *clients.Clients) error {
@@ -40,6 +58,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, imag
 			Requeuer:      requeuer,
 			OperatorImage: image,
 			Clients:       c,
+			Recorder:      buildEventRecorder(c.Events),
 		}
 		if len(namespace) == 0 {
 			logrus.Debug("Listing all namespaces")
@@ -80,7 +99,6 @@ func syncNamespace(config config.Config, namespace string) error {
 		return err
 	}
 
-	//TODO collect all errors
 	versions := map[string][]provv1.ManagedOSVersion{}
 	for _, cc := range list.Items {
 		s, err := newManagedOSVersionChannelSyncer(cc.Spec)
@@ -90,6 +108,7 @@ func syncNamespace(config config.Config, namespace string) error {
 
 		vers, err := s.Sync(config, cc)
 		if err != nil {
+			config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
 			logrus.Error(err)
 			continue
 		}
@@ -121,7 +140,10 @@ func syncNamespace(config config.Config, namespace string) error {
 			}
 			_, err = cli.Create(&v)
 			if err != nil {
-				return err
+				// TODO: Need to keep cc for each version
+				//config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
+				logrus.Debugf("failed creating %s(%s): %w", v.Name, v.Spec.Version, err)
+				continue
 			}
 		}
 	}
