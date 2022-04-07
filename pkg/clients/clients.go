@@ -29,6 +29,8 @@ import (
 	oscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/generic"
+	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -43,10 +45,16 @@ type Clients struct {
 	OS           oscontrollers.Interface
 	Rancher      ranchercontrollers.Interface
 	Provisioning provcontrollers.Interface
+	Events       corev1.EventInterface
 }
 
 func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 	c, err := clients.NewFromConfig(restConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +64,7 @@ func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 	}
 	return &Clients{
 		Clients:      c,
+		Events:       kubeClient.CoreV1().Events(""),
 		Fleet:        fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
 		OS:           rancheros.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Rancheros().V1(),
 		Rancher:      management.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Management().V3(),
