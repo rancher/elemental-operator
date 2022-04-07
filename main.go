@@ -17,52 +17,127 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
-)
-
-var (
-	namespace  = flag.String("namespace", "cattle-rancheros-operator-system", "Namespace of the pod")
-	namespaces = flag.String("namespaces", "", "A comma separated list of namespaces to watch")
-	interval   = flag.String("sync-interval", "60m", "Interval for the upgrade channel ticker")
+	"github.com/urfave/cli"
 )
 
 func main() {
-	flag.Parse()
-	logrus.Info("Starting controller")
+	app := &cli.App{
+		Name:        "rancheros-operator",
+		Version:     "", // TODO: bind internal.Version to CI while building with ldflags
+		Author:      "",
+		Usage:       "",
+		Description: "",
+		Copyright:   "",
+		Commands: []cli.Command{
+			{
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "file",
+						EnvVar:   "FILE",
+						Usage:    "File to display",
+						Required: true,
+					},
+				},
+				Name:   "display",
+				Action: display,
+			},
+			{
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "operator-image",
+						EnvVar:   "OPERATOR_IMAGE",
+						Usage:    "Image of the operator",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     "namespace",
+						EnvVar:   "NAMESPACE",
+						Usage:    "Namespace of the pod",
+						Required: true,
+					},
+					&cli.StringSliceFlag{
+						Name:     "sync-namespaces",
+						EnvVar:   "SYNC_NAMESPACE",
+						Usage:    "List of namespaces to watch",
+						Required: false,
+					},
+					&cli.StringFlag{
+						Name:     "sync-interval",
+						EnvVar:   "SYNC_INTERVAL",
+						Usage:    "Interval for the upgrade channel sync daemon",
+						Value:    "60m",
+						Required: true,
+					},
+				},
+				Name:   "start-operator",
+				Action: runOperator,
+			},
+		},
+	}
+
+	err := app.Run(os.Args)
+	if err != nil {
+		logrus.Error(err)
+		os.Exit(1)
+	}
+}
+
+func display(c *cli.Context) error {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+	go func() {
+		<-sigc
+		os.Exit(0)
+	}()
+
+	b, err := ioutil.ReadFile(c.String("file"))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(b))
+	for {
+		time.Sleep(time.Duration(int64(^uint64(0) >> 1)))
+	}
+}
+
+func runOperator(c *cli.Context) error {
+
 	ctx := signals.SetupSignalContext()
 
-	if os.Getenv("NAMESPACE") != "" {
-		*namespace = os.Getenv("NAMESPACE")
-	}
+	interval := c.String("sync-interval")
+	namespace := c.String("namespace")
 
-	var ns []string
-	if os.Getenv("WATCH_NAMESPACE") != "" {
-		*namespaces = os.Getenv("WATCH_NAMESPACE")
-	}
+	logrus.Infof("Starting controller at namespace %s. Upgrade sync interval at: %s", namespace, interval)
 
-	if *namespaces != "" {
-		ns = strings.Split(*namespaces, ",")
-	}
-
-	ticker, err := time.ParseDuration(*interval)
+	ticker, err := time.ParseDuration(interval)
 	if err != nil {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
 	if err := operator.Run(ctx,
-		operator.WithNamespace(*namespace),
-		operator.WithServices(services.UpgradeChannelSync(ticker, ns...)),
+		operator.WithNamespace(namespace),
+		operator.WithServices(syncer.UpgradeChannelSync(ticker, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
 	); err != nil {
-		logrus.Fatalf("Error starting: %s", err.Error())
+		return err
 	}
 
 	<-ctx.Done()
+
+	return fmt.Errorf("operator shouldn't return")
 }

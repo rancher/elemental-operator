@@ -13,6 +13,12 @@ spec:
     spec:
       containers:
       - env:
+        - name: NAMESPACE
+          value: {{ .Release.Namespace }}
+        - name: SYNC_INTERVAL
+          value: {{.Values.sync_interval}}
+        - name: OPERATOR_IMAGE
+          value: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
         {{- if .Values.proxy }}
         - name: HTTP_PROXY
           value: {{ .Values.proxy }}
@@ -34,8 +40,7 @@ spec:
         command:
         - /usr/sbin/rancheros-operator
         args:
-          - "-sync-interval"
-          - "{{.Values.sync_interval}}"
+        - start-operator
       {{- if .Values.hostbin }}
       volumes:
         - name: sbin

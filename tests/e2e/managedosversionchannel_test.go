@@ -37,12 +37,12 @@ import (
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 	var k *kubectl.Kubectl
 
-	Context("Create ManagedOSVersions from JSON", func() {
+	Context("Create ManagedOSVersions", func() {
 		BeforeEach(func() {
 			k = kubectl.New()
 		})
 
-		It("Creates a list of ManagedOSVersion", func() {
+		It("creates a list of ManagedOSVersion from a JSON server", func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -132,6 +132,85 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal(""),
+			)
+		})
+
+		It("creates a list of ManagedOSVersion from a custom hook", func() {
+
+			versions := []provv1.ManagedOSVersion{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+					Spec: provv1.ManagedOSVersionSpec{
+						Version:    "v1",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: &fleet.GenericMap{
+							Data: map[string]interface{}{
+								"upgradeImage": "registry.com/repository/image:v1",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "bar"},
+					Spec: provv1.ManagedOSVersionSpec{
+						Version:    "v2",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: &fleet.GenericMap{
+							Data: map[string]interface{}{
+								"upgradeImage": "registry.com/repository/image:v2",
+							},
+						},
+					},
+				},
+			}
+
+			b, err := json.Marshal(versions)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			By("Create a ManagedOSVersionChannel")
+			ui := catalog.NewManagedOSVersionChannel(
+				"testchannel2",
+				"custom",
+				map[string]interface{}{
+					"image":      "opensuse/tumbleweed",
+					"command":    []string{"/bin/bash", "-c", "--"},
+					"mountPath":  "/output",      // This defaults to /data
+					"outputFile": "/output/data", // This defaults to /data/output
+					"args":       []string{fmt.Sprintf("echo '%s' > /output/data", string(b))},
+				},
+			)
+
+			err = k.ApplyYAML("fleet-default", "testchannel2", ui)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			r, err := kubectl.GetData("fleet-default", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			Expect(string(r)).To(Equal("custom"))
+
+			Eventually(func() string {
+				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				return string(r)
+			}, 1*time.Minute, 2*time.Second).Should(
+				Equal("registry.com/repository/image:v1"),
+			)
+
+			Eventually(func() string {
+				r, err := kubectl.GetData("fleet-default", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return string(r)
+			}, 1*time.Minute, 2*time.Second).Should(
+				Equal("registry.com/repository/image:v2"),
 			)
 		})
 	})
