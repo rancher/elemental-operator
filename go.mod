@@ -38,7 +38,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
-	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220404080514-8d32d4d75a67
+	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220407110407-bb1edfe6bb21
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210927195558-4aaa778d23dd
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607

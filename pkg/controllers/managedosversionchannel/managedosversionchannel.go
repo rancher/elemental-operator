@@ -66,7 +66,7 @@ func (h *handler) OnChange(s string, moc *provv1.ManagedOSVersionChannel) (*prov
 	if moc.Spec.Type == "" {
 		copy := moc.DeepCopy()
 		copy.Status.Status = "error"
-		h.eventRecorder.Event(moc, corev1.EventTypeWarning, "error", "No type defined")
+		h.eventRecorder.Event(moc, corev1.EventTypeWarning, "error", "No ManagedOSVersionChannel type defined")
 		_, err := h.clients.OS.ManagedOSVersionChannel().UpdateStatus(copy)
 		return nil, err
 	}
