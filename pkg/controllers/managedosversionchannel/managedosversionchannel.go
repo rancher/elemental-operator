@@ -21,20 +21,40 @@ import (
 
 	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1Typed "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 )
 
-func Register(ctx context.Context, r chan interface{}, clients *clients.Clients) {
+const controllerAgentName = "mos-sync"
+
+func Register(ctx context.Context, r chan interface{}, c *clients.Clients) {
 	h := &handler{
-		requer:  r,
-		clients: clients,
+		requer:        r,
+		clients:       c,
+		eventRecorder: buildEventRecorder(c.Events),
 	}
-	clients.OS.ManagedOSVersionChannel().OnChange(ctx, "mos-sync", h.OnChange)
+	c.OS.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.OnChange)
 }
 
 type handler struct {
-	requer  chan interface{}
-	clients *clients.Clients
+	requer        chan interface{}
+	clients       *clients.Clients
+	eventRecorder record.EventRecorder
+}
+
+func buildEventRecorder(events corev1Typed.EventInterface) record.EventRecorder {
+	// Create event broadcaster
+	utilruntime.Must(rosscheme.AddToScheme(scheme.Scheme))
+	logrus.Info("Creating event broadcaster for " + controllerAgentName)
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(logrus.Infof)
+	eventBroadcaster.StartRecordingToSink(&corev1Typed.EventSinkImpl{Interface: events})
+	return eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 }
 
 func (h *handler) OnChange(s string, moc *provv1.ManagedOSVersionChannel) (*provv1.ManagedOSVersionChannel, error) {
@@ -46,6 +66,7 @@ func (h *handler) OnChange(s string, moc *provv1.ManagedOSVersionChannel) (*prov
 	if moc.Spec.Type == "" {
 		copy := moc.DeepCopy()
 		copy.Status.Status = "error"
+		h.eventRecorder.Event(moc, corev1.EventTypeWarning, "error", "No type defined")
 		_, err := h.clients.OS.ManagedOSVersionChannel().UpdateStatus(copy)
 		return nil, err
 	}
