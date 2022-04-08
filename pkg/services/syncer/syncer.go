@@ -36,7 +36,7 @@ import (
 const controllerAgentName = "mos-sync"
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, namespace ...string) func(context.Context, *clients.Clients) error {
+func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, concurrent bool, namespace ...string) func(context.Context, *clients.Clients) error {
 	reSync := func(c *clients.Clients) {
 		recorder := c.EventRecorder(controllerAgentName)
 
@@ -63,6 +63,11 @@ func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, imag
 		}
 	}
 	return func(ctx context.Context, c *clients.Clients) error {
+		work := func() {
+			// Delay few seconds between requeues
+			time.Sleep(5 * time.Second)
+			reSync(c)
+		}
 		ticker := time.NewTicker(interval)
 		for {
 			select {
@@ -71,9 +76,11 @@ func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, imag
 			case <-ticker.C:
 				reSync(c)
 			case <-requeuer.Dequeue():
-				// Delay few seconds between requeues
-				time.Sleep(5 * time.Second)
-				reSync(c)
+				if concurrent {
+					go work()
+				} else {
+					work()
+				}
 			}
 		}
 	}

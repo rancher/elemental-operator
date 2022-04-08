@@ -131,12 +131,15 @@ func runOperator(c *cli.Context) error {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
-	requeuer := types.ConcurrentRequeuer(10)
+	// We do want a stack for requeuer here, but we want the syncer to
+	// tick sequentially. We can turn the behavior the other way around
+	// by setting UpgradeChannelSync concurrent to true.
+	requeuer := types.ConcurrentRequeuer(100)
 
 	if err := operator.Run(ctx,
 		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(namespace),
-		operator.WithServices(syncer.UpgradeChannelSync(ticker, requeuer, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
+		operator.WithServices(syncer.UpgradeChannelSync(ticker, requeuer, c.String("operator-image"), false, c.StringSlice("sync-namespaces")...)),
 	); err != nil {
 		return err
 	}
