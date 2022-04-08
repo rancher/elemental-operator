@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -42,43 +41,6 @@ func TestE2e(t *testing.T) {
 	RunSpecs(t, "ros-operator e2e test Suite")
 }
 
-func waitNamespacePodsDelete(namespace string) {
-	k := kubectl.New()
-
-	Eventually(func() bool {
-		pods, err := k.GetPodNames(namespace, "")
-		Expect(err).ToNot(HaveOccurred())
-
-		return len(pods) <= 0
-	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
-}
-
-func waitNamespaceDeletion(namespace string) {
-	Eventually(func() bool {
-		phase, _ := kubectl.GetData(namespace, "namespace", namespace, `jsonpath={.status.phase}`)
-		return string(phase) == ""
-	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
-}
-func waitNamespace(namespace, label string) {
-	k := kubectl.New()
-
-	Eventually(func() bool {
-		pods, err := k.GetPodNames(namespace, label)
-		Expect(err).ToNot(HaveOccurred())
-
-		for _, p := range pods {
-			e, _ := k.PodStatus(namespace, p)
-			if e == nil || e.ContainerStatuses == nil || len(e.ContainerStatuses) == 0 {
-				return false
-			}
-			if !e.ContainerStatuses[0].Ready {
-				return false
-			}
-		}
-		return true
-	}, 15*time.Minute, 2*time.Second).Should(BeTrue())
-}
-
 func isOperatorInstalled(k *kubectl.Kubectl) bool {
 	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
 	Expect(err).ToNot(HaveOccurred())
@@ -94,7 +56,8 @@ func deployOperator(k *kubectl.Kubectl) {
 		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
 		Expect(err).ToNot(HaveOccurred())
 
-		waitNamespace("cattle-rancheros-operator-system", "app=rancheros-operator")
+		err = k.WaitForNamespaceWithPod("cattle-rancheros-operator-system", "app=rancheros-operator")
+		Expect(err).ToNot(HaveOccurred())
 
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
@@ -133,17 +96,25 @@ var _ = BeforeSuite(func() {
 		// Upgrade/delete of operator only goes here
 		// (no further bootstrap is required)
 		By("Upgrading the operator only", func() {
-			kubectl.DeleteNamespace("cattle-rancheros-operator-system")
-			waitNamespaceDeletion("cattle-rancheros-operator-system")
+			err := kubectl.DeleteNamespace("cattle-rancheros-operator-system")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k.WaitNamespacePodsDelete("cattle-rancheros-operator-system")
+			Expect(err).ToNot(HaveOccurred())
+
 			deployOperator(k)
+
 			// Somehow rancher needs to be restarted after a ros-operator upgrade
 			// to get machineregistration working
-			pods, _ := k.GetPodNames("cattle-system", "")
+			pods, err := k.GetPodNames("cattle-system", "")
+			Expect(err).ToNot(HaveOccurred())
 			for _, p := range pods {
-				k.Delete("pod", "-n", "cattle-system", p)
+				err = k.Delete("pod", "-n", "cattle-system", p)
+				Expect(err).ToNot(HaveOccurred())
 			}
 
-			waitNamespace("cattle-system", "app=rancher")
+			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
+			Expect(err).ToNot(HaveOccurred())
 		})
 		return
 	}
@@ -164,16 +135,19 @@ var _ = BeforeSuite(func() {
 			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
-			waitNamespace("ingress-nginx", "app.kubernetes.io/component=controller")
+			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		By("installing cert-manager", func() {
 			err := kubectl.RunHelmBinaryWithCustomErr("-n", "cert-manager", "install", "--set", "installCRDs=true", "--create-namespace", "cert-manager", "https://charts.jetstack.io/charts/cert-manager-v1.5.3.tgz")
 			Expect(err).ToNot(HaveOccurred())
+
 			err = k.WaitForPod("cert-manager", "app.kubernetes.io/instance=cert-manager", "cert-manager-cainjector")
 			Expect(err).ToNot(HaveOccurred())
 
-			waitNamespace("cert-manager", "app.kubernetes.io/instance=cert-manager")
+			err = k.WaitForNamespaceWithPod("cert-manager", "app.kubernetes.io/instance=cert-manager")
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		By("installing rancher", func() {
@@ -195,8 +169,11 @@ var _ = BeforeSuite(func() {
 			err = k.WaitForPod("cattle-system", "app=rancher", "rancher")
 			Expect(err).ToNot(HaveOccurred())
 
-			waitNamespace("cattle-system", "app=rancher")
-			waitNamespace("cattle-fleet-local-system", "app=fleet-agent")
+			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k.WaitForNamespaceWithPod("cattle-fleet-local-system", "app=fleet-agent")
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
