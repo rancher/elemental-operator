@@ -19,10 +19,12 @@ package config
 import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	"k8s.io/client-go/tools/record"
 )
 
 type Config struct {
 	Requeuer      types.Requeuer
 	Clients       *clients.Clients
 	OperatorImage string
+	Recorder      record.EventRecorder
 }

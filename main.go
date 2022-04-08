@@ -143,5 +143,5 @@ func runOperator(c *cli.Context) error {
 
 	<-ctx.Done()
 
-	return fmt.Errorf("operator shouldn't return")
+	return fmt.Errorf("operator quits")
 }

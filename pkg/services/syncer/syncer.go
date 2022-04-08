@@ -38,10 +38,13 @@ const controllerAgentName = "mos-sync"
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
 func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, namespace ...string) func(context.Context, *clients.Clients) error {
 	reSync := func(c *clients.Clients) {
+		recorder := c.EventRecorder(controllerAgentName)
+
 		config := config.Config{
 			Requeuer:      requeuer,
 			OperatorImage: image,
 			Clients:       c,
+			Recorder:      recorder,
 		}
 		if len(namespace) == 0 {
 			logrus.Debug("Listing all namespaces")
@@ -81,7 +84,6 @@ func syncNamespace(config config.Config, namespace string) error {
 	if err != nil {
 		return err
 	}
-	recorder := config.Clients.EventRecorder(controllerAgentName)
 
 	versions := map[string][]provv1.ManagedOSVersion{}
 	for _, cc := range list.Items {
@@ -92,7 +94,7 @@ func syncNamespace(config config.Config, namespace string) error {
 
 		vers, err := s.Sync(config, cc)
 		if err != nil {
-			recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
+			config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
 			logrus.Error(err)
 			continue
 		}
