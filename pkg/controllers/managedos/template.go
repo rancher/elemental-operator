@@ -18,6 +18,7 @@ package managedos
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -77,12 +78,13 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	baseImage := mos.Spec.OSImage
 	m := &fleet.GenericMap{Data: make(map[string]interface{})}
 	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
-		m, err := mv.Metadata()
+		osMeta, err := mv.Metadata()
 		if err != nil {
 			return []runtime.Object{}, err
 		}
+		m = mv.Spec.Metadata
 
-		baseImage = m.ImageURI
+		baseImage = osMeta.ImageURI
 	}
 
 	image := strings.SplitN(baseImage, ":", 2)
@@ -113,8 +115,15 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	// Encode metadata as environment in the upgrade spec pod
 	envs := []corev1.EnvVar{}
 	for k, v := range m.Data {
-		j, _ := json.Marshal(v)
-		envs = append(envs, corev1.EnvVar{Name: k, Value: string(j)})
+		toEncode := ""
+		switch value := v.(type) {
+		case string:
+			toEncode = value
+		default:
+			j, _ := json.Marshal(v)
+			toEncode = string(j)
+		}
+		envs = append(envs, corev1.EnvVar{Name: strings.ToUpper(fmt.Sprintf("METADATA_%s", k)), Value: toEncode})
 	}
 	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, envs...)
 
