@@ -21,7 +21,7 @@ type ManagedOSVersionSpec struct {
 	Version          string                 `json:"version" yaml:"version"`
 	MinVersion       string                 `json:"minVersion" yaml:"minVersion"`
 	Metadata         map[string]interface{} `json:"metadata" yaml:"metadata"`
-	UpgradeContainer ContainerSpec          `json:"upgradeContainer" yaml:"upgradeContainer"`
+	UpgradeContainer *ContainerSpec         `json:"upgradeContainer" yaml:"upgradeContainer"`
 }
 
 type ManagedOSVersion struct {
@@ -39,7 +39,7 @@ type ContainerSpec struct {
 	Args    []string `json:"args,omitempty" yaml:"args,omitempty"`
 }
 
-func NewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC ContainerSpec) *ManagedOSVersion {
+func NewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC *ContainerSpec) *ManagedOSVersion {
 	return &ManagedOSVersion{
 		APIVersion: "rancheros.cattle.io/v1",
 		Metadata: struct {

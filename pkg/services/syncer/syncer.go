@@ -127,6 +127,7 @@ func syncNamespace(config config.Config, namespace string) error {
 				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
 				continue
 			}
+
 			_, err = cli.Create(&v)
 			if err != nil {
 				// TODO: Need to keep cc for each version

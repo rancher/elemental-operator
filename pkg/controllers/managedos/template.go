@@ -77,7 +77,6 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	baseImage := mos.Spec.OSImage
 	m := &fleet.GenericMap{Data: make(map[string]interface{})}
 	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
-
 		m, err := mv.Metadata()
 		if err != nil {
 			return []runtime.Object{}, err

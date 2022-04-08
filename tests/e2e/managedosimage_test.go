@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
 	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
@@ -66,15 +67,20 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 	})
 	Context("Using ManagedOSVersion reference", func() {
 
-		BeforeEach(func() {
-			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
+		AfterEach(func() {
+			kube := kubectl.New()
+			kube.Delete("managedosimage", "-n", "fleet-default", "update-osversion")
+			kube.Delete("managedosversion", "-n", "fleet-default", "osversion")
+		})
+
+		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
 			ov := catalog.NewManagedOSVersion(
 				"osversion", "v1.0", "0.0.0",
-				map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"},
-				catalog.ContainerSpec{},
+				meta,
+				c,
 			)
 
-			Eventually(func() error {
+			EventuallyWithOffset(1, func() error {
 				return k.ApplyYAML("fleet-default", "osversion", ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
@@ -85,28 +91,40 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 				"osversion",
 			)
 
-			Eventually(func() error {
+			EventuallyWithOffset(1, func() error {
 				return k.ApplyYAML("fleet-default", "update-osversion", ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
-		})
 
-		AfterEach(func() {
-			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", "fleet-default", "update-osversion")
-			kube.Delete("managedosversion", "-n", "fleet-default", "osversion")
-		})
-
-		It("creates a new fleet bundle with the upgrade plan", func() {
-			Eventually(func() string {
+			EventuallyWithOffset(1, func() string {
 				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
+				m,
+			)
+		}
+
+		It("creates a new fleet bundle with the upgrade plan image", func() {
+			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
+
+			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"}, nil,
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"registry.com/repository/image"`),
+				),
+			)
+		})
+
+		It("creates a new fleet bundle with the upgrade plan container", func() {
+			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
+
+			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"},
+				&catalog.ContainerSpec{Image: "foo/bar:image"},
+				And(
+					ContainSubstring(`"version":"v1.0"`),
+					ContainSubstring(`"image":"foo/bar:image"`),
 				),
 			)
 		})
