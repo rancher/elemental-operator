@@ -44,6 +44,42 @@ func cloudConfig(mos *osv1.ManagedOSImage) ([]byte, error) {
 	return append([]byte("#cloud-config\n"), data...), nil
 }
 
+func getImageVersion(mos *osv1.ManagedOSImage, mv *osv1.ManagedOSVersion) ([]string, string, error) {
+	baseImage := mos.Spec.OSImage
+	if baseImage == "" && mv != nil {
+		osMeta, err := mv.Metadata()
+		if err != nil {
+			return []string{}, "", err
+		}
+		baseImage = osMeta.ImageURI
+	}
+
+	image := strings.SplitN(baseImage, ":", 2)
+	version := "latest"
+	if len(image) == 2 {
+		version = image[1]
+	}
+
+	return image, version, nil
+}
+
+func metadataEnv(m map[string]interface{}) []corev1.EnvVar {
+	// Encode metadata as environment in a slice of envVar
+	envs := []corev1.EnvVar{}
+	for k, v := range m {
+		toEncode := ""
+		switch value := v.(type) {
+		case string:
+			toEncode = value
+		default:
+			j, _ := json.Marshal(v)
+			toEncode = string(j)
+		}
+		envs = append(envs, corev1.EnvVar{Name: strings.ToUpper(fmt.Sprintf("METADATA_%s", k)), Value: toEncode})
+	}
+	return envs
+}
+
 func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
 	cloudConfig, err := cloudConfig(mos)
 	if err != nil {
@@ -61,6 +97,10 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	}
 
 	var mv *osv1.ManagedOSVersion
+
+	m := &fleet.GenericMap{Data: make(map[string]interface{})}
+
+	// if a managedOS version was specified, we fetch it for later use and store the metadata
 	if mos.Spec.ManagedOSVersionName != "" {
 		// ns, name
 		mv, err = h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
@@ -68,6 +108,7 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 			// TODO: This should be propagated back as an event, as we could not find the ManagedOSVersion specified
 			return []runtime.Object{}, err
 		}
+		m = mv.Spec.Metadata
 	}
 
 	// XXX Issues currently standing:
@@ -75,22 +116,10 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	//	 gate minVersion that are not passing validation checks with the version reported
 	// - Monitoring upgrade status from the fleet bundles (reconcile to update the status to report what is the current version )
 	// - Enforce a ManagedOSImage "version" that is applied to a one node only. Or check out if either fleet is already doing that
-	baseImage := mos.Spec.OSImage
-	m := &fleet.GenericMap{Data: make(map[string]interface{})}
-	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
-		osMeta, err := mv.Metadata()
-		if err != nil {
-			return []runtime.Object{}, err
-		}
-		m = mv.Spec.Metadata
-
-		baseImage = osMeta.ImageURI
-	}
-
-	image := strings.SplitN(baseImage, ":", 2)
-	version := "latest"
-	if len(image) == 2 {
-		version = image[1]
+	image, version, err := getImageVersion(mos, mv)
+	if err != nil {
+		// TODO: This should be propagated back as an event, as we could not find the ManagedOSVersion specified
+		return []runtime.Object{}, err
 	}
 
 	selector := mos.Spec.NodeSelector
@@ -112,20 +141,8 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		}
 	}
 
-	// Encode metadata as environment in the upgrade spec pod
-	envs := []corev1.EnvVar{}
-	for k, v := range m.Data {
-		toEncode := ""
-		switch value := v.(type) {
-		case string:
-			toEncode = value
-		default:
-			j, _ := json.Marshal(v)
-			toEncode = string(j)
-		}
-		envs = append(envs, corev1.EnvVar{Name: strings.ToUpper(fmt.Sprintf("METADATA_%s", k)), Value: toEncode})
-	}
-	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, envs...)
+	// Encode metadata from the spec as environment in the upgrade spec pod
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, metadataEnv(m.Data)...)
 
 	return []runtime.Object{
 		&rbacv1.ClusterRole{

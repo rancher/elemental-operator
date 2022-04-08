@@ -66,33 +66,34 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		})
 	})
 	Context("Using ManagedOSVersion reference", func() {
-
+		osImage := "update-osversion"
+		osVersion := "osversion"
 		AfterEach(func() {
 			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", "fleet-default", "update-osversion")
-			kube.Delete("managedosversion", "-n", "fleet-default", "osversion")
+			kube.Delete("managedosimage", "-n", "fleet-default", osImage)
+			kube.Delete("managedosversion", "-n", "fleet-default", osVersion)
 		})
 
 		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
 			ov := catalog.NewManagedOSVersion(
-				"osversion", "v1.0", "0.0.0",
+				osVersion, "v1.0", "0.0.0",
 				meta,
 				c,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", "osversion", ov)
+				return k.ApplyYAML("fleet-default", osVersion, ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			ui := catalog.NewManagedOSImage(
-				"update-osversion",
+				osImage,
 				[]map[string]interface{}{{"clusterName": "dummycluster"}},
 				"",
-				"osversion",
+				osVersion,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", "update-osversion", ui)
+				return k.ApplyYAML("fleet-default", osImage, ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
@@ -109,10 +110,12 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan image", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"}, nil,
+			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "robin": "batman"}, nil,
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"registry.com/repository/image"`),
+					ContainSubstring(`"command":["/usr/sbin/suc-upgrade"]`),
+					ContainSubstring(`"name":"METADATA_ROBIN","value":"batman"`),
 				),
 			)
 		})
@@ -120,11 +123,13 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan container", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0"},
+			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "baz": "batman", "jsondata": struct{ Foo string }{Foo: "foostruct"}},
 				&catalog.ContainerSpec{Image: "foo/bar:image"},
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"foo/bar:image"`),
+					ContainSubstring(`"name":"METADATA_BAZ","value":"batman"`),
+					ContainSubstring(`{"name":"METADATA_JSONDATA","value":"{\"foo\":\"foostruct\"}"}`),
 				),
 			)
 		})
