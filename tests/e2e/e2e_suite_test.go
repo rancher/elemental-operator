@@ -96,17 +96,25 @@ var _ = BeforeSuite(func() {
 		// Upgrade/delete of operator only goes here
 		// (no further bootstrap is required)
 		By("Upgrading the operator only", func() {
-			kubectl.DeleteNamespace("cattle-rancheros-operator-system")
-			k.WaitNamespacePodsDelete("cattle-rancheros-operator-system")
+			err := kubectl.DeleteNamespace("cattle-rancheros-operator-system")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k.WaitNamespacePodsDelete("cattle-rancheros-operator-system")
+			Expect(err).ToNot(HaveOccurred())
+
 			deployOperator(k)
+
 			// Somehow rancher needs to be restarted after a ros-operator upgrade
 			// to get machineregistration working
-			pods, _ := k.GetPodNames("cattle-system", "")
+			pods, err := k.GetPodNames("cattle-system", "")
+			Expect(err).ToNot(HaveOccurred())
 			for _, p := range pods {
-				k.Delete("pod", "-n", "cattle-system", p)
+				err = k.Delete("pod", "-n", "cattle-system", p)
+				Expect(err).ToNot(HaveOccurred())
 			}
 
-			k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
+			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
+			Expect(err).ToNot(HaveOccurred())
 		})
 		return
 	}
