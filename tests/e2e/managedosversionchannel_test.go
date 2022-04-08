@@ -41,6 +41,30 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 		BeforeEach(func() {
 			k = kubectl.New()
 		})
+		It("Reports failure events", func() {
+
+			By("Create an invalid ManagedOSVersionChannel")
+			ui := catalog.NewManagedOSVersionChannel(
+				"invalid",
+				"",
+				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
+			)
+
+			err := k.ApplyYAML("fleet-default", "invalid", ui)
+			Expect(err).ShouldNot(HaveOccurred())
+			defer k.Delete("managedosversionchannel", "-n", "fleet-default", "invalid")
+
+			By("Check that reports event failure")
+			Eventually(func() string {
+				r, err := kubectl.Run("describe", "-n", "fleet-default", "managedosversionchannel", "invalid")
+				if err != nil {
+					fmt.Println(err)
+				}
+				return string(r)
+			}, 1*time.Minute, 2*time.Second).Should(
+				ContainSubstring("No ManagedOSVersionChannel type defined"),
+			)
+		})
 
 		It("creates a list of ManagedOSVersion from a JSON server", func() {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -199,7 +223,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				}
 
 				return string(r)
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
@@ -209,7 +233,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 					fmt.Println(err)
 				}
 				return string(r)
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
 			)
 		})

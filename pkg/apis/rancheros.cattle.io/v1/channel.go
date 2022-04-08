@@ -29,8 +29,8 @@ type ManagedOSVersionChannel struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ManagedOSVersionChannelSpec `json:"spec"`
-	Status ManagedOSImageStatus        `json:"status"`
+	Spec   ManagedOSVersionChannelSpec       `json:"spec"`
+	Status ManagedOSVersionChannelSpecStatus `json:"status"`
 }
 
 type ManagedOSVersionChannelSpec struct {

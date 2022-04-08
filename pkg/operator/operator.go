@@ -23,6 +23,8 @@ import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/inventory"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedos"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedosversionchannel"
+
 	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/registration"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
@@ -82,6 +84,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 	managedos.Register(ctx, clients)
 	inventory.Register(ctx, clients)
 	registration.Register(ctx, clients)
+	managedosversionchannel.Register(ctx, o.requeuer, clients)
 
 	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "rancheros-operator", server.New(clients))
 

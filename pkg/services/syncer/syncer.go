@@ -27,19 +27,24 @@ import (
 	"github.com/rancher-sandbox/rancheros-operator/pkg/object"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/types"
+	rosTypes "github.com/rancher-sandbox/rancheros-operator/pkg/types"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, image string, namespace ...string) func(context.Context, *clients.Clients) error {
-	requeuer := make(chan interface{}, 10)
+const controllerAgentName = "mos-sync"
 
-	requeue := func(c *clients.Clients) {
+// UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
+func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, concurrent bool, namespace ...string) func(context.Context, *clients.Clients) error {
+	reSync := func(c *clients.Clients) {
+		recorder := c.EventRecorder(controllerAgentName)
+
 		config := config.Config{
 			Requeuer:      requeuer,
 			OperatorImage: image,
 			Clients:       c,
+			Recorder:      recorder,
 		}
 		if len(namespace) == 0 {
 			logrus.Debug("Listing all namespaces")
@@ -58,17 +63,24 @@ func UpgradeChannelSync(interval time.Duration, image string, namespace ...strin
 		}
 	}
 	return func(ctx context.Context, c *clients.Clients) error {
+		work := func() {
+			// Delay few seconds between requeues
+			time.Sleep(5 * time.Second)
+			reSync(c)
+		}
 		ticker := time.NewTicker(interval)
 		for {
 			select {
 			case <-ctx.Done():
 				return fmt.Errorf("context canceled")
 			case <-ticker.C:
-				requeue(c)
-			case <-requeuer:
-				// Delay few seconds between requeues
-				time.Sleep(5 * time.Second)
-				requeue(c)
+				reSync(c)
+			case <-requeuer.Dequeue():
+				if concurrent {
+					go work()
+				} else {
+					work()
+				}
 			}
 		}
 	}
@@ -80,32 +92,35 @@ func syncNamespace(config config.Config, namespace string) error {
 		return err
 	}
 
-	//TODO collect all errors
 	versions := map[string][]provv1.ManagedOSVersion{}
-	for _, cc := range list.Items {
-		s, err := newManagedOSVersionChannelSyncer(cc.Spec)
+	for _, vc := range list.Items {
+		s, err := newManagedOSVersionChannelSyncer(vc.Spec)
 		if err != nil {
 			return err
 		}
 
-		vers, err := s.Sync(config, cc)
+		vers, err := s.Sync(config, vc)
 		if err != nil {
+			config.Recorder.Event(&vc, corev1.EventTypeWarning, "sync", err.Error())
 			logrus.Error(err)
 			continue
 		}
 
-		if _, ok := versions[cc.Namespace]; !ok {
-			versions[cc.Namespace] = []provv1.ManagedOSVersion{}
+		if _, ok := versions[vc.Namespace]; !ok {
+			versions[vc.Namespace] = []provv1.ManagedOSVersion{}
 		}
 
 		blockDel := false
 		for _, v := range vers {
 			vcpy := v.DeepCopy()
-			vcpy.ObjectMeta.Namespace = cc.Namespace
-			ownRef := *metav1.NewControllerRef(&cc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
+			vcpy.ObjectMeta.Namespace = vc.Namespace
+			ownRef := *metav1.NewControllerRef(&vc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
 			ownRef.BlockOwnerDeletion = &blockDel
 			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
-			versions[cc.Namespace] = append(versions[cc.Namespace], *vcpy)
+			if vc.Spec.UpgradeContainer != nil {
+				vcpy.Spec.UpgradeContainer = vc.Spec.UpgradeContainer
+			}
+			versions[vc.Namespace] = append(versions[vc.Namespace], *vcpy)
 		}
 	}
 
@@ -119,9 +134,13 @@ func syncNamespace(config config.Config, namespace string) error {
 				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
 				continue
 			}
+
 			_, err = cli.Create(&v)
 			if err != nil {
-				return err
+				// TODO: Need to keep cc for each version
+				//config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
+				logrus.Debugf("failed creating %s(%s): %s", v.Name, v.Spec.Version, err.Error())
+				continue
 			}
 		}
 	}

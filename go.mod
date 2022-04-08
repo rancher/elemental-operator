@@ -38,7 +38,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.1.3
 	github.com/onsi/gomega v1.18.1
 	github.com/pkg/errors v0.9.1
-	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220404080514-8d32d4d75a67
+	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220407110407-bb1edfe6bb21
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220217133323-a7b15ad1f8f7
 	github.com/rancher/fleet/pkg/apis v0.0.0-20210927195558-4aaa778d23dd
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
@@ -48,6 +48,7 @@ require (
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/sirupsen/logrus v1.8.1
 	github.com/urfave/cli v1.22.5
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.22.2

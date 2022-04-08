@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/sirupsen/logrus"
@@ -109,7 +110,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 		})
 
 		// Requeueing
-		c.Requeue()
+		c.Requeuer.Requeue()
 		return nil, err
 	}
 
@@ -121,7 +122,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 	if !terminated {
 		logrus.Infof("Waiting for '%s/%s' to finish", p.Namespace, p.Name)
 
-		c.Requeue()
+		c.Requeuer.Requeue()
 		return nil, err
 	} else if failed {
 		// reattempt
@@ -134,9 +135,13 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	req := c.Clients.K8s.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
-	podLogs, err := req.Stream(context.Background())
+	podLogs, err := req.Stream(ctx)
 	if err != nil {
+		c.Requeuer.Requeue()
 		return nil, fmt.Errorf("error in opening stream")
 	}
 	defer podLogs.Close()
@@ -144,11 +149,13 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
+		c.Requeuer.Requeue()
 		return nil, fmt.Errorf("error in copy information from podLogs to buf")
 	}
 
 	err = c.Clients.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
 	if err != nil {
+		c.Requeuer.Requeue()
 		return nil, err
 	}
 

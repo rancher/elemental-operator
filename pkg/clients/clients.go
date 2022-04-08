@@ -19,6 +19,7 @@ package clients
 import (
 	"context"
 
+	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io"
 	fleetcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io"
@@ -29,7 +30,15 @@ import (
 	oscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/generic"
+	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1Typed "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -43,10 +52,27 @@ type Clients struct {
 	OS           oscontrollers.Interface
 	Rancher      ranchercontrollers.Interface
 	Provisioning provcontrollers.Interface
+	Events       corev1Typed.EventInterface
+}
+
+// EventRecorder creates an event recorder associated to a controller nome for the schema (arbitrary)
+func (c *Clients) EventRecorder(name string) record.EventRecorder {
+	// Create event broadcaster
+	utilruntime.Must(rosscheme.AddToScheme(scheme.Scheme))
+	logrus.Info("Creating event broadcaster for " + name)
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(logrus.Infof)
+	eventBroadcaster.StartRecordingToSink(&corev1Typed.EventSinkImpl{Interface: c.Events})
+	return eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: name})
 }
 
 func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 	c, err := clients.NewFromConfig(restConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +82,7 @@ func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 	}
 	return &Clients{
 		Clients:      c,
+		Events:       kubeClient.CoreV1().Events(""),
 		Fleet:        fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
 		OS:           rancheros.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Rancheros().V1(),
 		Rancher:      management.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Management().V3(),

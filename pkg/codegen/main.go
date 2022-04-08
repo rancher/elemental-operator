@@ -52,7 +52,8 @@ func main() {
 				Types: []interface{}{
 					"./pkg/apis/rancheros.cattle.io/v1",
 				},
-				GenerateTypes: true,
+				GenerateTypes:   true,
+				GenerateClients: true,
 			},
 		},
 	})

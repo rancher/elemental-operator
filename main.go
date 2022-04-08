@@ -26,6 +26,7 @@ import (
 
 	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer"
+	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -130,14 +131,20 @@ func runOperator(c *cli.Context) error {
 		logrus.Fatalf("sync-interval value cant be parsed as duration: %s", err)
 	}
 
+	// We do want a stack for requeuer here, but we want the syncer to
+	// tick sequentially. We can turn the behavior the other way around
+	// by setting UpgradeChannelSync concurrent to true.
+	requeuer := types.ConcurrentRequeuer(100)
+
 	if err := operator.Run(ctx,
+		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(namespace),
-		operator.WithServices(syncer.UpgradeChannelSync(ticker, c.String("operator-image"), c.StringSlice("sync-namespaces")...)),
+		operator.WithServices(syncer.UpgradeChannelSync(ticker, requeuer, c.String("operator-image"), false, c.StringSlice("sync-namespaces")...)),
 	); err != nil {
 		return err
 	}
 
 	<-ctx.Done()
 
-	return fmt.Errorf("operator shouldn't return")
+	return fmt.Errorf("operator quits")
 }
