@@ -23,7 +23,7 @@ Manager.
 
 The ManagedOSImage kind used to define what version of RancherOS should be
 running on each node. The simplest example of this type would be to change
-the version of the local nodes.
+the image of the local nodes.
 
 ```bash
 kubectl edit -n fleet-local default-os-image
@@ -36,6 +36,23 @@ metadata:
   namespace: fleet-local
 spec:
   osImage: rancher/os2:v0.0.0
+```
+
+A `ManagedOSImage` can also use a `ManagedOSVersion` to drive upgrades. 
+To use a `ManagedOSVersion` specify a `managedOSVersionName`, as `osImage` takes precedence, mind to set back as empty:
+
+```bash
+kubectl edit -n fleet-local default-os-image
+```
+```yaml
+apiVersion: rancheros.cattle.io/v1
+kind: ManagedOSImage
+metadata:
+  name: default-os-image
+  namespace: fleet-local
+spec:
+  osImage: ""
+  managedOSVersionName: "version-name"
 ```
 
 
@@ -56,8 +73,11 @@ metadata:
   # which is typically fleet-default.
   namespace: fleet-local
 spec:
-  # The image name to pull for the OS
+  # The image name to pull for the OS. Overrides managedOSVersionName when specified
   osImage: rancher/os2:v0.0.0
+
+  # The ManagedOSVersion to use for the upgrade
+  managedOSVersionName: ""
   
   # The selector for which nodes will be select.  If null then all nodes
   # will be selected
