@@ -59,6 +59,16 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		cordon = *mos.Spec.Cordon
 	}
 
+	var mv *osv1.ManagedOSVersion
+	if mos.Spec.ManagedOSVersionName != "" {
+		// ns, name
+		mv, err = h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
+		if err != nil {
+			// TODO: This should be propagated back as an event, as we could not find the ManagedOSVersion specified
+			return []runtime.Object{}, err
+		}
+	}
+
 	// XXX Issues currently standing:
 	// - minVersion is not respected:
 	//	 gate minVersion that are not passing validation checks with the version reported
@@ -67,13 +77,8 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	baseImage := mos.Spec.OSImage
 	m := &fleet.GenericMap{Data: make(map[string]interface{})}
 	if baseImage == "" && mos.Spec.ManagedOSVersionName != "" {
-		// ns, name
-		v, err := h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
-		if err != nil {
-			return []runtime.Object{}, err
-		}
 
-		m, err := v.Metadata()
+		m, err := mv.Metadata()
 		if err != nil {
 			return []runtime.Object{}, err
 		}
@@ -93,6 +98,10 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	}
 
 	upgradeContainerSpec := mos.Spec.UpgradeContainer
+	if mv != nil && upgradeContainerSpec == nil {
+		upgradeContainerSpec = mv.Spec.UpgradeContainer
+	}
+
 	if upgradeContainerSpec == nil {
 		upgradeContainerSpec = &upgradev1.ContainerSpec{
 			Image: PrefixPrivateRegistry(image[0], prefix),

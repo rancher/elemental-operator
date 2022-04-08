@@ -86,31 +86,34 @@ func syncNamespace(config config.Config, namespace string) error {
 	}
 
 	versions := map[string][]provv1.ManagedOSVersion{}
-	for _, cc := range list.Items {
-		s, err := newManagedOSVersionChannelSyncer(cc.Spec)
+	for _, vc := range list.Items {
+		s, err := newManagedOSVersionChannelSyncer(vc.Spec)
 		if err != nil {
 			return err
 		}
 
-		vers, err := s.Sync(config, cc)
+		vers, err := s.Sync(config, vc)
 		if err != nil {
-			config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
+			config.Recorder.Event(&vc, corev1.EventTypeWarning, "sync", err.Error())
 			logrus.Error(err)
 			continue
 		}
 
-		if _, ok := versions[cc.Namespace]; !ok {
-			versions[cc.Namespace] = []provv1.ManagedOSVersion{}
+		if _, ok := versions[vc.Namespace]; !ok {
+			versions[vc.Namespace] = []provv1.ManagedOSVersion{}
 		}
 
 		blockDel := false
 		for _, v := range vers {
 			vcpy := v.DeepCopy()
-			vcpy.ObjectMeta.Namespace = cc.Namespace
-			ownRef := *metav1.NewControllerRef(&cc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
+			vcpy.ObjectMeta.Namespace = vc.Namespace
+			ownRef := *metav1.NewControllerRef(&vc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
 			ownRef.BlockOwnerDeletion = &blockDel
 			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
-			versions[cc.Namespace] = append(versions[cc.Namespace], *vcpy)
+			if vc.Spec.UpgradeContainer != nil {
+				vcpy.Spec.UpgradeContainer = vc.Spec.UpgradeContainer
+			}
+			versions[vc.Namespace] = append(versions[vc.Namespace], *vcpy)
 		}
 	}
 
