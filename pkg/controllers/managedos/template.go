@@ -105,7 +105,7 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		// ns, name
 		mv, err = h.managedVersionCache.Get(mos.ObjectMeta.Namespace, mos.Spec.ManagedOSVersionName)
 		if err != nil {
-			// TODO: This should be propagated back as an event, as we could not find the ManagedOSVersion specified
+			h.Recorder.Event(mos, corev1.EventTypeWarning, "error", err.Error())
 			return []runtime.Object{}, err
 		}
 		m = mv.Spec.Metadata
@@ -118,7 +118,7 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	// - Enforce a ManagedOSImage "version" that is applied to a one node only. Or check out if either fleet is already doing that
 	image, version, err := getImageVersion(mos, mv)
 	if err != nil {
-		// TODO: This should be propagated back as an event, as we could not find the ManagedOSVersion specified
+		h.Recorder.Event(mos, corev1.EventTypeWarning, "error", err.Error())
 		return []runtime.Object{}, err
 	}
 

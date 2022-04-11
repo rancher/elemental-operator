@@ -124,22 +124,20 @@ func syncNamespace(config config.Config, namespace string) error {
 		}
 	}
 
-	// TODO: collect all errors
 	for _, vv := range versions {
 		for _, v := range vv {
 			cli := config.Clients.OS.ManagedOSVersion()
 
 			_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
 			if err == nil {
-				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
+				msg := fmt.Sprintf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
+				config.Recorder.Event(&v, corev1.EventTypeWarning, "sync", msg)
 				continue
 			}
 
 			_, err = cli.Create(&v)
 			if err != nil {
-				// TODO: Need to keep cc for each version
-				//config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
-				logrus.Debugf("failed creating %s(%s): %s", v.Name, v.Spec.Version, err.Error())
+				config.Recorder.Event(&v, corev1.EventTypeWarning, "sync", err.Error())
 				continue
 			}
 		}
