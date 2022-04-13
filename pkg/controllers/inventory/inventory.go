@@ -78,7 +78,7 @@ func (h *handler) OnMachineInventory(machine *v1.MachineInventory, status v1.Mac
 
 	if cluster.Status.ClusterName == "" {
 		msg := fmt.Sprintf("waiting for mgmt cluster to be created for prov cluster %s/%s", machine.Namespace, machine.Spec.ClusterName)
-		h.Recorder.Event(machine, corev1.EventTypeWarning, "error", msg)
+		h.Recorder.Event(machine, corev1.EventTypeWarning, "warning", msg)
 		return status, errors.New(msg)
 	}
 
