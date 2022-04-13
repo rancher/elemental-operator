@@ -25,17 +25,23 @@ import (
 	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
 	roscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/randomtoken"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 )
+
+var controllerName = "machine-registration"
 
 type handler struct {
 	settingsCache ranchercontrollers.SettingCache
+	Recorder      record.EventRecorder
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := handler{
 		settingsCache: clients.Rancher.Setting().Cache(),
+		Recorder:      clients.EventRecorder(controllerName),
 	}
-	roscontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.OS.MachineRegistration(), "Ready", "machine-registration",
+	roscontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.OS.MachineRegistration(), "Ready", controllerName,
 		h.OnChange)
 }
 
@@ -48,6 +54,7 @@ func (h *handler) OnChange(obj *v1.MachineRegistration, status v1.MachineRegistr
 	if status.RegistrationToken == "" {
 		status.RegistrationToken, err = randomtoken.Generate()
 		if err != nil {
+			h.Recorder.Event(obj, corev1.EventTypeWarning, "error", err.Error())
 			return status, err
 		}
 	}

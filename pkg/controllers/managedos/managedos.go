@@ -28,16 +28,21 @@ import (
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/relatedresource"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 )
+
+var controllerName = "mos-bundle"
 
 func Register(ctx context.Context, clients *clients.Clients) {
 	h := &handler{
 		bundleCache:         clients.Fleet.Bundle().Cache(),
 		settingsCache:       clients.Rancher.Setting().Cache(),
 		managedVersionCache: clients.OS.ManagedOSVersion().Cache(),
+		Recorder:            clients.EventRecorder(controllerName),
 	}
 
 	relatedresource.Watch(ctx,
@@ -53,7 +58,7 @@ func Register(ctx context.Context, clients *clients.Clients) {
 				clients.OS.ManagedOSImage(),
 				clients.Fleet.Bundle()),
 		"Defined",
-		"mos-bundle",
+		controllerName,
 		h.OnChange,
 		nil)
 }
@@ -62,6 +67,7 @@ type handler struct {
 	bundleCache         fleetcontrollers.BundleCache
 	settingsCache       ranchercontrollers.SettingCache
 	managedVersionCache oscontrollers.ManagedOSVersionCache
+	Recorder            record.EventRecorder
 }
 
 func (h *handler) defaultRegistry() (string, error) {
@@ -96,7 +102,9 @@ func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSIm
 	}
 
 	if mos.Namespace == "fleet-local" && len(mos.Spec.Targets) > 0 {
-		return nil, status, fmt.Errorf("spec.targets should be empty if in the fleet-local namespace")
+		msg := "spec.targets should be empty if in the fleet-local namespace"
+		h.Recorder.Event(mos, corev1.EventTypeWarning, "error", msg)
+		return nil, status, fmt.Errorf(msg)
 	}
 
 	bundle := &v1alpha1.Bundle{

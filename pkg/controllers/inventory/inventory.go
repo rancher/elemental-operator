@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pkg/errors"
 	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
 	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
@@ -27,14 +28,19 @@ import (
 	v12 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/name"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 )
+
+var controllerName = "machine-inventory"
 
 type handler struct {
 	clusterCache                   provcontrollers.ClusterCache
 	clusterRegistrationTokenCache  ranchercontrollers.ClusterRegistrationTokenCache
 	clusterRegistrationTokenClient ranchercontrollers.ClusterRegistrationTokenClient
+	Recorder                       record.EventRecorder
 }
 
 func Register(ctx context.Context, clients *clients.Clients) {
@@ -42,16 +48,18 @@ func Register(ctx context.Context, clients *clients.Clients) {
 		clusterCache:                   clients.Provisioning.Cluster().Cache(),
 		clusterRegistrationTokenCache:  clients.Rancher.ClusterRegistrationToken().Cache(),
 		clusterRegistrationTokenClient: clients.Rancher.ClusterRegistrationToken(),
+		Recorder:                       clients.EventRecorder(controllerName),
 	}
 
 	clients.OS.MachineInventory().OnRemove(ctx, "machine-inventory-remove", h.OnMachineInventoryRemove)
-	v12.RegisterMachineInventoryStatusHandler(ctx, clients.OS.MachineInventory(), "", "machine-inventory", h.OnMachineInventory)
+	v12.RegisterMachineInventoryStatusHandler(ctx, clients.OS.MachineInventory(), "", controllerName, h.OnMachineInventory)
 }
 
 func (h *handler) OnMachineInventoryRemove(key string, machine *v1.MachineInventory) (*v1.MachineInventory, error) {
 	if machine.Status.ClusterRegistrationTokenName != "" && machine.Status.ClusterRegistrationTokenNamespace != "" {
 		err := h.clusterRegistrationTokenClient.Delete(machine.Status.ClusterRegistrationTokenNamespace, machine.Status.ClusterRegistrationTokenName, nil)
 		if !apierrors.IsNotFound(err) && err != nil {
+			h.Recorder.Event(machine, corev1.EventTypeWarning, "error", err.Error())
 			return nil, err
 		}
 	}
@@ -69,7 +77,9 @@ func (h *handler) OnMachineInventory(machine *v1.MachineInventory, status v1.Mac
 	}
 
 	if cluster.Status.ClusterName == "" {
-		return status, fmt.Errorf("waiting for mgmt cluster to be created for prov cluster %s/%s", machine.Namespace, machine.Spec.ClusterName)
+		msg := fmt.Sprintf("waiting for mgmt cluster to be created for prov cluster %s/%s", machine.Namespace, machine.Spec.ClusterName)
+		h.Recorder.Event(machine, corev1.EventTypeWarning, "warning", msg)
+		return status, errors.New(msg)
 	}
 
 	crtName := name.SafeConcatName(cluster.Status.ClusterName, machine.Name, "token")
@@ -87,6 +97,7 @@ func (h *handler) OnMachineInventory(machine *v1.MachineInventory, status v1.Mac
 	}
 
 	if err != nil {
+		h.Recorder.Event(machine, corev1.EventTypeWarning, "error", err.Error())
 		return status, err
 	}
 

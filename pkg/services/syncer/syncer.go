@@ -92,7 +92,6 @@ func syncNamespace(config config.Config, namespace string) error {
 		return err
 	}
 
-	versions := map[string][]provv1.ManagedOSVersion{}
 	for _, vc := range list.Items {
 		s, err := newManagedOSVersionChannelSyncer(vc.Spec)
 		if err != nil {
@@ -106,44 +105,36 @@ func syncNamespace(config config.Config, namespace string) error {
 			continue
 		}
 
-		if _, ok := versions[vc.Namespace]; !ok {
-			versions[vc.Namespace] = []provv1.ManagedOSVersion{}
-		}
-
 		blockDel := false
 		for _, v := range vers {
 			vcpy := v.DeepCopy()
 			vcpy.ObjectMeta.Namespace = vc.Namespace
 			ownRef := *metav1.NewControllerRef(&vc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
 			ownRef.BlockOwnerDeletion = &blockDel
+
 			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
+
 			if vc.Spec.UpgradeContainer != nil {
 				vcpy.Spec.UpgradeContainer = vc.Spec.UpgradeContainer
 			}
-			versions[vc.Namespace] = append(versions[vc.Namespace], *vcpy)
-		}
-	}
 
-	// TODO: collect all errors
-	for _, vv := range versions {
-		for _, v := range vv {
 			cli := config.Clients.OS.ManagedOSVersion()
 
-			_, err := cli.Get(namespace, v.ObjectMeta.Name, metav1.GetOptions{})
+			_, err := cli.Get(namespace, vcpy.ObjectMeta.Name, metav1.GetOptions{})
 			if err == nil {
-				logrus.Debugf("there is already a version defined for %s(%s)", v.Name, v.Spec.Version)
+				msg := fmt.Sprintf("there is already a version defined for %s(%s)", vcpy.Name, vcpy.Spec.Version)
+				config.Recorder.Event(&vc, corev1.EventTypeWarning, "sync", msg)
 				continue
 			}
 
-			_, err = cli.Create(&v)
+			_, err = cli.Create(vcpy)
 			if err != nil {
-				// TODO: Need to keep cc for each version
-				//config.Recorder.Event(&cc, corev1.EventTypeWarning, "sync", err.Error())
-				logrus.Debugf("failed creating %s(%s): %s", v.Name, v.Spec.Version, err.Error())
+				config.Recorder.Event(&vc, corev1.EventTypeWarning, "sync", err.Error())
 				continue
 			}
 		}
 	}
+
 	return nil
 }
 
