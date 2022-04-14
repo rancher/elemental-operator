@@ -129,8 +129,19 @@ var _ = BeforeSuite(func() {
 		return
 	}
 
+	installed := func(n string) bool {
+		pods, err := k.GetPodNames(n, "")
+		if err == nil && len(pods) > 0 {
+			return true
+		}
+		return false
+	}
 	By("Deploying ros-operator chart dependencies", func() {
 		By("installing nginx", func() {
+			if installed("ingress-nginx") {
+				By("already installed")
+				return
+			}
 			kubectl.CreateNamespace("ingress-nginx")
 			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
 			Expect(err).ToNot(HaveOccurred())
@@ -139,7 +150,18 @@ var _ = BeforeSuite(func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		By("installing system-upgrade-controller", func() {
+			// https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml\
+			err := kubectl.Apply("system-upgrade", "https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		By("installing cert-manager", func() {
+			if installed("cert-manager") {
+				By("already installed")
+				return
+			}
+
 			err := kubectl.RunHelmBinaryWithCustomErr("-n", "cert-manager", "install", "--set", "installCRDs=true", "--create-namespace", "cert-manager", "https://charts.jetstack.io/charts/cert-manager-v1.5.3.tgz")
 			Expect(err).ToNot(HaveOccurred())
 
@@ -151,6 +173,11 @@ var _ = BeforeSuite(func() {
 		})
 
 		By("installing rancher", func() {
+			if installed("cattle-system") {
+				By("already installed")
+				return
+			}
+
 			err := kubectl.RunHelmBinaryWithCustomErr(
 				"-n",
 				"cattle-system",
