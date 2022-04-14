@@ -142,7 +142,20 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	}
 
 	// Encode metadata from the spec as environment in the upgrade spec pod
-	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, metadataEnv(m.Data)...)
+	metadataEnv := metadataEnv(m.Data)
+
+	// metadata envs overwrites any other specified
+	keys := map[string]interface{}{}
+	for _, e := range metadataEnv {
+		keys[e.Name] = nil
+	}
+
+	for _, e := range upgradeContainerSpec.Env {
+		if _, ok := keys[e.Name]; !ok {
+			metadataEnv = append(metadataEnv, e)
+		}
+	}
+	upgradeContainerSpec.Env = metadataEnv
 
 	return []runtime.Object{
 		&rbacv1.ClusterRole{
