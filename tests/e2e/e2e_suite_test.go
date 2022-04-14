@@ -17,9 +17,15 @@ limitations under the License.
 package e2e_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -56,8 +62,21 @@ func deployOperator(k *kubectl.Kubectl) {
 		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
 		Expect(err).ToNot(HaveOccurred())
 
+		pods, err := k.GetPodNames("cattle-rancheros-operator-system", "app=rancheros-operator")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(pods)).To(Equal(1))
+
 		err = k.WaitForNamespaceWithPod("cattle-rancheros-operator-system", "app=rancheros-operator")
 		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() string {
+			str, _ := kubectl.Run("logs", "-n", "cattle-rancheros-operator-system", pods[0])
+			fmt.Println(str)
+			return str
+		}, 5*time.Minute, 2*time.Second).Should(
+			And(
+				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
+			))
 
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
@@ -88,6 +107,11 @@ var _ = BeforeSuite(func() {
 		bridgeIP = "172.17.0.1"
 	}
 
+	if os.Getenv("NO_SETUP") != "" {
+		By("No setup")
+		return
+	}
+
 	chart = os.Getenv("ROS_CHART")
 	if chart == "" && !isOperatorInstalled(k) {
 		Fail("No ROS_CHART provided, a ros operator helm chart is required to run e2e tests")
@@ -99,7 +123,7 @@ var _ = BeforeSuite(func() {
 			err := kubectl.DeleteNamespace("cattle-rancheros-operator-system")
 			Expect(err).ToNot(HaveOccurred())
 
-			err = k.WaitNamespacePodsDelete("cattle-rancheros-operator-system")
+			err = k.WaitForNamespaceDelete("cattle-rancheros-operator-system")
 			Expect(err).ToNot(HaveOccurred())
 
 			deployOperator(k)
@@ -116,11 +140,6 @@ var _ = BeforeSuite(func() {
 			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
 			Expect(err).ToNot(HaveOccurred())
 		})
-		return
-	}
-
-	if os.Getenv("NO_SETUP") != "" {
-		By("No setup")
 		return
 	}
 
@@ -147,12 +166,6 @@ var _ = BeforeSuite(func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		By("installing system-upgrade-controller", func() {
-			// https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml\
-			err := kubectl.Apply("system-upgrade", "https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml")
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -202,6 +215,31 @@ var _ = BeforeSuite(func() {
 			err = k.WaitForNamespaceWithPod("cattle-fleet-local-system", "app=fleet-agent")
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		By("installing system-upgrade-controller", func() {
+
+			resp, err := http.Get("https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml")
+			Expect(err).ToNot(HaveOccurred())
+			defer resp.Body.Close()
+			data := bytes.NewBuffer([]byte{})
+
+			_, err = io.Copy(data, resp.Body)
+			Expect(err).ToNot(HaveOccurred())
+
+			// It needs to look over cattle-system ns to be functional
+			toApply := strings.ReplaceAll(data.String(), "namespace: system-upgrade", "namespace: cattle-system")
+
+			temp, err := ioutil.TempFile("", "temp")
+			Expect(err).ToNot(HaveOccurred())
+
+			defer os.RemoveAll(temp.Name())
+			err = ioutil.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = kubectl.Apply("cattle-system", temp.Name())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 	})
 
 	deployOperator(k)
