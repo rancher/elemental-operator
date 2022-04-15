@@ -19,9 +19,11 @@ package managedos
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	"github.com/sirupsen/logrus"
 
 	osv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
 	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
@@ -155,6 +157,13 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 			metadataEnv = append(metadataEnv, e)
 		}
 	}
+
+	sort.Slice(metadataEnv, func(i, j int) bool {
+		dat := []string{metadataEnv[i].Name, metadataEnv[j].Name}
+		sort.Strings(dat)
+		return dat[0] == metadataEnv[i].Name
+	})
+
 	upgradeContainerSpec.Env = metadataEnv
 
 	return []runtime.Object{
