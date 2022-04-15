@@ -171,11 +171,18 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "os-upgrader",
 			},
-			Rules: []rbacv1.PolicyRule{{
-				Verbs:     []string{"update", "get", "list", "watch", "patch"},
-				APIGroups: []string{""},
-				Resources: []string{"nodes"},
-			}},
+			Rules: []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"update", "get", "list", "watch", "patch"},
+					APIGroups: []string{""},
+					Resources: []string{"nodes"},
+				},
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{""},
+					Resources: []string{"pods"},
+				},
+			},
 		},
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
