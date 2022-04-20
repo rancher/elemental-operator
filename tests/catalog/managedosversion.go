@@ -35,7 +35,7 @@ type ManagedOSVersion struct {
 
 type ContainerSpec struct {
 	Image   string   `json:"image,omitempty" yaml:"image,omitempty"`
-	Command string   `json:"command,omitempty" yaml:"command,omitempty"`
+	Command []string `json:"command,omitempty" yaml:"command,omitempty"`
 	Args    []string `json:"args,omitempty" yaml:"args,omitempty"`
 }
 

@@ -16,13 +16,30 @@ limitations under the License.
 
 package catalog
 
+import (
+	"time"
+)
+
+type DrainSpec struct {
+	Timeout                  *time.Duration `json:"timeout,omitempty" yaml:"timeout"`
+	GracePeriod              *int32         `json:"gracePeriod,omitempty" yaml:"gracePeriod"`
+	DeleteLocalData          *bool          `json:"deleteLocalData,omitempty" yaml:"deleteLocalData"`
+	IgnoreDaemonSets         *bool          `json:"ignoreDaemonSets,omitempty" yaml:"ignoreDaemonSets"`
+	Force                    bool           `json:"force,omitempty" yaml:"force"`
+	DisableEviction          bool           `json:"disableEviction,omitempty" yaml:"disableEviction"`
+	SkipWaitForDeleteTimeout int            `json:"skipWaitForDeleteTimeout,omitempty" yaml:"skipWaitForDeleteTimeout"`
+}
+
 type ManagedOSImage struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	Kind       string `json:"kind" yaml:"kind"`
 	Metadata   struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
+
 	Spec struct {
+		Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
+		Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
 		OSImage              string                   `json:"osImage" yaml:"osImage"`
 		ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
 		ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
@@ -30,6 +47,8 @@ type ManagedOSImage struct {
 }
 
 func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
+	cordon := false
+
 	return &ManagedOSImage{
 		APIVersion: "rancheros.cattle.io/v1",
 		Metadata: struct {
@@ -37,13 +56,38 @@ func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mos
 		}{Name: name},
 		Kind: "ManagedOSImage",
 		Spec: struct {
-			OSImage              string                   "json:\"osImage\" yaml:\"osImage\""
-			ManagedOSVersionName string                   "json:\"managedOSVersionName\" yaml:\"managedOSVersionName\""
-			ClusterTargets       []map[string]interface{} "json:\"clusterTargets\" yaml:\"clusterTargets\""
+			Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
+			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
+			OSImage              string                   `json:"osImage" yaml:"osImage"`
+			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
+			ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
 		}{
 			OSImage:              mosImage,
 			ManagedOSVersionName: mosVersionName,
+			Cordon:               &cordon,
 			ClusterTargets:       clusterTargets,
+		},
+	}
+}
+
+func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
+	cordon := false
+	return &ManagedOSImage{
+		APIVersion: "rancheros.cattle.io/v1",
+		Metadata: struct {
+			Name string "json:\"name\" yaml:\"name\""
+		}{Name: name},
+		Kind: "ManagedOSImage",
+		Spec: struct {
+			Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
+			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
+			OSImage              string                   `json:"osImage" yaml:"osImage"`
+			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
+			ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
+		}{
+			Cordon:               &cordon,
+			ManagedOSVersionName: managedOSVersion,
+			Drain:                drainSpec,
 		},
 	}
 }

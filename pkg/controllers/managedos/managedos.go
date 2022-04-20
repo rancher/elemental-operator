@@ -85,7 +85,6 @@ func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSIm
 	if mos.Spec.OSImage == "" && mos.Spec.ManagedOSVersionName == "" {
 		return nil, status, nil
 	}
-
 	prefix, err := h.defaultRegistry()
 	if err != nil {
 		return nil, status, err

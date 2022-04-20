@@ -37,6 +37,11 @@ import (
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 	var k *kubectl.Kubectl
 
+	AfterEach(func() {
+		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", "fleet-default")
+		Expect(err).ShouldNot(HaveOccurred())
+	})
+
 	Context("Create ManagedOSVersions", func() {
 		BeforeEach(func() {
 			k = kubectl.New()
@@ -48,6 +53,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				"invalid",
 				"",
 				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
+				nil,
 			)
 
 			err := k.ApplyYAML("fleet-default", "invalid", ui)
@@ -109,6 +115,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				"testchannel",
 				"json",
 				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
+				nil,
 			)
 
 			err = k.ApplyYAML("fleet-default", "testchannel", ui)
@@ -204,6 +211,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 					"outputFile": "/output/data", // This defaults to /data/output
 					"args":       []string{fmt.Sprintf("echo '%s' > /output/data", string(b))},
 				},
+				nil,
 			)
 
 			err = k.ApplyYAML("fleet-default", "testchannel2", ui)

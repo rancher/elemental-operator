@@ -19,7 +19,7 @@ package catalog
 type ManagedOSVersionChannelSpec struct {
 	Type             string                 `json:"type" yaml:"type"`
 	Options          map[string]interface{} `json:"options" yaml:"options"`
-	UpgradeContainer ContainerSpec          `json:"upgradeContainer" yaml:"upgradeContainer"`
+	UpgradeContainer *ContainerSpec         `json:"upgradeContainer,omitempty" yaml:"upgradeContainer"`
 }
 
 type ManagedOSVersionChannel struct {
@@ -31,7 +31,7 @@ type ManagedOSVersionChannel struct {
 	Spec ManagedOSVersionChannelSpec
 }
 
-func NewManagedOSVersionChannel(name string, t string, options map[string]interface{}) *ManagedOSVersionChannel {
+func NewManagedOSVersionChannel(name string, t string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
 	return &ManagedOSVersionChannel{
 		APIVersion: "rancheros.cattle.io/v1",
 		Metadata: struct {
@@ -39,8 +39,9 @@ func NewManagedOSVersionChannel(name string, t string, options map[string]interf
 		}{Name: name},
 		Kind: "ManagedOSVersionChannel",
 		Spec: ManagedOSVersionChannelSpec{
-			Type:    t,
-			Options: options,
+			Type:             t,
+			Options:          options,
+			UpgradeContainer: upgradeContainer,
 		},
 	}
 }

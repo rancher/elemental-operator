@@ -19,6 +19,7 @@ package managedos
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -142,18 +143,45 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 	}
 
 	// Encode metadata from the spec as environment in the upgrade spec pod
-	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, metadataEnv(m.Data)...)
+	metadataEnv := metadataEnv(m.Data)
+
+	// metadata envs overwrites any other specified
+	keys := map[string]interface{}{}
+	for _, e := range metadataEnv {
+		keys[e.Name] = nil
+	}
+
+	for _, e := range upgradeContainerSpec.Env {
+		if _, ok := keys[e.Name]; !ok {
+			metadataEnv = append(metadataEnv, e)
+		}
+	}
+
+	sort.Slice(metadataEnv, func(i, j int) bool {
+		dat := []string{metadataEnv[i].Name, metadataEnv[j].Name}
+		sort.Strings(dat)
+		return dat[0] == metadataEnv[i].Name
+	})
+
+	upgradeContainerSpec.Env = metadataEnv
 
 	return []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "os-upgrader",
 			},
-			Rules: []rbacv1.PolicyRule{{
-				Verbs:     []string{"update", "get", "list", "watch", "patch"},
-				APIGroups: []string{""},
-				Resources: []string{"nodes"},
-			}},
+			Rules: []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"update", "get", "list", "watch", "patch"},
+					APIGroups: []string{""},
+					Resources: []string{"nodes"},
+				},
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{""},
+					Resources: []string{"pods"},
+				},
+			},
 		},
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
