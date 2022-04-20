@@ -17,7 +17,6 @@ limitations under the License.
 package e2e_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -39,25 +38,7 @@ const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.3-4
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
-	r, err := kubectl.GetData(cattleNamespace, "plan", s, `jsonpath={}`)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = json.Unmarshal(r, up)
-	return
-}
-
-func getPod(s string) (up *corev1.Pod, err error) {
-	up = &corev1.Pod{}
-	r, err := kubectl.GetData(cattleNamespace, "pods", s, `jsonpath={}`)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	err = json.Unmarshal(r, up)
+	err = kubectl.GetObject(s, cattleNamespace, "plan", up)
 	return
 }
 
@@ -91,11 +72,20 @@ func upgradePod(k *kubectl.Kubectl) string {
 }
 
 func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.GomegaMatcher) {
-	waitUpgradePod(k)
+	// Wait for the upgrade pod to appear
+	k.EventuallyPodMatch(
+		cattleNamespace,
+		"upgrade.cattle.io/controller=system-upgrade-controller",
+		3*time.Minute, 2*time.Second,
+		ContainElement(ContainSubstring("apply-os-upgrader-on-ros-e2e-control-plane-with")),
+	)
+
 	podName := upgradePod(k)
 
-	pod, err := getPod(podName)
+	pod := &corev1.Pod{}
+	err := kubectl.GetObject(podName, cattleNamespace, "pods", pod)
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+
 	container := pod.Spec.Containers[0]
 
 	envs := []string{}
@@ -112,16 +102,6 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	ExpectWithOffset(1, container.Command).To(command)
 	ExpectWithOffset(1, container.Args).To(args)
 	ExpectWithOffset(1, mounts).To(mm)
-}
-
-func waitUpgradePod(k *kubectl.Kubectl) {
-	EventuallyWithOffset(1, func() []string {
-		pods, err := k.GetPodNames(cattleNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
-		if err != nil {
-			fmt.Println(err)
-		}
-		return pods
-	}, 3*time.Minute, 2*time.Second).Should(ContainElement(ContainSubstring("apply-os-upgrader-on-ros-e2e-control-plane-with")))
 }
 
 var _ = Describe("ManagedOSImage e2e tests", func() {
