@@ -17,8 +17,8 @@ limitations under the License.
 package config
 
 import (
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/types"
 	"k8s.io/client-go/tools/record"
 )
 

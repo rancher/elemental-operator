@@ -16,13 +16,16 @@ limitations under the License.
 
 package operator
 
-import "github.com/rancher-sandbox/rancheros-operator/pkg/types"
+import "github.com/rancher/elemental-operator/pkg/types"
 
 type options struct {
-	namespace     string
-	services      []service
-	operatorImage string
-	requeuer      types.Requeuer
+	namespace       string
+	services        []service
+	operatorImage   string
+	requeuer        types.Requeuer
+	ServerURL       string
+	CACert          string
+	DefaultRegistry string
 }
 
 // Setting are settings for the operator
@@ -66,6 +69,30 @@ func WithOperatorImage(s string) Setting {
 func WithServices(s ...service) Setting {
 	return func(o *options) error {
 		o.services = append(o.services, s...)
+		return nil
+	}
+}
+
+// WithServerURL sets the rancher server url
+func WithServerURL(serverURL string) Setting {
+	return func(o *options) error {
+		o.ServerURL = serverURL
+		return nil
+	}
+}
+
+// WithCACert sets the ca cert for the rancher server
+func WithCACert(caCert string) Setting {
+	return func(o *options) error {
+		o.CACert = caCert
+		return nil
+	}
+}
+
+// WithDefaultRegistry sets the default registry for os images
+func WithDefaultRegistry(registry string) Setting {
+	return func(o *options) error {
+		o.DefaultRegistry = registry
 		return nil
 	}
 }

@@ -19,7 +19,7 @@ package operator
 import (
 	"context"
 
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/clients"
 )
 
 type service func(context.Context, *clients.Clients) error

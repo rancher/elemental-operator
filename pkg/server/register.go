@@ -19,23 +19,23 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/installer"
+	values "github.com/rancher/wrangler/pkg/data"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
 	"io"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"path"
 	"regexp"
 	"strings"
-
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
-	values "github.com/rancher/wrangler/pkg/data"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/Serial Number}-"
+const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/Serial Number}"
 
 var (
 	sanitize   = regexp.MustCompile("[^0-9a-zA-Z]")
@@ -43,64 +43,166 @@ var (
 	start      = regexp.MustCompile("^[a-zA-Z]")
 )
 
-func (i *InventoryServer) register(resp http.ResponseWriter, req *http.Request) {
-	machineInventory, machineRegister, data, err := i.buildResponse(req)
+func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	// get the machine registration relevant to this request
+	registration, err := i.getMachineRegistration(req)
 	if err != nil {
-		http.Error(resp, err.Error(), http.StatusUnauthorized)
+		http.Error(resp, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	machine, writer, err := i.authMachine(resp, req, machineInventory.Namespace)
+	// attempt to authenticate the machine, if the machine is nil, authentication has failed
+	inventory, w, err := i.authMachine(resp, req, registration.Namespace)
 	if err != nil {
-		http.Error(resp, err.Error(), http.StatusUnauthorized)
+		logrus.Error("failed to authenticate inventory: ", err)
 		return
 	}
-	if writer == nil {
-		if err := i.sampleConfig(machineRegister, resp); err != nil {
-			http.Error(resp, "authorization required", http.StatusUnauthorized)
+
+	// by default return the cloud init for this machine registration
+	if inventory == nil {
+		if err = i.unauthenticatedResponse(registration, resp); err != nil {
+			logrus.Error("error writing unauthenticated response: ", err)
+			return
 		}
 		return
 	}
-	defer writer.Close()
 
-	if err := i.saveMachine(machine.Spec.TPMHash, machineInventory); err != nil {
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
+	if inventory.CreationTimestamp.IsZero() {
+		inventory.ObjectMeta.Labels = registration.Spec.MachineInventoryLabels
+		inventory.ObjectMeta.Annotations = registration.Spec.MachineInventoryAnnotations
+		inventory, err = i.createMachineInventory(req, inventory, registration)
+		if err != nil {
+			logrus.Error("error creating machine inventory: ", err)
+			return
+		}
+	}
+
+	labels, err := getLabels(req)
+	if err != nil {
+		logrus.Warn("failed to parse labels header: ", err)
+	}
+
+	if len(labels) > 0 {
+		for k, v := range labels {
+			inventory.Labels[k] = v
+		}
+
+		inventory, err = i.machineClient.Update(inventory)
+		if err != nil {
+			logrus.Error("failed to update inventory labels: ", err)
+			return
+		}
+	}
+
+	err = i.writeMachineInventoryCloudConfig(w, inventory, registration)
+	if err != nil {
+		logrus.Error("failed to write machine inventory cloud config: ", err)
 		return
 	}
 
-	_, _ = writer.Write(data)
+	_ = w.Close()
+	return
 }
 
-func (i *InventoryServer) sampleConfig(machineRegistration *v1.MachineRegistration, writer io.Writer) error {
+func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
 	_, err := writer.Write([]byte("#cloud-config\n"))
 	if err != nil {
 		return err
 	}
 
-	installSection := map[string]interface{}{
-		"registrationURL": machineRegistration.Status.RegistrationURL,
-	}
-	certs := i.cacert()
-	if certs != "" {
-		installSection["registrationCaCert"] = certs
-	}
-
-	return yaml.NewEncoder(writer).Encode(map[string]interface{}{
-		"rancheros": map[string]interface{}{
-			"install": installSection,
+	return yaml.NewEncoder(writer).Encode(installer.Config{
+		Elemental: installer.Elemental{
+			Registration: installer.Registration{
+				URL:    machineRegistration.Status.RegistrationURL,
+				CACert: i.caCerts,
+			},
 		},
 	})
 }
 
-func (i *InventoryServer) saveMachine(tpmHash string, machineInventory *v1.MachineInventory) error {
-	machines, err := i.machineCache.GetByIndex(tpmHashIndex, tpmHash)
+func (i *InventoryServer) createMachineInventory(req *http.Request, inventory *elm.MachineInventory, registration *elm.MachineRegistration) (*elm.MachineInventory, error) {
+	inventory.Name = registration.Spec.MachineName
+	if inventory.Name == "" {
+		inventory.Name = defaultName
+	}
+	sMBios, _ := getSMBios(req)
+	inventory.Name = buildName(sMBios, inventory.Name)
+	inventory.Namespace = registration.Namespace
+	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
+	inventory.Labels = registration.Spec.MachineInventoryLabels
+
+	machines, err := i.machineCache.GetByIndex(tpmHashIndex, inventory.Spec.TPMHash)
 	if err != nil || len(machines) > 0 {
+		return nil, err
+	}
+
+	return i.machineClient.Create(inventory)
+}
+
+func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.MachineRegistration, error) {
+	token := path.Base(req.URL.Path)
+
+	regs, err := i.machineRegistrationCache.GetByIndex(registrationTokenIndex, token)
+	if apierrors.IsNotFound(err) || len(regs) != 1 {
+		if len(regs) > 1 {
+			logrus.Errorf("Multiple MachineRegistrations have the same token %s: %v", token, regs)
+		}
+		if err == nil && len(regs) == 0 {
+			err = fmt.Errorf("MachineRegistration does not exist")
+		}
+		return nil, err
+	}
+
+	var ready bool
+	for _, condition := range regs[0].Status.Conditions {
+		if condition.Type == "Ready" && condition.Status == "True" {
+			ready = true
+			break
+		}
+	}
+
+	if !ready {
+		return nil, errors.New("MachineRegistration is not ready")
+	}
+
+	return regs[0], nil
+
+}
+
+func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inventory *elm.MachineInventory, registration *elm.MachineRegistration) error {
+	var err error
+
+	sa, err := i.serviceAccountCache.Get(registration.Status.ServiceAccountRef.Namespace,
+		registration.Status.ServiceAccountRef.Name)
+	if err != nil || len(sa.Secrets) < 1 {
 		return err
 	}
 
-	machineInventory.Spec.TPMHash = tpmHash
-	_, err = i.machineClient.Create(machineInventory)
-	return err
+	tokenSecret, err := i.secretCache.Get(sa.Namespace, sa.Secrets[0].Name)
+	if err != nil || tokenSecret.Type != v1.SecretTypeServiceAccountToken {
+		return err
+	}
+
+	var install installer.Install
+	if registration.Spec.Install != nil {
+		install = *registration.Spec.Install
+	}
+
+	return yaml.NewEncoder(writer).Encode(installer.Config{
+		Elemental: installer.Elemental{
+			Registration: installer.Registration{
+				URL:    registration.Status.RegistrationURL,
+				CACert: i.caCerts,
+			},
+			SystemAgent: installer.SystemAgent{
+				URL:             i.serverURL + "/k8s/clusters/local",
+				Token:           string(tokenSecret.Data["token"]),
+				SecretName:      inventory.Name,
+				SecretNamespace: inventory.Namespace,
+			},
+			Install: install,
+		},
+	})
 }
 
 func buildName(data map[string]interface{}, name string) string {
@@ -137,64 +239,6 @@ func buildName(data map[string]interface{}, name string) string {
 	return strings.ToLower(resultStr)
 }
 
-func (i *InventoryServer) buildResponse(req *http.Request) (*v1.MachineInventory, *v1.MachineRegistration, []byte, error) {
-	token := path.Base(req.URL.Path)
-
-	smbios, err := getSMBios(req)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	machineRegisters, err := i.machineRegistrationCache.GetByIndex(registrationTokenIndex, token)
-	if apierrors.IsNotFound(err) || len(machineRegisters) != 1 {
-		if len(machineRegisters) > 1 {
-			logrus.Errorf("Multiple MachineRegistrations have the same token %s: %v", token, machineRegisters)
-		}
-		if err == nil && len(machineRegisters) == 0 {
-			err = fmt.Errorf("MachineRegistration does not exist")
-		}
-		return nil, nil, nil, err
-	}
-	machineRegister := machineRegisters[0]
-
-	name := machineRegister.Spec.MachineName
-	if name == "" {
-		name = defaultName
-	}
-
-	installConfig := map[string]interface{}{}
-	if machineRegister.Spec.CloudConfig != nil && len(machineRegister.Spec.CloudConfig.Data) > 0 {
-		installConfig = values.MergeMapsConcatSlice(installConfig, machineRegister.Spec.CloudConfig.Data)
-	}
-
-	serverURL, err := i.serverURL()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	values.PutValue(installConfig, serverURL, "rancherd", "server")
-	values.PutValue(installConfig, "tpm://", "rancherd", "token")
-	values.PutValue(installConfig, true, "rancheros", "install", "automatic")
-
-	data, err := json.Marshal(installConfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return &v1.MachineInventory{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: buildName(smbios, name),
-			Namespace:    machineRegister.Namespace,
-			Labels:       machineRegisters[0].Spec.MachineInventoryLabels,
-			Annotations:  machineRegisters[0].Spec.MachineInventoryAnnotations,
-		},
-		Spec: v1.MachineInventorySpec{
-			SMBIOS: &v1alpha1.GenericMap{
-				Data: smbios,
-			},
-		},
-	}, machineRegister, data, nil
-}
-
 func getSMBios(req *http.Request) (map[string]interface{}, error) {
 	smbios := req.Header.Get("X-Cattle-Smbios")
 	if smbios == "" {
@@ -206,4 +250,26 @@ func getSMBios(req *http.Request) (map[string]interface{}, error) {
 	}
 	data := map[string]interface{}{}
 	return data, json.Unmarshal(smbiosData, &data)
+}
+
+func getLabels(req *http.Request) (map[string]string, error) {
+	in := req.Header.Get("X-Cattle-Labels")
+	if in == "" {
+		return nil, nil
+	}
+
+	labelString, err := base64.StdEncoding.DecodeString(in)
+	if err != nil {
+		return nil, err
+	}
+	var labels map[string]string
+	return labels, json.Unmarshal(labelString, &labels)
+}
+
+type WriteFile struct {
+	Encoding    string `json:"encoding,omitempty"`
+	Content     string `json:"content,omitempty"`
+	Owner       string `json:"owner,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Permissions string `json:"permissions,omitempty"`
 }

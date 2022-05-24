@@ -20,11 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	fleetcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
-	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
-	oscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
+	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/wrangler/pkg/name"
 	"github.com/rancher/wrangler/pkg/relatedresource"
@@ -37,25 +36,25 @@ import (
 
 var controllerName = "mos-bundle"
 
-func Register(ctx context.Context, clients *clients.Clients) {
+func Register(ctx context.Context, clients *clients.Clients, defaultRegistry string) {
 	h := &handler{
 		bundleCache:         clients.Fleet.Bundle().Cache(),
-		settingsCache:       clients.Rancher.Setting().Cache(),
-		managedVersionCache: clients.OS.ManagedOSVersion().Cache(),
+		managedVersionCache: clients.Elemental.ManagedOSVersion().Cache(),
 		Recorder:            clients.EventRecorder(controllerName),
+		DefaultRegistry:     defaultRegistry,
 	}
 
 	relatedresource.Watch(ctx,
 		"mcc-from-bundle-trigger",
-		relatedresource.OwnerResolver(true, provv1.SchemeGroupVersion.String(), "ManagedOSImage"),
-		clients.OS.ManagedOSImage(),
+		relatedresource.OwnerResolver(true, elm.SchemeGroupVersion.String(), "ManagedOSImage"),
+		clients.Elemental.ManagedOSImage(),
 		clients.Fleet.Bundle())
-	oscontrollers.RegisterManagedOSImageGeneratingHandler(ctx,
-		clients.OS.ManagedOSImage(),
+	elmcontrollers.RegisterManagedOSImageGeneratingHandler(ctx,
+		clients.Elemental.ManagedOSImage(),
 		clients.Apply.
 			WithSetOwnerReference(true, true).
 			WithCacheTypes(
-				clients.OS.ManagedOSImage(),
+				clients.Elemental.ManagedOSImage(),
 				clients.Fleet.Bundle()),
 		"Defined",
 		controllerName,
@@ -65,32 +64,17 @@ func Register(ctx context.Context, clients *clients.Clients) {
 
 type handler struct {
 	bundleCache         fleetcontrollers.BundleCache
-	settingsCache       ranchercontrollers.SettingCache
-	managedVersionCache oscontrollers.ManagedOSVersionCache
+	managedVersionCache elmcontrollers.ManagedOSVersionCache
 	Recorder            record.EventRecorder
+	DefaultRegistry     string
 }
 
-func (h *handler) defaultRegistry() (string, error) {
-	setting, err := h.settingsCache.Get("system-default-registry")
-	if err != nil {
-		return "", err
-	}
-	if setting.Value == "" {
-		return setting.Default, nil
-	}
-	return setting.Value, nil
-}
-
-func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSImageStatus) ([]runtime.Object, provv1.ManagedOSImageStatus, error) {
+func (h *handler) OnChange(mos *elm.ManagedOSImage, status elm.ManagedOSImageStatus) ([]runtime.Object, elm.ManagedOSImageStatus, error) {
 	if mos.Spec.OSImage == "" && mos.Spec.ManagedOSVersionName == "" {
 		return nil, status, nil
 	}
-	prefix, err := h.defaultRegistry()
-	if err != nil {
-		return nil, status, err
-	}
 
-	objs, err := h.objects(mos, prefix)
+	objs, err := h.objects(mos)
 	if err != nil {
 		return nil, status, err
 	}
@@ -129,7 +113,7 @@ func (h *handler) OnChange(mos *provv1.ManagedOSImage, status provv1.ManagedOSIm
 	}, status, err
 }
 
-func (h *handler) updateStatus(status provv1.ManagedOSImageStatus, bundle *v1alpha1.Bundle) (provv1.ManagedOSImageStatus, error) {
+func (h *handler) updateStatus(status elm.ManagedOSImageStatus, bundle *v1alpha1.Bundle) (elm.ManagedOSImageStatus, error) {
 	bundle, err := h.bundleCache.Get(bundle.Namespace, bundle.Name)
 	if apierrors.IsNotFound(err) {
 		return status, nil

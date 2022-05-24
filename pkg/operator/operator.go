@@ -18,15 +18,16 @@ package operator
 
 import (
 	"context"
+	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
+	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/inventory"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedos"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedosversionchannel"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
+	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
 
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/registration"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/server"
+	"github.com/rancher/elemental-operator/pkg/controllers/registration"
+	"github.com/rancher/elemental-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/sirupsen/logrus"
@@ -57,36 +58,50 @@ func Run(ctx context.Context, settings ...Setting) error {
 
 	err = factory.BatchCreateCRDs(ctx,
 		crd.CRD{
-			SchemaObject: v1.ManagedOSImage{},
+			SchemaObject: elm.ManagedOSImage{},
 			Status:       true,
 		},
 		crd.CRD{
-			SchemaObject: v1.MachineInventory{},
+			SchemaObject: elm.MachineInventory{},
 			Status:       true,
 		},
 		crd.CRD{
-			SchemaObject: v1.MachineRegistration{},
+			SchemaObject: elm.MachineRegistration{},
 			Status:       true,
 		},
 		crd.CRD{
-			SchemaObject: v1.ManagedOSVersion{},
+			SchemaObject: elm.ManagedOSVersion{},
 			Status:       true,
 		},
 		crd.CRD{
-			SchemaObject: v1.ManagedOSVersionChannel{},
+			SchemaObject: elm.ManagedOSVersionChannel{},
 			Status:       true,
+		},
+		crd.CRD{
+			SchemaObject: elm.MachineInventorySelector{},
+			Status:       true,
+			Labels: map[string]string{
+				"cluster.x-k8s.io/v1beta1": "v1beta1",
+			},
+		},
+		crd.CRD{
+			SchemaObject: elm.MachineInventorySelectorTemplate{},
+			Labels: map[string]string{
+				"cluster.x-k8s.io/v1beta1": "v1beta1",
+			},
 		},
 	).BatchWait()
 	if err != nil {
 		logrus.Fatalf("Failed to create CRDs: %v", err)
 	}
 
-	managedos.Register(ctx, clients)
-	inventory.Register(ctx, clients)
-	registration.Register(ctx, clients)
+	managedos.Register(ctx, clients, o.DefaultRegistry)
+	registration.Register(ctx, clients, o.ServerURL)
+	machineinventory.Register(ctx, clients)
 	managedosversionchannel.Register(ctx, o.requeuer, clients)
+	machineinventoryselector.Register(ctx, clients)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "rancheros-operator", server.New(clients))
+	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients, o.ServerURL, o.CACert))
 
 	for _, s := range o.services {
 		go s(ctx, clients) //nolint:golint,errcheck

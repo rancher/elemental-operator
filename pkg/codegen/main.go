@@ -20,40 +20,33 @@ import (
 	"os"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
+	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 func main() {
 	os.Unsetenv("GOPATH")
 	controllergen.Run(args.Options{
-		OutputPackage: "github.com/rancher-sandbox/rancheros-operator/pkg/generated",
+		OutputPackage: "github.com/rancher/elemental-operator/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
-			"provisioning.cattle.io": {
-				Types: []interface{}{
-					provv1.Cluster{},
-				},
-			},
-			"management.cattle.io": {
-				Types: []interface{}{
-					v3.Setting{},
-					v3.ClusterRegistrationToken{},
-				},
-			},
 			"fleet.cattle.io": {
 				Types: []interface{}{
 					fleet.Bundle{},
 				},
 			},
-			"rancheros.cattle.io": {
+			"elemental.cattle.io": {
 				Types: []interface{}{
-					"./pkg/apis/rancheros.cattle.io/v1",
+					"./pkg/apis/elemental.cattle.io/v1beta1",
 				},
 				GenerateTypes:   true,
 				GenerateClients: true,
+			},
+			"cluster.x-k8s.io": {
+				Types: []interface{}{
+					capi.Machine{},
+				},
 			},
 		},
 	})

@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,10 +32,10 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error) {
+func (j *JSONSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s' (JSON)", s.Namespace, s.Name)
 
-	timeout := time.Duration(time.Second * 30)
+	timeout := time.Second * 30
 	if j.Timeout != "" {
 		var err error
 		timeout, err = time.ParseDuration(j.Timeout)
@@ -56,7 +56,7 @@ func (j *JSONSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]
 	if err != nil {
 		return nil, err
 	}
-	res := []provv1.ManagedOSVersion{}
+	res := []elm.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf, &res)
 	if err != nil {

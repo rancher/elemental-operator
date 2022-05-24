@@ -29,8 +29,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
 )
 
 type CustomSyncer struct {
@@ -56,7 +56,7 @@ func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error) {
+func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
 
 	mountDir := j.MountPath
@@ -80,7 +80,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 				Name:      s.Name,
 				Namespace: s.Namespace,
 				OwnerReferences: []v1.OwnerReference{
-					*v1.NewControllerRef(&s, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel")),
+					*v1.NewControllerRef(&s, elm.SchemeGroupVersion.WithKind("ManagedOSVersionChannel")),
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -98,7 +98,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 					}},
 					Name:    "pause",
 					Image:   c.OperatorImage,
-					Command: []string{"/usr/sbin/rancheros-operator"},
+					Command: []string{"/usr/bin/elemental-operator"},
 					Args:    []string{"display"},
 					Env: []corev1.EnvVar{{
 						Name:  "FILE",
@@ -160,7 +160,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 	}
 
 	logrus.Infof("Got '%s' from '%s/%s'", buf.String(), s.Namespace, s.Name)
-	res := []provv1.ManagedOSVersion{}
+	res := []elm.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf.Bytes(), &res)
 	if err != nil {

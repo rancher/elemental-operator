@@ -19,15 +19,13 @@ package clients
 import (
 	"context"
 
-	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io"
-	fleetcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io"
-	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/provisioning.cattle.io"
-	provcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/provisioning.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io"
-	oscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	elmscheme "github.com/rancher/elemental-operator/pkg/generated/clientset/versioned/scheme"
+	capicontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io"
+	capi "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io"
+	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io"
+	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
@@ -37,28 +35,23 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1Typed "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-
 	"k8s.io/client-go/tools/record"
 )
 
-const (
-	// SystemNamespace Default namespace for rancher system objects
-	SystemNamespace = "cattle-system"
-)
+const SystemNamespace = "cattle-system"
 
 type Clients struct {
 	*clients.Clients
-	Fleet        fleetcontrollers.Interface
-	OS           oscontrollers.Interface
-	Rancher      ranchercontrollers.Interface
-	Provisioning provcontrollers.Interface
-	Events       corev1Typed.EventInterface
+	Fleet     fleetcontrollers.Interface
+	Elemental elmcontrollers.Interface
+	Events    corev1Typed.EventInterface
+	CAPI      capi.Interface
 }
 
 // EventRecorder creates an event recorder associated to a controller nome for the schema (arbitrary)
 func (c *Clients) EventRecorder(name string) record.EventRecorder {
 	// Create event broadcaster
-	utilruntime.Must(rosscheme.AddToScheme(scheme.Scheme))
+	utilruntime.Must(elmscheme.AddToScheme(scheme.Scheme))
 	logrus.Info("Creating event broadcaster for " + name)
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(logrus.Infof)
@@ -81,12 +74,11 @@ func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 		SharedControllerFactory: c.SharedControllerFactory,
 	}
 	return &Clients{
-		Clients:      c,
-		Events:       kubeClient.CoreV1().Events(""),
-		Fleet:        fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
-		OS:           rancheros.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Rancheros().V1(),
-		Rancher:      management.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Management().V3(),
-		Provisioning: provisioning.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Provisioning().V1(),
+		Clients:   c,
+		Events:    kubeClient.CoreV1().Events(""),
+		Fleet:     fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
+		Elemental: elemental.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Elemental().V1beta1(),
+		CAPI:      capicontrollers.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Cluster().V1beta1(),
 	}, nil
 }
 

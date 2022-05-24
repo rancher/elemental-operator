@@ -1,9 +1,9 @@
 kind: APIService
 apiVersion: management.cattle.io/v3
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 spec:
-  secretName: rancheros-operator
+  secretName: elemental-operator
   secretNamespace: {{ .Release.Namespace }}
   pathPrefixes:
-  - /v1-rancheros/
+  - /elemental/

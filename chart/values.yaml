@@ -1,7 +1,7 @@
 image:
   empty: rancher/pause:3.1
-  repository: rancher/os2
-  tag: dev
+  repository: rancher/elemental-operator
+  tag: ""
   imagePullPolicy: IfNotPresent
 
 # http[s] proxy server
@@ -13,9 +13,8 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
-
-# Use ros-operator binary from the host
-hostbin: false
+    url: ""
+    ca_cert: ""
 
 # default sync interval for upgrade channel
 sync_interval: "60m"

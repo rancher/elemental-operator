@@ -17,9 +17,9 @@ limitations under the License.
 package tpm
 
 import (
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	roscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 )
 
@@ -29,19 +29,19 @@ const (
 )
 
 type AuthServer struct {
-	machineCache  roscontrollers.MachineInventoryCache
-	machineClient roscontrollers.MachineInventoryClient
+	machineCache  elmcontrollers.MachineInventoryCache
+	machineClient elmcontrollers.MachineInventoryClient
 	secretCache   corecontrollers.SecretCache
 }
 
 func New(clients *clients.Clients) *AuthServer {
 	a := &AuthServer{
-		machineCache:  clients.OS.MachineInventory().Cache(),
-		machineClient: clients.OS.MachineInventory(),
+		machineCache:  clients.Elemental.MachineInventory().Cache(),
+		machineClient: clients.Elemental.MachineInventory(),
 		secretCache:   clients.Core.Secret().Cache(),
 	}
 
-	a.machineCache.AddIndexer(machineByHash, func(obj *v1.MachineInventory) ([]string, error) {
+	a.machineCache.AddIndexer(machineByHash, func(obj *elm.MachineInventory) ([]string, error) {
 		if obj.Spec.TPMHash == "" {
 			return nil, nil
 		}

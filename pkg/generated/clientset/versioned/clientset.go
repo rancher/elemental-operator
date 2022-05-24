@@ -21,7 +21,7 @@ package versioned
 import (
 	"fmt"
 
-	rancherosv1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/typed/rancheros.cattle.io/v1"
+	elementalv1beta1 "github.com/rancher/elemental-operator/pkg/generated/clientset/versioned/typed/elemental.cattle.io/v1beta1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -29,19 +29,19 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
-	RancherosV1() rancherosv1.RancherosV1Interface
+	ElementalV1beta1() elementalv1beta1.ElementalV1beta1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
 // version included in a Clientset.
 type Clientset struct {
 	*discovery.DiscoveryClient
-	rancherosV1 *rancherosv1.RancherosV1Client
+	elementalV1beta1 *elementalv1beta1.ElementalV1beta1Client
 }
 
-// RancherosV1 retrieves the RancherosV1Client
-func (c *Clientset) RancherosV1() rancherosv1.RancherosV1Interface {
-	return c.rancherosV1
+// ElementalV1beta1 retrieves the ElementalV1beta1Client
+func (c *Clientset) ElementalV1beta1() elementalv1beta1.ElementalV1beta1Interface {
+	return c.elementalV1beta1
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -65,7 +65,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 	}
 	var cs Clientset
 	var err error
-	cs.rancherosV1, err = rancherosv1.NewForConfig(&configShallowCopy)
+	cs.elementalV1beta1, err = elementalv1beta1.NewForConfig(&configShallowCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func NewForConfig(c *rest.Config) (*Clientset, error) {
 // panics if there is an error in the config.
 func NewForConfigOrDie(c *rest.Config) *Clientset {
 	var cs Clientset
-	cs.rancherosV1 = rancherosv1.NewForConfigOrDie(c)
+	cs.elementalV1beta1 = elementalv1beta1.NewForConfigOrDie(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClientForConfigOrDie(c)
 	return &cs
@@ -90,7 +90,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
-	cs.rancherosV1 = rancherosv1.New(c)
+	cs.elementalV1beta1 = elementalv1beta1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
