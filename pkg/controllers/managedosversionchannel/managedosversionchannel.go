@@ -19,9 +19,9 @@ package managedosversionchannel
 import (
 	"context"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	provv1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/clients"
+	"github.com/rancher-sandbox/elemental-operator/pkg/types"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 )

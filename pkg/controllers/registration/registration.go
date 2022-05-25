@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
-	roscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/clients"
+	ranchercontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	roscontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/randomtoken"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -59,7 +59,7 @@ func (h *handler) OnChange(obj *v1.MachineRegistration, status v1.MachineRegistr
 		}
 	}
 
-	status.RegistrationURL = serverURL + "/v1-rancheros/registration/" + status.RegistrationToken
+	status.RegistrationURL = serverURL + "/v1-elemental/registration/" + status.RegistrationToken
 	return status, nil
 }
 

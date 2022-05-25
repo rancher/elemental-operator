@@ -19,8 +19,8 @@ limitations under the License.
 package v1
 
 import (
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -33,7 +33,7 @@ type RancherosV1Interface interface {
 	ManagedOSVersionChannelsGetter
 }
 
-// RancherosV1Client is used to interact with features provided by the rancheros.cattle.io group.
+// RancherosV1Client is used to interact with features provided by the elemental.cattle.io group.
 type RancherosV1Client struct {
 	restClient rest.Interface
 }

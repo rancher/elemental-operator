@@ -25,7 +25,7 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher-sandbox/elemental-operator/tests/catalog"
 )
 
 var _ = Describe("MachineRegistration e2e tests", func() {
@@ -39,7 +39,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 			mr := catalog.NewMachineRegistration("machine-registration", map[string]interface{}{
 				"install":   map[string]string{"device": "/dev/vda"},
-				"rancheros": map[string]interface{}{"install": map[string]string{"isoUrl": "https://something.example.com"}},
+				"elemental": map[string]interface{}{"install": map[string]string{"isoUrl": "https://something.example.com"}},
 				"users": []map[string]string{
 					{
 						"name":   "root",
@@ -62,7 +62,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 				return string(e)
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/v1-elemental/registration", externalIP, magicDNS)),
 				),
 			)
 
@@ -72,7 +72,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			Expect(out).Should(
 				And(
 					ContainSubstring("BEGIN CERTIFICATE"),
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/v1-elemental/registration", externalIP, magicDNS)),
 				),
 			)
 		})

@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 rules:
 - apiGroups:
   - ""
@@ -34,7 +34,7 @@ rules:
   verbs:
   - 'get'
 - apiGroups:
-  - rancheros.cattle.io
+  - elemental.cattle.io
   resources:
   - '*'
   verbs:
@@ -85,12 +85,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: rancheros-operator
+  name: elemental-operator
 subjects:
 - kind: ServiceAccount
-  name: rancheros-operator
+  name: elemental-operator
   namespace: {{.Release.Namespace}}

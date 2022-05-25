@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	rancheroscattleiov1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	elementalcattleiov1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,25 +36,25 @@ type FakeMachineRegistrations struct {
 	ns   string
 }
 
-var machineregistrationsResource = schema.GroupVersionResource{Group: "rancheros.cattle.io", Version: "v1", Resource: "machineregistrations"}
+var machineregistrationsResource = schema.GroupVersionResource{Group: "elemental.cattle.io", Version: "v1", Resource: "machineregistrations"}
 
-var machineregistrationsKind = schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "MachineRegistration"}
+var machineregistrationsKind = schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "MachineRegistration"}
 
 // Get takes name of the machineRegistration, and returns the corresponding machineRegistration object, and an error if there is any.
-func (c *FakeMachineRegistrations) Get(ctx context.Context, name string, options v1.GetOptions) (result *rancheroscattleiov1.MachineRegistration, err error) {
+func (c *FakeMachineRegistrations) Get(ctx context.Context, name string, options v1.GetOptions) (result *elementalcattleiov1.MachineRegistration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(machineregistrationsResource, c.ns, name), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewGetAction(machineregistrationsResource, c.ns, name), &elementalcattleiov1.MachineRegistration{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineRegistration), err
+	return obj.(*elementalcattleiov1.MachineRegistration), err
 }
 
 // List takes label and field selectors, and returns the list of MachineRegistrations that match those selectors.
-func (c *FakeMachineRegistrations) List(ctx context.Context, opts v1.ListOptions) (result *rancheroscattleiov1.MachineRegistrationList, err error) {
+func (c *FakeMachineRegistrations) List(ctx context.Context, opts v1.ListOptions) (result *elementalcattleiov1.MachineRegistrationList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(machineregistrationsResource, machineregistrationsKind, c.ns, opts), &rancheroscattleiov1.MachineRegistrationList{})
+		Invokes(testing.NewListAction(machineregistrationsResource, machineregistrationsKind, c.ns, opts), &elementalcattleiov1.MachineRegistrationList{})
 
 	if obj == nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (c *FakeMachineRegistrations) List(ctx context.Context, opts v1.ListOptions
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &rancheroscattleiov1.MachineRegistrationList{ListMeta: obj.(*rancheroscattleiov1.MachineRegistrationList).ListMeta}
-	for _, item := range obj.(*rancheroscattleiov1.MachineRegistrationList).Items {
+	list := &elementalcattleiov1.MachineRegistrationList{ListMeta: obj.(*elementalcattleiov1.MachineRegistrationList).ListMeta}
+	for _, item := range obj.(*elementalcattleiov1.MachineRegistrationList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -81,43 +81,43 @@ func (c *FakeMachineRegistrations) Watch(ctx context.Context, opts v1.ListOption
 }
 
 // Create takes the representation of a machineRegistration and creates it.  Returns the server's representation of the machineRegistration, and an error, if there is any.
-func (c *FakeMachineRegistrations) Create(ctx context.Context, machineRegistration *rancheroscattleiov1.MachineRegistration, opts v1.CreateOptions) (result *rancheroscattleiov1.MachineRegistration, err error) {
+func (c *FakeMachineRegistrations) Create(ctx context.Context, machineRegistration *elementalcattleiov1.MachineRegistration, opts v1.CreateOptions) (result *elementalcattleiov1.MachineRegistration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(machineregistrationsResource, c.ns, machineRegistration), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewCreateAction(machineregistrationsResource, c.ns, machineRegistration), &elementalcattleiov1.MachineRegistration{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineRegistration), err
+	return obj.(*elementalcattleiov1.MachineRegistration), err
 }
 
 // Update takes the representation of a machineRegistration and updates it. Returns the server's representation of the machineRegistration, and an error, if there is any.
-func (c *FakeMachineRegistrations) Update(ctx context.Context, machineRegistration *rancheroscattleiov1.MachineRegistration, opts v1.UpdateOptions) (result *rancheroscattleiov1.MachineRegistration, err error) {
+func (c *FakeMachineRegistrations) Update(ctx context.Context, machineRegistration *elementalcattleiov1.MachineRegistration, opts v1.UpdateOptions) (result *elementalcattleiov1.MachineRegistration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(machineregistrationsResource, c.ns, machineRegistration), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewUpdateAction(machineregistrationsResource, c.ns, machineRegistration), &elementalcattleiov1.MachineRegistration{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineRegistration), err
+	return obj.(*elementalcattleiov1.MachineRegistration), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeMachineRegistrations) UpdateStatus(ctx context.Context, machineRegistration *rancheroscattleiov1.MachineRegistration, opts v1.UpdateOptions) (*rancheroscattleiov1.MachineRegistration, error) {
+func (c *FakeMachineRegistrations) UpdateStatus(ctx context.Context, machineRegistration *elementalcattleiov1.MachineRegistration, opts v1.UpdateOptions) (*elementalcattleiov1.MachineRegistration, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(machineregistrationsResource, "status", c.ns, machineRegistration), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewUpdateSubresourceAction(machineregistrationsResource, "status", c.ns, machineRegistration), &elementalcattleiov1.MachineRegistration{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineRegistration), err
+	return obj.(*elementalcattleiov1.MachineRegistration), err
 }
 
 // Delete takes name of the machineRegistration and deletes it. Returns an error if one occurs.
 func (c *FakeMachineRegistrations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(machineregistrationsResource, c.ns, name), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewDeleteAction(machineregistrationsResource, c.ns, name), &elementalcattleiov1.MachineRegistration{})
 
 	return err
 }
@@ -126,17 +126,17 @@ func (c *FakeMachineRegistrations) Delete(ctx context.Context, name string, opts
 func (c *FakeMachineRegistrations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(machineregistrationsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &rancheroscattleiov1.MachineRegistrationList{})
+	_, err := c.Fake.Invokes(action, &elementalcattleiov1.MachineRegistrationList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched machineRegistration.
-func (c *FakeMachineRegistrations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *rancheroscattleiov1.MachineRegistration, err error) {
+func (c *FakeMachineRegistrations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *elementalcattleiov1.MachineRegistration, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(machineregistrationsResource, c.ns, name, pt, data, subresources...), &rancheroscattleiov1.MachineRegistration{})
+		Invokes(testing.NewPatchSubresourceAction(machineregistrationsResource, c.ns, name, pt, data, subresources...), &elementalcattleiov1.MachineRegistration{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineRegistration), err
+	return obj.(*elementalcattleiov1.MachineRegistration), err
 }

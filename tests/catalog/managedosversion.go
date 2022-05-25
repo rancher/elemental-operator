@@ -41,7 +41,7 @@ type ContainerSpec struct {
 
 func NewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC *ContainerSpec) *ManagedOSVersion {
 	return &ManagedOSVersion{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},

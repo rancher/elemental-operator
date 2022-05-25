@@ -24,9 +24,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rancher-sandbox/rancheros-operator/pkg/operator"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	"github.com/rancher-sandbox/elemental-operator/pkg/operator"
+	"github.com/rancher-sandbox/elemental-operator/pkg/services/syncer"
+	"github.com/rancher-sandbox/elemental-operator/pkg/types"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -34,7 +34,7 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:        "rancheros-operator",
+		Name:        "elemental-operator",
 		Version:     "", // TODO: bind internal.Version to CI while building with ldflags
 		Author:      "",
 		Usage:       "",

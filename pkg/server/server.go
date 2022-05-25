@@ -26,11 +26,11 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
-	roscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/tpm"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/clients"
+	ranchercontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	roscontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/tpm"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,7 +38,7 @@ import (
 )
 
 var (
-	tokenType                = "rancheros.cattle.io/token"
+	tokenType                = "elemental.cattle.io/token"
 	tokenKey                 = "token"
 	tokenIndex               = "tokenIndex"
 	machineBySecretNameIndex = "machineBySecretNameIndex"

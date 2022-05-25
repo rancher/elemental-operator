@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	object "github.com/rancher-sandbox/rancheros-operator/pkg/object"
+	object "github.com/rancher-sandbox/elemental-operator/pkg/object"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"

@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	rancheroscattleiov1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	elementalcattleiov1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,25 +36,25 @@ type FakeMachineInventories struct {
 	ns   string
 }
 
-var machineinventoriesResource = schema.GroupVersionResource{Group: "rancheros.cattle.io", Version: "v1", Resource: "machineinventories"}
+var machineinventoriesResource = schema.GroupVersionResource{Group: "elemental.cattle.io", Version: "v1", Resource: "machineinventories"}
 
-var machineinventoriesKind = schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "MachineInventory"}
+var machineinventoriesKind = schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "MachineInventory"}
 
 // Get takes name of the machineInventory, and returns the corresponding machineInventory object, and an error if there is any.
-func (c *FakeMachineInventories) Get(ctx context.Context, name string, options v1.GetOptions) (result *rancheroscattleiov1.MachineInventory, err error) {
+func (c *FakeMachineInventories) Get(ctx context.Context, name string, options v1.GetOptions) (result *elementalcattleiov1.MachineInventory, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(machineinventoriesResource, c.ns, name), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewGetAction(machineinventoriesResource, c.ns, name), &elementalcattleiov1.MachineInventory{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineInventory), err
+	return obj.(*elementalcattleiov1.MachineInventory), err
 }
 
 // List takes label and field selectors, and returns the list of MachineInventories that match those selectors.
-func (c *FakeMachineInventories) List(ctx context.Context, opts v1.ListOptions) (result *rancheroscattleiov1.MachineInventoryList, err error) {
+func (c *FakeMachineInventories) List(ctx context.Context, opts v1.ListOptions) (result *elementalcattleiov1.MachineInventoryList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(machineinventoriesResource, machineinventoriesKind, c.ns, opts), &rancheroscattleiov1.MachineInventoryList{})
+		Invokes(testing.NewListAction(machineinventoriesResource, machineinventoriesKind, c.ns, opts), &elementalcattleiov1.MachineInventoryList{})
 
 	if obj == nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (c *FakeMachineInventories) List(ctx context.Context, opts v1.ListOptions) 
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &rancheroscattleiov1.MachineInventoryList{ListMeta: obj.(*rancheroscattleiov1.MachineInventoryList).ListMeta}
-	for _, item := range obj.(*rancheroscattleiov1.MachineInventoryList).Items {
+	list := &elementalcattleiov1.MachineInventoryList{ListMeta: obj.(*elementalcattleiov1.MachineInventoryList).ListMeta}
+	for _, item := range obj.(*elementalcattleiov1.MachineInventoryList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -81,43 +81,43 @@ func (c *FakeMachineInventories) Watch(ctx context.Context, opts v1.ListOptions)
 }
 
 // Create takes the representation of a machineInventory and creates it.  Returns the server's representation of the machineInventory, and an error, if there is any.
-func (c *FakeMachineInventories) Create(ctx context.Context, machineInventory *rancheroscattleiov1.MachineInventory, opts v1.CreateOptions) (result *rancheroscattleiov1.MachineInventory, err error) {
+func (c *FakeMachineInventories) Create(ctx context.Context, machineInventory *elementalcattleiov1.MachineInventory, opts v1.CreateOptions) (result *elementalcattleiov1.MachineInventory, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(machineinventoriesResource, c.ns, machineInventory), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewCreateAction(machineinventoriesResource, c.ns, machineInventory), &elementalcattleiov1.MachineInventory{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineInventory), err
+	return obj.(*elementalcattleiov1.MachineInventory), err
 }
 
 // Update takes the representation of a machineInventory and updates it. Returns the server's representation of the machineInventory, and an error, if there is any.
-func (c *FakeMachineInventories) Update(ctx context.Context, machineInventory *rancheroscattleiov1.MachineInventory, opts v1.UpdateOptions) (result *rancheroscattleiov1.MachineInventory, err error) {
+func (c *FakeMachineInventories) Update(ctx context.Context, machineInventory *elementalcattleiov1.MachineInventory, opts v1.UpdateOptions) (result *elementalcattleiov1.MachineInventory, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(machineinventoriesResource, c.ns, machineInventory), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewUpdateAction(machineinventoriesResource, c.ns, machineInventory), &elementalcattleiov1.MachineInventory{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineInventory), err
+	return obj.(*elementalcattleiov1.MachineInventory), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeMachineInventories) UpdateStatus(ctx context.Context, machineInventory *rancheroscattleiov1.MachineInventory, opts v1.UpdateOptions) (*rancheroscattleiov1.MachineInventory, error) {
+func (c *FakeMachineInventories) UpdateStatus(ctx context.Context, machineInventory *elementalcattleiov1.MachineInventory, opts v1.UpdateOptions) (*elementalcattleiov1.MachineInventory, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(machineinventoriesResource, "status", c.ns, machineInventory), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewUpdateSubresourceAction(machineinventoriesResource, "status", c.ns, machineInventory), &elementalcattleiov1.MachineInventory{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineInventory), err
+	return obj.(*elementalcattleiov1.MachineInventory), err
 }
 
 // Delete takes name of the machineInventory and deletes it. Returns an error if one occurs.
 func (c *FakeMachineInventories) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(machineinventoriesResource, c.ns, name), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewDeleteAction(machineinventoriesResource, c.ns, name), &elementalcattleiov1.MachineInventory{})
 
 	return err
 }
@@ -126,17 +126,17 @@ func (c *FakeMachineInventories) Delete(ctx context.Context, name string, opts v
 func (c *FakeMachineInventories) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(machineinventoriesResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &rancheroscattleiov1.MachineInventoryList{})
+	_, err := c.Fake.Invokes(action, &elementalcattleiov1.MachineInventoryList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched machineInventory.
-func (c *FakeMachineInventories) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *rancheroscattleiov1.MachineInventory, err error) {
+func (c *FakeMachineInventories) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *elementalcattleiov1.MachineInventory, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(machineinventoriesResource, c.ns, name, pt, data, subresources...), &rancheroscattleiov1.MachineInventory{})
+		Invokes(testing.NewPatchSubresourceAction(machineinventoriesResource, c.ns, name, pt, data, subresources...), &elementalcattleiov1.MachineInventory{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.MachineInventory), err
+	return obj.(*elementalcattleiov1.MachineInventory), err
 }

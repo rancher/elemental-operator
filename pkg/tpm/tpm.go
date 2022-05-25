@@ -17,9 +17,9 @@ limitations under the License.
 package tpm
 
 import (
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	roscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/clients"
+	roscontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 )
 

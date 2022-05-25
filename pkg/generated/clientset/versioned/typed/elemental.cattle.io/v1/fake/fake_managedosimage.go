@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	rancheroscattleiov1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	elementalcattleiov1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,25 +36,25 @@ type FakeManagedOSImages struct {
 	ns   string
 }
 
-var managedosimagesResource = schema.GroupVersionResource{Group: "rancheros.cattle.io", Version: "v1", Resource: "managedosimages"}
+var managedosimagesResource = schema.GroupVersionResource{Group: "elemental.cattle.io", Version: "v1", Resource: "managedosimages"}
 
-var managedosimagesKind = schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSImage"}
+var managedosimagesKind = schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "ManagedOSImage"}
 
 // Get takes name of the managedOSImage, and returns the corresponding managedOSImage object, and an error if there is any.
-func (c *FakeManagedOSImages) Get(ctx context.Context, name string, options v1.GetOptions) (result *rancheroscattleiov1.ManagedOSImage, err error) {
+func (c *FakeManagedOSImages) Get(ctx context.Context, name string, options v1.GetOptions) (result *elementalcattleiov1.ManagedOSImage, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(managedosimagesResource, c.ns, name), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewGetAction(managedosimagesResource, c.ns, name), &elementalcattleiov1.ManagedOSImage{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSImage), err
+	return obj.(*elementalcattleiov1.ManagedOSImage), err
 }
 
 // List takes label and field selectors, and returns the list of ManagedOSImages that match those selectors.
-func (c *FakeManagedOSImages) List(ctx context.Context, opts v1.ListOptions) (result *rancheroscattleiov1.ManagedOSImageList, err error) {
+func (c *FakeManagedOSImages) List(ctx context.Context, opts v1.ListOptions) (result *elementalcattleiov1.ManagedOSImageList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(managedosimagesResource, managedosimagesKind, c.ns, opts), &rancheroscattleiov1.ManagedOSImageList{})
+		Invokes(testing.NewListAction(managedosimagesResource, managedosimagesKind, c.ns, opts), &elementalcattleiov1.ManagedOSImageList{})
 
 	if obj == nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (c *FakeManagedOSImages) List(ctx context.Context, opts v1.ListOptions) (re
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &rancheroscattleiov1.ManagedOSImageList{ListMeta: obj.(*rancheroscattleiov1.ManagedOSImageList).ListMeta}
-	for _, item := range obj.(*rancheroscattleiov1.ManagedOSImageList).Items {
+	list := &elementalcattleiov1.ManagedOSImageList{ListMeta: obj.(*elementalcattleiov1.ManagedOSImageList).ListMeta}
+	for _, item := range obj.(*elementalcattleiov1.ManagedOSImageList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -81,43 +81,43 @@ func (c *FakeManagedOSImages) Watch(ctx context.Context, opts v1.ListOptions) (w
 }
 
 // Create takes the representation of a managedOSImage and creates it.  Returns the server's representation of the managedOSImage, and an error, if there is any.
-func (c *FakeManagedOSImages) Create(ctx context.Context, managedOSImage *rancheroscattleiov1.ManagedOSImage, opts v1.CreateOptions) (result *rancheroscattleiov1.ManagedOSImage, err error) {
+func (c *FakeManagedOSImages) Create(ctx context.Context, managedOSImage *elementalcattleiov1.ManagedOSImage, opts v1.CreateOptions) (result *elementalcattleiov1.ManagedOSImage, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(managedosimagesResource, c.ns, managedOSImage), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewCreateAction(managedosimagesResource, c.ns, managedOSImage), &elementalcattleiov1.ManagedOSImage{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSImage), err
+	return obj.(*elementalcattleiov1.ManagedOSImage), err
 }
 
 // Update takes the representation of a managedOSImage and updates it. Returns the server's representation of the managedOSImage, and an error, if there is any.
-func (c *FakeManagedOSImages) Update(ctx context.Context, managedOSImage *rancheroscattleiov1.ManagedOSImage, opts v1.UpdateOptions) (result *rancheroscattleiov1.ManagedOSImage, err error) {
+func (c *FakeManagedOSImages) Update(ctx context.Context, managedOSImage *elementalcattleiov1.ManagedOSImage, opts v1.UpdateOptions) (result *elementalcattleiov1.ManagedOSImage, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(managedosimagesResource, c.ns, managedOSImage), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewUpdateAction(managedosimagesResource, c.ns, managedOSImage), &elementalcattleiov1.ManagedOSImage{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSImage), err
+	return obj.(*elementalcattleiov1.ManagedOSImage), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeManagedOSImages) UpdateStatus(ctx context.Context, managedOSImage *rancheroscattleiov1.ManagedOSImage, opts v1.UpdateOptions) (*rancheroscattleiov1.ManagedOSImage, error) {
+func (c *FakeManagedOSImages) UpdateStatus(ctx context.Context, managedOSImage *elementalcattleiov1.ManagedOSImage, opts v1.UpdateOptions) (*elementalcattleiov1.ManagedOSImage, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(managedosimagesResource, "status", c.ns, managedOSImage), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewUpdateSubresourceAction(managedosimagesResource, "status", c.ns, managedOSImage), &elementalcattleiov1.ManagedOSImage{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSImage), err
+	return obj.(*elementalcattleiov1.ManagedOSImage), err
 }
 
 // Delete takes name of the managedOSImage and deletes it. Returns an error if one occurs.
 func (c *FakeManagedOSImages) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(managedosimagesResource, c.ns, name), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewDeleteAction(managedosimagesResource, c.ns, name), &elementalcattleiov1.ManagedOSImage{})
 
 	return err
 }
@@ -126,17 +126,17 @@ func (c *FakeManagedOSImages) Delete(ctx context.Context, name string, opts v1.D
 func (c *FakeManagedOSImages) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(managedosimagesResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &rancheroscattleiov1.ManagedOSImageList{})
+	_, err := c.Fake.Invokes(action, &elementalcattleiov1.ManagedOSImageList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched managedOSImage.
-func (c *FakeManagedOSImages) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *rancheroscattleiov1.ManagedOSImage, err error) {
+func (c *FakeManagedOSImages) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *elementalcattleiov1.ManagedOSImage, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(managedosimagesResource, c.ns, name, pt, data, subresources...), &rancheroscattleiov1.ManagedOSImage{})
+		Invokes(testing.NewPatchSubresourceAction(managedosimagesResource, c.ns, name, pt, data, subresources...), &elementalcattleiov1.ManagedOSImage{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSImage), err
+	return obj.(*elementalcattleiov1.ManagedOSImage), err
 }

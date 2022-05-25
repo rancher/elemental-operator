@@ -16,7 +16,7 @@ limitations under the License.
 
 package operator
 
-import "github.com/rancher-sandbox/rancheros-operator/pkg/types"
+import "github.com/rancher-sandbox/elemental-operator/pkg/types"
 
 type options struct {
 	namespace     string

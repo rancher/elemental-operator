@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/typed/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/typed/elemental.cattle.io/v1"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

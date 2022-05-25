@@ -19,15 +19,15 @@ package clients
 import (
 	"context"
 
-	rosscheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io"
-	fleetcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io"
-	ranchercontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/management.cattle.io/v3"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/provisioning.cattle.io"
-	provcontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/provisioning.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io"
-	oscontrollers "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/rancheros.cattle.io/v1"
+	rosscheme "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/scheme"
+	"github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/fleet.cattle.io"
+	fleetcontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/management.cattle.io"
+	ranchercontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/provisioning.cattle.io"
+	provcontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/provisioning.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/elemental.cattle.io"
+	oscontrollers "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
@@ -84,7 +84,7 @@ func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 		Clients:      c,
 		Events:       kubeClient.CoreV1().Events(""),
 		Fleet:        fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
-		OS:           rancheros.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Rancheros().V1(),
+		OS:           elemental.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Rancheros().V1(),
 		Rancher:      management.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Management().V3(),
 		Provisioning: provisioning.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Provisioning().V1(),
 	}, nil

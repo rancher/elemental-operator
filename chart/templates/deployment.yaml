@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 spec:
   selector:
     matchLabels:
-      app: rancheros-operator
+      app: elemental-operator
   template:
     metadata:
       labels:
-        app: rancheros-operator
+        app: elemental-operator
     spec:
       containers:
       - env:
@@ -35,10 +35,10 @@ spec:
         {{- else }}
         image: '{{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}'
         {{- end }}
-        name: rancheros-operator
+        name: elemental-operator
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
         command:
-        - /usr/sbin/rancheros-operator
+        - /usr/sbin/elemental-operator
         args:
         - start-operator
       {{- if .Values.hostbin }}
@@ -46,9 +46,9 @@ spec:
         - name: sbin
           hostPath:
             type: File
-            path: /usr/sbin/rancheros-operator
+            path: /usr/sbin/elemental-operator
       {{- end }}
-      serviceAccountName: rancheros-operator
+      serviceAccountName: elemental-operator
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

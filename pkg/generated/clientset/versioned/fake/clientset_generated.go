@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned"
-	rancherosv1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/typed/rancheros.cattle.io/v1"
-	fakerancherosv1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/typed/rancheros.cattle.io/v1/fake"
+	clientset "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned"
+	elementalv1 "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/typed/elemental.cattle.io/v1"
+	fakeelementalv1 "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/typed/elemental.cattle.io/v1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
@@ -80,6 +80,6 @@ var (
 )
 
 // RancherosV1 retrieves the RancherosV1Client
-func (c *Clientset) RancherosV1() rancherosv1.RancherosV1Interface {
-	return &fakerancherosv1.FakeRancherosV1{Fake: &c.Fake}
+func (c *Clientset) RancherosV1() elementalv1.RancherosV1Interface {
+	return &fakeelementalv1.FakeRancherosV1{Fake: &c.Fake}
 }

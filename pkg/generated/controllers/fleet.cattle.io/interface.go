@@ -19,7 +19,7 @@ limitations under the License.
 package fleet
 
 import (
-	v1alpha1 "github.com/rancher-sandbox/rancheros-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
+	v1alpha1 "github.com/rancher-sandbox/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/lasso/pkg/controller"
 )
 

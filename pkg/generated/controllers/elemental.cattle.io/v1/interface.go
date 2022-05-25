@@ -19,7 +19,7 @@ limitations under the License.
 package v1
 
 import (
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/schemes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -48,17 +48,17 @@ type version struct {
 }
 
 func (c *version) MachineInventory() MachineInventoryController {
-	return NewMachineInventoryController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "MachineInventory"}, "machineinventories", true, c.controllerFactory)
+	return NewMachineInventoryController(schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "MachineInventory"}, "machineinventories", true, c.controllerFactory)
 }
 func (c *version) MachineRegistration() MachineRegistrationController {
-	return NewMachineRegistrationController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "MachineRegistration"}, "machineregistrations", true, c.controllerFactory)
+	return NewMachineRegistrationController(schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "MachineRegistration"}, "machineregistrations", true, c.controllerFactory)
 }
 func (c *version) ManagedOSImage() ManagedOSImageController {
-	return NewManagedOSImageController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSImage"}, "managedosimages", true, c.controllerFactory)
+	return NewManagedOSImageController(schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "ManagedOSImage"}, "managedosimages", true, c.controllerFactory)
 }
 func (c *version) ManagedOSVersion() ManagedOSVersionController {
-	return NewManagedOSVersionController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSVersion"}, "managedosversions", true, c.controllerFactory)
+	return NewManagedOSVersionController(schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "ManagedOSVersion"}, "managedosversions", true, c.controllerFactory)
 }
 func (c *version) ManagedOSVersionChannel() ManagedOSVersionChannelController {
-	return NewManagedOSVersionChannelController(schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSVersionChannel"}, "managedosversionchannels", true, c.controllerFactory)
+	return NewManagedOSVersionChannelController(schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "ManagedOSVersionChannel"}, "managedosversionchannels", true, c.controllerFactory)
 }

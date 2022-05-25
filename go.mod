@@ -1,4 +1,4 @@
-module github.com/rancher-sandbox/rancheros-operator
+module github.com/rancher-sandbox/elemental-operator
 
 go 1.16
 

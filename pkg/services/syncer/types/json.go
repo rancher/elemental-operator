@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
+	provv1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/services/syncer/config"
 	"github.com/sirupsen/logrus"
 )
 

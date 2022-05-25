@@ -22,8 +22,8 @@ import (
 	"context"
 	"time"
 
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	scheme "github.com/rancher-sandbox/rancheros-operator/pkg/generated/clientset/versioned/scheme"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	scheme "github.com/rancher-sandbox/elemental-operator/pkg/generated/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	rancheroscattleiov1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	elementalcattleiov1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,25 +36,25 @@ type FakeManagedOSVersions struct {
 	ns   string
 }
 
-var managedosversionsResource = schema.GroupVersionResource{Group: "rancheros.cattle.io", Version: "v1", Resource: "managedosversions"}
+var managedosversionsResource = schema.GroupVersionResource{Group: "elemental.cattle.io", Version: "v1", Resource: "managedosversions"}
 
-var managedosversionsKind = schema.GroupVersionKind{Group: "rancheros.cattle.io", Version: "v1", Kind: "ManagedOSVersion"}
+var managedosversionsKind = schema.GroupVersionKind{Group: "elemental.cattle.io", Version: "v1", Kind: "ManagedOSVersion"}
 
 // Get takes name of the managedOSVersion, and returns the corresponding managedOSVersion object, and an error if there is any.
-func (c *FakeManagedOSVersions) Get(ctx context.Context, name string, options v1.GetOptions) (result *rancheroscattleiov1.ManagedOSVersion, err error) {
+func (c *FakeManagedOSVersions) Get(ctx context.Context, name string, options v1.GetOptions) (result *elementalcattleiov1.ManagedOSVersion, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(managedosversionsResource, c.ns, name), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewGetAction(managedosversionsResource, c.ns, name), &elementalcattleiov1.ManagedOSVersion{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSVersion), err
+	return obj.(*elementalcattleiov1.ManagedOSVersion), err
 }
 
 // List takes label and field selectors, and returns the list of ManagedOSVersions that match those selectors.
-func (c *FakeManagedOSVersions) List(ctx context.Context, opts v1.ListOptions) (result *rancheroscattleiov1.ManagedOSVersionList, err error) {
+func (c *FakeManagedOSVersions) List(ctx context.Context, opts v1.ListOptions) (result *elementalcattleiov1.ManagedOSVersionList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(managedosversionsResource, managedosversionsKind, c.ns, opts), &rancheroscattleiov1.ManagedOSVersionList{})
+		Invokes(testing.NewListAction(managedosversionsResource, managedosversionsKind, c.ns, opts), &elementalcattleiov1.ManagedOSVersionList{})
 
 	if obj == nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (c *FakeManagedOSVersions) List(ctx context.Context, opts v1.ListOptions) (
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &rancheroscattleiov1.ManagedOSVersionList{ListMeta: obj.(*rancheroscattleiov1.ManagedOSVersionList).ListMeta}
-	for _, item := range obj.(*rancheroscattleiov1.ManagedOSVersionList).Items {
+	list := &elementalcattleiov1.ManagedOSVersionList{ListMeta: obj.(*elementalcattleiov1.ManagedOSVersionList).ListMeta}
+	for _, item := range obj.(*elementalcattleiov1.ManagedOSVersionList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -81,43 +81,43 @@ func (c *FakeManagedOSVersions) Watch(ctx context.Context, opts v1.ListOptions) 
 }
 
 // Create takes the representation of a managedOSVersion and creates it.  Returns the server's representation of the managedOSVersion, and an error, if there is any.
-func (c *FakeManagedOSVersions) Create(ctx context.Context, managedOSVersion *rancheroscattleiov1.ManagedOSVersion, opts v1.CreateOptions) (result *rancheroscattleiov1.ManagedOSVersion, err error) {
+func (c *FakeManagedOSVersions) Create(ctx context.Context, managedOSVersion *elementalcattleiov1.ManagedOSVersion, opts v1.CreateOptions) (result *elementalcattleiov1.ManagedOSVersion, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(managedosversionsResource, c.ns, managedOSVersion), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewCreateAction(managedosversionsResource, c.ns, managedOSVersion), &elementalcattleiov1.ManagedOSVersion{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSVersion), err
+	return obj.(*elementalcattleiov1.ManagedOSVersion), err
 }
 
 // Update takes the representation of a managedOSVersion and updates it. Returns the server's representation of the managedOSVersion, and an error, if there is any.
-func (c *FakeManagedOSVersions) Update(ctx context.Context, managedOSVersion *rancheroscattleiov1.ManagedOSVersion, opts v1.UpdateOptions) (result *rancheroscattleiov1.ManagedOSVersion, err error) {
+func (c *FakeManagedOSVersions) Update(ctx context.Context, managedOSVersion *elementalcattleiov1.ManagedOSVersion, opts v1.UpdateOptions) (result *elementalcattleiov1.ManagedOSVersion, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(managedosversionsResource, c.ns, managedOSVersion), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewUpdateAction(managedosversionsResource, c.ns, managedOSVersion), &elementalcattleiov1.ManagedOSVersion{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSVersion), err
+	return obj.(*elementalcattleiov1.ManagedOSVersion), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeManagedOSVersions) UpdateStatus(ctx context.Context, managedOSVersion *rancheroscattleiov1.ManagedOSVersion, opts v1.UpdateOptions) (*rancheroscattleiov1.ManagedOSVersion, error) {
+func (c *FakeManagedOSVersions) UpdateStatus(ctx context.Context, managedOSVersion *elementalcattleiov1.ManagedOSVersion, opts v1.UpdateOptions) (*elementalcattleiov1.ManagedOSVersion, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(managedosversionsResource, "status", c.ns, managedOSVersion), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewUpdateSubresourceAction(managedosversionsResource, "status", c.ns, managedOSVersion), &elementalcattleiov1.ManagedOSVersion{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSVersion), err
+	return obj.(*elementalcattleiov1.ManagedOSVersion), err
 }
 
 // Delete takes name of the managedOSVersion and deletes it. Returns an error if one occurs.
 func (c *FakeManagedOSVersions) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(managedosversionsResource, c.ns, name), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewDeleteAction(managedosversionsResource, c.ns, name), &elementalcattleiov1.ManagedOSVersion{})
 
 	return err
 }
@@ -126,17 +126,17 @@ func (c *FakeManagedOSVersions) Delete(ctx context.Context, name string, opts v1
 func (c *FakeManagedOSVersions) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
 	action := testing.NewDeleteCollectionAction(managedosversionsResource, c.ns, listOpts)
 
-	_, err := c.Fake.Invokes(action, &rancheroscattleiov1.ManagedOSVersionList{})
+	_, err := c.Fake.Invokes(action, &elementalcattleiov1.ManagedOSVersionList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched managedOSVersion.
-func (c *FakeManagedOSVersions) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *rancheroscattleiov1.ManagedOSVersion, err error) {
+func (c *FakeManagedOSVersions) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *elementalcattleiov1.ManagedOSVersion, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(managedosversionsResource, c.ns, name, pt, data, subresources...), &rancheroscattleiov1.ManagedOSVersion{})
+		Invokes(testing.NewPatchSubresourceAction(managedosversionsResource, c.ns, name, pt, data, subresources...), &elementalcattleiov1.ManagedOSVersion{})
 
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*rancheroscattleiov1.ManagedOSVersion), err
+	return obj.(*elementalcattleiov1.ManagedOSVersion), err
 }

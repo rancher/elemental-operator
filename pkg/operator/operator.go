@@ -19,14 +19,14 @@ package operator
 import (
 	"context"
 
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/inventory"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedos"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/managedosversionchannel"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/clients"
+	"github.com/rancher-sandbox/elemental-operator/pkg/controllers/inventory"
+	"github.com/rancher-sandbox/elemental-operator/pkg/controllers/managedos"
+	"github.com/rancher-sandbox/elemental-operator/pkg/controllers/managedosversionchannel"
 
-	"github.com/rancher-sandbox/rancheros-operator/pkg/controllers/registration"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/server"
+	"github.com/rancher-sandbox/elemental-operator/pkg/controllers/registration"
+	"github.com/rancher-sandbox/elemental-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/sirupsen/logrus"
@@ -86,7 +86,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 	registration.Register(ctx, clients)
 	managedosversionchannel.Register(ctx, o.requeuer, clients)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "rancheros-operator", server.New(clients))
+	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients))
 
 	for _, s := range o.services {
 		go s(ctx, clients) //nolint:golint,errcheck

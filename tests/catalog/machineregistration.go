@@ -29,7 +29,7 @@ type MachineRegistration struct {
 
 func NewMachineRegistration(name string, cloudConfig map[string]interface{}) *MachineRegistration {
 	return &MachineRegistration{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},

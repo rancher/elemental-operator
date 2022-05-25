@@ -26,7 +26,7 @@ import (
 	"regexp"
 	"strings"
 
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	v1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
 	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
@@ -86,7 +86,7 @@ func (i *InventoryServer) sampleConfig(machineRegistration *v1.MachineRegistrati
 	}
 
 	return yaml.NewEncoder(writer).Encode(map[string]interface{}{
-		"rancheros": map[string]interface{}{
+		"elemental": map[string]interface{}{
 			"install": installSection,
 		},
 	})
@@ -173,7 +173,7 @@ func (i *InventoryServer) buildResponse(req *http.Request) (*v1.MachineInventory
 	}
 	values.PutValue(installConfig, serverURL, "rancherd", "server")
 	values.PutValue(installConfig, "tpm://", "rancherd", "token")
-	values.PutValue(installConfig, true, "rancheros", "install", "automatic")
+	values.PutValue(installConfig, true, "elemental", "install", "automatic")
 
 	data, err := json.Marshal(installConfig)
 	if err != nil {

@@ -29,8 +29,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
+	provv1 "github.com/rancher-sandbox/elemental-operator/pkg/apis/elemental.cattle.io/v1"
+	"github.com/rancher-sandbox/elemental-operator/pkg/services/syncer/config"
 )
 
 type CustomSyncer struct {
@@ -98,7 +98,7 @@ func (j *CustomSyncer) Sync(c config.Config, s provv1.ManagedOSVersionChannel) (
 					}},
 					Name:    "pause",
 					Image:   c.OperatorImage,
-					Command: []string{"/usr/sbin/rancheros-operator"},
+					Command: []string{"/usr/sbin/elemental-operator"},
 					Args:    []string{"display"},
 					Env: []corev1.EnvVar{{
 						Name:  "FILE",

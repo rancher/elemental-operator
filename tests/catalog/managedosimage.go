@@ -50,7 +50,7 @@ func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mos
 	cordon := false
 
 	return &ManagedOSImage{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},
@@ -73,7 +73,7 @@ func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mos
 func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
 	cordon := false
 	return &ManagedOSImage{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},

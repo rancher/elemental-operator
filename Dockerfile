@@ -5,7 +5,7 @@ COPY go.mod go.sum /src/
 RUN go mod download
 COPY main.go /src/
 COPY pkg /src/pkg
-RUN go build -ldflags "-extldflags -static -s" -o /usr/sbin/rancheros-operator
+RUN go build -ldflags "-extldflags -static -s" -o /usr/sbin/elemental-operator
 
 FROM scratch as ros-operator
-COPY --from=build /usr/sbin/rancheros-operator /usr/sbin/rancheros-operator
+COPY --from=build /usr/sbin/elemental-operator /usr/sbin/elemental-operator

@@ -9,7 +9,7 @@ The RancherOS operator can be added to a cluster running Rancher Multi Cluster
 Management server.  It is a helm chart and can be installed as follows:
 
 ```bash
-helm -n cattle-rancheros-operator-system install --create-namespace rancheros-operator https://github.com/rancher/os2/releases/download/v0.1.0-alpha12/rancheros-operator-0.1.0-alpha12-amd64.tgz
+helm -n cattle-elemental-operator-system install --create-namespace elemental-operator https://github.com/rancher/os2/releases/download/v0.1.0-alpha12/elemental-operator-0.1.0-alpha12-amd64.tgz
 ```
 
 
@@ -29,7 +29,7 @@ the image of the local nodes.
 kubectl edit -n fleet-local default-os-image
 ```
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1
 kind: ManagedOSImage
 metadata:
   name: default-os-image
@@ -45,7 +45,7 @@ To use a `ManagedOSVersion` specify a `managedOSVersionName`, as `osImage` takes
 kubectl edit -n fleet-local default-os-image
 ```
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1
 kind: ManagedOSImage
 metadata:
   name: default-os-image
@@ -61,7 +61,7 @@ spec:
 Below is reference of the full type
 
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1
 kind: ManagedOSImage
 metadata:
   name: arbitrary
@@ -138,7 +138,7 @@ the mapping of the machine to it's configuration and assigned cluster.
 #### Reference
 
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1
 kind: MachineInventory
 metadata:
   name: machine-a
@@ -157,7 +157,7 @@ spec:
   # the MachineRegister approach
   smbios: {}
   # A reference to a secret that contains a shared secret value to
-  # identify a node.  The secret must be of type "rancheros.cattle.io/token"
+  # identify a node.  The secret must be of type "elemental.cattle.io/token"
   # and have on field "token" which is the value of the shared secret
   machineTokenSecretName: some-secret-name
   # Arbitrary cloud config that will be added to the machines cloud config
