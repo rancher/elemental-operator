@@ -1,27 +1,26 @@
 # Operator
 
-The RancherOS operator is responsible for managing the RancherOS versions
+The Elemental operator is responsible for managing the Elemental versions
 and maintaining a machine inventory to assist with edge or baremetal installations.
 
 ## Installation
 
-The RancherOS operator can be added to a cluster running Rancher Multi Cluster
+The Elemental operator can be added to a cluster running Rancher Multi Cluster
 Management server.  It is a helm chart and can be installed as follows:
 
 ```bash
-helm -n cattle-rancheros-operator-system install --create-namespace rancheros-operator https://github.com/rancher/os2/releases/download/v0.1.0-alpha12/rancheros-operator-0.1.0-alpha12-amd64.tgz
+helm -n cattle-rancheros-operator-system install --create-namespace rancheros-operator https://github.com/rancher-sandbox/rancheros-operator/releases/download/v0.1.0/rancheros-operator-0.1.0.tgz
 ```
-
 
 ## Managing Upgrades
 
-The RancherOS operator will manage the upgrade of the local cluster where the operator
+The Elemental operator will manage the upgrade of the local cluster where the operator
 is running and also any downstream cluster managed by Rancher Multi-Cluster
 Manager.
 
 ### ManagedOSImage
 
-The ManagedOSImage kind used to define what version of RancherOS should be
+The ManagedOSImage kind used to define what version of Elemental should be
 running on each node. The simplest example of this type would be to change
 the image of the local nodes.
 
@@ -35,7 +34,7 @@ metadata:
   name: default-os-image
   namespace: fleet-local
 spec:
-  osImage: rancher/os2:v0.0.0
+  osImage: rancher/elemental:v0.0.0
 ```
 
 A `ManagedOSImage` can also use a `ManagedOSVersion` to drive upgrades. 
@@ -113,7 +112,7 @@ spec:
   # This is used if you are running Rancher MCM and managing
   # multiple clusters.  The syntax of this field matches the
   # Fleet targets and is described at https://fleet.rancher.io/gitrepo-targets/
-  targets: []
+  clusterTargets: []
 
   # Overrides the default container created for running the upgrade with a custom one
   # This is optional and used only if specific upgrading mechanisms needs to be applied
@@ -130,7 +129,7 @@ spec:
 
 ## Inventory Management
 
-The RancherOS operator can hold an inventory of machines and
+The Elemental operator can hold an inventory of machines and
 the mapping of the machine to it's configuration and assigned cluster.
 
 ### MachineInventory
