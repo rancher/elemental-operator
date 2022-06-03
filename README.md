@@ -112,7 +112,7 @@ spec:
   # This is used if you are running Rancher MCM and managing
   # multiple clusters.  The syntax of this field matches the
   # Fleet targets and is described at https://fleet.rancher.io/gitrepo-targets/
-  targets: []
+  clusterTargets: []
 
   # Overrides the default container created for running the upgrade with a custom one
   # This is optional and used only if specific upgrading mechanisms needs to be applied
