@@ -1,54 +1,44 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 spec:
   selector:
     matchLabels:
-      app: rancheros-operator
+      app: elemental-operator
   template:
     metadata:
       labels:
-        app: rancheros-operator
+        app: elemental-operator
     spec:
       containers:
       - env:
-        - name: NAMESPACE
-          value: {{ .Release.Namespace }}
-        - name: SYNC_INTERVAL
-          value: {{.Values.sync_interval}}
-        - name: OPERATOR_IMAGE
-          value: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}
+        - name: NO_PROXY
+          value: {{ .Values.noProxy }}
         {{- if .Values.proxy }}
         - name: HTTP_PROXY
           value: {{ .Values.proxy }}
         - name: HTTPS_PROXY
           value: {{ .Values.proxy }}
-        - name: NO_PROXY
-          value: {{ .Values.noProxy }}
         {{- end }}
-        {{- if .Values.hostbin }}
-        image: '{{ template "system_default_registry" . }}{{ .Values.image.empty }}'
-        volumeMounts:
-          - mountPath: /usr/sbin/ros-operator
-            name: sbin
-        {{- else }}
-        image: '{{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}'
-        {{- end }}
-        name: rancheros-operator
+        name: elemental-operator
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
-        command:
-        - /usr/sbin/rancheros-operator
+        image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         args:
-        - start-operator
-      {{- if .Values.hostbin }}
-      volumes:
-        - name: sbin
-          hostPath:
-            type: File
-            path: /usr/sbin/rancheros-operator
-      {{- end }}
-      serviceAccountName: rancheros-operator
+        - operator
+        - --namespace
+        - {{ .Release.Namespace }}
+        - --sync-interval
+        - {{.Values.sync_interval }}
+        - --operator-image
+        - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        - --default-registry
+        - {{ .Values.global.cattle.systemDefaultRegistry | quote }}
+        - --rancher-server-url
+        - {{ .Values.global.cattle.url }}
+        - --ca-cert
+        - {{ .Values.global.cattle.ca_cert | quote }}
+      serviceAccountName: elemental-operator
       {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

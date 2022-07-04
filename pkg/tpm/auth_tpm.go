@@ -30,7 +30,7 @@ import (
 	gotpm "github.com/rancher-sandbox/go-tpm"
 
 	"github.com/gorilla/websocket"
-	v1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/wrangler/pkg/merr"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -53,36 +53,31 @@ func (a *AuthServer) verifyChain(ek *attest.EK, namespace string) error {
 	return err
 }
 
-func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*v1.MachineInventory, error) {
+func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elm.MachineInventory, error) {
 	hashEncoded, err := gotpm.DecodePubHash(ek)
 	if err != nil {
 		return nil, fmt.Errorf("tpm: could not get public key hash: %v", err)
 	}
 
-	if registerNamespace != "" {
-		if err := a.verifyChain(ek, registerNamespace); err != nil {
-			return nil, fmt.Errorf("verifying chain: %w", err)
-		}
-		return &v1.MachineInventory{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: registerNamespace,
-			},
-			Spec: v1.MachineInventorySpec{
-				TPMHash: hashEncoded,
-			},
-		}, nil
+	if err := a.verifyChain(ek, registerNamespace); err != nil {
+		return nil, fmt.Errorf("verifying chain: %w", err)
 	}
 
 	machines, err := a.machineCache.GetByIndex(machineByHash, hashEncoded)
-	if apierrors.IsNotFound(err) || len(machines) != 1 {
+	if len(machines) != 1 {
 		if len(machines) > 1 {
 			logrus.Errorf("multiple machines for same hash %s found: %v", hashEncoded, machines)
+			return nil, fmt.Errorf("failed to find machine")
 		}
-		return nil, fmt.Errorf("failed to find machine")
-	}
 
-	if err := a.verifyChain(ek, machines[0].Namespace); err != nil {
-		return nil, fmt.Errorf("verifying chain: %w", err)
+		return &elm.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: registerNamespace,
+			},
+			Spec: elm.MachineInventorySpec{
+				TPMHash: hashEncoded,
+			},
+		}, nil
 	}
 
 	return machines[0], nil
@@ -126,7 +121,7 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	return conn, err
 }
 
-func (a *AuthServer) Authenticate(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*v1.MachineInventory, bool, io.WriteCloser, error) {
+func (a *AuthServer) Authenticate(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, io.WriteCloser, error) {
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
 		return nil, true, nil, nil

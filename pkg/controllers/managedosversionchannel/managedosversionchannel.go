@@ -19,9 +19,9 @@ package managedosversionchannel
 import (
 	"context"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/types"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -34,7 +34,7 @@ func Register(ctx context.Context, r types.Requeuer, c *clients.Clients) {
 		requer:  r,
 		clients: c,
 	}
-	c.OS.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.onChange)
+	c.Elemental.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.onChange)
 }
 
 type handler struct {
@@ -42,7 +42,7 @@ type handler struct {
 	clients *clients.Clients
 }
 
-func (h *handler) onChange(s string, moc *provv1.ManagedOSVersionChannel) (*provv1.ManagedOSVersionChannel, error) {
+func (h *handler) onChange(s string, moc *elm.ManagedOSVersionChannel) (*elm.ManagedOSVersionChannel, error) {
 
 	if moc == nil {
 		return nil, nil
@@ -54,7 +54,7 @@ func (h *handler) onChange(s string, moc *provv1.ManagedOSVersionChannel) (*prov
 		copy := moc.DeepCopy()
 		copy.Status.Status = "error"
 		recorder.Event(moc, corev1.EventTypeWarning, "error", "No ManagedOSVersionChannel type defined")
-		_, err := h.clients.OS.ManagedOSVersionChannel().UpdateStatus(copy)
+		_, err := h.clients.Elemental.ManagedOSVersionChannel().UpdateStatus(copy)
 		return nil, err
 	}
 

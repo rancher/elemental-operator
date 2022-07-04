@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 rules:
 - apiGroups:
   - ""
@@ -18,15 +18,31 @@ rules:
   - 'get'
   - 'watch'
   - 'list'
+  - 'create'
+  - 'update'
+  - 'patch'
+  - 'delete'
 - apiGroups:
   - ""
   resources:
   - 'pods'
+  - 'serviceaccounts'
   verbs:
   - 'get'
   - 'create'
   - 'delete'
   - 'list'
+  - 'watch'
+- apiGroups:
+    - "rbac.authorization.k8s.io"
+  resources:
+    - 'rolebindings'
+    - 'roles'
+  verbs:
+    - 'get'
+    - 'create'
+    - 'delete'
+    - 'watch'
 - apiGroups:
   - ""
   resources:
@@ -34,7 +50,7 @@ rules:
   verbs:
   - 'get'
 - apiGroups:
-  - rancheros.cattle.io
+  - elemental.cattle.io
   resources:
   - '*'
   verbs:
@@ -46,28 +62,6 @@ rules:
   verbs:
   - '*'
 - apiGroups:
-  - provisioning.cattle.io
-  resources:
-  - 'clusters'
-  verbs:
-  - 'get'
-  - 'watch'
-  - 'list'
-- apiGroups:
-  - management.cattle.io
-  resources:
-  - 'clusterregistrationtokens'
-  verbs:
-  - '*'
-- apiGroups:
-  - management.cattle.io
-  resources:
-  - 'settings'
-  verbs:
-  - 'get'
-  - 'watch'
-  - 'list'
-- apiGroups:
   - apiextensions.k8s.io
   resources:
   - customresourcedefinitions
@@ -80,17 +74,24 @@ rules:
   verbs:
   - 'list'
   - 'get'
-
+- apiGroups:
+    - cluster.x-k8s.io
+  resources:
+    - machines
+  verbs:
+    - 'list'
+    - 'get'
+    - 'watch'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: rancheros-operator
+  name: elemental-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: rancheros-operator
+  name: elemental-operator
 subjects:
 - kind: ServiceAccount
-  name: rancheros-operator
+  name: elemental-operator
   namespace: {{.Release.Namespace}}

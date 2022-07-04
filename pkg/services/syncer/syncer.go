@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/object"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/config"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/services/syncer/types"
-	rosTypes "github.com/rancher-sandbox/rancheros-operator/pkg/types"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/object"
+	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
+	"github.com/rancher/elemental-operator/pkg/services/syncer/types"
+	elmTypes "github.com/rancher/elemental-operator/pkg/types"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +36,7 @@ import (
 const controllerAgentName = "mos-sync"
 
 // UpgradeChannelSync returns a service to keep in sync managedosversions available for upgrade
-func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, image string, concurrent bool, namespace ...string) func(context.Context, *clients.Clients) error {
+func UpgradeChannelSync(interval time.Duration, requeuer elmTypes.Requeuer, image string, concurrent bool, namespace ...string) func(context.Context, *clients.Clients) error {
 	reSync := func(c *clients.Clients) {
 		recorder := c.EventRecorder(controllerAgentName)
 
@@ -87,7 +87,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer rosTypes.Requeuer, imag
 }
 
 func syncNamespace(config config.Config, namespace string) error {
-	list, err := config.Clients.OS.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
+	list, err := config.Clients.Elemental.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func syncNamespace(config config.Config, namespace string) error {
 		for _, v := range vers {
 			vcpy := v.DeepCopy()
 			vcpy.ObjectMeta.Namespace = vc.Namespace
-			ownRef := *metav1.NewControllerRef(&vc, provv1.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
+			ownRef := *metav1.NewControllerRef(&vc, elm.SchemeGroupVersion.WithKind("ManagedOSVersionChannel"))
 			ownRef.BlockOwnerDeletion = &blockDel
 
 			vcpy.ObjectMeta.OwnerReferences = []metav1.OwnerReference{ownRef}
@@ -118,7 +118,7 @@ func syncNamespace(config config.Config, namespace string) error {
 				vcpy.Spec.UpgradeContainer = vc.Spec.UpgradeContainer
 			}
 
-			cli := config.Clients.OS.ManagedOSVersion()
+			cli := config.Clients.Elemental.ManagedOSVersion()
 
 			_, err := cli.Get(namespace, vcpy.ObjectMeta.Name, metav1.GetOptions{})
 			if err == nil {
@@ -139,7 +139,7 @@ func syncNamespace(config config.Config, namespace string) error {
 }
 
 type syncer interface {
-	Sync(c config.Config, s provv1.ManagedOSVersionChannel) ([]provv1.ManagedOSVersion, error)
+	Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm.ManagedOSVersion, error)
 }
 
 const (
@@ -147,7 +147,7 @@ const (
 	customType = "custom"
 )
 
-func newManagedOSVersionChannelSyncer(spec provv1.ManagedOSVersionChannelSpec) (syncer, error) {
+func newManagedOSVersionChannelSyncer(spec elm.ManagedOSVersionChannelSpec) (syncer, error) {
 	switch strings.ToLower(spec.Type) {
 	case jsonType:
 		j := &types.JSONSyncer{}

@@ -19,22 +19,22 @@ package managedos
 import (
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"sort"
 	"strings"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 
-	osv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
-	"github.com/rancher-sandbox/rancheros-operator/pkg/clients"
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/clients"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func cloudConfig(mos *osv1.ManagedOSImage) ([]byte, error) {
+func cloudConfig(mos *elm.ManagedOSImage) ([]byte, error) {
 	if mos.Spec.CloudConfig == nil || len(mos.Spec.CloudConfig.Data) == 0 {
 		return []byte{}, nil
 	}
@@ -45,7 +45,7 @@ func cloudConfig(mos *osv1.ManagedOSImage) ([]byte, error) {
 	return append([]byte("#cloud-config\n"), data...), nil
 }
 
-func getImageVersion(mos *osv1.ManagedOSImage, mv *osv1.ManagedOSVersion) ([]string, string, error) {
+func getImageVersion(mos *elm.ManagedOSImage, mv *elm.ManagedOSVersion) ([]string, string, error) {
 	baseImage := mos.Spec.OSImage
 	if baseImage == "" && mv != nil {
 		osMeta, err := mv.Metadata()
@@ -81,7 +81,7 @@ func metadataEnv(m map[string]interface{}) []corev1.EnvVar {
 	return envs
 }
 
-func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Object, error) {
+func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 	cloudConfig, err := cloudConfig(mos)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 		cordon = *mos.Spec.Cordon
 	}
 
-	var mv *osv1.ManagedOSVersion
+	var mv *elm.ManagedOSVersion
 
 	m := &fleet.GenericMap{Data: make(map[string]interface{})}
 
@@ -135,7 +135,7 @@ func (h *handler) objects(mos *osv1.ManagedOSImage, prefix string) ([]runtime.Ob
 
 	if upgradeContainerSpec == nil {
 		upgradeContainerSpec = &upgradev1.ContainerSpec{
-			Image: PrefixPrivateRegistry(image[0], prefix),
+			Image: PrefixPrivateRegistry(image[0], h.DefaultRegistry),
 			Command: []string{
 				"/usr/sbin/suc-upgrade",
 			},
