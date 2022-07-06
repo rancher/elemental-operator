@@ -35,19 +35,19 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 	Context("registration", func() {
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", "fleet-default", "machine-registration")
+			kubectl.New().Delete("machineregistration", "-n", "cattle-elemental-operator-system", "machine-registration")
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 			spec := v1beta1.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
-				return k.ApplyYAML("fleet-default", "machine-registration", mr)
+				return k.ApplyYAML("cattle-elemental-operator-system", "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData("fleet-default", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
+				e, err := kubectl.GetData("cattle-elemental-operator-system", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
 				if err != nil {
 					fmt.Println(err)
 				}

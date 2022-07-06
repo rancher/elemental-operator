@@ -54,7 +54,7 @@ func isOperatorInstalled(k *kubectl.Kubectl) bool {
 func deployOperator(k *kubectl.Kubectl) {
 	By("Deploying elemental-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n", "cattle-elemental-operator-system", "install", "--create-namespace", "elemental-operator", chart)
+			"-n", "cattle-elemental-operator-system", "install", "--create-namespace", "--set", "sync_interval=30s", "elemental-operator", chart)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = k.WaitForPod("cattle-elemental-operator-system", "app=elemental-operator", "elemental-operator")

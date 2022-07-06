@@ -42,17 +42,17 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			)
 
 			Eventually(func() error {
-				return k.ApplyYAML("fleet-default", "update-image", ui)
+				return k.ApplyYAML("cattle-elemental-operator-system", "update-image", ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			kubectl.New().Delete("managedosimage", "-n", "fleet-default", "update-image")
+			kubectl.New().Delete("managedosimage", "-n", "cattle-elemental-operator-system", "update-image")
 		})
 
 		It("creates a new fleet bundle with the upgrade plan", func() {
 			Eventually(func() string {
-				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-image", `jsonpath={.spec.resources[*].content}`)
+				r, err := kubectl.GetData("cattle-elemental-operator-system", "bundle", "mos-update-image", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -70,8 +70,8 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		osVersion := "osversion"
 		AfterEach(func() {
 			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", "fleet-default", osImage)
-			kube.Delete("managedosversion", "-n", "fleet-default", osVersion)
+			kube.Delete("managedosimage", "-n", "cattle-elemental-operator-system", osImage)
+			kube.Delete("managedosversion", "-n", "cattle-elemental-operator-system", osVersion)
 		})
 
 		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
@@ -82,7 +82,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", osVersion, ov)
+				return k.ApplyYAML("cattle-elemental-operator-system", osVersion, ov)
 			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			ui := catalog.NewManagedOSImage(
@@ -93,11 +93,11 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", osImage, ui)
+				return k.ApplyYAML("cattle-elemental-operator-system", osImage, ui)
 			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
-				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
+				r, err := kubectl.GetData("cattle-elemental-operator-system", "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}
