@@ -33,7 +33,7 @@ type ManagedOSVersionChannel struct {
 
 func NewManagedOSVersionChannel(name string, t string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
 	return &ManagedOSVersionChannel{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},

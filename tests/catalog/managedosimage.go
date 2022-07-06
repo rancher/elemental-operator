@@ -42,15 +42,15 @@ type ManagedOSImage struct {
 		Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
 		OSImage              string                   `json:"osImage" yaml:"osImage"`
 		ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-		ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
+		Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
 	}
 }
 
-func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
+func NewManagedOSImage(name string, targets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
 	cordon := false
 
 	return &ManagedOSImage{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},
@@ -60,12 +60,12 @@ func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mos
 			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
 			OSImage              string                   `json:"osImage" yaml:"osImage"`
 			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-			ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
+			Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
 		}{
 			OSImage:              mosImage,
 			ManagedOSVersionName: mosVersionName,
 			Cordon:               &cordon,
-			ClusterTargets:       clusterTargets,
+			Targets:              targets,
 		},
 	}
 }
@@ -73,7 +73,7 @@ func NewManagedOSImage(name string, clusterTargets []map[string]interface{}, mos
 func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
 	cordon := false
 	return &ManagedOSImage{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},
@@ -83,7 +83,7 @@ func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *M
 			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
 			OSImage              string                   `json:"osImage" yaml:"osImage"`
 			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-			ClusterTargets       []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
+			Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
 		}{
 			Cordon:               &cordon,
 			ManagedOSVersionName: managedOSVersion,

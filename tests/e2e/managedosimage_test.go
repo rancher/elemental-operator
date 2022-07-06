@@ -83,7 +83,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 			EventuallyWithOffset(1, func() error {
 				return k.ApplyYAML("fleet-default", osVersion, ov)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			ui := catalog.NewManagedOSImage(
 				osImage,
@@ -94,7 +94,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 			EventuallyWithOffset(1, func() error {
 				return k.ApplyYAML("fleet-default", osImage, ui)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
 				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)

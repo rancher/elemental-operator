@@ -25,6 +25,8 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
+	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/installer"
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
@@ -37,17 +39,8 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-			mr := catalog.NewMachineRegistration("machine-registration", map[string]interface{}{
-				"install":   map[string]string{"device": "/dev/vda"},
-				"rancheros": map[string]interface{}{"install": map[string]string{"isoUrl": "https://something.example.com"}},
-				"users": []map[string]string{
-					{
-						"name":   "root",
-						"passwd": "root",
-					},
-				},
-			})
-
+			spec := v1beta1.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
+			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
 				return k.ApplyYAML("fleet-default", "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())

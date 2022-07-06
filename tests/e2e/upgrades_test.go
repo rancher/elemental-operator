@@ -77,7 +77,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 		cattleNamespace,
 		"upgrade.cattle.io/controller=system-upgrade-controller",
 		3*time.Minute, 2*time.Second,
-		ContainElement(ContainSubstring("apply-os-upgrader-on-ros-e2e-control-plane-with")),
+		ContainElement(ContainSubstring("apply-os-upgrader-on-operator-e2e-control-plane-with")),
 	)
 
 	podName := upgradePod(k)

@@ -72,7 +72,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			)
 		})
 
-		It("creates a list of ManagedOSVersion from a JSON server", func() {
+		It("creates a list of ManagedOSVersion from a JSON server", Focus, func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -137,7 +137,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				}
 
 				return string(r)
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 5*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 

@@ -85,7 +85,6 @@ jobs:
           go-version: '^1.17'
       - name: Deps
         run: |
-          ip a
           make test_deps
       - uses: engineerd/setup-kind@v0.5.0
         with:

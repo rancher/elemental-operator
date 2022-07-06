@@ -19,18 +19,16 @@ package e2e_test
 import (
 	"bytes"
 	"fmt"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	"github.com/rancher/elemental-operator/tests/catalog"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
-	"time"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 var (
@@ -54,7 +52,7 @@ func isOperatorInstalled(k *kubectl.Kubectl) bool {
 }
 
 func deployOperator(k *kubectl.Kubectl) {
-	By("Deploying ros-operator chart", func() {
+	By("Deploying elemental-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
 			"-n", "cattle-elemental-operator-system", "install", "--create-namespace", "elemental-operator", chart)
 		Expect(err).ToNot(HaveOccurred())
@@ -68,15 +66,6 @@ func deployOperator(k *kubectl.Kubectl) {
 
 		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
-
-		Eventually(func() string {
-			str, _ := kubectl.Run("logs", "-n", "cattle-elemental-operator-system", pods[0])
-			fmt.Println(str)
-			return str
-		}, 5*time.Minute, 2*time.Second).Should(
-			And(
-				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
-			))
 
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
@@ -114,7 +103,7 @@ var _ = BeforeSuite(func() {
 
 	chart = os.Getenv("CHART")
 	if chart == "" && !isOperatorInstalled(k) {
-		Fail("No CHART provided, a ros operator helm chart is required to run e2e tests")
+		Fail("No CHART provided, a elemental operator helm chart is required to run e2e tests")
 	} else if isOperatorInstalled(k) {
 		//
 		// Upgrade/delete of operator only goes here
@@ -128,7 +117,7 @@ var _ = BeforeSuite(func() {
 
 			deployOperator(k)
 
-			// Somehow rancher needs to be restarted after a ros-operator upgrade
+			// Somehow rancher needs to be restarted after a elemental-operator upgrade
 			// to get machineregistration working
 			pods, err := k.GetPodNames("cattle-system", "")
 			Expect(err).ToNot(HaveOccurred())
@@ -155,7 +144,7 @@ var _ = BeforeSuite(func() {
 		}
 		return false
 	}
-	By("Deploying ros-operator chart dependencies", func() {
+	By("Deploying elemental-operator chart dependencies", func() {
 		By("installing nginx", func() {
 			if installed("ingress-nginx") {
 				By("already installed")
