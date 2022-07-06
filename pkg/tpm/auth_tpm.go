@@ -63,7 +63,7 @@ func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elm.Ma
 		return nil, fmt.Errorf("verifying chain: %w", err)
 	}
 
-	machines, err := a.machineCache.GetByIndex(machineByHash, hashEncoded)
+	var machines, _ = a.machineCache.GetByIndex(machineByHash, hashEncoded)
 	if len(machines) != 1 {
 		if len(machines) > 1 {
 			logrus.Errorf("multiple machines for same hash %s found: %v", hashEncoded, machines)

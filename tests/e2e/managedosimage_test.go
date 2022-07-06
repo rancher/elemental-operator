@@ -25,7 +25,7 @@ import (
 	"github.com/onsi/gomega/types"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 var _ = Describe("ManagedOSImage e2e tests", func() {

@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	provv1 "github.com/rancher-sandbox/rancheros-operator/pkg/apis/rancheros.cattle.io/v1"
+	provv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -31,7 +31,7 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {

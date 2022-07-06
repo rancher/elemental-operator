@@ -41,7 +41,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220531132501-de5547132dd8
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e
-	github.com/rancher-sandbox/rancheros-operator v0.1.0
+	github.com/rancher/elemental-operator v0.1.0
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37

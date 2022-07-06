@@ -35,7 +35,7 @@ spec:
         - --default-registry
         - {{ .Values.global.cattle.systemDefaultRegistry | quote }}
         - --rancher-server-url
-        - {{ .Values.global.cattle.url }}
+        - {{ .Values.global.cattle.url | quote }}
         - --ca-cert
         - {{ .Values.global.cattle.ca_cert | quote }}
       serviceAccountName: elemental-operator

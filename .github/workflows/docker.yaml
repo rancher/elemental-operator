@@ -16,7 +16,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/rancheros-operator
+            quay.io/costoolkit/elemental-operator
           tags: |
             type=semver,pattern={{raw}}
       - name: Set up Docker Buildx

@@ -17,13 +17,14 @@ limitations under the License.
 package server
 
 import (
+	"io"
+	"net/http"
+
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-	"io"
-	"net/http"
 )
 
 var (

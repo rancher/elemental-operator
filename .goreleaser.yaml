@@ -1,4 +1,4 @@
-project_name: rancheros-operator
+project_name: elemental-operator
 builds:
   - main: ./cmd/operator
     env:

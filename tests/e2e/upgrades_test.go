@@ -29,7 +29,7 @@ import (
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 const cattleNamespace = "cattle-system"

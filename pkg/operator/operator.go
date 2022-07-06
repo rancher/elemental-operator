@@ -18,14 +18,13 @@ package operator
 
 import (
 	"context"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
+	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
-
 	"github.com/rancher/elemental-operator/pkg/controllers/registration"
 	"github.com/rancher/elemental-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
