@@ -46,6 +46,9 @@ func NewOperatorCommand() *cobra.Command {
 		Use:   "operator",
 		Short: "Run the Kubernetes operator.",
 		Run: func(_ *cobra.Command, _ []string) {
+			if config.Debug {
+				logrus.SetLevel(logrus.DebugLevel)
+			}
 			operatorRun(&config)
 		},
 	}
