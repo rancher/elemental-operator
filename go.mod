@@ -45,14 +45,13 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37
-	github.com/rancher/system-agent v0.2.7
+	github.com/rancher/system-agent v0.2.8
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/viper v1.9.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	gopkg.in/pin/tftp.v2 v2.1.0
 	gopkg.in/yaml.v2 v2.4.0
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.23.0
@@ -111,7 +110,6 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pin/tftp v2.1.0+incompatible // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.34.0 // indirect
