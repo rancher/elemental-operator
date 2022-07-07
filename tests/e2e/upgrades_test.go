@@ -34,7 +34,7 @@ import (
 
 const cattleNamespace = "cattle-system"
 const fleetNamespace = "fleet-local"
-const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.3-4b83dbe"
+const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.4.0"
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
@@ -223,7 +223,6 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("applies an os-upgrade from a channel", func() {
-			Skip("Requires a new image for discovery plugin")
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel3",
 				"custom",
@@ -266,7 +265,6 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("overwrites default container spec from a channel", func() {
-			Skip("Requires a new image for discovery plugin")
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel4",
 				"custom",
@@ -313,7 +311,6 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("tries to apply an upgrade", func() {
-			Skip("Requires a new image for discovery plugin")
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel5",
 				"custom",

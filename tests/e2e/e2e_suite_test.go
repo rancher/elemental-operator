@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	"github.com/rancher/elemental-operator/tests/catalog"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -54,7 +53,14 @@ func isOperatorInstalled(k *kubectl.Kubectl) bool {
 func deployOperator(k *kubectl.Kubectl) {
 	By("Deploying elemental-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n", "cattle-elemental-operator-system", "install", "--create-namespace", "--set", "sync_interval=30s", "elemental-operator", chart)
+			"-n",
+			"cattle-elemental-operator-system",
+			"install",
+			"--create-namespace",
+			"--set", "sync_interval=30s",
+			"--set", fmt.Sprintf("global.cattle.url=%s.%s", externalIP, magicDNS),
+			"elemental-operator",
+			chart)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = k.WaitForPod("cattle-elemental-operator-system", "app=elemental-operator", "elemental-operator")
@@ -65,9 +71,6 @@ func deployOperator(k *kubectl.Kubectl) {
 		Expect(len(pods)).To(Equal(1))
 
 		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
-		Expect(err).ToNot(HaveOccurred())
-
-		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
 	})
 }

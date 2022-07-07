@@ -56,7 +56,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 				return string(e)
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),
 			)
 
@@ -65,10 +65,11 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 
 			Expect(out).Should(
 				And(
-					ContainSubstring("BEGIN CERTIFICATE"),
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),
 			)
+			// TODO: There is no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
+			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})
 })
