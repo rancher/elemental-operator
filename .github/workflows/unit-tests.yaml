@@ -22,3 +22,7 @@ jobs:
     - name: Run tests
       run: |
         make unit-tests
+    - name: Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        file: ./coverage.out
