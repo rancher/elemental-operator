@@ -9,7 +9,7 @@ CHART_VERSION?=$(subst v,,$(GIT_TAG))
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s -X 'github.com/rancher/elemental-operator/version.Version=$TAG'" -o build/elemental-operator
+	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s -X 'github.com/rancher/elemental-operator/version.Version=$TAG'" -o build/elemental-operator $(ROOT_DIR)/cmd/operator
 
 .PHONY: build-docker
 build-docker:

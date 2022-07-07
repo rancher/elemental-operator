@@ -7,8 +7,8 @@ cd $(dirname $0)/..
 echo 'Running: go mod verify'
 go mod verify
 
-echo 'Running: go fmt'
-go fmt
+echo 'Running: gofmt -s -w .'
+gofmt -s -w .
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo 'go fmt produced differences'
   exit 1
