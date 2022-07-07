@@ -36,3 +36,10 @@ chart:
 
 validate:
 	scripts/validate
+
+unit-tests-deps:
+	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
+	go get github.com/onsi/gomega/...
+
+unit-tests:
+	ginkgo -r -v ./pkg/...
