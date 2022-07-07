@@ -64,6 +64,10 @@ func deployOperator(k *kubectl.Kubectl) {
 		Expect(err).ToNot(HaveOccurred())
 
 		err = k.WaitForPod("cattle-elemental-operator-system", "app=elemental-operator", "elemental-operator")
+		if err != nil {
+			status, _ := k.PodStatus("cattle-elemental-operator-system", "elemental-operator")
+			_, _ = fmt.Fprintf(GinkgoWriter, "Pod status: %+v", status)
+		}
 		Expect(err).ToNot(HaveOccurred())
 
 		pods, err := k.GetPodNames("cattle-elemental-operator-system", "app=elemental-operator")
