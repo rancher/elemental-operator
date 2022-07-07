@@ -8,8 +8,15 @@ CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 
 .PHONY: build
-build:
+build: operator installer
+
+.PHONY: operator
+operator:
 	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s -X 'github.com/rancher/elemental-operator/version.Version=$TAG'" -o build/elemental-operator $(ROOT_DIR)/cmd/operator
+
+.PHONY: installer
+installer:
+	CGO_ENABLED=0 go build -ldflags "-extldflags -static -s -X 'github.com/rancher/elemental-operator/version.Version=$TAG'" -o build/elemental-installer $(ROOT_DIR)/cmd/installer
 
 .PHONY: build-docker
 build-docker:
