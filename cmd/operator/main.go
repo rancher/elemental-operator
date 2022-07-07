@@ -1,9 +1,9 @@
 package main
 
 import (
-	display_cmd "github.com/rancher/elemental-operator/cmd/display"
-	operator_cmd "github.com/rancher/elemental-operator/cmd/operator"
-	register_cmd "github.com/rancher/elemental-operator/cmd/register"
+	display_cmd "github.com/rancher/elemental-operator/cmd/operator/display"
+	operator_cmd "github.com/rancher/elemental-operator/cmd/operator/operator"
+	register_cmd "github.com/rancher/elemental-operator/cmd/operator/register"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

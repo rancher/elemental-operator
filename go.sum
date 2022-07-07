@@ -952,6 +952,7 @@ github.com/mattn/go-isatty v0.0.9/go.mod h1:YNRxwqDuOph6SZLI9vUUz6OYw3QyUt7WiY2y
 github.com/mattn/go-isatty v0.0.10/go.mod h1:qgIWMr58cqv1PHHyhnkY9lrL7etaEgOFcMEpPG5Rm84=
 github.com/mattn/go-isatty v0.0.11/go.mod h1:PhnuNfih5lzO57/f3n+odYbM4JtupLOxQOAqxQCu2WE=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
+github.com/mattn/go-isatty v0.0.14 h1:yVuAays6BHfxijgZPzw+3Zlu5yQgKGP2/hcQbHb7S9Y=
 github.com/mattn/go-isatty v0.0.14/go.mod h1:7GGIvUiUoEMVVmxf/4nioHXj79iQHKdU27kJ6hsGG94=
 github.com/mattn/go-runewidth v0.0.2/go.mod h1:LwmH8dsx7+W8Uxz3IHJYH5QSwggIsqBzpuz5H//U1FU=
 github.com/mattn/go-runewidth v0.0.4/go.mod h1:LwmH8dsx7+W8Uxz3IHJYH5QSwggIsqBzpuz5H//U1FU=
@@ -1404,6 +1405,10 @@ github.com/tmc/grpc-websocket-proxy v0.0.0-20200427203606-3cfed13b9966/go.mod h1
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce/go.mod h1:o8v6yHRoik09Xen7gje4m9ERNah1d1PPsVq1VEx9vE4=
 github.com/transparency-dev/merkle v0.0.1/go.mod h1:B8FIw5LTq6DaULoHsVFRzYIUDkl8yuSwCdZnOZGKL/A=
+github.com/tredoe/fileutil v1.0.5/go.mod h1:HFzzpvg+3Q8LgmZgo1mVF5epHc/CVkWKEb3hja+/1Zo=
+github.com/tredoe/goutil v1.0.0/go.mod h1:Qhf75QLcNEChimbl4wb8nROzw9PCFCPYTEUmTnoszXY=
+github.com/tredoe/osutil v1.0.6 h1:KJvG9AFmUPLe3hsNKyPMIjNx77CkAJtMKVS4ugAT7vM=
+github.com/tredoe/osutil v1.0.6/go.mod h1:zNq93p2DLHJWkHi2/+zi3xOjZl8xxiv3tiI2A6zcB3w=
 github.com/tredoe/osutil/v2 v2.0.0-rc.16/go.mod h1:uLRVx/3pb7Y4RQhG8cQFbPE9ha5r81e6MXpBsxbTAYc=
 github.com/twpayne/go-vfs v1.5.0 h1:3j9j2RchDSIQ1gjuNHZqJOyZAS702lrmqUow2uUYgX8=
 github.com/twpayne/go-vfs v1.5.0/go.mod h1:MAbvpnWRAE5LfIt88Eopskigmyc+wakYCyCDnys7iNw=
