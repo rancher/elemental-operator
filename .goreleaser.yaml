@@ -1,6 +1,7 @@
 project_name: rancheros-operator
 builds:
-  - env:
+  - main: ./cmd/operator
+    env:
       - CGO_ENABLED=0
     ldflags:
       - -extldflags -static -s
