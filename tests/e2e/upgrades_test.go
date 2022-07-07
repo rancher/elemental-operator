@@ -33,7 +33,7 @@ import (
 )
 
 const cattleNamespace = "cattle-system"
-const fleetNamespace = "cattle-elemental-operator-system"
+const fleetNamespace = "fleet-local"
 const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.3-4b83dbe"
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
@@ -104,7 +104,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	ExpectWithOffset(1, mounts).To(mm)
 }
 
-var _ = Describe("ManagedOSImage e2e tests", func() {
+var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 	k := kubectl.New()
 
 	Context("Using ManagedOSVersion reference", func() {
@@ -200,8 +200,6 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 				up, err := getPlan("os-upgrader")
 				if err == nil {
 					return up.Spec.Version
-				} else {
-					fmt.Println(err)
 				}
 				return ""
 			}, 1*time.Minute, 2*time.Second).Should(Equal("v1.0"))

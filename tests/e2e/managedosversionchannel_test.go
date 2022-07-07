@@ -62,11 +62,9 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			By("Check that reports event failure")
 			Eventually(func() string {
-				r, err := kubectl.Run("describe", "-n", "cattle-elemental-operator-system", "managedosversionchannel", "invalid")
-				if err != nil {
-					fmt.Println(err)
-				}
-				return string(r)
+				r, _ := kubectl.Run("describe", "-n", "cattle-elemental-operator-system", "managedosversionchannel", "invalid")
+
+				return r
 			}, 1*time.Minute, 2*time.Second).Should(
 				ContainSubstring("No ManagedOSVersionChannel type defined"),
 			)
@@ -122,33 +120,21 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			defer k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "testchannel")
 
-			r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
-			if err != nil {
-				fmt.Println(err)
-			}
+			r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("json"))
 
 			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
-				r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
-				fmt.Fprintf(GinkgoWriter, "output: %s", string(r))
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, err.Error())
-				}
-
+				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 5*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
-				fmt.Fprintf(GinkgoWriter, string(r))
+				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
 
-				if err != nil {
-					fmt.Fprintf(GinkgoWriter, err.Error())
-				}
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
@@ -159,10 +145,8 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			By("Check ManagedOSVersions are deleted on channel clean up")
 			Eventually(func() string {
-				r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={}`)
-				if err != nil {
-					fmt.Println(err)
-				}
+				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={}`)
+
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal(""),
@@ -219,30 +203,22 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			err = k.ApplyYAML("cattle-elemental-operator-system", "testchannel2", ui)
 			Expect(err).ShouldNot(HaveOccurred())
+			defer k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "testchannel2")
 
-			r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
-			if err != nil {
-				fmt.Println(err)
-			}
+			r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("custom"))
 
 			Eventually(func() string {
-				r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
-				if err != nil {
-					fmt.Println(err)
-				}
-
+				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, err := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
-				if err != nil {
-					fmt.Println(err)
-				}
+				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
+
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),

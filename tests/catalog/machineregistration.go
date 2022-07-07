@@ -16,7 +16,7 @@ limitations under the License.
 
 package catalog
 
-import v1beta1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+import "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 
 type MachineRegistration struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
