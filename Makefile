@@ -2,7 +2,7 @@ GIT_COMMIT?=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
-REPO?=rancher/elemental-operator-ci
+REPO?=quay.io/costoolkit/elemental-operator-ci
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
