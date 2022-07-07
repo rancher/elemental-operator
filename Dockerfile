@@ -9,7 +9,7 @@ COPY cmd /src/cmd
 # Set arg/env after go mod download, otherwise we invalidate the cached layers due to the commit changing easily
 ARG VERSION=0.0.0
 ENV VERSION=${VERSION}
-RUN go build -ldflags "-extldflags -static -s -X github.com/rancher/elemental-operator/version.Version=$VERSION" -o /usr/sbin/elemental-operator
+RUN go build -ldflags "-extldflags -static -w -s -X github.com/rancher/elemental-operator/version.Version=$VERSION" -o /usr/sbin/elemental-operator
 
 FROM scratch as elemental-operator
 COPY --from=build /usr/sbin/elemental-operator /usr/sbin/elemental-operator
