@@ -16,7 +16,7 @@ limitations under the License.
 
 package config
 
-type RancherOS struct {
+type Elemental struct {
 	Install Install `json:"install,omitempty"`
 }
 
@@ -43,7 +43,7 @@ type Install struct {
 
 type Config struct {
 	SSHAuthorizedKeys []string               `json:"ssh_authorized_keys,omitempty"`
-	RancherOS         RancherOS              `json:"rancheros,omitempty"`
+	Elemental         Elemental              `json:"elemental,omitempty"`
 	Data              map[string]interface{} `json:"-"`
 }
 

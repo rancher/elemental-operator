@@ -22,10 +22,10 @@ import (
 )
 
 func PrintInstall(cfg Config) ([]byte, error) {
-	if cfg.RancherOS.Install.Password != "" {
-		cfg.RancherOS.Install.Password = "******"
+	if cfg.Elemental.Install.Password != "" {
+		cfg.Elemental.Install.Password = "******"
 	}
-	data, err := convert.EncodeToMap(cfg.RancherOS.Install)
+	data, err := convert.EncodeToMap(cfg.Elemental.Install)
 	if err != nil {
 		return nil, err
 	}
