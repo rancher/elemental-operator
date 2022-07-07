@@ -46,16 +46,8 @@ unit-tests-deps:
 	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
 	go get github.com/onsi/gomega/...
 
-unit-tests:
-	ginkgo -r -v --covermode=atomic --coverprofile=coverage.out ./pkg/...
-
-.PHONY: test_deps
-test_deps:
-	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo
-	go install github.com/onsi/gomega/...
-
 .PHONY: unit-tests
-unit-tests: test_deps
+unit-tests: unit-tests-deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
 
 e2e-tests:
