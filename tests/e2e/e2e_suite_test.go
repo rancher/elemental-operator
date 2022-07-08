@@ -59,6 +59,7 @@ func deployOperator(k *kubectl.Kubectl) {
 			"--create-namespace",
 			"--set", "sync_interval=30s",
 			"--set", fmt.Sprintf("global.cattle.url=%s.%s", externalIP, magicDNS),
+			"--set", "watch_namespace=fleet-local",
 			"elemental-operator",
 			chart)
 		Expect(err).ToNot(HaveOccurred())

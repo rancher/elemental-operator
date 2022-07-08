@@ -35,7 +35,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 	Context("registration", func() {
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", "cattle-elemental-operator-system", "machine-registration")
+			kubectl.New().Delete("machineregistration", "-n", "fleet-local", "machine-registration")
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
@@ -43,12 +43,12 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			spec := v1beta1.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
-				return k.ApplyYAML("cattle-elemental-operator-system", "machine-registration", mr)
+				return k.ApplyYAML("fleet-local", "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData("cattle-elemental-operator-system", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
+				e, err := kubectl.GetData("fleet-local", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -68,7 +68,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),
 			)
-			// TODO: There is no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
+			// TODO: There are no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
 			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})

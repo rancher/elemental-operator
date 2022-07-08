@@ -234,8 +234,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
 						},
 					},
-					"command": []string{},
-					"args":    []string{"git"},
+					"args": []string{"git"},
 				},
 				nil,
 			)
@@ -276,8 +275,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
 						},
 					},
-					"command": []string{},
-					"args":    []string{"git"},
+					"args": []string{"git"},
 				},
 				&catalog.ContainerSpec{
 					Image:   "Foobarz",
@@ -334,8 +332,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 							"value": "-amd64",
 						},
 					},
-					"command": []string{},
-					"args":    []string{"github"},
+					"args": []string{"github"},
 				},
 				nil,
 			)

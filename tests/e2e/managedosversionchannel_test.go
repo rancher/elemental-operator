@@ -38,7 +38,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 	var k *kubectl.Kubectl
 
 	AfterEach(func() {
-		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", "cattle-elemental-operator-system")
+		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", "fleet-local")
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
@@ -56,13 +56,13 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				nil,
 			)
 
-			err := k.ApplyYAML("cattle-elemental-operator-system", "invalid", ui)
+			err := k.ApplyYAML("fleet-local", "invalid", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "invalid")
+			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "invalid")
 
 			By("Check that reports event failure")
 			Eventually(func() string {
-				r, _ := kubectl.Run("describe", "-n", "cattle-elemental-operator-system", "managedosversionchannel", "invalid")
+				r, _ := kubectl.Run("describe", "-n", "fleet-local", "managedosversionchannel", "invalid")
 
 				return r
 			}, 1*time.Minute, 2*time.Second).Should(
@@ -116,36 +116,36 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				nil,
 			)
 
-			err = k.ApplyYAML("cattle-elemental-operator-system", "testchannel", ui)
+			err = k.ApplyYAML("fleet-local", "testchannel", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "testchannel")
+			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel")
 
-			r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
+			r, _ := kubectl.GetData("fleet-local", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("json"))
 
 			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
-				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 5*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
 
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
 			)
 
-			err = k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "testchannel")
+			err = k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			By("Check ManagedOSVersions are deleted on channel clean up")
 			Eventually(func() string {
-				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "v2", `jsonpath={}`)
+				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v2", `jsonpath={}`)
 
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
@@ -201,23 +201,23 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				nil,
 			)
 
-			err = k.ApplyYAML("cattle-elemental-operator-system", "testchannel2", ui)
+			err = k.ApplyYAML("fleet-local", "testchannel2", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "cattle-elemental-operator-system", "testchannel2")
+			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel2")
 
-			r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
+			r, _ := kubectl.GetData("fleet-local", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("custom"))
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("cattle-elemental-operator-system", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
 
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
