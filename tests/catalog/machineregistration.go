@@ -16,7 +16,16 @@ limitations under the License.
 
 package catalog
 
-import "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+import (
+	"github.com/rancher/elemental-operator/pkg/installer"
+)
+
+type MachineRegistrationSpec struct {
+	MachineName                 string             `yaml:"machineName,omitempty" json:"machineName,omitempty"`
+	MachineInventoryLabels      map[string]string  `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
+	MachineInventoryAnnotations map[string]string  `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
+	Install                     *installer.Install `yaml:"install,omitempty" json:"install,omitempty"`
+}
 
 type MachineRegistration struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
@@ -24,10 +33,10 @@ type MachineRegistration struct {
 	Metadata   struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
-	Spec v1beta1.MachineRegistrationSpec `json:"spec" yaml:"spec"`
+	Spec MachineRegistrationSpec `json:"spec" yaml:"spec"`
 }
 
-func NewMachineRegistration(name string, spec v1beta1.MachineRegistrationSpec) *MachineRegistration {
+func NewMachineRegistration(name string, spec MachineRegistrationSpec) *MachineRegistration {
 	return &MachineRegistration{
 		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {

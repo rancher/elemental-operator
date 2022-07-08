@@ -30,7 +30,11 @@ spec:
         - --debug
         {{- end }}
         - --namespace
-        - {{ .Values.watch_namespace | default .Release.Namespace }}
+        - {{ .Release.Namespace }}
+        {{- if .Values.sync_namespaces}}
+        - --sync-namespaces
+        - {{ .Values.sync_namespaces }}
+        {{- end }}
         - --sync-interval
         - {{.Values.sync_interval }}
         - --operator-image

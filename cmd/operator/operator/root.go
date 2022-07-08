@@ -37,6 +37,7 @@ type rootConfig struct {
 	RancherServerURL string
 	CACert           string
 	OperatorImage    string
+	SyncNamespaces   []string
 }
 
 func NewOperatorCommand() *cobra.Command {
@@ -58,9 +59,12 @@ func NewOperatorCommand() *cobra.Command {
 	_ = viper.BindPFlag("rancher-server-url", cmd.PersistentFlags().Lookup("rancher-server-url"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "rancher-server-url")
 
-	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to watch for machine registrations")
+	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to run the operator on")
 	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "namespace")
+
+	cmd.PersistentFlags().StringArrayVar(&config.SyncNamespaces, "sync-namespaces", []string{}, "namespace to watch for machine registrations")
+	_ = viper.BindPFlag("sync-namespaces", cmd.PersistentFlags().Lookup("sync-namespaces"))
 
 	cmd.PersistentFlags().StringVar(&config.OperatorImage, "operator-image", "rancher/elemental-operator:"+version.Version, "this image")
 	_ = viper.BindPFlag("operator-image", cmd.PersistentFlags().Lookup("operator-image"))
@@ -97,7 +101,7 @@ func operatorRun(config *rootConfig) {
 		operator.WithServerURL(config.RancherServerURL),
 		operator.WithCACert(config.CACert),
 		operator.WithDefaultRegistry(config.DefaultRegistry),
-		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.Namespace)),
+		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.SyncNamespaces...)),
 	); err != nil {
 		logrus.Fatal(err)
 	}

@@ -58,8 +58,8 @@ func deployOperator(k *kubectl.Kubectl) {
 			"install",
 			"--create-namespace",
 			"--set", "sync_interval=30s",
+			"--set", "debug=true",
 			"--set", fmt.Sprintf("global.cattle.url=%s.%s", externalIP, magicDNS),
-			"--set", "watch_namespace=fleet-local",
 			"elemental-operator",
 			chart)
 		Expect(err).ToNot(HaveOccurred())
@@ -155,7 +155,7 @@ var _ = BeforeSuite(func() {
 				return
 			}
 			kubectl.CreateNamespace("ingress-nginx")
-			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
+			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/1.22/deploy.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
 			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")

@@ -25,30 +25,31 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/installer"
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
+
+const testRegistrationNamespace = "cattle-elemental-operator-system"
 
 var _ = Describe("MachineRegistration e2e tests", func() {
 	k := kubectl.New()
 	Context("registration", func() {
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", "fleet-local", "machine-registration")
+			kubectl.New().Delete("machineregistration", "-n", testRegistrationNamespace, "machine-registration")
 		})
 
-		It("creates a machine registration resource and a URL attaching CA certificate", func() {
+		It("creates a machine registration resource and a URL attaching CA certificate", Focus, func() {
 
-			spec := v1beta1.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
+			spec := catalog.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
-				return k.ApplyYAML("fleet-local", "machine-registration", mr)
+				return k.ApplyYAML(testRegistrationNamespace, "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData("fleet-local", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
+				e, err := kubectl.GetData(testRegistrationNamespace, "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -60,10 +61,13 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 				),
 			)
 
-			out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(out).Should(
+			Eventually(func() string {
+				out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
+				if err != nil {
+					fmt.Println(err)
+				}
+				return out
+			}, 1*time.Minute, 2*time.Second).Should(
 				And(
 					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),

@@ -37,7 +37,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/mudler/yip v0.0.0-20220704150701-30d215fa4ab0
 	github.com/onsi/ginkgo/v2 v2.1.3
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/gomega v1.19.0
 	github.com/pkg/errors v0.9.1
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220531132501-de5547132dd8
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e
