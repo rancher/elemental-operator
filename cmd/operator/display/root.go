@@ -17,7 +17,8 @@ limitations under the License.
 package displayCmd
 
 import (
-	"io"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -59,16 +60,12 @@ func displayRun(path string) {
 		os.Exit(0)
 	}()
 
-	f, err := os.Open(path)
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	_, err = io.Copy(os.Stdout, f)
-	_ = f.Close()
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	fmt.Println(string(b))
 
 	for {
 		time.Sleep(time.Duration(int64(^uint64(0) >> 1)))
