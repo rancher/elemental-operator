@@ -26,8 +26,11 @@ spec:
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         args:
         - operator
+        {{- if .Values.debug }}
+        - --debug
+        {{- end }}
         - --namespace
-        - {{ .Release.Namespace }}
+        - {{ .Values.watch_namespace | default .Release.Namespace }}
         - --sync-interval
         - {{.Values.sync_interval }}
         - --operator-image
