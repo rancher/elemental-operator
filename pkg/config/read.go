@@ -38,6 +38,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+const authorizedKeysKey = "ssh_authorized_keys"
+
 var (
 	defaultMappers = schemas2.Mappers{
 		NewToMap(),
@@ -69,15 +71,11 @@ func ToEnv(cfg Config) ([]string, error) {
 
 // it's a mapping of how config env option should be transliterated to the elemental CLI
 var defaultOverrides = map[string]string{
-	"ELEMENTAL_INSTALL_CONFIG_URL":       "ELEMENTAL_INSTALL_CLOUD_INIT",
-	"ELEMENTAL_INSTALL_ISO_URL":          "ELEMENTAL_INSTALL_ISO",
-	"ELEMENTAL_INSTALL_POWER_OFF":        "ELEMENTAL_POWEROFF",
-	"ELEMENTAL_INSTALL_DEVICE":           "ELEMENTAL_INSTALL_TARGET",
-	"ELEMENTAL_INSTALL_CONTAINER_IMAGE":  "ELEMENTAL_INSTALL_SYSTEM",
-	"ELEMENTAL_INSTALL_NO_FORMAT":        "ELEMENTAL_INSTALL_NO_FORMAT",
-	"ELEMENTAL_INSTALL_TTY":              "ELEMENTAL_INSTALL_TTY",
-	"ELEMENTAL_INSTALL_DEBUG":            "ELEMENTAL_DEBUG",
-	"ELEMENTAL_INSTALL_REGISTRATION_URL": "ELEMENTAL_REGISTRATION_URL",
+	"ELEMENTAL_INSTALL_CONFIG_URL": "ELEMENTAL_INSTALL_CLOUD_INIT",
+	"ELEMENTAL_INSTALL_POWEROFF":   "ELEMENTAL_POWEROFF",
+	"ELEMENTAL_INSTALL_DEVICE":     "ELEMENTAL_INSTALL_TARGET",
+	"ELEMENTAL_INSTALL_SYSTEM_URI": "ELEMENTAL_INSTALL_SYSTEM",
+	"ELEMENTAL_INSTALL_DEBUG":      "ELEMENTAL_DEBUG",
 }
 
 func envOverrides(keyName string) string {
@@ -91,6 +89,7 @@ func mapToEnv(prefix string, data map[string]interface{}) []string {
 	var result []string
 	for k, v := range data {
 		keyName := strings.ToUpper(prefix + convert.ToYAMLKey(k))
+		keyName = strings.ReplaceAll(keyName, "-", "_")
 		// Apply overrides needed to convert between configs types
 		keyName = envOverrides(keyName)
 
@@ -216,16 +215,16 @@ func readConfigMap(ctx context.Context, cfg string, includeCmdline bool) (map[st
 }
 
 func updateData(ctx context.Context, data map[string]interface{}) (map[string]interface{}, error) {
-	registrationURL := convert.ToString(values.GetValueN(data, "elemental", "install", "registrationUrl"))
-	registrationCA := convert.ToString(values.GetValueN(data, "elemental", "install", "registrationCaCert"))
-	emulatedTPM := convert.ToString(values.GetValueN(data, "elemental", "tpm", "emulated"))
-	emulatedSeed := convert.ToString(values.GetValueN(data, "elemental", "tpm", "seed"))
-	noSmbios := convert.ToString(values.GetValueN(data, "elemental", "tpm", "no_smbios"))
-	isoURL := convert.ToString(values.GetValueN(data, "elemental", "install", "isoUrl"))
-	ContainerImage := convert.ToString(values.GetValueN(data, "elemental", "install", "containerImage"))
+	registrationURL := convert.ToString(values.GetValueN(data, "elemental", "registration", "url"))
+	registrationCA := convert.ToString(values.GetValueN(data, "elemental", "registration", "ca_cert"))
+	emulatedTPM := convert.ToString(values.GetValueN(data, "elemental", "registration", "emulateTPM"))
+	emulatedSeed := convert.ToString(values.GetValueN(data, "elemental", "registration", "emulatedTPMSeed"))
+	noSmbios := convert.ToString(values.GetValueN(data, "elemental", "registration", "noSMBIOS"))
+	isoURL := convert.ToString(values.GetValueN(data, "elemental", "install", "iso"))
+	ContainerImage := convert.ToString(values.GetValueN(data, "elemental", "install", "system-uri"))
 	// Can't set both values at the same time
 	if isoURL != "" && ContainerImage != "" {
-		return nil, fmt.Errorf("cant set both elemental.install.iso_url and elemental.install.containerImage in /proc/cmdline or in MachineRegistration both .spec.cloudConfig.elemental.install.isoUrl and .spec.cloudConfig.elemental.install.containerImage")
+		return nil, fmt.Errorf("cant set both elemental.install.iso and elemental.install.system-uri in /proc/cmdline or in MachineRegistration both .spec.cloudConfig.elemental.install.iso and .spec.cloudConfig.elemental.install.system-uri")
 	}
 
 	if registrationURL != "" {
@@ -236,14 +235,14 @@ func updateData(ctx context.Context, data map[string]interface{}) (map[string]in
 			default:
 				newData, err := returnRegistrationData(registrationURL, registrationCA, emulatedTPM, emulatedSeed, noSmbios)
 				if err == nil {
-					newISOURL := convert.ToString(values.GetValueN(newData, "elemental", "install", "isoUrl"))
-					newContainerImage := convert.ToString(values.GetValueN(newData, "elemental", "install", "containerImage"))
+					newISOURL := convert.ToString(values.GetValueN(newData, "elemental", "install", "iso"))
+					newContainerImage := convert.ToString(values.GetValueN(newData, "elemental", "install", "system-uri"))
 					// If values from registration server are empty, override the old values into the new data
 					if newISOURL == "" {
-						values.PutValue(newData, isoURL, "elemental", "install", "isoUrl")
+						values.PutValue(newData, isoURL, "elemental", "install", "iso")
 					}
 					if newContainerImage == "" {
-						values.PutValue(newData, ContainerImage, "elemental", "install", "containerImage")
+						values.PutValue(newData, ContainerImage, "elemental", "install", "system-uri")
 					}
 					// Return the data obtained from the registration url with our full data
 					return newData, nil
@@ -277,9 +276,14 @@ func ToBytes(cfg Config) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if len(cfg.Elemental.Install.SSHKeys) > 0 {
+			data[authorizedKeysKey] = cfg.Elemental.Install.SSHKeys
+		}
 	}
 	values.RemoveValue(data, "install")
 	values.RemoveValue(data, "elemental", "install")
+	values.RemoveValue(data, "elemental", "registration")
+	values.RemoveValue(data, "elemental", "system_agent")
 	bytes, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err

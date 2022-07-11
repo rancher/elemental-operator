@@ -81,7 +81,7 @@ func AskToken(cfg *config.Config, server bool) error {
 		err   error
 	)
 
-	if cfg.Elemental.Install.Token != "" {
+	if cfg.Elemental.SystemAgent.Token != "" {
 		return nil
 	}
 
@@ -94,7 +94,7 @@ func AskToken(cfg *config.Config, server bool) error {
 	} else {
 		token, err = questions.Prompt(msg+": ", "")
 	}
-	cfg.Elemental.Install.Token = token
+	cfg.Elemental.SystemAgent.Token = token
 
 	return err
 }
@@ -110,7 +110,7 @@ func isServer() (bool, bool, error) {
 }
 
 func AskServerAgent(cfg *config.Config) error {
-	if cfg.Elemental.Install.ServerURL != "" || cfg.Elemental.Install.Automatic {
+	if cfg.Elemental.SystemAgent.URL != "" || cfg.Elemental.Install.Automatic {
 		return nil
 	}
 
@@ -124,16 +124,16 @@ func AskServerAgent(cfg *config.Config) error {
 	}
 
 	if server {
-		cfg.Elemental.Install.Role = "server"
+		//cfg.Elemental.Install.Role = "server"
 		return AskToken(cfg, true)
 	}
 
-	cfg.Elemental.Install.Role = "agent"
+	//cfg.Elemental.Install.Role = "agent"
 	url, err := questions.Prompt("URL of server: ", "")
 	if err != nil {
 		return err
 	}
-	cfg.Elemental.Install.ServerURL = url
+	cfg.Elemental.SystemAgent.URL = url
 
 	return AskToken(cfg, false)
 }
@@ -168,7 +168,7 @@ func AskPassword(cfg *config.Config) error {
 }
 
 func AskGithub(cfg *config.Config) error {
-	if len(cfg.SSHAuthorizedKeys) > 0 || cfg.Elemental.Install.Password != "" || cfg.Elemental.Install.Automatic {
+	if len(cfg.Elemental.Install.SSHKeys) > 0 || cfg.Elemental.Install.Password != "" || cfg.Elemental.Install.Automatic {
 		return nil
 	}
 
@@ -183,7 +183,7 @@ func AskGithub(cfg *config.Config) error {
 	}
 
 	for _, s := range strings.Split(str, ",") {
-		cfg.SSHAuthorizedKeys = append(cfg.SSHAuthorizedKeys, "github:"+strings.TrimSpace(s))
+		cfg.Elemental.Install.SSHKeys = append(cfg.Elemental.Install.SSHKeys, "github:"+strings.TrimSpace(s))
 	}
 
 	return nil

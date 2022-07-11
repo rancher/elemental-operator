@@ -120,14 +120,14 @@ var _ = Describe("os2 config unit tests", func() {
 		data = map[string]interface{}{
 			"elemental": map[string]interface{}{
 				"install": map[string]string{
-					"isoUrl": "foo",
+					"iso": "foo",
 				},
 			},
 		}
 	})
 
 	Context("Validation", func() {
-		It("fails if isoUrl and containerImage are both used at the same time", func() {
+		It("fails if iso and system-uri are both used at the same time", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(f.Name())
@@ -135,29 +135,28 @@ var _ = Describe("os2 config unit tests", func() {
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
   install:
-    containerImage: "docker/image:test"
-    isoUrl: "test"
+    system-uri: "docker/image:test"
+    iso: "test"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
-			cfg, err := ReadConfig(ctx, f.Name(), false)
-			fmt.Printf("%+v\n", cfg)
+			_, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).To(HaveOccurred())
 		})
-		It("fails if isoUrl and containerImage are both empty", Serial, func() {
+		It("fails if iso and system-uri are both empty", Serial, func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-    seed: "5"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    emulatedTPMSeed: "5"
   install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+    firmware: efi
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -182,34 +181,32 @@ elemental:
 				Data: map[string]interface{}{
 					"random": "data",
 				},
-				SSHAuthorizedKeys: []string{"github:mudler"},
 				Elemental: Elemental{
 					// Those settings below are tied to the
 					// elemental installer.
 					Install: Install{
-						Device:          "foob",
-						ConfigURL:       "fooc",
-						Firmware:        "efi",
-						RegistrationURL: "Foo",
-						ISOURL:          "http://foo.bar",
-						NoFormat:        true,
-						Debug:           true,
-						PowerOff:        true,
-						TTY:             "foo",
-						ContainerImage:  "docker:container",
+						Device:    "foob",
+						ConfigURL: "fooc",
+						Firmware:  "efi",
+						ISO:       "http://foo.bar",
+						NoFormat:  true,
+						Debug:     true,
+						PowerOff:  true,
+						TTY:       "foo",
+						SystemURI: "docker:container",
+						SSHKeys:   []string{"github:mudler"},
 					},
 				},
 			}
 			e, err := ToEnv(c)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(e)).To(Equal(11))
+			Expect(len(e)).To(Equal(10))
 			Expect(e).To(
 				ContainElements(
-					"SSH_AUTHORIZED_KEYS=[github:mudler]",
+					"ELEMENTAL_INSTALL_SSH_KEYS=[github:mudler]",
 					"ELEMENTAL_INSTALL_TARGET=foob",
 					"ELEMENTAL_INSTALL_CLOUD_INIT=fooc",
 					"ELEMENTAL_INSTALL_FIRMWARE=efi",
-					"ELEMENTAL_REGISTRATION_URL=Foo",
 					"ELEMENTAL_INSTALL_ISO=http://foo.bar",
 					"ELEMENTAL_INSTALL_NO_FORMAT=true",
 					"ELEMENTAL_DEBUG=true",
@@ -229,17 +226,18 @@ elemental:
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
+  registration:
+    url: foobaz
   install:
-    registrationUrl: "foobaz"
-    iso_url: "foo_bar"
+    iso: "foo_bar"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.RegistrationURL).To(Equal("foobaz"))
-			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Registration.URL).To(Equal("foobaz"))
+			Expect(c.Elemental.Install.ISO).To(Equal("foo_bar"))
 		})
 		It("reads iso_url only, without contacting a registrationUrl server", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
@@ -249,14 +247,14 @@ elemental:
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
   install:
-    iso_url: "foo_bar"
+    iso: "foo_bar"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Install.ISO).To(Equal("foo_bar"))
 		})
 		It("reads containerImage, without contacting a registrationUrl server", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
@@ -266,17 +264,17 @@ elemental:
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
   install:
-    containerImage: "docker:docker/image:test"
+    system-uri: "docker:docker/image:test"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ISOURL).To(Equal(""))
-			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:docker/image:test"))
+			Expect(c.Elemental.Install.ISO).To(Equal(""))
+			Expect(c.Elemental.Install.SystemURI).To(Equal("docker:docker/image:test"))
 		})
-		It("reads containerImage and registrationUrl", func() {
+		It("reads system-uri and registration url", func() {
 
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
@@ -284,18 +282,20 @@ elemental:
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
+  registration:
+    url: "foobar"
   install:
-    registrationUrl: "foobar"
-    containerImage: "docker:docker/image:test"
+    system-uri: "docker:docker/image:test"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:docker/image:test"))
+			Expect(c.Elemental.Install.SystemURI).To(Equal("docker:docker/image:test"))
 		})
-		It("reads isoUrl instead of iso_url", func() {
+
+		It("reads iso", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(f.Name())
@@ -303,30 +303,33 @@ elemental:
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
   install:
-    isoUrl: "foo_bar"
+    iso: "foo_bar"
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Install.ISO).To(Equal("foo_bar"))
 		})
-		It("reads ssh_authorized_keys", func() {
+
+		It("reads install ssh-keys", Label("format"), func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-ssh_authorized_keys:
-- foo
+elemental:
+  install:
+    ssh-keys:
+    - foo
 `), os.ModePerm)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.SSHAuthorizedKeys).To(Equal([]string{"foo"}))
+			Expect(c.Elemental.Install.SSHKeys).To(Equal([]string{"foo"}))
 		})
 	})
 
@@ -339,13 +342,15 @@ ssh_authorized_keys:
 						Pass string `json:"pass"`
 					}{{"foo", "Bar"}},
 				},
-				SSHAuthorizedKeys: []string{"github:mudler"},
+
 				Elemental: Elemental{
 					Install: Install{
-						Automatic:       true,
-						Firmware:        "efi",
-						RegistrationURL: "Foo",
-						ISOURL:          "http://foo.bar",
+						Automatic: true,
+						Firmware:  "efi",
+						SSHKeys:   []string{"github:mudler"},
+						ISO:       "http://foo.bar",
+					}, Registration: Registration{
+						URL: "Foo",
 					},
 				},
 			}
@@ -362,13 +367,14 @@ ssh_authorized_keys:
 		})
 		It("writes cloud-init files", func() {
 			c = Config{
-				SSHAuthorizedKeys: []string{"github:mudler"},
 				Elemental: Elemental{
 					Install: Install{
-						Automatic:       true,
-						Firmware:        "efi",
-						RegistrationURL: "Foo",
-						ISOURL:          "http://foo.bar",
+						Automatic: true,
+						Firmware:  "efi",
+						SSHKeys:   []string{"github:mudler"},
+						ISO:       "http://foo.bar",
+					}, Registration: Registration{
+						URL: "Foo",
 					},
 				},
 			}
@@ -395,38 +401,37 @@ ssh_authorized_keys:
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-    seed: "5"
-  install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    emulatedTPMSeed: "5"
+    url: "http://127.0.0.1:9980/test"
 `), os.ModePerm)
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ISOURL).To(Equal("foo"))
+			Expect(c.Elemental.Install.ISO).To(Equal("foo"))
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-  install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    emulatedTPMSeed: "5"
+    url: "http://127.0.0.1:9980/test"
 `), os.ModePerm)
 
 			c, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ISOURL).To(Equal("foo"))
+			Expect(c.Elemental.Install.ISO).To(Equal("foo"))
 		})
-		It("reads containerImage by contacting a registrationUrl server", Serial, func() {
+		It("reads system-uri by contacting a registrationUrl server", Serial, func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			// Override the install value on the data
-			value := map[string]string{"containerImage": "docker:test"}
+			value := map[string]string{"system-uri": "docker:test"}
 			values.PutValue(data, value, "elemental", "install")
 
 			WSServer(ctx, data)
@@ -436,30 +441,28 @@ elemental:
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-    seed: "5"
-  install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    emulatedTPMSeed: "5"
+    url: "http://127.0.0.1:9980/test"
 `), os.ModePerm)
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:test"))
+			Expect(c.Elemental.Install.SystemURI).To(Equal("docker:test"))
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-  install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    url: "http://127.0.0.1:9980/test"
 `), os.ModePerm)
 
 			c, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:test"))
+			Expect(c.Elemental.Install.SystemURI).To(Equal("docker:test"))
 		})
 		It("doesn't error out if isoUrl or containerImage are not provided", Serial, func() {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -476,18 +479,16 @@ elemental:
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
 elemental:
-  tpm:
-    emulated: true
-    no_smbios: true
-    seed: "5"
-  install:
-    registrationUrl: "http://127.0.0.1:9980/test"
+  registration:
+    emulateTPM: true
+    noSMBIOS: true
+    url: "http://127.0.0.1:9980/test"
 `), os.ModePerm)
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.Elemental.Install.ContainerImage).To(Equal(""))
-			Expect(c.Elemental.Install.ISOURL).To(Equal(""))
+			Expect(c.Elemental.Install.SystemURI).To(Equal(""))
+			Expect(c.Elemental.Install.ISO).To(Equal(""))
 		})
 	})
 })
