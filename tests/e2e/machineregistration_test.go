@@ -39,7 +39,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			kubectl.New().Delete("machineregistration", "-n", testRegistrationNamespace, "machine-registration")
 		})
 
-		It("creates a machine registration resource and a URL attaching CA certificate", Focus, func() {
+		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 
 			spec := catalog.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
