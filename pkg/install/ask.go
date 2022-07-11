@@ -35,7 +35,7 @@ func Ask(cfg *config.Config) error {
 		return err
 	}
 
-	if cfg.RancherOS.Install.ConfigURL == "" {
+	if cfg.Elemental.Install.ConfigURL == "" {
 		if err := AskGithub(cfg); err != nil {
 			return err
 		}
@@ -53,11 +53,11 @@ func Ask(cfg *config.Config) error {
 }
 
 func AskInstallDevice(cfg *config.Config) error {
-	if cfg.RancherOS.Install.Device != "" {
+	if cfg.Elemental.Install.Device != "" {
 		return nil
 	}
 
-	if cfg.RancherOS.Install.Automatic {
+	if cfg.Elemental.Install.Automatic {
 		return errors.Errorf("Target disk was not provided, please add device option to config file (e.g. device: /dev/sdb)")
 	}
 
@@ -71,7 +71,7 @@ func AskInstallDevice(cfg *config.Config) error {
 		return err
 	}
 
-	cfg.RancherOS.Install.Device = "/dev/" + fields[i]
+	cfg.Elemental.Install.Device = "/dev/" + fields[i]
 	return nil
 }
 
@@ -81,7 +81,7 @@ func AskToken(cfg *config.Config, server bool) error {
 		err   error
 	)
 
-	if cfg.RancherOS.Install.Token != "" {
+	if cfg.Elemental.Install.Token != "" {
 		return nil
 	}
 
@@ -94,7 +94,7 @@ func AskToken(cfg *config.Config, server bool) error {
 	} else {
 		token, err = questions.Prompt(msg+": ", "")
 	}
-	cfg.RancherOS.Install.Token = token
+	cfg.Elemental.Install.Token = token
 
 	return err
 }
@@ -110,7 +110,7 @@ func isServer() (bool, bool, error) {
 }
 
 func AskServerAgent(cfg *config.Config) error {
-	if cfg.RancherOS.Install.ServerURL != "" || cfg.RancherOS.Install.Automatic {
+	if cfg.Elemental.Install.ServerURL != "" || cfg.Elemental.Install.Automatic {
 		return nil
 	}
 
@@ -124,22 +124,22 @@ func AskServerAgent(cfg *config.Config) error {
 	}
 
 	if server {
-		cfg.RancherOS.Install.Role = "server"
+		cfg.Elemental.Install.Role = "server"
 		return AskToken(cfg, true)
 	}
 
-	cfg.RancherOS.Install.Role = "agent"
+	cfg.Elemental.Install.Role = "agent"
 	url, err := questions.Prompt("URL of server: ", "")
 	if err != nil {
 		return err
 	}
-	cfg.RancherOS.Install.ServerURL = url
+	cfg.Elemental.Install.ServerURL = url
 
 	return AskToken(cfg, false)
 }
 
 func AskPassword(cfg *config.Config) error {
-	if cfg.RancherOS.Install.Automatic || cfg.RancherOS.Install.Password != "" {
+	if cfg.Elemental.Install.Automatic || cfg.Elemental.Install.Password != "" {
 		return nil
 	}
 
@@ -163,12 +163,12 @@ func AskPassword(cfg *config.Config) error {
 		}
 	}
 
-	cfg.RancherOS.Install.Password = pass
+	cfg.Elemental.Install.Password = pass
 	return nil
 }
 
 func AskGithub(cfg *config.Config) error {
-	if len(cfg.SSHAuthorizedKeys) > 0 || cfg.RancherOS.Install.Password != "" || cfg.RancherOS.Install.Automatic {
+	if len(cfg.SSHAuthorizedKeys) > 0 || cfg.Elemental.Install.Password != "" || cfg.Elemental.Install.Automatic {
 		return nil
 	}
 
@@ -190,7 +190,7 @@ func AskGithub(cfg *config.Config) error {
 }
 
 func AskConfigURL(cfg *config.Config) error {
-	if cfg.RancherOS.Install.ConfigURL != "" || cfg.RancherOS.Install.Automatic {
+	if cfg.Elemental.Install.ConfigURL != "" || cfg.Elemental.Install.Automatic {
 		return nil
 	}
 
@@ -208,6 +208,6 @@ func AskConfigURL(cfg *config.Config) error {
 		return err
 	}
 
-	cfg.RancherOS.Install.ConfigURL = str
+	cfg.Elemental.Install.ConfigURL = str
 	return nil
 }

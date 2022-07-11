@@ -35,28 +35,28 @@ func Run(automatic bool, configFile string, powerOff bool, reboot bool, noReboot
 	}
 
 	if ejectCD {
-		cfg.RancherOS.Install.EjectCD = true
+		cfg.Elemental.Install.EjectCD = true
 	}
 	if powerOff {
-		cfg.RancherOS.Install.PowerOff = true
+		cfg.Elemental.Install.PowerOff = true
 	}
 
 	if reboot {
-		cfg.RancherOS.Install.Reboot = true
+		cfg.Elemental.Install.Reboot = true
 	}
 
 	if silent {
-		cfg.RancherOS.Install.Automatic = true
+		cfg.Elemental.Install.Automatic = true
 	}
 
 	// If we set the installation to automatic, reboot is set to true unless we set no reboot
 	if automatic && !noRebootAutomatic {
-		cfg.RancherOS.Install.Reboot = true
+		cfg.Elemental.Install.Reboot = true
 	}
 
-	if automatic && !cfg.RancherOS.Install.Automatic {
+	if automatic && !cfg.Elemental.Install.Automatic {
 		fmt.Println("Running automatic installation, option -y will be enforced")
-		cfg.RancherOS.Install.Automatic = true
+		cfg.Elemental.Install.Automatic = true
 	}
 
 	err = Ask(&cfg)
@@ -81,7 +81,7 @@ func runInstall(cfg config.Config, output string) error {
 		return err
 	}
 
-	if !cfg.RancherOS.Install.Automatic {
+	if !cfg.Elemental.Install.Automatic {
 		val, err := questions.PromptBool("\nConfiguration\n"+"-------------\n\n"+
 			string(installBytes)+
 			"\nYour disk will be formatted and installed with the above configuration.\nContinue?", false)
@@ -90,26 +90,26 @@ func runInstall(cfg config.Config, output string) error {
 		}
 	}
 
-	if cfg.RancherOS.Install.ConfigURL == "" && !cfg.RancherOS.Install.Automatic {
+	if cfg.Elemental.Install.ConfigURL == "" && !cfg.Elemental.Install.Automatic {
 		yip := config.YipConfig{
 			Rancherd: config.Rancherd{
-				Server: cfg.RancherOS.Install.ServerURL,
-				Token:  cfg.RancherOS.Install.Token,
-				Role:   cfg.RancherOS.Install.Role,
+				Server: cfg.Elemental.Install.ServerURL,
+				Token:  cfg.Elemental.Install.Token,
+				Role:   cfg.Elemental.Install.Role,
 			},
 		}
-		if cfg.RancherOS.Install.Password != "" || len(cfg.SSHAuthorizedKeys) > 0 {
+		if cfg.Elemental.Install.Password != "" || len(cfg.SSHAuthorizedKeys) > 0 {
 			yip.Stages = map[string][]config.Stage{
 				"network": {{
 					Users: map[string]config.User{
 						"root": {
 							Name:              "root",
-							PasswordHash:      cfg.RancherOS.Install.Password,
+							PasswordHash:      cfg.Elemental.Install.Password,
 							SSHAuthorizedKeys: cfg.SSHAuthorizedKeys,
 						},
 					}},
 				}}
-			cfg.RancherOS.Install.Password = ""
+			cfg.Elemental.Install.Password = ""
 		}
 
 		data, err := yaml.Marshal(yip)
@@ -120,12 +120,12 @@ func runInstall(cfg config.Config, output string) error {
 		if err := ioutil.WriteFile(output+".yip", data, 0600); err != nil {
 			return err
 		}
-		cfg.RancherOS.Install.ConfigURL = output + ".yip"
+		cfg.Elemental.Install.ConfigURL = output + ".yip"
 	} else {
 		if err := config.ToFile(cfg, output); err != nil {
 			return err
 		}
-		cfg.RancherOS.Install.ConfigURL = output
+		cfg.Elemental.Install.ConfigURL = output
 	}
 
 	ev, err := config.ToEnv(cfg)
@@ -147,8 +147,8 @@ func runInstall(cfg config.Config, output string) error {
 }
 
 func printEnv(cfg config.Config) {
-	if cfg.RancherOS.Install.Password != "" {
-		cfg.RancherOS.Install.Password = "<removed>"
+	if cfg.Elemental.Install.Password != "" {
+		cfg.Elemental.Install.Password = "<removed>"
 	}
 
 	ev2, err := config.ToEnv(cfg)

@@ -118,7 +118,7 @@ var _ = Describe("os2 config unit tests", func() {
 	BeforeEach(func() {
 		c = Config{}
 		data = map[string]interface{}{
-			"rancheros": map[string]interface{}{
+			"elemental": map[string]interface{}{
 				"install": map[string]string{
 					"isoUrl": "foo",
 				},
@@ -133,7 +133,7 @@ var _ = Describe("os2 config unit tests", func() {
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     containerImage: "docker/image:test"
     isoUrl: "test"
@@ -141,7 +141,8 @@ rancheros:
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
-			_, err = ReadConfig(ctx, f.Name(), false)
+			cfg, err := ReadConfig(ctx, f.Name(), false)
+			fmt.Printf("%+v\n", cfg)
 			Expect(err).To(HaveOccurred())
 		})
 		It("fails if isoUrl and containerImage are both empty", func() {
@@ -150,7 +151,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -162,7 +163,7 @@ rancheros:
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			// Empty the install key so there is no isourl nor containerImage
-			values.PutValue(data, "", "rancheros", "install")
+			values.PutValue(data, "", "elemental", "install")
 			WSServer(ctx, data)
 			_, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).To(HaveOccurred())
@@ -184,7 +185,7 @@ rancheros:
 					"random": "data",
 				},
 				SSHAuthorizedKeys: []string{"github:mudler"},
-				RancherOS: RancherOS{
+				Elemental: Elemental{
 					// Those settings below are tied to the
 					// elemental installer.
 					Install: Install{
@@ -229,7 +230,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     registrationUrl: "foobaz"
     iso_url: "foo_bar"
@@ -239,8 +240,8 @@ rancheros:
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.RegistrationURL).To(Equal("foobaz"))
-			Expect(c.RancherOS.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Install.RegistrationURL).To(Equal("foobaz"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
 
 		It("reads iso_url only, without contacting a registrationUrl server", func() {
@@ -249,7 +250,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     iso_url: "foo_bar"
 `), os.ModePerm)
@@ -258,7 +259,7 @@ rancheros:
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
 
 		It("reads containerImage, without contacting a registrationUrl server", func() {
@@ -267,7 +268,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     containerImage: "docker:docker/image:test"
 `), os.ModePerm)
@@ -276,8 +277,8 @@ rancheros:
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ISOURL).To(Equal(""))
-			Expect(c.RancherOS.Install.ContainerImage).To(Equal("docker:docker/image:test"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal(""))
+			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:docker/image:test"))
 		})
 		It("reads containerImage and registrationUrl", func() {
 
@@ -286,7 +287,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     registrationUrl: "foobar"
     containerImage: "docker:docker/image:test"
@@ -296,7 +297,7 @@ rancheros:
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ContainerImage).To(Equal("docker:docker/image:test"))
+			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:docker/image:test"))
 		})
 
 		It("reads isoUrl instead of iso_url", func() {
@@ -305,7 +306,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   install:
     isoUrl: "foo_bar"
 `), os.ModePerm)
@@ -314,7 +315,7 @@ rancheros:
 			defer cancel()
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ISOURL).To(Equal("foo_bar"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
 
 		It("reads ssh_authorized_keys", func() {
@@ -345,7 +346,7 @@ ssh_authorized_keys:
 					}{{"foo", "Bar"}},
 				},
 				SSHAuthorizedKeys: []string{"github:mudler"},
-				RancherOS: RancherOS{
+				Elemental: Elemental{
 					Install: Install{
 						Automatic:       true,
 						Firmware:        "efi",
@@ -369,7 +370,7 @@ ssh_authorized_keys:
 		It("writes cloud-init files", func() {
 			c = Config{
 				SSHAuthorizedKeys: []string{"github:mudler"},
-				RancherOS: RancherOS{
+				Elemental: Elemental{
 					Install: Install{
 						Automatic:       true,
 						Firmware:        "efi",
@@ -387,7 +388,7 @@ ssh_authorized_keys:
 			Expect(err).ToNot(HaveOccurred())
 
 			ff, _ := ioutil.ReadFile(f.Name())
-			Expect(string(ff)).To(Equal("#cloud-config\nrancheros: {}\nssh_authorized_keys:\n- github:mudler\n"))
+			Expect(string(ff)).To(Equal("#cloud-config\nelemental: {}\nssh_authorized_keys:\n- github:mudler\n"))
 		})
 
 		It("reads iso_url by contacting a registrationUrl server", func() {
@@ -401,7 +402,7 @@ ssh_authorized_keys:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -412,10 +413,10 @@ rancheros:
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ISOURL).To(Equal("foo"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal("foo"))
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -425,7 +426,7 @@ rancheros:
 
 			c, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ISOURL).To(Equal("foo"))
+			Expect(c.Elemental.Install.ISOURL).To(Equal("foo"))
 		})
 		It("reads containerImage by contacting a registrationUrl server", func() {
 
@@ -434,7 +435,7 @@ rancheros:
 
 			// Override the install value on the data
 			value := map[string]string{"containerImage": "docker:test"}
-			values.PutValue(data, value, "rancheros", "install")
+			values.PutValue(data, value, "elemental", "install")
 
 			WSServer(ctx, data)
 			f, err := ioutil.TempFile("", "xxxxtest")
@@ -442,7 +443,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -453,10 +454,10 @@ rancheros:
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ContainerImage).To(Equal("docker:test"))
+			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:test"))
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -466,7 +467,7 @@ rancheros:
 
 			c, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ContainerImage).To(Equal("docker:test"))
+			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:test"))
 		})
 
 		It("doesn't error out if isoUrl or containerImage are not provided", func() {
@@ -475,7 +476,7 @@ rancheros:
 
 			// Override the install value on the data
 			value := map[string]string{}
-			values.PutValue(data, value, "rancheros", "install")
+			values.PutValue(data, value, "elemental", "install")
 
 			WSServer(ctx, data)
 			f, err := ioutil.TempFile("", "xxxxtest")
@@ -483,7 +484,7 @@ rancheros:
 			defer os.Remove(f.Name())
 
 			_ = ioutil.WriteFile(f.Name(), []byte(`
-rancheros:
+elemental:
   tpm:
     emulated: true
     no_smbios: true
@@ -494,8 +495,8 @@ rancheros:
 
 			c, err := ReadConfig(ctx, f.Name(), false)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(c.RancherOS.Install.ContainerImage).To(Equal(""))
-			Expect(c.RancherOS.Install.ISOURL).To(Equal(""))
+			Expect(c.Elemental.Install.ContainerImage).To(Equal(""))
+			Expect(c.Elemental.Install.ISOURL).To(Equal(""))
 		})
 	})
 })
