@@ -44,7 +44,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37
-	github.com/rancher/system-agent v0.2.7
+	github.com/rancher/system-agent v0.2.8
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/sirupsen/logrus v1.8.1
