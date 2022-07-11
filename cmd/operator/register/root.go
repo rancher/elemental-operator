@@ -1,7 +1,29 @@
-package register_cmd
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package registerCmd
 
 import (
 	"encoding/json"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/mudler/yip/pkg/schema"
 	"github.com/rancher/elemental-operator/pkg/installer"
 	"github.com/rancher/elemental-operator/pkg/tpm"
@@ -10,13 +32,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
-	"io/fs"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 func NewRegisterCommand() *cobra.Command {
@@ -124,7 +141,9 @@ func run(config installer.Config) {
 
 func writeCloudInit(data []byte) error {
 	f, err := os.OpenFile("/oem/userdata", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 	if err != nil {
 		return err
 	}
@@ -217,7 +236,9 @@ func writeYIPConfig(config installer.Elemental) (string, error) {
 	}
 
 	f, err := os.CreateTemp(os.TempDir(), "*.yip")
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 	if err != nil {
 		return "", err
 	}
@@ -237,7 +258,9 @@ func writeElementalConfig(config installer.Elemental, cloudInitPath string) erro
 
 	_ = os.MkdirAll(configDir, 0600)
 	f, err := os.CreateTemp(configDir, "*.yaml")
-	defer f.Close()
+	defer func(f *os.File) {
+		_ = f.Close()
+	}(f)
 	if err != nil {
 		return err
 	}
@@ -248,7 +271,9 @@ func writeElementalConfig(config installer.Elemental, cloudInitPath string) erro
 	}
 
 	f2, err := os.CreateTemp(configDir, "*.yaml")
-	defer f2.Close()
+	defer func(f2 *os.File) {
+		_ = f2.Close()
+	}(f2)
 	if err != nil {
 		return err
 	}

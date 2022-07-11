@@ -1,6 +1,24 @@
-package operator_cmd
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package operatorCmd
 
 import (
+	"time"
+
 	"github.com/rancher/elemental-operator/pkg/operator"
 	"github.com/rancher/elemental-operator/pkg/services/syncer"
 	"github.com/rancher/elemental-operator/pkg/types"
@@ -9,7 +27,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"time"
 )
 
 type rootConfig struct {
@@ -20,6 +37,7 @@ type rootConfig struct {
 	RancherServerURL string
 	CACert           string
 	OperatorImage    string
+	SyncNamespaces   []string
 }
 
 func NewOperatorCommand() *cobra.Command {
@@ -29,6 +47,9 @@ func NewOperatorCommand() *cobra.Command {
 		Use:   "operator",
 		Short: "Run the Kubernetes operator.",
 		Run: func(_ *cobra.Command, _ []string) {
+			if config.Debug {
+				logrus.SetLevel(logrus.DebugLevel)
+			}
 			operatorRun(&config)
 		},
 	}
@@ -38,9 +59,12 @@ func NewOperatorCommand() *cobra.Command {
 	_ = viper.BindPFlag("rancher-server-url", cmd.PersistentFlags().Lookup("rancher-server-url"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "rancher-server-url")
 
-	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to watch for machine registrations")
+	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to run the operator on")
 	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "namespace")
+
+	cmd.PersistentFlags().StringArrayVar(&config.SyncNamespaces, "sync-namespaces", []string{}, "namespace to watch for machine registrations")
+	_ = viper.BindPFlag("sync-namespaces", cmd.PersistentFlags().Lookup("sync-namespaces"))
 
 	cmd.PersistentFlags().StringVar(&config.OperatorImage, "operator-image", "rancher/elemental-operator:"+version.Version, "this image")
 	_ = viper.BindPFlag("operator-image", cmd.PersistentFlags().Lookup("operator-image"))
@@ -77,7 +101,7 @@ func operatorRun(config *rootConfig) {
 		operator.WithServerURL(config.RancherServerURL),
 		operator.WithCACert(config.CACert),
 		operator.WithDefaultRegistry(config.DefaultRegistry),
-		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.Namespace)),
+		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.SyncNamespaces...)),
 	); err != nil {
 		logrus.Fatal(err)
 	}

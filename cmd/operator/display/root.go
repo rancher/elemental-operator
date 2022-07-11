@@ -1,14 +1,32 @@
-package display_cmd
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package displayCmd
 
 import (
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"io"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func NewDisplayCommand() *cobra.Command {
@@ -42,16 +60,12 @@ func displayRun(path string) {
 		os.Exit(0)
 	}()
 
-	f, err := os.Open(path)
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
-	_, err = io.Copy(os.Stdout, f)
-	_ = f.Close()
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	fmt.Println(string(b))
 
 	for {
 		time.Sleep(time.Duration(int64(^uint64(0) >> 1)))

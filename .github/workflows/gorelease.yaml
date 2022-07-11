@@ -16,7 +16,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16
+          go-version: 1.17.x
       - uses: actions/cache@v2
         with:
           path: |
@@ -24,7 +24,7 @@ jobs:
             ~/.cache/go-build
           key: ${{ runner.os }}-release-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-release-go-
+            ${{ runner.os }}-release-go-${{ hashFiles('**/go.sum') }}
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2
         with:

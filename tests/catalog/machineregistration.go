@@ -16,28 +16,33 @@ limitations under the License.
 
 package catalog
 
+import (
+	"github.com/rancher/elemental-operator/pkg/installer"
+)
+
+type MachineRegistrationSpec struct {
+	MachineName                 string             `yaml:"machineName,omitempty" json:"machineName,omitempty"`
+	MachineInventoryLabels      map[string]string  `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
+	MachineInventoryAnnotations map[string]string  `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
+	Install                     *installer.Install `yaml:"install,omitempty" json:"install,omitempty"`
+}
+
 type MachineRegistration struct {
 	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
 	Kind       string `json:"kind" yaml:"kind"`
 	Metadata   struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
-	Spec struct {
-		CloudConfig map[string]interface{} `json:"cloudConfig" yaml:"cloudConfig"`
-	} `json:"spec" yaml:"spec"`
+	Spec MachineRegistrationSpec `json:"spec" yaml:"spec"`
 }
 
-func NewMachineRegistration(name string, cloudConfig map[string]interface{}) *MachineRegistration {
+func NewMachineRegistration(name string, spec MachineRegistrationSpec) *MachineRegistration {
 	return &MachineRegistration{
-		APIVersion: "rancheros.cattle.io/v1",
+		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
 			Name string "json:\"name\" yaml:\"name\""
 		}{Name: name},
 		Kind: "MachineRegistration",
-		Spec: struct {
-			CloudConfig map[string]interface{} "json:\"cloudConfig\" yaml:\"cloudConfig\""
-		}{
-			CloudConfig: cloudConfig,
-		},
+		Spec: spec,
 	}
 }

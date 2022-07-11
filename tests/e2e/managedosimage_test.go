@@ -25,8 +25,10 @@ import (
 	"github.com/onsi/gomega/types"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
+
+const testnamespace = "fleet-default"
 
 var _ = Describe("ManagedOSImage e2e tests", func() {
 	k := kubectl.New()
@@ -42,17 +44,17 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			)
 
 			Eventually(func() error {
-				return k.ApplyYAML("fleet-default", "update-image", ui)
+				return k.ApplyYAML(testnamespace, "update-image", ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 		})
 
 		AfterEach(func() {
-			kubectl.New().Delete("managedosimage", "-n", "fleet-default", "update-image")
+			kubectl.New().Delete("managedosimage", "-n", testnamespace, "update-image")
 		})
 
 		It("creates a new fleet bundle with the upgrade plan", func() {
 			Eventually(func() string {
-				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-image", `jsonpath={.spec.resources[*].content}`)
+				r, err := kubectl.GetData(testnamespace, "bundle", "mos-update-image", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -70,8 +72,8 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		osVersion := "osversion"
 		AfterEach(func() {
 			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", "fleet-default", osImage)
-			kube.Delete("managedosversion", "-n", "fleet-default", osVersion)
+			kube.Delete("managedosimage", "-n", testnamespace, osImage)
+			kube.Delete("managedosversion", "-n", testnamespace, osVersion)
 		})
 
 		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
@@ -83,7 +85,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 			EventuallyWithOffset(1, func() error {
 				return k.ApplyYAML("fleet-default", osVersion, ov)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			ui := catalog.NewManagedOSImage(
 				osImage,
@@ -93,11 +95,11 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", osImage, ui)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+				return k.ApplyYAML(testnamespace, osImage, ui)
+			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
-				r, err := kubectl.GetData("fleet-default", "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
+				r, err := kubectl.GetData(testnamespace, "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}

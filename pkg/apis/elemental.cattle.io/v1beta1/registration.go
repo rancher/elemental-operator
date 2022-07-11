@@ -35,10 +35,10 @@ type MachineRegistration struct {
 }
 
 type MachineRegistrationSpec struct {
-	MachineName                 string             `json:"machineName,omitempty"`
-	MachineInventoryLabels      map[string]string  `json:"machineInventoryLabels,omitempty"`
-	MachineInventoryAnnotations map[string]string  `json:"machineInventoryAnnotations,omitempty"`
-	Install                     *installer.Install `json:"install,omitempty"`
+	MachineName                 string             `yaml:"machineName,omitempty" json:"machineName,omitempty"`
+	MachineInventoryLabels      map[string]string  `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
+	MachineInventoryAnnotations map[string]string  `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
+	Install                     *installer.Install `yaml:"install,omitempty" json:"install,omitempty"`
 }
 
 type MachineRegistrationStatus struct {

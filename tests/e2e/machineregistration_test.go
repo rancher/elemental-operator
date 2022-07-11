@@ -25,36 +25,31 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
+
+const testRegistrationNamespace = "cattle-elemental-operator-system"
 
 var _ = Describe("MachineRegistration e2e tests", func() {
 	k := kubectl.New()
 	Context("registration", func() {
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", "fleet-default", "machine-registration")
+			kubectl.New().Delete("machineregistration", "-n", testRegistrationNamespace, "machine-registration")
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-			mr := catalog.NewMachineRegistration("machine-registration", map[string]interface{}{
-				"install":   map[string]string{"device": "/dev/vda"},
-				"rancheros": map[string]interface{}{"install": map[string]string{"isoUrl": "https://something.example.com"}},
-				"users": []map[string]string{
-					{
-						"name":   "root",
-						"passwd": "root",
-					},
-				},
-			})
 
+			spec := catalog.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
+			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
-				return k.ApplyYAML("fleet-default", "machine-registration", mr)
+				return k.ApplyYAML(testRegistrationNamespace, "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData("fleet-default", "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
+				e, err := kubectl.GetData(testRegistrationNamespace, "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -62,19 +57,23 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 				return string(e)
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),
 			)
 
-			out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(out).Should(
+			Eventually(func() string {
+				out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
+				if err != nil {
+					fmt.Println(err)
+				}
+				return out
+			}, 1*time.Minute, 2*time.Second).Should(
 				And(
-					ContainSubstring("BEGIN CERTIFICATE"),
-					ContainSubstring(fmt.Sprintf("%s.%s/v1-rancheros/registration", externalIP, magicDNS)),
+					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
 				),
 			)
+			// TODO: There are no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
+			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})
 })

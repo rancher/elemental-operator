@@ -11,12 +11,18 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
+      - name: Export tag
+        id: export_tag
+        run: |
+          git describe --abbrev=0 --tags
+          TAG=`git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0"`
+          echo "::set-output name=operator_tag::$TAG"
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/rancheros-operator
+            quay.io/costoolkit/elemental-operator
           tags: |
             type=semver,pattern={{raw}}
       - name: Set up Docker Buildx
@@ -38,3 +44,5 @@ jobs:
           cache-to: type=gha,mode=max
           target: ros-operator
           push: true
+          build-args: |
+            VERSION=${{ steps.export_tag.outputs.operator_tag }}

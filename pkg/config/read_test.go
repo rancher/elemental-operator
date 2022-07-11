@@ -145,7 +145,7 @@ elemental:
 			fmt.Printf("%+v\n", cfg)
 			Expect(err).To(HaveOccurred())
 		})
-		It("fails if isoUrl and containerImage are both empty", func() {
+		It("fails if isoUrl and containerImage are both empty", Serial, func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
 			defer os.Remove(f.Name())
@@ -168,7 +168,6 @@ elemental:
 			_, err = ReadConfig(ctx, f.Name(), false)
 			Expect(err).To(HaveOccurred())
 		})
-
 	})
 
 	Context("convert to environment configuration", func() {
@@ -178,7 +177,6 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(e).To(BeEmpty())
 		})
-
 		It("converts to env slice installation parameters", func() {
 			c = Config{
 				Data: map[string]interface{}{
@@ -243,7 +241,6 @@ elemental:
 			Expect(c.Elemental.Install.RegistrationURL).To(Equal("foobaz"))
 			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
-
 		It("reads iso_url only, without contacting a registrationUrl server", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
@@ -261,7 +258,6 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
-
 		It("reads containerImage, without contacting a registrationUrl server", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
@@ -299,7 +295,6 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:docker/image:test"))
 		})
-
 		It("reads isoUrl instead of iso_url", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
@@ -317,7 +312,6 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Elemental.Install.ISOURL).To(Equal("foo_bar"))
 		})
-
 		It("reads ssh_authorized_keys", func() {
 			f, err := ioutil.TempFile("", "xxxxtest")
 			Expect(err).ToNot(HaveOccurred())
@@ -366,7 +360,6 @@ ssh_authorized_keys:
 			ff, _ := ioutil.ReadFile(f.Name())
 			Expect(string(ff)).To(Equal("#cloud-config\nusers:\n- pass: Bar\n  user: foo\n"))
 		})
-
 		It("writes cloud-init files", func() {
 			c = Config{
 				SSHAuthorizedKeys: []string{"github:mudler"},
@@ -390,8 +383,7 @@ ssh_authorized_keys:
 			ff, _ := ioutil.ReadFile(f.Name())
 			Expect(string(ff)).To(Equal("#cloud-config\nelemental: {}\nssh_authorized_keys:\n- github:mudler\n"))
 		})
-
-		It("reads iso_url by contacting a registrationUrl server", func() {
+		It("reads iso_url by contacting a registrationUrl server", Serial, func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -428,7 +420,7 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Elemental.Install.ISOURL).To(Equal("foo"))
 		})
-		It("reads containerImage by contacting a registrationUrl server", func() {
+		It("reads containerImage by contacting a registrationUrl server", Serial, func() {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -469,8 +461,7 @@ elemental:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(c.Elemental.Install.ContainerImage).To(Equal("docker:test"))
 		})
-
-		It("doesn't error out if isoUrl or containerImage are not provided", func() {
+		It("doesn't error out if isoUrl or containerImage are not provided", Serial, func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 

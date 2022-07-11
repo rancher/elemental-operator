@@ -19,6 +19,12 @@ global:
 # default sync interval for upgrade channel
 sync_interval: "60m"
 
+# namespace the operator will watch for, leave empty for all
+sync_namespaces: []
+
+# enable debug output for operator
+debug: false
+
 nodeSelector:
   kubernetes.io/os: linux
 

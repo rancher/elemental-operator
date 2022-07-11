@@ -6,7 +6,7 @@ appVersion: 0.0.0
 annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/experimental: "true"
-  catalog.cattle.io/namespace: cattle-elemental-system
+  catalog.cattle.io/namespace: cattle-elemental-operator-system
   catalog.cattle.io/release-name: elemental-operator
-  catalog.cattle.io/provides-gvr: elemental.cattle.io/v1
+  catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
   catalog.cattle.io/os: linux

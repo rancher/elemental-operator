@@ -1,10 +1,11 @@
-project_name: rancheros-operator
+project_name: elemental-operator
 builds:
   - main: ./cmd/operator
     env:
       - CGO_ENABLED=0
     ldflags:
-      - -extldflags -static -s
+      - -extldflags -static -w -s
+      - -X github.com/rancher/elemental-operator/version.Version={{.Tag}}
     goos:
       - linux
     goarch:

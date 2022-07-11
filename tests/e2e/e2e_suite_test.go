@@ -19,18 +19,15 @@ package e2e_test
 import (
 	"bytes"
 	"fmt"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
-	"time"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
 )
 
 var (
@@ -44,41 +41,37 @@ var testResources = []string{"machineregistration", "managedosversionchannel"}
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ros-operator e2e test Suite")
+	RunSpecs(t, "elemental-operator e2e test Suite")
 }
 
 func isOperatorInstalled(k *kubectl.Kubectl) bool {
-	pods, err := k.GetPodNames("cattle-rancheros-operator-system", "")
+	pods, err := k.GetPodNames("cattle-elemental-operator-system", "")
 	Expect(err).ToNot(HaveOccurred())
 	return len(pods) > 0
 }
 
 func deployOperator(k *kubectl.Kubectl) {
-	By("Deploying ros-operator chart", func() {
+	By("Deploying elemental-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n", "cattle-rancheros-operator-system", "install", "--create-namespace", "rancheros-operator", chart)
+			"-n",
+			"cattle-elemental-operator-system",
+			"install",
+			"--create-namespace",
+			"--set", "sync_interval=30s",
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("global.cattle.url=%s.%s", externalIP, magicDNS),
+			"elemental-operator",
+			chart)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = k.WaitForPod("cattle-rancheros-operator-system", "app=rancheros-operator", "rancheros-operator")
+		err = k.WaitForPod("cattle-elemental-operator-system", "app=elemental-operator", "elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 
-		pods, err := k.GetPodNames("cattle-rancheros-operator-system", "app=rancheros-operator")
+		pods, err := k.GetPodNames("cattle-elemental-operator-system", "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(pods)).To(Equal(1))
 
-		err = k.WaitForNamespaceWithPod("cattle-rancheros-operator-system", "app=rancheros-operator")
-		Expect(err).ToNot(HaveOccurred())
-
-		Eventually(func() string {
-			str, _ := kubectl.Run("logs", "-n", "cattle-rancheros-operator-system", pods[0])
-			fmt.Println(str)
-			return str
-		}, 5*time.Minute, 2*time.Second).Should(
-			And(
-				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
-			))
-
-		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
+		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 	})
 }
@@ -112,23 +105,23 @@ var _ = BeforeSuite(func() {
 		return
 	}
 
-	chart = os.Getenv("ROS_CHART")
+	chart = os.Getenv("CHART")
 	if chart == "" && !isOperatorInstalled(k) {
-		Fail("No ROS_CHART provided, a ros operator helm chart is required to run e2e tests")
+		Fail("No CHART provided, a elemental operator helm chart is required to run e2e tests")
 	} else if isOperatorInstalled(k) {
 		//
 		// Upgrade/delete of operator only goes here
 		// (no further bootstrap is required)
 		By("Upgrading the operator only", func() {
-			err := kubectl.DeleteNamespace("cattle-rancheros-operator-system")
+			err := kubectl.DeleteNamespace("cattle-elemental-operator-system")
 			Expect(err).ToNot(HaveOccurred())
 
-			err = k.WaitForNamespaceDelete("cattle-rancheros-operator-system")
+			err = k.WaitForNamespaceDelete("cattle-elemental-operator-system")
 			Expect(err).ToNot(HaveOccurred())
 
 			deployOperator(k)
 
-			// Somehow rancher needs to be restarted after a ros-operator upgrade
+			// Somehow rancher needs to be restarted after a elemental-operator upgrade
 			// to get machineregistration working
 			pods, err := k.GetPodNames("cattle-system", "")
 			Expect(err).ToNot(HaveOccurred())
@@ -155,14 +148,14 @@ var _ = BeforeSuite(func() {
 		}
 		return false
 	}
-	By("Deploying ros-operator chart dependencies", func() {
+	By("Deploying elemental-operator chart dependencies", func() {
 		By("installing nginx", func() {
 			if installed("ingress-nginx") {
 				By("already installed")
 				return
 			}
 			kubectl.CreateNamespace("ingress-nginx")
-			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
+			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/1.22/deploy.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
 			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")

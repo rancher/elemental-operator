@@ -29,12 +29,12 @@ import (
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 
-	"github.com/rancher-sandbox/rancheros-operator/tests/catalog"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 const cattleNamespace = "cattle-system"
 const fleetNamespace = "fleet-local"
-const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.3-4b83dbe"
+const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.4.0"
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
@@ -77,7 +77,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 		cattleNamespace,
 		"upgrade.cattle.io/controller=system-upgrade-controller",
 		3*time.Minute, 2*time.Second,
-		ContainElement(ContainSubstring("apply-os-upgrader-on-ros-e2e-control-plane-with")),
+		ContainElement(ContainSubstring("apply-os-upgrader-on-operator-e2e-control-plane-with")),
 	)
 
 	podName := upgradePod(k)
@@ -104,7 +104,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	ExpectWithOffset(1, mounts).To(mm)
 }
 
-var _ = Describe("ManagedOSImage e2e tests", func() {
+var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 	k := kubectl.New()
 
 	Context("Using ManagedOSVersion reference", func() {
@@ -200,8 +200,6 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 				up, err := getPlan("os-upgrader")
 				if err == nil {
 					return up.Spec.Version
-				} else {
-					fmt.Println(err)
 				}
 				return ""
 			}, 1*time.Minute, 2*time.Second).Should(Equal("v1.0"))
@@ -236,8 +234,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
 						},
 					},
-					"command": []string{"/usr/bin/upgradechannel-discovery"},
-					"args":    []string{"git"},
+					"args": []string{"git"},
 				},
 				nil,
 			)
@@ -278,8 +275,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
 						},
 					},
-					"command": []string{"/usr/bin/upgradechannel-discovery"},
-					"args":    []string{"git"},
+					"args": []string{"git"},
 				},
 				&catalog.ContainerSpec{
 					Image:   "Foobarz",
@@ -336,8 +332,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 							"value": "-amd64",
 						},
 					},
-					"command": []string{"/usr/bin/upgradechannel-discovery"},
-					"args":    []string{"github"},
+					"args": []string{"github"},
 				},
 				nil,
 			)

@@ -21,18 +21,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"path"
+	"regexp"
+	"strings"
+
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/installer"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	"io"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"net/http"
-	"path"
-	"regexp"
-	"strings"
 )
 
 const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/Serial Number}"
@@ -101,7 +102,6 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	}
 
 	_ = w.Close()
-	return
 }
 
 func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
