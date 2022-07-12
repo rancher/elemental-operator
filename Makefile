@@ -18,7 +18,7 @@ operator:
 
 .PHONY: installer
 installer:
-	CGO_ENABLED=0 go build -ldflags "-extldflags -static -w -s -X 'github.com/rancher/elemental-operator/version.Version=$(TAG)'" -o build/elemental-installer $(ROOT_DIR)/cmd/installer
+	go build -ldflags "-w -s -X 'github.com/rancher/elemental-operator/version.Version=$(TAG)'" -o build/elemental-installer $(ROOT_DIR)/cmd/installer
 
 .PHONY: build-docker
 build-docker:
