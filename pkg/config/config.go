@@ -16,50 +16,72 @@ limitations under the License.
 
 package config
 
-type Elemental struct {
-	Install Install `json:"install,omitempty"`
+type Install struct {
+	Firmware  string `json:"firmware,omitempty"`
+	Device    string `json:"device,omitempty"`
+	NoFormat  bool   `json:"no-format,omitempty"`
+	Automatic bool   `json:"automatic,omitempty"`
+
+	ConfigURL string `json:"config-url,omitempty"`
+	ISO       string `json:"iso,omitempty"`
+	SystemURI string `json:"system-uri,omitempty"`
+
+	Debug    bool   `json:"debug,omitempty"`
+	TTY      string `json:"tty,omitempty"`
+	PowerOff bool   `json:"poweroff,omitempty"`
+	Reboot   bool   `json:"reboot,omitempty"`
+	EjectCD  bool   `json:"eject-cd,omitempty"`
+
+	Password string   `json:"password,omitempty"`
+	SSHKeys  []string `json:"ssh-keys,omitempty"`
 }
 
-type Install struct {
-	Automatic          bool   `json:"automatic,omitempty"`
-	Firmware           string `json:"firmware,omitempty"`
-	Device             string `json:"device,omitempty"`
-	ConfigURL          string `json:"configUrl,omitempty"`
-	ISOURL             string `json:"isoUrl,omitempty"`
-	ContainerImage     string `json:"containerImage,omitempty"`
-	PowerOff           bool   `json:"powerOff,omitempty"`
-	Reboot             bool   `json:"reboot,omitempty"`
-	NoFormat           bool   `json:"noFormat,omitempty"`
-	Debug              bool   `json:"debug,omitempty"`
-	TTY                string `json:"tty,omitempty"`
-	ServerURL          string `json:"-"`
-	Token              string `json:"-"`
-	Role               string `json:"-"`
-	Password           string `json:"password,omitempty"`
-	RegistrationURL    string `json:"registrationUrl,omitempty"`
-	RegistrationCACert string `json:"registrationCaCert,omitempty"`
-	EjectCD            bool   `json:"ejectCD,omitempty"`
+func (in *Install) DeepCopy() *Install {
+	if in == nil {
+		return nil
+	}
+	out := new(Install)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *Install) DeepCopyInto(out *Install) {
+	*out = *in
+}
+
+type Registration struct {
+	URL             string            `json:"url,omitempty"`
+	CACert          string            `json:"ca_cert,omitempty"`
+	EmulateTPM      bool              `json:"emulateTPM,omitempty"`
+	EmulatedTPMSeed int64             `json:"emulatedTPMSeed,omitempty"`
+	NoSMBIOS        bool              `json:"noSMBIOS,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+}
+
+type SystemAgent struct {
+	URL             string `json:"url,omitempty"`
+	Token           string `json:"token,omitempty"`
+	SecretName      string `json:"secret_name,omitempty"`
+	SecretNamespace string `json:"secret_namespace,omitempty"`
+}
+
+type Elemental struct {
+	Install      Install      `json:"install,omitempty"`
+	Registration Registration `json:"registration,omitempty"`
+	SystemAgent  SystemAgent  `json:"system_agent,omitempty"`
 }
 
 type Config struct {
-	SSHAuthorizedKeys []string               `json:"ssh_authorized_keys,omitempty"`
-	Elemental         Elemental              `json:"elemental,omitempty"`
-	Data              map[string]interface{} `json:"-"`
+	Elemental Elemental              `json:"elemental,omitempty"`
+	Data      map[string]interface{} `json:"-"`
 }
 
 type YipConfig struct {
-	Stages   map[string][]Stage `json:"stages,omitempty"`
-	Rancherd Rancherd           `json:"rancherd,omitempty"`
+	Stages map[string][]Stage `json:"stages,omitempty"`
 }
 
 type Stage struct {
 	Users map[string]User `json:"users,omitempty"`
-}
-
-type Rancherd struct {
-	Server string `json:"server,omitempty"`
-	Role   string `json:"role,omitempty"`
-	Token  string `json:"token,omitempty"`
 }
 
 type User struct {

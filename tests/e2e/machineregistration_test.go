@@ -25,7 +25,7 @@ import (
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 
-	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
@@ -41,7 +41,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 
-			spec := catalog.MachineRegistrationSpec{Install: &installer.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
+			spec := catalog.MachineRegistrationSpec{Install: &config.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
 				return k.ApplyYAML(testRegistrationNamespace, "machine-registration", mr)

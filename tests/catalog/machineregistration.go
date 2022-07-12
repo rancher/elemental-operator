@@ -17,14 +17,14 @@ limitations under the License.
 package catalog
 
 import (
-	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/pkg/config"
 )
 
 type MachineRegistrationSpec struct {
-	MachineName                 string             `yaml:"machineName,omitempty" json:"machineName,omitempty"`
-	MachineInventoryLabels      map[string]string  `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
-	MachineInventoryAnnotations map[string]string  `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
-	Install                     *installer.Install `yaml:"install,omitempty" json:"install,omitempty"`
+	MachineName                 string            `yaml:"machineName,omitempty" json:"machineName,omitempty"`
+	MachineInventoryLabels      map[string]string `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
+	MachineInventoryAnnotations map[string]string `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
+	Install                     *config.Install   `yaml:"install,omitempty" json:"install,omitempty"`
 }
 
 type MachineRegistration struct {
