@@ -17,7 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,10 +35,10 @@ type MachineRegistration struct {
 }
 
 type MachineRegistrationSpec struct {
-	MachineName                 string             `yaml:"machineName,omitempty" json:"machineName,omitempty"`
-	MachineInventoryLabels      map[string]string  `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
-	MachineInventoryAnnotations map[string]string  `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
-	Install                     *installer.Install `yaml:"install,omitempty" json:"install,omitempty"`
+	MachineName                 string            `yaml:"machineName,omitempty" json:"machineName,omitempty"`
+	MachineInventoryLabels      map[string]string `yaml:"machineInventoryLabels,omitempty" json:"machineInventoryLabels,omitempty"`
+	MachineInventoryAnnotations map[string]string `yaml:"machineInventoryAnnotations,omitempty" json:"machineInventoryAnnotations,omitempty"`
+	Install                     *config.Install   `yaml:"install,omitempty" json:"install,omitempty"`
 }
 
 type MachineRegistrationStatus struct {

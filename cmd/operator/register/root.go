@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
-	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sirupsen/logrus"
@@ -37,7 +37,7 @@ import (
 )
 
 func NewRegisterCommand() *cobra.Command {
-	var config installer.Config
+	var config config.Config
 	var labels []string
 
 	cmd := &cobra.Command{
@@ -95,7 +95,7 @@ func NewRegisterCommand() *cobra.Command {
 	return cmd
 }
 
-func run(config installer.Config) {
+func run(config config.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
@@ -155,7 +155,7 @@ func writeCloudInit(data []byte) error {
 	return nil
 }
 
-func writeYIPConfig(config installer.Elemental) (string, error) {
+func writeYIPConfig(config config.Elemental) (string, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -253,7 +253,7 @@ func writeYIPConfig(config installer.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func writeElementalConfig(config installer.Elemental, cloudInitPath string) error {
+func writeElementalConfig(config config.Elemental, cloudInitPath string) error {
 	configDir := "/etc/elemental/config.d"
 
 	_ = os.MkdirAll(configDir, 0600)

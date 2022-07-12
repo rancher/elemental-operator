@@ -28,7 +28,7 @@ import (
 	"strings"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/installer"
+	"github.com/rancher/elemental-operator/pkg/config"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -110,9 +110,9 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 		return err
 	}
 
-	return yaml.NewEncoder(writer).Encode(installer.Config{
-		Elemental: installer.Elemental{
-			Registration: installer.Registration{
+	return yaml.NewEncoder(writer).Encode(config.Config{
+		Elemental: config.Elemental{
+			Registration: config.Registration{
 				URL:    machineRegistration.Status.RegistrationURL,
 				CACert: i.caCerts,
 			},
@@ -183,18 +183,18 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 		return err
 	}
 
-	var install installer.Install
+	var install config.Install
 	if registration.Spec.Install != nil {
 		install = *registration.Spec.Install
 	}
 
-	return yaml.NewEncoder(writer).Encode(installer.Config{
-		Elemental: installer.Elemental{
-			Registration: installer.Registration{
+	return yaml.NewEncoder(writer).Encode(config.Config{
+		Elemental: config.Elemental{
+			Registration: config.Registration{
 				URL:    registration.Status.RegistrationURL,
 				CACert: i.caCerts,
 			},
-			SystemAgent: installer.SystemAgent{
+			SystemAgent: config.SystemAgent{
 				URL:             i.serverURL + "/k8s/clusters/local",
 				Token:           string(tokenSecret.Data["token"]),
 				SecretName:      inventory.Name,

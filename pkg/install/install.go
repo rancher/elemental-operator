@@ -64,7 +64,7 @@ func Run(automatic bool, configFile string, powerOff bool, reboot bool, noReboot
 		return err
 	}
 
-	tempFile, err := ioutil.TempFile("", "ros-install")
+	tempFile, err := ioutil.TempFile("", "elemental-install")
 	if err != nil {
 		return err
 	}
@@ -91,21 +91,16 @@ func runInstall(cfg config.Config, output string) error {
 	}
 
 	if cfg.Elemental.Install.ConfigURL == "" && !cfg.Elemental.Install.Automatic {
-		yip := config.YipConfig{
-			Rancherd: config.Rancherd{
-				Server: cfg.Elemental.Install.ServerURL,
-				Token:  cfg.Elemental.Install.Token,
-				Role:   cfg.Elemental.Install.Role,
-			},
-		}
-		if cfg.Elemental.Install.Password != "" || len(cfg.SSHAuthorizedKeys) > 0 {
+		yip := config.YipConfig{}
+
+		if cfg.Elemental.Install.Password != "" || len(cfg.Elemental.Install.SSHKeys) > 0 {
 			yip.Stages = map[string][]config.Stage{
 				"network": {{
 					Users: map[string]config.User{
 						"root": {
 							Name:              "root",
 							PasswordHash:      cfg.Elemental.Install.Password,
-							SSHAuthorizedKeys: cfg.SSHAuthorizedKeys,
+							SSHAuthorizedKeys: cfg.Elemental.Install.SSHKeys,
 						},
 					}},
 				}}
@@ -135,7 +130,7 @@ func runInstall(cfg config.Config, output string) error {
 
 	printEnv(cfg)
 
-	installerOpts := []string{"elemental", "install", "--no-verify"}
+	installerOpts := []string{"elemental", "install"}
 
 	cmd := exec.Command("elemental")
 	cmd.Env = append(os.Environ(), ev...)
