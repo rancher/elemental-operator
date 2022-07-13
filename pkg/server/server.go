@@ -17,8 +17,6 @@ limitations under the License.
 package server
 
 import (
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 
@@ -27,7 +25,9 @@ import (
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
 	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/sirupsen/logrus"
 )
 
 var (
