@@ -13,7 +13,6 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
-    url: ""
 
 # default sync interval for upgrade channel
 sync_interval: "60m"

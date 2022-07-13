@@ -17,6 +17,7 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -48,10 +49,9 @@ type InventoryServer struct {
 	machineRegistrationCache elmcontrollers.MachineRegistrationCache
 	settingCache             ranchercontrollers.SettingCache
 	authenticators           []authenticator
-	serverURL                string
 }
 
-func New(clients *clients.Clients, serverURL, caCerts string) *InventoryServer {
+func New(clients *clients.Clients) *InventoryServer {
 	server := &InventoryServer{
 		authenticators: []authenticator{
 			tpm.New(clients),
@@ -62,7 +62,6 @@ func New(clients *clients.Clients, serverURL, caCerts string) *InventoryServer {
 		machineClient:            clients.Elemental.MachineInventory(),
 		machineRegistrationCache: clients.Elemental.MachineRegistration().Cache(),
 		settingCache:             clients.Rancher.Setting().Cache(),
-		serverURL:                serverURL,
 	}
 
 	server.settingCache.AddIndexer(settingsIndex, func(obj *v3.Setting) ([]string, error) {
@@ -105,6 +104,19 @@ func (i InventoryServer) getRancherCACert() string {
 		}
 	}
 	return setting.Value
+}
+
+func (i *InventoryServer) getRancherServerURL() (string, error) {
+	setting, err := i.settingCache.Get("server-url")
+	if err != nil {
+		logrus.Errorf("Error getting server-url setting: %s", err.Error())
+		return "", err
+	}
+	if setting.Value == "" {
+		logrus.Error("server-url is not set")
+		return "", fmt.Errorf("server-url is not set")
+	}
+	return setting.Value, nil
 }
 
 func (i *InventoryServer) authMachine(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, io.WriteCloser, error) {

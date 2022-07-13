@@ -40,7 +40,6 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-
 			spec := catalog.MachineRegistrationSpec{Install: &config.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
@@ -62,7 +61,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			)
 
 			Eventually(func() string {
-				out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
+				out, err := http.GetInsecure(url)
 				if err != nil {
 					fmt.Println(err)
 				}

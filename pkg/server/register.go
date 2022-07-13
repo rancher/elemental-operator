@@ -188,6 +188,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 		install = *registration.Spec.Install
 	}
 
+	serverURL, err := i.getRancherServerURL()
+	if err != nil {
+		logrus.Errorf("Failed to get server-url: %s", err.Error())
+		return err
+	}
+
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
@@ -195,7 +201,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 				CACert: i.getRancherCACert(),
 			},
 			SystemAgent: config.SystemAgent{
-				URL:             i.serverURL + "/k8s/clusters/local",
+				URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
 				Token:           string(tokenSecret.Data["token"]),
 				SecretName:      inventory.Name,
 				SecretNamespace: inventory.Namespace,
