@@ -85,7 +85,7 @@ func deployOperator(k *kubectl.Kubectl) {
 
 		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
 		// We need to manually set this value, which is the same value you would get from doing the bootstrap
-		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("%s.%s", externalIP, magicDNS)))
+		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("https://%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
 
 	})
