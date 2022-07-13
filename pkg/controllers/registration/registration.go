@@ -72,7 +72,12 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			APIGroups: []string{""},
 			Verbs:     []string{"get", "watch", "list", "update", "patch"},
 			Resources: []string{"secrets"},
-		}},
+		}, {
+			APIGroups: []string{"management.cattle.io"},
+			Verbs:     []string{"get", "watch", "list"},
+			Resources: []string{"settings"},
+		},
+		},
 	})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return status, err

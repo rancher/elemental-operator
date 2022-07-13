@@ -73,9 +73,6 @@ func NewOperatorCommand() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&config.DefaultRegistry, "default-registry", "", "default registry to prepend to os images")
 	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
 
-	cmd.PersistentFlags().StringVar(&config.CACert, "ca-cert", "", "Rancher URL CA certificate")
-	_ = viper.BindPFlag("ca-cert", cmd.PersistentFlags().Lookup("ca-cert"))
-
 	cmd.PersistentFlags().DurationVar(&config.SyncInterval, "sync-interval", 60*time.Minute, "how often to check for new os versions")
 	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
 

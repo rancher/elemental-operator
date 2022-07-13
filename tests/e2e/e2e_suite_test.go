@@ -28,6 +28,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -73,6 +74,15 @@ func deployOperator(k *kubectl.Kubectl) {
 
 		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() string {
+			str, _ := kubectl.Run("logs", "-n", "cattle-elemental-operator-system", pods[0])
+			return str
+		}, 5*time.Minute, 2*time.Second).Should(
+			And(
+				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
+			))
+
 	})
 }
 

@@ -114,7 +114,7 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 		Elemental: config.Elemental{
 			Registration: config.Registration{
 				URL:    machineRegistration.Status.RegistrationURL,
-				CACert: i.caCerts,
+				CACert: i.getRancherCACert(),
 			},
 		},
 	})
@@ -192,7 +192,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 		Elemental: config.Elemental{
 			Registration: config.Registration{
 				URL:    registration.Status.RegistrationURL,
-				CACert: i.caCerts,
+				CACert: i.getRancherCACert(),
 			},
 			SystemAgent: config.SystemAgent{
 				URL:             i.serverURL + "/k8s/clusters/local",

@@ -70,9 +70,10 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
 					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
+					ContainSubstring("BEGIN CERTIFICATE"),
+					ContainSubstring("END CERTIFICATE"),
 				),
 			)
-			// TODO: There are no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
 			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})

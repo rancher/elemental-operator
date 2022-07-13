@@ -18,6 +18,7 @@ package clients
 
 import (
 	"context"
+	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
 
 	elmscheme "github.com/rancher/elemental-operator/pkg/generated/clientset/versioned/scheme"
 	capicontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io"
@@ -26,6 +27,7 @@ import (
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io"
 	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
+	"github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
@@ -45,6 +47,7 @@ type Clients struct {
 	Fleet     fleetcontrollers.Interface
 	Elemental elmcontrollers.Interface
 	Events    corev1Typed.EventInterface
+	Rancher   ranchercontrollers.Interface
 	CAPI      capi.Interface
 }
 
@@ -79,6 +82,7 @@ func NewFromConfig(restConfig *rest.Config) (*Clients, error) {
 		Fleet:     fleet.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Fleet().V1alpha1(),
 		Elemental: elemental.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Elemental().V1beta1(),
 		CAPI:      capicontrollers.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Cluster().V1beta1(),
+		Rancher:   management.NewFactoryFromConfigWithOptionsOrDie(restConfig, opts).Management().V3(),
 	}, nil
 }
 

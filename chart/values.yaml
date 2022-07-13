@@ -14,7 +14,6 @@ global:
   cattle:
     systemDefaultRegistry: ""
     url: ""
-    ca_cert: ""
 
 # default sync interval for upgrade channel
 sync_interval: "60m"
