@@ -90,7 +90,7 @@ func New(clients *clients.Clients) *InventoryServer {
 	return server
 }
 
-func (i InventoryServer) getRancherCACert() string {
+func (i *InventoryServer) getRancherCACert() string {
 	setting, err := i.settingCache.Get("cacerts")
 	if err != nil {
 		logrus.Errorf("Error getting cacerts setting: %s", err.Error())
