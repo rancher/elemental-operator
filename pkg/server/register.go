@@ -117,6 +117,7 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 				CACert: i.getRancherCACert(),
 			},
 		},
+		Data: machineRegistration.Spec.Config.Data,
 	})
 }
 
@@ -183,11 +184,6 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 		return err
 	}
 
-	var install config.Install
-	if registration.Spec.Install != nil {
-		install = *registration.Spec.Install
-	}
-
 	serverURL, err := i.getRancherServerURL()
 	if err != nil {
 		logrus.Errorf("Failed to get server-url: %s", err.Error())
@@ -206,8 +202,9 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 				SecretName:      inventory.Name,
 				SecretNamespace: inventory.Namespace,
 			},
-			Install: install,
+			Install: registration.Spec.Config.Elemental.Install,
 		},
+		Data: registration.Spec.Config.Data,
 	})
 }
 
@@ -270,12 +267,4 @@ func getLabels(req *http.Request) (map[string]string, error) {
 	}
 	var labels map[string]string
 	return labels, json.Unmarshal(labelString, &labels)
-}
-
-type WriteFile struct {
-	Encoding    string `json:"encoding,omitempty"`
-	Content     string `json:"content,omitempty"`
-	Owner       string `json:"owner,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Permissions string `json:"permissions,omitempty"`
 }

@@ -22,6 +22,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	config "github.com/rancher/elemental-operator/pkg/config"
 	v1alpha1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradecattleiov1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	genericcondition "github.com/rancher/wrangler/pkg/genericcondition"
@@ -432,9 +433,10 @@ func (in *MachineRegistrationSpec) DeepCopyInto(out *MachineRegistrationSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.Install != nil {
-		in, out := &in.Install, &out.Install
-		*out = (*in).DeepCopy()
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = new(config.Config)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

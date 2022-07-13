@@ -61,12 +61,14 @@ var (
 // to allow installation parameters to be set in the cos.sh script:
 // e.g. https://github.com/rancher-sandbox/cOS-toolkit/blob/affc831b76d50298bbbbe637f31c81c52c5489b8/packages/backports/installer/cos.sh#L698
 func ToEnv(cfg Config) ([]string, error) {
-	data, err := convert.EncodeToMap(&cfg)
+	// Pass only the elemental values, as those are the ones used by the installer/cli
+	// Ignore the Data as that is cloud-config stuff
+	data, err := convert.EncodeToMap(&cfg.Elemental)
 	if err != nil {
 		return nil, err
 	}
 
-	return mapToEnv("", data), nil
+	return mapToEnv("ELEMENTAL_", data), nil
 }
 
 // it's a mapping of how config env option should be transliterated to the elemental CLI
@@ -284,6 +286,7 @@ func ToBytes(cfg Config) ([]byte, error) {
 	values.RemoveValue(data, "elemental", "install")
 	values.RemoveValue(data, "elemental", "registration")
 	values.RemoveValue(data, "elemental", "system_agent")
+	values.RemoveValue(data, "data") // Remove data here, as we are merging the data into the cfg directly, we want to output a valid cloud-config
 	bytes, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
