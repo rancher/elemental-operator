@@ -41,10 +41,6 @@ spec:
         - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         - --default-registry
         - {{ .Values.global.cattle.systemDefaultRegistry | quote }}
-        - --rancher-server-url
-        - {{ .Values.global.cattle.url | quote }}
-        - --ca-cert
-        - {{ .Values.global.cattle.ca_cert | quote }}
       serviceAccountName: elemental-operator
       {{- with .Values.tolerations }}
       tolerations:

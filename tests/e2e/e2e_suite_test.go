@@ -22,12 +22,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	"github.com/rancher/elemental-operator/tests/catalog"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 var (
@@ -59,7 +61,6 @@ func deployOperator(k *kubectl.Kubectl) {
 			"--create-namespace",
 			"--set", "sync_interval=30s",
 			"--set", "debug=true",
-			"--set", fmt.Sprintf("global.cattle.url=%s.%s", externalIP, magicDNS),
 			"elemental-operator",
 			chart)
 		Expect(err).ToNot(HaveOccurred())
@@ -73,6 +74,20 @@ func deployOperator(k *kubectl.Kubectl) {
 
 		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() string {
+			str, _ := kubectl.Run("logs", "-n", "cattle-elemental-operator-system", pods[0])
+			return str
+		}, 5*time.Minute, 2*time.Second).Should(
+			And(
+				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
+			))
+
+		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
+		// We need to manually set this value, which is the same value you would get from doing the bootstrap
+		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("https://%s.%s", externalIP, magicDNS)))
+		Expect(err).ToNot(HaveOccurred())
+
 	})
 }
 
