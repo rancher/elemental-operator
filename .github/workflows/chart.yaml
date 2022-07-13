@@ -14,6 +14,8 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
+      - name: Install yq
+        uses: mikefarah/yq@v4.25.3
       - name: Build chart for CI
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
@@ -34,6 +36,36 @@ jobs:
         uses: azure/setup-helm@v1
         with:
           version: v3.7.1
+      - name: Set chart output
+        id: chart
+        run: |
+          CHART=$(find . -type f  -name "elemental-operator*.tgz" -print)
+          echo "::set-output name=chart_name::$CHART"
+      - name: Test chart values
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          REPO=$(helm show values ${{ steps.chart.outputs.chart_name }}|yq .image.repository)
+          TAG=$(helm show values ${{ steps.chart.outputs.chart_name }}|yq .image.tag)
+          if [ "$REPO" != "quay.io/costoolkit/elemental-operator-ci" ];then
+            echo "REPO on the built chart is not the expected value"
+            echo "Expected quay.io/costoolkit/elemental-operator but got $REPO"
+            exit 1
+          fi
+      - name: Test release chart values
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          REPO=$(helm show values ${{ steps.chart.outputs.chart_name }}|yq .image.repository)
+          TAG=$(helm show values ${{ steps.chart.outputs.chart_name }}|yq .image.tag)
+          if [ "$REPO" != "quay.io/costoolkit/elemental-operator" ];then
+            echo "REPO on the built chart is not the expected value"
+            echo "Expected quay.io/costoolkit/elemental-operator but got $REPO"
+            exit 1
+          fi
+          if [ "$TAG" != "${GITHUB_REF##*/}" ];then
+            echo "TAG on the built chart is not the expected value"
+            echo "Expected ${GITHUB_REF##*/} but got $TAG"
+            exit 1
+          fi
       - name: Build and push index
         if: startsWith(github.ref, 'refs/tags/')
         run: |
