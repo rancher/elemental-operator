@@ -27,11 +27,11 @@ import (
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 )
 
-func Register(url string, caCert string, smbios bool, emulatedTPM bool, emulatedSeed int64, labels map[string]string) ([]byte, error) {
+func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulatedSeed int64, labels map[string]string) ([]byte, error) {
 	var opts []tpm.Option
 
-	if caCert != "" {
-		opts = append(opts, tpm.WithCAs([]byte(caCert)))
+	if len(caCert) > 0 {
+		opts = append(opts, tpm.WithCAs(caCert))
 	}
 
 	header := http.Header{}

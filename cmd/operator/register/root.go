@@ -19,6 +19,7 @@ package registerCmd
 import (
 	"encoding/json"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ import (
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
-	"github.com/rancher/elemental-operator/pkg/config"
+	cfg "github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	agent "github.com/rancher/system-agent/pkg/config"
@@ -39,12 +40,17 @@ import (
 )
 
 func NewRegisterCommand() *cobra.Command {
-	var config config.Config
+	var config cfg.Config
 	var labels []string
+	var debug bool
 
 	cmd := &cobra.Command{
-		Use: "register",
+		Use:   "register",
+		Short: "Register the node",
 		Run: func(_ *cobra.Command, args []string) {
+			if debug {
+				logrus.SetLevel(logrus.DebugLevel)
+			}
 			if len(args) == 0 {
 				args = append(args, "/oem")
 			}
@@ -82,22 +88,19 @@ func NewRegisterCommand() *cobra.Command {
 		},
 	}
 
-	// TODO: debug flag
-	// TODO: docs
-	// TODO: flag docs
-
 	// Registration
-	cmd.Flags().StringVar(&config.Elemental.Registration.URL, "registration-url", "", "")
-	cmd.Flags().StringVar(&config.Elemental.Registration.CACert, "registration-ca-cert", "", "")
-	cmd.Flags().BoolVar(&config.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "")
-	cmd.Flags().Int64Var(&config.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "")
-	cmd.Flags().BoolVar(&config.Elemental.Registration.NoSMBIOS, "no-smbios", false, "")
+	cmd.Flags().StringVar(&config.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
+	cmd.Flags().StringVar(&config.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")
+	cmd.Flags().BoolVar(&config.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
+	cmd.Flags().Int64Var(&config.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
+	cmd.Flags().BoolVar(&config.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
+	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug logging")
 	cmd.Flags().StringArrayVar(&labels, "label", nil, "")
 
 	return cmd
 }
 
-func run(config config.Config) {
+func run(config cfg.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
@@ -105,10 +108,21 @@ func run(config config.Config) {
 	}
 
 	var err error
-	var data []byte
+	var data, caCert []byte
+
+	_, err = os.Stat(registration.CACert)
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	caCert, err = ioutil.ReadFile(registration.CACert)
+
+	if err != nil {
+		logrus.Error(err)
+	}
 
 	for {
-		data, err = tpm.Register(registration.URL, registration.CACert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed, registration.Labels)
+		data, err = tpm.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed, registration.Labels)
 		if err != nil {
 			logrus.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)
@@ -157,7 +171,7 @@ func writeCloudInit(data []byte) error {
 	return nil
 }
 
-func writeYIPConfig(config config.Elemental) (string, error) {
+func writeYIPConfig(config cfg.Elemental) (string, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -255,11 +269,11 @@ func writeYIPConfig(config config.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func writeElementalConfig(conf config.Elemental, cloudInitPath string) error {
+func writeElementalConfig(conf cfg.Elemental, cloudInitPath string) error {
 
 	conf.Install.ConfigURL = cloudInitPath
-	fullConf := config.Config{Elemental: conf}
-	ev, err := config.ToEnv(fullConf)
+	fullConf := cfg.Config{Elemental: conf}
+	ev, err := cfg.ToEnv(fullConf)
 	if err != nil {
 		return err
 	}
