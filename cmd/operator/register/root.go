@@ -269,11 +269,11 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func writeElementalConfig(conf config.Elemental, cloudInitPath string) error {
+func writeElementalConfig(conf cfg.Elemental, cloudInitPath string) error {
 
 	conf.Install.ConfigURL = cloudInitPath
-	fullConf := config.Config{Elemental: conf}
-	ev, err := config.ToEnv(fullConf)
+	fullConf := cfg.Config{Elemental: conf}
+	ev, err := cfg.ToEnv(fullConf)
 	if err != nil {
 		return err
 	}
