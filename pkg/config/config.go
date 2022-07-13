@@ -73,7 +73,7 @@ type Elemental struct {
 
 type Config struct {
 	Elemental Elemental              `yaml:"elemental" json:"elemental,omitempty"`
-	Data      map[string]interface{} `yaml:"data" json:"data"`
+	Data      map[string]interface{} `yaml:"data,omitempty" json:"data,omitempty"`
 }
 
 type YipConfig struct {

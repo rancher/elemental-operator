@@ -284,6 +284,7 @@ func ToBytes(cfg Config) ([]byte, error) {
 	values.RemoveValue(data, "elemental", "install")
 	values.RemoveValue(data, "elemental", "registration")
 	values.RemoveValue(data, "elemental", "system_agent")
+	values.RemoveValue(data, "data") // Remove data here, as we are merging the data into the cfg directly, we want to output a valid cloud-config
 	bytes, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
