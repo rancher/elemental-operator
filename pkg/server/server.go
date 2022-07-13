@@ -17,19 +17,24 @@ limitations under the License.
 package server
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
+	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/sirupsen/logrus"
 )
 
 var (
 	registrationTokenIndex = "registrationTokenIndex"
 	tpmHashIndex           = "tpmHashIndex"
+	settingsIndex          = "settingsIndex"
 )
 
 type authenticator interface {
@@ -42,12 +47,11 @@ type InventoryServer struct {
 	machineCache             elmcontrollers.MachineInventoryCache
 	machineClient            elmcontrollers.MachineInventoryClient
 	machineRegistrationCache elmcontrollers.MachineRegistrationCache
+	settingCache             ranchercontrollers.SettingCache
 	authenticators           []authenticator
-	serverURL                string
-	caCerts                  string
 }
 
-func New(clients *clients.Clients, serverURL, caCerts string) *InventoryServer {
+func New(clients *clients.Clients) *InventoryServer {
 	server := &InventoryServer{
 		authenticators: []authenticator{
 			tpm.New(clients),
@@ -57,9 +61,15 @@ func New(clients *clients.Clients, serverURL, caCerts string) *InventoryServer {
 		machineCache:             clients.Elemental.MachineInventory().Cache(),
 		machineClient:            clients.Elemental.MachineInventory(),
 		machineRegistrationCache: clients.Elemental.MachineRegistration().Cache(),
-		serverURL:                serverURL,
-		caCerts:                  caCerts,
+		settingCache:             clients.Rancher.Setting().Cache(),
 	}
+
+	server.settingCache.AddIndexer(settingsIndex, func(obj *v3.Setting) ([]string, error) {
+		if obj.Value == "" {
+			return nil, nil
+		}
+		return []string{obj.Value}, nil
+	})
 
 	server.machineRegistrationCache.AddIndexer(registrationTokenIndex, func(obj *elm.MachineRegistration) ([]string, error) {
 		if obj.Status.RegistrationToken == "" {
@@ -78,6 +88,35 @@ func New(clients *clients.Clients, serverURL, caCerts string) *InventoryServer {
 	})
 
 	return server
+}
+
+func (i *InventoryServer) getRancherCACert() string {
+	setting, err := i.settingCache.Get("cacerts")
+	if err != nil {
+		logrus.Errorf("Error getting cacerts setting: %s", err.Error())
+		return ""
+	}
+	if setting.Value == "" {
+		setting, err = i.settingCache.Get("internal-cacerts")
+		if err != nil {
+			logrus.Errorf("Error getting internal-cacerts setting: %s", err.Error())
+			return ""
+		}
+	}
+	return setting.Value
+}
+
+func (i *InventoryServer) getRancherServerURL() (string, error) {
+	setting, err := i.settingCache.Get("server-url")
+	if err != nil {
+		logrus.Errorf("Error getting server-url setting: %s", err.Error())
+		return "", err
+	}
+	if setting.Value == "" {
+		logrus.Error("server-url is not set")
+		return "", fmt.Errorf("server-url is not set")
+	}
+	return setting.Value, nil
 }
 
 func (i *InventoryServer) authMachine(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, io.WriteCloser, error) {

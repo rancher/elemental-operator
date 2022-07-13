@@ -114,9 +114,10 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 		Elemental: config.Elemental{
 			Registration: config.Registration{
 				URL:    machineRegistration.Status.RegistrationURL,
-				CACert: i.caCerts,
+				CACert: i.getRancherCACert(),
 			},
 		},
+		Data: machineRegistration.Spec.Config.Data,
 	})
 }
 
@@ -183,25 +184,27 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 		return err
 	}
 
-	var install config.Install
-	if registration.Spec.Install != nil {
-		install = *registration.Spec.Install
+	serverURL, err := i.getRancherServerURL()
+	if err != nil {
+		logrus.Errorf("Failed to get server-url: %s", err.Error())
+		return err
 	}
 
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
 				URL:    registration.Status.RegistrationURL,
-				CACert: i.caCerts,
+				CACert: i.getRancherCACert(),
 			},
 			SystemAgent: config.SystemAgent{
-				URL:             i.serverURL + "/k8s/clusters/local",
+				URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
 				Token:           string(tokenSecret.Data["token"]),
 				SecretName:      inventory.Name,
 				SecretNamespace: inventory.Namespace,
 			},
-			Install: install,
+			Install: registration.Spec.Config.Elemental.Install,
 		},
+		Data: registration.Spec.Config.Data,
 	})
 }
 
@@ -264,12 +267,4 @@ func getLabels(req *http.Request) (map[string]string, error) {
 	}
 	var labels map[string]string
 	return labels, json.Unmarshal(labelString, &labels)
-}
-
-type WriteFile struct {
-	Encoding    string `json:"encoding,omitempty"`
-	Content     string `json:"content,omitempty"`
-	Owner       string `json:"owner,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Permissions string `json:"permissions,omitempty"`
 }

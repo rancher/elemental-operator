@@ -18,11 +18,14 @@ package registration
 
 import (
 	"context"
+	"fmt"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
+	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,18 +36,18 @@ import (
 var controllerName = "machine-registration"
 
 type handler struct {
-	ctx       context.Context
-	Recorder  record.EventRecorder
-	clients   *clients.Clients
-	serverURL string
+	ctx          context.Context
+	Recorder     record.EventRecorder
+	clients      *clients.Clients
+	settingCache ranchercontrollers.SettingCache
 }
 
-func Register(ctx context.Context, clients *clients.Clients, serverURL string) {
+func Register(ctx context.Context, clients *clients.Clients) {
 	h := handler{
-		ctx:       ctx,
-		clients:   clients,
-		serverURL: serverURL,
-		Recorder:  clients.EventRecorder(controllerName),
+		ctx:          ctx,
+		clients:      clients,
+		Recorder:     clients.EventRecorder(controllerName),
+		settingCache: clients.Rancher.Setting().Cache(),
 	}
 	elmcontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.Elemental.MachineRegistration(), "Ready", controllerName, h.OnChange)
 	h.clients.Elemental.MachineRegistration().OnRemove(ctx, controllerName, h.OnRemove)
@@ -52,6 +55,11 @@ func Register(ctx context.Context, clients *clients.Clients, serverURL string) {
 
 func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegistrationStatus) (elm.MachineRegistrationStatus, error) {
 	var err error
+
+	serverURL, err := h.getRancherServerURL()
+	if err != nil {
+		return status, err
+	}
 
 	if status.RegistrationToken == "" {
 		status.RegistrationToken, err = randomtoken.Generate()
@@ -61,7 +69,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		}
 	}
 
-	status.RegistrationURL = h.serverURL + "/elemental/registration/" + status.RegistrationToken
+	status.RegistrationURL = fmt.Sprintf("%s/elemental/registration/%s", serverURL, status.RegistrationToken)
 
 	_, err = h.clients.RBAC.Role().Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -72,7 +80,12 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			APIGroups: []string{""},
 			Verbs:     []string{"get", "watch", "list", "update", "patch"},
 			Resources: []string{"secrets"},
-		}},
+		}, {
+			APIGroups: []string{"management.cattle.io"},
+			Verbs:     []string{"get", "watch", "list"},
+			Resources: []string{"settings"},
+		},
+		},
 	})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return status, err
@@ -132,4 +145,17 @@ func (h *handler) OnRemove(_ string, obj *elm.MachineRegistration) (*elm.Machine
 	}
 
 	return nil, nil
+}
+
+func (h *handler) getRancherServerURL() (string, error) {
+	setting, err := h.settingCache.Get("server-url")
+	if err != nil {
+		logrus.Errorf("Error getting server-url setting: %s", err.Error())
+		return "", err
+	}
+	if setting.Value == "" {
+		logrus.Error("server-url is not set")
+		return "", fmt.Errorf("server-url is not set")
+	}
+	return setting.Value, nil
 }

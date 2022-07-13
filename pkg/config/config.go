@@ -72,8 +72,8 @@ type Elemental struct {
 }
 
 type Config struct {
-	Elemental Elemental              `json:"elemental,omitempty"`
-	Data      map[string]interface{} `json:"-"`
+	Elemental Elemental              `yaml:"elemental" json:"elemental,omitempty"`
+	Data      map[string]interface{} `yaml:"data,omitempty" json:"data,omitempty"`
 }
 
 type YipConfig struct {
@@ -88,4 +88,17 @@ type User struct {
 	Name              string   `json:"name,omitempty"`
 	PasswordHash      string   `json:"passwd,omitempty"`
 	SSHAuthorizedKeys []string `json:"ssh_authorized_keys,omitempty"`
+}
+
+func (in *Config) DeepCopyInto(out *Config) {
+	*out = *in
+}
+
+func (in *Config) DeepCopy() *Config {
+	if in == nil {
+		return nil
+	}
+	out := new(Config)
+	in.DeepCopyInto(out)
+	return out
 }
