@@ -128,7 +128,7 @@ func runInstall(cfg config.Config, output string) error {
 		return err
 	}
 
-	printEnv(cfg)
+	PrintEnv(cfg)
 
 	installerOpts := []string{"elemental", "install"}
 
@@ -141,7 +141,7 @@ func runInstall(cfg config.Config, output string) error {
 	return cmd.Run()
 }
 
-func printEnv(cfg config.Config) {
+func PrintEnv(cfg config.Config) {
 	if cfg.Elemental.Install.Password != "" {
 		cfg.Elemental.Install.Password = "<removed>"
 	}

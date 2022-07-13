@@ -20,12 +20,14 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
 	"github.com/rancher/elemental-operator/pkg/config"
+	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sirupsen/logrus"
@@ -253,34 +255,24 @@ func writeYIPConfig(config config.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func writeElementalConfig(config config.Elemental, cloudInitPath string) error {
-	configDir := "/etc/elemental/config.d"
+func writeElementalConfig(conf config.Elemental, cloudInitPath string) error {
 
-	_ = os.MkdirAll(configDir, 0600)
-	f, err := os.CreateTemp(configDir, "*.yaml")
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+	conf.Install.ConfigURL = cloudInitPath
+	fullConf := config.Config{Elemental: conf}
+	ev, err := config.ToEnv(fullConf)
 	if err != nil {
 		return err
 	}
 
-	err = json.NewEncoder(f).Encode(config.Install)
-	if err != nil {
-		return err
-	}
+	install.PrintEnv(fullConf)
 
-	f2, err := os.CreateTemp(configDir, "*.yaml")
-	defer func(f2 *os.File) {
-		_ = f2.Close()
-	}(f2)
-	if err != nil {
-		return err
-	}
+	installerOpts := []string{"elemental", "install"}
 
-	if _, err = f2.WriteString("\ncloud-init: " + cloudInitPath); err != nil {
-		return err
-	}
-
-	return nil
+	cmd := exec.Command("elemental")
+	cmd.Env = append(os.Environ(), ev...)
+	cmd.Stdout = os.Stdout
+	cmd.Args = installerOpts
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
