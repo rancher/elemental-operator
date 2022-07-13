@@ -95,12 +95,12 @@ func Run(ctx context.Context, settings ...Setting) error {
 	}
 
 	managedos.Register(ctx, clients, o.DefaultRegistry)
-	registration.Register(ctx, clients, o.ServerURL)
+	registration.Register(ctx, clients)
 	machineinventory.Register(ctx, clients)
 	managedosversionchannel.Register(ctx, o.requeuer, clients)
 	machineinventoryselector.Register(ctx, clients)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients, o.ServerURL, o.CACert))
+	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients))
 
 	for _, s := range o.services {
 		go s(ctx, clients) //nolint:golint,errcheck

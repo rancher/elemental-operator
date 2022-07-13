@@ -30,14 +30,12 @@ import (
 )
 
 type rootConfig struct {
-	Debug            bool
-	SyncInterval     time.Duration
-	Namespace        string
-	DefaultRegistry  string
-	RancherServerURL string
-	CACert           string
-	OperatorImage    string
-	SyncNamespaces   []string
+	Debug           bool
+	SyncInterval    time.Duration
+	Namespace       string
+	DefaultRegistry string
+	OperatorImage   string
+	SyncNamespaces  []string
 }
 
 func NewOperatorCommand() *cobra.Command {
@@ -55,9 +53,6 @@ func NewOperatorCommand() *cobra.Command {
 	}
 
 	viper.AutomaticEnv()
-	cmd.PersistentFlags().StringVar(&config.RancherServerURL, "rancher-server-url", "", "URL used to build registration url")
-	_ = viper.BindPFlag("rancher-server-url", cmd.PersistentFlags().Lookup("rancher-server-url"))
-	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "rancher-server-url")
 
 	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to run the operator on")
 	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
@@ -72,9 +67,6 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&config.DefaultRegistry, "default-registry", "", "default registry to prepend to os images")
 	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
-
-	cmd.PersistentFlags().StringVar(&config.CACert, "ca-cert", "", "Rancher URL CA certificate")
-	_ = viper.BindPFlag("ca-cert", cmd.PersistentFlags().Lookup("ca-cert"))
 
 	cmd.PersistentFlags().DurationVar(&config.SyncInterval, "sync-interval", 60*time.Minute, "how often to check for new os versions")
 	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
@@ -98,8 +90,6 @@ func operatorRun(config *rootConfig) {
 	if err := operator.Run(ctx,
 		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(config.Namespace),
-		operator.WithServerURL(config.RancherServerURL),
-		operator.WithCACert(config.CACert),
 		operator.WithDefaultRegistry(config.DefaultRegistry),
 		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.SyncNamespaces...)),
 	); err != nil {

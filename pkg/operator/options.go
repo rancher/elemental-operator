@@ -73,22 +73,6 @@ func WithServices(s ...service) Setting {
 	}
 }
 
-// WithServerURL sets the rancher server url
-func WithServerURL(serverURL string) Setting {
-	return func(o *options) error {
-		o.ServerURL = serverURL
-		return nil
-	}
-}
-
-// WithCACert sets the ca cert for the rancher server
-func WithCACert(caCert string) Setting {
-	return func(o *options) error {
-		o.CACert = caCert
-		return nil
-	}
-}
-
 // WithDefaultRegistry sets the default registry for os images
 func WithDefaultRegistry(registry string) Setting {
 	return func(o *options) error {

@@ -4,6 +4,14 @@ metadata:
   name: elemental-operator
 rules:
 - apiGroups:
+    - management.cattle.io
+  resources:
+    - 'settings'
+  verbs:
+    - 'get'
+    - 'watch'
+    - 'list'
+- apiGroups:
   - ""
   resources:
   - 'events'

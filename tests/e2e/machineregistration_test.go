@@ -40,7 +40,6 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-
 			spec := catalog.MachineRegistrationSpec{Install: &config.Install{Device: "/dev/vda", ISO: "https://something.example.com"}}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
@@ -62,7 +61,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			)
 
 			Eventually(func() string {
-				out, err := http.GetInsecure(fmt.Sprintf("https://%s", url))
+				out, err := http.GetInsecure(url)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -70,9 +69,10 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
 					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
+					ContainSubstring("BEGIN CERTIFICATE"),
+					ContainSubstring("END CERTIFICATE"),
 				),
 			)
-			// TODO: There are no cacerts anymore being generated, do we drop that? Do we follow up recreating the ca in the controller?
 			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})
