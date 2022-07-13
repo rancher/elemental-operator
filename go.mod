@@ -43,6 +43,7 @@ require (
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
+	github.com/rancher/rancher/pkg/apis v0.0.0-20211013185633-a636bda2a00e // indirect
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37
 	github.com/rancher/system-agent v0.2.8
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
@@ -62,9 +63,13 @@ require (
 	sigs.k8s.io/controller-runtime v0.11.1
 )
 
-require github.com/pin/tftp v2.1.0+incompatible // indirect
-
 require (
+	github.com/pin/tftp v2.1.0+incompatible // indirect
+	github.com/rancher/aks-operator v1.0.2 // indirect
+	github.com/rancher/eks-operator v1.1.1 // indirect
+	github.com/rancher/gke-operator v1.1.1 // indirect
+	github.com/rancher/norman v0.0.0-20210608202517-59b3523c3133 // indirect
+	github.com/rancher/rke v1.3.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect

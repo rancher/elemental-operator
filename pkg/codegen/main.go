@@ -20,6 +20,7 @@ import (
 	"os"
 
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -46,6 +47,11 @@ func main() {
 			"cluster.x-k8s.io": {
 				Types: []interface{}{
 					capi.Machine{},
+				},
+			},
+			"management.cattle.io": {
+				Types: []interface{}{
+					v3.Setting{},
 				},
 			},
 		},
