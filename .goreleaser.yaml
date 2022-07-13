@@ -1,10 +1,25 @@
 project_name: elemental-operator
 builds:
   - main: ./cmd/operator
-    env:
-      - CGO_ENABLED=0
+    binary: elemental-operator
+    id: elemental-operator
     ldflags:
-      - -extldflags -static -w -s
+      - -w -s
+      - -X github.com/rancher/elemental-operator/version.Version={{.Tag}}
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - 6
+      - 7
+  - main: ./cmd/installer
+    binary: elemental-installer
+    id: elemental-installer
+    ldflags:
+      - -w -s
       - -X github.com/rancher/elemental-operator/version.Version={{.Tag}}
     goos:
       - linux
