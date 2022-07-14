@@ -23,7 +23,7 @@ installer:
 .PHONY: build-docker
 build-docker:
 	DOCKER_BUILDKIT=1 docker build \
-		-f package/Dockerfile \
+		-f Dockerfile \
 		--target elemental-operator \
 		-t ${REPO}:${TAG} .
 
