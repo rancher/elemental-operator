@@ -48,6 +48,7 @@ func NewOperatorCommand() *cobra.Command {
 			if config.Debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
+			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			operatorRun(&config)
 		},
 	}

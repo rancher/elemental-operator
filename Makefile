@@ -8,19 +8,30 @@ CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 KUBE_VERSION?="v1.22.7"
 CLUSTER_NAME?="operator-e2e"
+RAWCOMMITDATE=$(shell git log -n1 --format="%at")
+COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
+
+LDFLAGS := -w -s
+LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Version=${GIT_TAG}"
+LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_COMMIT}"
+LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.CommitDate=${COMMITDATE}"
 
 .PHONY: build
 build: operator
 
 .PHONY: operator
 operator:
-	go build -ldflags "-w -s -X 'github.com/rancher/elemental-operator/version.Version=$(TAG)'" -o build/elemental-operator $(ROOT_DIR)/cmd/operator
+	go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
+
 
 .PHONY: build-docker
 build-docker:
 	DOCKER_BUILDKIT=1 docker build \
 		-f Dockerfile \
 		--target elemental-operator \
+		--build-arg "TAG=${GIT_TAG}" \
+		--build-arg "COMMIT=${GIT_COMMIT}" \
+		--build-arg "COMMITDATE=${COMMITDATE}" \
 		-t ${REPO}:${TAG} .
 
 .PHONY: build-docker-push
