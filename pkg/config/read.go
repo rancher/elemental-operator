@@ -17,28 +17,13 @@ limitations under the License.
 package config
 
 import (
-	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
-	"github.com/rancher-sandbox/go-tpm"
-	"github.com/rancher/elemental-operator/pkg/dmidecode"
-	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
-	schemas2 "github.com/rancher/wrangler/pkg/schemas"
-	"github.com/sirupsen/logrus"
-	"sigs.k8s.io/yaml"
 )
 
-const authorizedKeysKey = "ssh_authorized_keys"
+/*const authorizedKeysKey = "ssh_authorized_keys"
 
 var (
 	defaultMappers = schemas2.Mappers{
@@ -54,7 +39,7 @@ var (
 		return s
 	}).MustImport(Config{})
 	schema = schemas.Schema("config")
-)
+)*/
 
 // ToEnv converts the config into a slice env.
 // The configuration fields are prefixed with "_COS"
@@ -105,7 +90,7 @@ func mapToEnv(prefix string, data map[string]interface{}) []string {
 	return result
 }
 
-func readFileFunc(path string) func() (map[string]interface{}, error) {
+/*func readFileFunc(path string) func() (map[string]interface{}, error) {
 	return func() (map[string]interface{}, error) {
 		return readFile(path)
 	}
@@ -404,4 +389,4 @@ func readCmdline() (map[string]interface{}, error) {
 	}
 
 	return readNested(data, true)
-}
+}*/

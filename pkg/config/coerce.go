@@ -16,7 +16,7 @@ limitations under the License.
 
 package config
 
-import (
+/*import (
 	"github.com/rancher/wrangler/pkg/data"
 	"github.com/rancher/wrangler/pkg/data/convert"
 	schemas2 "github.com/rancher/wrangler/pkg/schemas"
@@ -99,4 +99,4 @@ func NewToBool() schemas2.Mapper {
 		}
 		return val
 	})
-}
+}*/

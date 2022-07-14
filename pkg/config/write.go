@@ -16,7 +16,7 @@ limitations under the License.
 
 package config
 
-import (
+/*import (
 	"github.com/rancher/wrangler/pkg/data/convert"
 	"sigs.k8s.io/yaml"
 )
@@ -45,4 +45,4 @@ func toYAMLKeys(data map[string]interface{}) {
 			data[newK] = v
 		}
 	}
-}
+}*/

@@ -16,7 +16,7 @@ limitations under the License.
 
 package config
 
-import (
+/*import (
 	"strings"
 
 	"github.com/rancher/wrangler/pkg/data"
@@ -64,4 +64,4 @@ func (f *FuzzyNames) ModifySchema(schema *schemas2.Schema, schemas *schemas2.Sch
 	f.names["password"] = "passphrase"
 
 	return nil
-}
+}*/

@@ -16,7 +16,7 @@ limitations under the License.
 
 package config
 
-import (
+/*import (
 	"bytes"
 	"fmt"
 	"net"
@@ -54,4 +54,4 @@ func tftpGet(tftpURL string) (map[string]interface{}, error) {
 
 	result := map[string]interface{}{}
 	return result, yaml.Unmarshal(buf.Bytes(), &result)
-}
+}*/

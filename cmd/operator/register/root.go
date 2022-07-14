@@ -28,7 +28,6 @@ import (
 
 	"github.com/mudler/yip/pkg/schema"
 	cfg "github.com/rancher/elemental-operator/pkg/config"
-	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sirupsen/logrus"
@@ -130,6 +129,8 @@ func run(config cfg.Config) {
 			continue
 		}
 
+		logrus.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
+
 		if yaml.Unmarshal(data, &config) != nil {
 			logrus.Error("failed to parse registration configuration: ", err)
 			time.Sleep(time.Second * 5)
@@ -149,11 +150,10 @@ func run(config cfg.Config) {
 		logrus.Fatal("failed to write yip config: ", err)
 	}
 
-	err = writeElementalConfig(config.Elemental, cloudInitPath)
+	err = callElementalClient(config.Elemental, cloudInitPath)
 	if err != nil {
-		logrus.Fatal("failed to write elemental config: ", err)
+		logrus.Fatal("failed calling elemental client: ", err)
 	}
-
 }
 
 func writeCloudInit(data []byte) error {
@@ -272,7 +272,7 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func writeElementalConfig(conf cfg.Elemental, cloudInitPath string) error {
+func callElementalClient(conf cfg.Elemental, cloudInitPath string) error {
 
 	conf.Install.ConfigURL = cloudInitPath
 	fullConf := cfg.Config{Elemental: conf}
@@ -281,7 +281,10 @@ func writeElementalConfig(conf cfg.Elemental, cloudInitPath string) error {
 		return err
 	}
 
-	install.PrintEnv(fullConf)
+	logrus.Debugln("Installation variables:")
+	for _, e := range ev {
+		logrus.Debugln(e)
+	}
 
 	installerOpts := []string{"elemental", "install"}
 
