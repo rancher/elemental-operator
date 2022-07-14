@@ -110,15 +110,16 @@ func run(config cfg.Config) {
 	var err error
 	var data, caCert []byte
 
+	/* Here we can have a file path or the cert data itself */
 	_, err = os.Stat(registration.CACert)
-	if err != nil {
-		logrus.Error(err)
-	}
-
-	caCert, err = ioutil.ReadFile(registration.CACert)
-
-	if err != nil {
-		logrus.Error(err)
+	if err == nil {
+		logrus.Debug("CACert passed as a file")
+		caCert, err = ioutil.ReadFile(registration.CACert)
+		if err != nil {
+			logrus.Error(err)
+		}
+	} else {
+		caCert = []byte(registration.CACert)
 	}
 
 	for {
