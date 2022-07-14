@@ -204,7 +204,9 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	agentConfig := agent.AgentConfig{
 		WorkDir:            "/var/lib/elemental/agent/work",
 		AppliedPlanDir:     "/var/lib/elemental/agent/applied",
+		LocalPlanDir:       "/var/lib/elemental/agent/plans",
 		RemoteEnabled:      true,
+		LocalEnabled:       true,
 		ConnectionInfoFile: "/var/lib/elemental/agent/elemental_connection.json",
 		PreserveWorkDir:    false,
 	}
