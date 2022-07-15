@@ -76,20 +76,6 @@ type Config struct {
 	Data      map[string]interface{} `yaml:"data,omitempty" json:"data,omitempty"`
 }
 
-type YipConfig struct {
-	Stages map[string][]Stage `json:"stages,omitempty"`
-}
-
-type Stage struct {
-	Users map[string]User `json:"users,omitempty"`
-}
-
-type User struct {
-	Name              string   `json:"name,omitempty"`
-	PasswordHash      string   `json:"passwd,omitempty"`
-	SSHAuthorizedKeys []string `json:"ssh_authorized_keys,omitempty"`
-}
-
 func (in *Config) DeepCopyInto(out *Config) {
 	*out = *in
 }

@@ -275,15 +275,9 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 func callElementalClient(conf cfg.Elemental, cloudInitPath string) error {
 
 	conf.Install.ConfigURL = cloudInitPath
-	fullConf := cfg.Config{Elemental: conf}
-	ev, err := cfg.ToEnv(fullConf)
+	ev, err := cfg.ToEnv(conf.Install)
 	if err != nil {
 		return err
-	}
-
-	logrus.Debugln("Installation variables:")
-	for _, e := range ev {
-		logrus.Debugln(e)
 	}
 
 	installerOpts := []string{"elemental", "install"}
