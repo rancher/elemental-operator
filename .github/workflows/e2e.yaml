@@ -21,7 +21,9 @@ jobs:
         id: export_tag
         run: |
           TAG=`git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0"`
+          COMMITDATE=`date -d @$(git log -n1 --format="%at") "+%FT%TZ"`
           echo "::set-output name=operator_tag::$TAG"
+          echo "::set-output name=commit_date::$COMMITDATE"
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
@@ -49,7 +51,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ steps.export_tag.outputs.operator_tag }}
+            TAG=${{ steps.export_tag.outputs.operator_tag }}
+            COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
+            COMMIT=${{ github.sha }}
       - name: Make chart
         run: make chart
       - name: Set chart output

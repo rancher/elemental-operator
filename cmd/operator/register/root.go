@@ -29,6 +29,7 @@ import (
 	"github.com/mudler/yip/pkg/schema"
 	cfg "github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -50,6 +51,7 @@ func NewRegisterCommand() *cobra.Command {
 			if debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
+			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			if len(args) == 0 {
 				args = append(args, "/oem")
 			}

@@ -5,7 +5,9 @@ builds:
     id: elemental-operator
     ldflags:
       - -w -s
-      - -X github.com/rancher/elemental-operator/version.Version={{.Tag}}
+      - -X github.com/rancher/elemental-operator/pkg/version.Version={{.Tag}}
+      - -X github.com/rancher/elemental-operator/pkg/version.Commit={{.Commit}}
+      - -X github.com/rancher/elemental-operator/pkg/version.CommitDate={{.CommitDate}}
     goos:
       - linux
     goarch:
@@ -20,7 +22,9 @@ builds:
     id: elemental-installer
     ldflags:
       - -w -s
-      - -X github.com/rancher/elemental-operator/version.Version={{.Tag}}
+      - -X github.com/rancher/elemental-operator/pkg/version.Version={{.Tag}}
+      - -X github.com/rancher/elemental-operator/pkg/version.Commit={{.Commit}}
+      - -X github.com/rancher/elemental-operator/pkg/version.CommitDate={{.CommitDate}}
     goos:
       - linux
     goarch:
