@@ -17,23 +17,6 @@ builds:
     goarm:
       - 6
       - 7
-  - main: ./cmd/installer
-    binary: elemental-installer
-    id: elemental-installer
-    ldflags:
-      - -w -s
-      - -X github.com/rancher/elemental-operator/pkg/version.Version={{.Tag}}
-      - -X github.com/rancher/elemental-operator/pkg/version.Commit={{.Commit}}
-      - -X github.com/rancher/elemental-operator/pkg/version.CommitDate={{.CommitDate}}
-    goos:
-      - linux
-    goarch:
-      - amd64
-      - arm
-      - arm64
-    goarm:
-      - 6
-      - 7
 source:
   enabled: true
   name_template: '{{ .ProjectName }}-{{ .Tag }}-source'
