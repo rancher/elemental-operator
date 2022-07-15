@@ -39,6 +39,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
+const stateInstallFile = "/run/initramfs/cos-state/state.yaml"
+
 func NewRegisterCommand() *cobra.Command {
 	var config cfg.Config
 	var labels []string
@@ -142,20 +144,29 @@ func run(config cfg.Config) {
 		break
 	}
 
-	err = writeCloudInit(data)
-	if err != nil {
-		logrus.Fatal("failed to write cloud init: ", err)
-	}
+	if !isSystemInstalled() {
+		err = writeCloudInit(data)
+		if err != nil {
+			logrus.Fatal("failed to write cloud init: ", err)
+		}
 
-	cloudInitPath, err := writeYIPConfig(config.Elemental)
-	if err != nil {
-		logrus.Fatal("failed to write yip config: ", err)
-	}
+		cloudInitPath, err := writeYIPConfig(config.Elemental)
+		if err != nil {
+			logrus.Fatal("failed to write yip config: ", err)
+		}
 
-	err = callElementalClient(config.Elemental, cloudInitPath)
-	if err != nil {
-		logrus.Fatal("failed calling elemental client: ", err)
+		err = callElementalClient(config.Elemental, cloudInitPath)
+		if err != nil {
+			logrus.Fatal("failed calling elemental client: ", err)
+		}
 	}
+}
+
+// isSystemInstalled checks if the host is currently installed
+// TODO: make the function dependent on tmp.Register returned data
+func isSystemInstalled() bool {
+	_, err := os.Stat(stateInstallFile)
+	return err == nil
 }
 
 func writeCloudInit(data []byte) error {
