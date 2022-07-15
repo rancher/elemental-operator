@@ -10,11 +10,11 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.1.1
-    created: "2022-07-15T14:42:30.328809535+02:00"
+    created: "2022-07-15T14:46:45.652168789+02:00"
     description: Rancher Elemental Operator
     digest: d0c751fa8cb762a998ec75fee0afa3a3e06b1188650a28b4f509dabb736ffee4
     name: elemental-operator
     urls:
-    - https://rancher-sandbox.github.io/rancheros-operator/build/elemental-operator-0.1.1.tgz
+    - https://rancher.github.io/elemental-operator/build/elemental-operator-0.1.1.tgz
     version: 0.1.1
-generated: "2022-07-15T14:42:30.328420969+02:00"
+generated: "2022-07-15T14:46:45.651874768+02:00"
