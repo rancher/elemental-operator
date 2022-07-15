@@ -1,0 +1,20 @@
+apiVersion: v1
+entries:
+  elemental-operator:
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/experimental: "true"
+      catalog.cattle.io/namespace: cattle-elemental-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/provides-gvr: elemental.cattle.io/v1
+      catalog.cattle.io/release-name: elemental-operator
+    apiVersion: v2
+    appVersion: v0.1.1
+    created: "2022-07-15T14:42:30.328809535+02:00"
+    description: Rancher Elemental Operator
+    digest: d0c751fa8cb762a998ec75fee0afa3a3e06b1188650a28b4f509dabb736ffee4
+    name: elemental-operator
+    urls:
+    - https://rancher-sandbox.github.io/rancheros-operator/build/elemental-operator-0.1.1.tgz
+    version: 0.1.1
+generated: "2022-07-15T14:42:30.328420969+02:00"
