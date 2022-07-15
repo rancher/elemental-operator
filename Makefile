@@ -10,15 +10,11 @@ KUBE_VERSION?="v1.22.7"
 CLUSTER_NAME?="operator-e2e"
 
 .PHONY: build
-build: operator installer
+build: operator
 
 .PHONY: operator
 operator:
 	go build -ldflags "-w -s -X 'github.com/rancher/elemental-operator/version.Version=$(TAG)'" -o build/elemental-operator $(ROOT_DIR)/cmd/operator
-
-.PHONY: installer
-installer:
-	go build -ldflags "-w -s -X 'github.com/rancher/elemental-operator/version.Version=$(TAG)'" -o build/elemental-installer $(ROOT_DIR)/cmd/installer
 
 .PHONY: build-docker
 build-docker:
