@@ -44,7 +44,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          target: ros-operator
+          target: elemental-operator
           push: true
           build-args: |
             TAG=${{ steps.export_tag.outputs.operator_tag }}
