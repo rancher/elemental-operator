@@ -17,23 +17,23 @@ limitations under the License.
 package config
 
 type Install struct {
-	Firmware  string `json:"firmware,omitempty"`
-	Device    string `json:"device,omitempty"`
-	NoFormat  bool   `json:"no-format,omitempty"`
-	Automatic bool   `json:"automatic,omitempty"`
+	Firmware  string `json:"firmware,omitempty" yaml:"firmware,omitempty"`
+	Device    string `json:"device,omitempty" yaml:"device,omitempty"`
+	NoFormat  bool   `json:"no-format,omitempty" yaml:"no-format,omitempty"`
+	Automatic bool   `json:"automatic,omitempty" yaml:"automatic,omitempty"`
 
-	ConfigURL string `json:"config-url,omitempty"`
-	ISO       string `json:"iso,omitempty"`
-	SystemURI string `json:"system-uri,omitempty"`
+	ConfigURL string `json:"config-url,omitempty" yaml:"config-url,omitempty"`
+	ISO       string `json:"iso,omitempty" yaml:"iso,omitempty"`
+	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
 
-	Debug    bool   `json:"debug,omitempty"`
-	TTY      string `json:"tty,omitempty"`
-	PowerOff bool   `json:"poweroff,omitempty"`
-	Reboot   bool   `json:"reboot,omitempty"`
-	EjectCD  bool   `json:"eject-cd,omitempty"`
+	Debug    bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
+	TTY      string `json:"tty,omitempty" yaml:"tty,omitempty"`
+	PowerOff bool   `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
+	Reboot   bool   `json:"reboot,omitempty" yaml:"reboot,omitempty"`
+	EjectCD  bool   `json:"eject-cd,omitempty" yaml:"eject-cd,omitempty"`
 
-	Password string   `json:"password,omitempty"`
-	SSHKeys  []string `json:"ssh-keys,omitempty"`
+	Password string   `json:"password,omitempty" yaml:"password,omitempty"`
+	SSHKeys  []string `json:"ssh-keys,omitempty" yaml:"ssh-keys,omitempty"`
 }
 
 func (in *Install) DeepCopy() *Install {
