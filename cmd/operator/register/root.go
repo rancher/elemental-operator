@@ -293,7 +293,11 @@ func callElementalClient(conf cfg.Elemental, cloudInitPath string) error {
 		return err
 	}
 
-	installerOpts := []string{"elemental", "install"}
+	installerOpts := []string{"elemental"}
+	if conf.Install.Debug {
+		installerOpts = append(installerOpts, "--debug")
+	}
+	installerOpts = append(installerOpts, "install")
 
 	cmd := exec.Command("elemental")
 	cmd.Env = append(os.Environ(), ev...)
