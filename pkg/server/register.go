@@ -117,7 +117,7 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 				CACert: i.getRancherCACert(),
 			},
 		},
-		Data: machineRegistration.Spec.Config.Data,
+		CloudConfig: machineRegistration.Spec.Config.CloudConfig,
 	})
 }
 
@@ -204,7 +204,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 			},
 			Install: registration.Spec.Config.Elemental.Install,
 		},
-		Data: registration.Spec.Config.Data,
+		CloudConfig: registration.Spec.Config.CloudConfig,
 	})
 }
 
