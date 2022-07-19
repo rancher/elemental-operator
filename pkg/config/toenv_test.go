@@ -144,10 +144,10 @@ var _ = Describe("os2 config unit tests", func() {
 			}
 			e, err := ToEnv(c.Elemental.Install)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(len(e)).To(Equal(11))
+			// We drop SSHKeys from the env vars
+			Expect(len(e)).To(Equal(10))
 			Expect(e).To(
 				ContainElements(
-					"ELEMENTAL_INSTALL_SSH_KEYS=[github:mudler]",
 					"ELEMENTAL_INSTALL_TARGET=foob",
 					"ELEMENTAL_INSTALL_CLOUD_INIT=fooc",
 					"ELEMENTAL_INSTALL_FIRMWARE=efi",

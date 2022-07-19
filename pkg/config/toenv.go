@@ -18,7 +18,6 @@ package config
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/rancher/wrangler/pkg/data/convert"
@@ -42,9 +41,12 @@ var defaultOverrides = map[string]string{
 	"ELEMENTAL_INSTALL_CONFIG_URL": "ELEMENTAL_INSTALL_CLOUD_INIT",
 	"ELEMENTAL_INSTALL_POWEROFF":   "ELEMENTAL_POWEROFF",
 	"ELEMENTAL_INSTALL_REBOOT":     "ELEMENTAL_REBOOT",
+	"ELEMENTAL_INSTALL_EJECT_CD":   "ELEMENTAL_EJECT_CD",
 	"ELEMENTAL_INSTALL_DEVICE":     "ELEMENTAL_INSTALL_TARGET",
 	"ELEMENTAL_INSTALL_SYSTEM_URI": "ELEMENTAL_INSTALL_SYSTEM",
 	"ELEMENTAL_INSTALL_DEBUG":      "ELEMENTAL_DEBUG",
+	"ELEMENTAL_INSTALL_PASSWORD":   "SKIP",
+	"ELEMENTAL_INSTALL_SSH_KEYS":   "SKIP",
 }
 
 func envOverrides(keyName string) string {
@@ -58,24 +60,22 @@ func mapToEnv(prefix string, data map[string]interface{}) []string {
 	var result []string
 
 	logrus.Debugln("Computed environment variables:")
-	r, _ := regexp.Compile("PASSWORD")
 
 	for k, v := range data {
 		keyName := strings.ToUpper(prefix + convert.ToYAMLKey(k))
 		keyName = strings.ReplaceAll(keyName, "-", "_")
 		// Apply overrides needed to convert between configs types
 		keyName = envOverrides(keyName)
+		if keyName == "SKIP" {
+			continue
+		}
 
 		if data, ok := v.(map[string]interface{}); ok {
 			subResult := mapToEnv(keyName+"_", data)
 			result = append(result, subResult...)
 		} else {
 			result = append(result, fmt.Sprintf("%s=%v", keyName, v))
-			if r.Match([]byte(keyName)) {
-				logrus.Debugf("%s=****\n", keyName)
-			} else {
-				logrus.Debugf("%s=%v\n", keyName, v)
-			}
+			logrus.Debugf("%s=%v\n", keyName, v)
 		}
 	}
 	return result

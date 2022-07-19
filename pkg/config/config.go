@@ -17,10 +17,9 @@ limitations under the License.
 package config
 
 type Install struct {
-	Firmware  string `json:"firmware,omitempty" yaml:"firmware,omitempty"`
-	Device    string `json:"device,omitempty" yaml:"device,omitempty"`
-	NoFormat  bool   `json:"no-format,omitempty" yaml:"no-format,omitempty"`
-	Automatic bool   `json:"automatic,omitempty" yaml:"automatic,omitempty"`
+	Firmware string `json:"firmware,omitempty" yaml:"firmware,omitempty"`
+	Device   string `json:"device,omitempty" yaml:"device,omitempty"`
+	NoFormat bool   `json:"no-format,omitempty" yaml:"no-format,omitempty"`
 
 	ConfigURL string `json:"config-url,omitempty" yaml:"config-url,omitempty"`
 	ISO       string `json:"iso,omitempty" yaml:"iso,omitempty"`
