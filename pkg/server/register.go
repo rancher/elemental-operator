@@ -105,11 +105,6 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 }
 
 func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
-	_, err := writer.Write([]byte("#cloud-config\n"))
-	if err != nil {
-		return err
-	}
-
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
@@ -117,7 +112,6 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 				CACert: i.getRancherCACert(),
 			},
 		},
-		CloudConfig: machineRegistration.Spec.Config.CloudConfig,
 	})
 }
 
