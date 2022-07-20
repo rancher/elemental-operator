@@ -46,25 +46,25 @@ func (in *Install) DeepCopyInto(out *Install) {
 }
 
 type Registration struct {
-	URL             string            `json:"url,omitempty"`
-	CACert          string            `json:"ca_cert,omitempty"`
-	EmulateTPM      bool              `json:"emulateTPM,omitempty"`
-	EmulatedTPMSeed int64             `json:"emulatedTPMSeed,omitempty"`
-	NoSMBIOS        bool              `json:"noSMBIOS,omitempty"`
-	Labels          map[string]string `json:"labels,omitempty"`
+	URL             string            `json:"url,omitempty" yaml:"url,omitempty" mapstructure:"url"`
+	CACert          string            `json:"ca-cert,omitempty" yaml:"ca-cert,omitempty" mapstructure:"ca-cert"`
+	EmulateTPM      bool              `json:"emulate-tpm,omitempty" yaml:"emulate-tpm,omitempty"`
+	EmulatedTPMSeed int64             `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty"`
+	NoSMBIOS        bool              `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 }
 
 type SystemAgent struct {
-	URL             string `json:"url,omitempty"`
-	Token           string `json:"token,omitempty"`
-	SecretName      string `json:"secret_name,omitempty"`
-	SecretNamespace string `json:"secret_namespace,omitempty"`
+	URL             string `json:"url,omitempty" yaml:"url,omitempty"`
+	Token           string `json:"token,omitempty" yaml:"token,omitempty"`
+	SecretName      string `json:"secret-name,omitempty" yaml:"secret-name,omitempty"`
+	SecretNamespace string `json:"secret-namespace,omitempty" yaml:"secret-namespace,omitempty"`
 }
 
 type Elemental struct {
-	Install      Install      `json:"install,omitempty"`
-	Registration Registration `json:"registration,omitempty"`
-	SystemAgent  SystemAgent  `json:"system_agent,omitempty"`
+	Install      Install      `json:"install,omitempty" yaml:"install,omitempty"`
+	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
+	SystemAgent  SystemAgent  `json:"system-agent,omitempty" yaml:"system-agent,omitempty"`
 }
 
 type Config struct {
