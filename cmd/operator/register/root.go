@@ -39,7 +39,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-const stateInstallFile = "/run/initramfs/cos-state/state.yaml"
+const (
+	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
+	agentStateDir    = "/var/lib/elemental/agent"
+	agentConfDir     = "/etc/rancher/elemental/agent"
+)
 
 func NewRegisterCommand() *cobra.Command {
 	var config cfg.Config
@@ -145,17 +149,28 @@ func run(config cfg.Config) {
 	}
 
 	if !isSystemInstalled() {
-		err = writeCloudInit(data)
-		if err != nil {
-			logrus.Fatal("failed to write cloud init: ", err)
+		cloudInitURLs := config.Elemental.Install.ConfigURLs
+		if cloudInitURLs == nil {
+			cloudInitURLs = []string{}
 		}
 
-		cloudInitPath, err := writeYIPConfig(config.Elemental)
+		agentConfPath, err := writeSystemAgentConfig(config.Elemental)
 		if err != nil {
-			logrus.Fatal("failed to write yip config: ", err)
+			logrus.Fatal("failed to write system agent configuration: ", err)
+		}
+		cloudInitURLs = append(cloudInitURLs, agentConfPath)
+
+		if len(config.CloudConfig) > 0 {
+			cloudInitPath, err := writeCloudInit(config.CloudConfig)
+			if err != nil {
+				logrus.Fatal("failed to write custom cloud-init file: ", err)
+			}
+			cloudInitURLs = append(cloudInitURLs, cloudInitPath)
 		}
 
-		err = callElementalClient(config.Elemental, cloudInitPath)
+		config.Elemental.Install.ConfigURLs = cloudInitURLs
+
+		err = callElementalClient(config.Elemental)
 		if err != nil {
 			logrus.Fatal("failed calling elemental client: ", err)
 		}
@@ -169,23 +184,24 @@ func isSystemInstalled() bool {
 	return err == nil
 }
 
-func writeCloudInit(data []byte) error {
-	f, err := os.OpenFile("/oem/userdata", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+func writeCloudInit(data map[string]interface{}) (string, error) {
+	f, err := os.CreateTemp(os.TempDir(), "*.yaml")
 	if err != nil {
-		return err
+		return "", err
 	}
+	defer f.Close()
 
-	if _, err = f.Write(data); err != nil {
-		return err
+	bytes, err := yaml.Marshal(data)
+	if err != nil {
+		return "", err
 	}
+	bytes = append([]byte("#cloud-config\n"), bytes...)
 
-	return nil
+	_, err = f.Write(bytes)
+	return f.Name(), err
 }
 
-func writeYIPConfig(config cfg.Elemental) (string, error) {
+func writeSystemAgentConfig(config cfg.Elemental) (string, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -215,12 +231,12 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	}
 
 	agentConfig := agent.AgentConfig{
-		WorkDir:            "/var/lib/elemental/agent/work",
-		AppliedPlanDir:     "/var/lib/elemental/agent/applied",
-		LocalPlanDir:       "/var/lib/elemental/agent/plans",
+		WorkDir:            filepath.Join(agentStateDir, "work"),
+		AppliedPlanDir:     filepath.Join(agentStateDir, "applied"),
+		LocalPlanDir:       filepath.Join(agentStateDir, "plans"),
 		RemoteEnabled:      true,
 		LocalEnabled:       true,
-		ConnectionInfoFile: "/var/lib/elemental/agent/elemental_connection.json",
+		ConnectionInfoFile: filepath.Join(agentStateDir, "elemental_connection.json"),
 		PreserveWorkDir:    false,
 	}
 
@@ -232,48 +248,23 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	stages = append(stages, schema.Stage{
 		Files: []schema.File{
 			{
-				Path:        "/var/lib/elemental/agent/elemental_connection.json",
+				Path:        filepath.Join(agentStateDir, "elemental_connection.json"),
 				Content:     string(connectionInfoBytes),
 				Permissions: 0600,
 			},
 			{
-				Path:        "/etc/rancher/elemental/agent/config.yaml",
+				Path:        filepath.Join(agentConfDir, "config.yaml"),
 				Content:     string(agentConfigBytes),
 				Permissions: 0600,
 			},
 		},
 	})
 
-	if config.Install.Password != "" {
-		stages = append(stages, schema.Stage{
-			Users: map[string]schema.User{
-				"root": {
-					Name:         "root",
-					PasswordHash: config.Install.Password,
-				},
-			},
-		})
-	}
-
-	if len(config.Install.SSHKeys) > 0 {
-		stages = append(stages, schema.Stage{
-			Users: map[string]schema.User{
-				"root": {
-					Name:              "root",
-					SSHAuthorizedKeys: config.Install.SSHKeys,
-					Homedir:           "/root",
-				},
-			},
-		})
-	}
-
-	f, err := os.CreateTemp(os.TempDir(), "*.yip")
-	defer func(f *os.File) {
-		_ = f.Close()
-	}(f)
+	f, err := os.CreateTemp(os.TempDir(), "*.yaml")
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
 
 	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
 		Name: "Elemental System Agent Configuration",
@@ -285,9 +276,7 @@ func writeYIPConfig(config cfg.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func callElementalClient(conf cfg.Elemental, cloudInitPath string) error {
-
-	conf.Install.ConfigURL = cloudInitPath
+func callElementalClient(conf cfg.Elemental) error {
 	ev, err := cfg.ToEnv(conf.Install)
 	if err != nil {
 		return err

@@ -121,35 +121,33 @@ var _ = Describe("os2 config unit tests", func() {
 		})
 		It("converts to env slice installation parameters", func() {
 			c = Config{
-				Data: map[string]interface{}{
+				CloudConfig: map[string]interface{}{
 					"random": "data",
 				},
 				Elemental: Elemental{
 					// Those settings below are tied to the
 					// elemental installer.
 					Install: Install{
-						Device:    "foob",
-						ConfigURL: "fooc",
-						Firmware:  "efi",
-						ISO:       "http://foo.bar",
-						NoFormat:  true,
-						Debug:     true,
-						PowerOff:  true,
-						Reboot:    true,
-						TTY:       "foo",
-						SystemURI: "docker:container",
-						SSHKeys:   []string{"github:mudler"},
+						Device:     "foob",
+						ConfigURLs: []string{"fooc", "food"},
+						Firmware:   "efi",
+						ISO:        "http://foo.bar",
+						NoFormat:   true,
+						Debug:      true,
+						PowerOff:   true,
+						Reboot:     true,
+						TTY:        "foo",
+						SystemURI:  "docker:container",
 					},
 				},
 			}
 			e, err := ToEnv(c.Elemental.Install)
 			Expect(err).ToNot(HaveOccurred())
-			// We drop SSHKeys from the env vars
 			Expect(len(e)).To(Equal(10))
 			Expect(e).To(
 				ContainElements(
 					"ELEMENTAL_INSTALL_TARGET=foob",
-					"ELEMENTAL_INSTALL_CLOUD_INIT=fooc",
+					"ELEMENTAL_INSTALL_CLOUD_INIT=fooc,food",
 					"ELEMENTAL_INSTALL_FIRMWARE=efi",
 					"ELEMENTAL_INSTALL_ISO=http://foo.bar",
 					"ELEMENTAL_INSTALL_NO_FORMAT=true",

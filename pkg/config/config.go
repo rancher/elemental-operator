@@ -21,18 +21,15 @@ type Install struct {
 	Device   string `json:"device,omitempty" yaml:"device,omitempty"`
 	NoFormat bool   `json:"no-format,omitempty" yaml:"no-format,omitempty"`
 
-	ConfigURL string `json:"config-url,omitempty" yaml:"config-url,omitempty"`
-	ISO       string `json:"iso,omitempty" yaml:"iso,omitempty"`
-	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
+	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty"`
+	ISO        string   `json:"iso,omitempty" yaml:"iso,omitempty"`
+	SystemURI  string   `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
 
 	Debug    bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
 	TTY      string `json:"tty,omitempty" yaml:"tty,omitempty"`
 	PowerOff bool   `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
 	Reboot   bool   `json:"reboot,omitempty" yaml:"reboot,omitempty"`
 	EjectCD  bool   `json:"eject-cd,omitempty" yaml:"eject-cd,omitempty"`
-
-	Password string   `json:"password,omitempty" yaml:"password,omitempty"`
-	SSHKeys  []string `json:"ssh-keys,omitempty" yaml:"ssh-keys,omitempty"`
 }
 
 func (in *Install) DeepCopy() *Install {
@@ -71,8 +68,8 @@ type Elemental struct {
 }
 
 type Config struct {
-	Elemental Elemental              `yaml:"elemental" json:"elemental,omitempty"`
-	Data      map[string]interface{} `yaml:"data,omitempty" json:"data,omitempty"`
+	Elemental   Elemental              `yaml:"elemental" json:"elemental,omitempty"`
+	CloudConfig map[string]interface{} `yaml:"cloud-config,omitempty" json:"cloud-config,omitempty"`
 }
 
 func (in *Config) DeepCopyInto(out *Config) {

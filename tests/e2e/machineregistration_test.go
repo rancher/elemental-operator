@@ -42,7 +42,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
 			install := config.Install{Device: "/dev/vda", ISO: "https://something.example.com"}
 			elemental := config.Elemental{Install: install}
-			config := &config.Config{Elemental: elemental, Data: map[string]interface{}{
+			config := &config.Config{Elemental: elemental, CloudConfig: map[string]interface{}{
 				"write_files": map[string]string{
 					"content":  "V2h5IGFyZSB5b3UgY2hlY2tpbmcgdGhpcz8K",
 					"encoding": "b64",
