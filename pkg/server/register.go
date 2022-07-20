@@ -36,7 +36,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/Serial Number}"
+const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/UUID}"
 
 var (
 	sanitize   = regexp.MustCompile("[^0-9a-zA-Z]")
