@@ -43,6 +43,11 @@ const (
 	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
 	agentStateDir    = "/var/lib/elemental/agent"
 	agentConfDir     = "/etc/rancher/elemental/agent"
+	afterInstallHook = "/oem/install-hook.yaml"
+
+	// This file stores the registration URL and certificate used for the registration
+	// this file will be stored into the install system by an after-install hook
+	registrationConf = "/run/cos/oem/registration/config.yaml"
 )
 
 func NewRegisterCommand() *cobra.Command {
@@ -170,6 +175,11 @@ func run(config cfg.Config) {
 
 		config.Elemental.Install.ConfigURLs = cloudInitURLs
 
+		err = installRegistrationYAML(config.Elemental.Registration)
+		if err != nil {
+			logrus.Fatal("failed preparing after-install hook")
+		}
+
 		err = callElementalClient(config.Elemental)
 		if err != nil {
 			logrus.Fatal("failed calling elemental client: ", err)
@@ -182,6 +192,49 @@ func run(config cfg.Config) {
 func isSystemInstalled() bool {
 	_, err := os.Stat(stateInstallFile)
 	return err == nil
+}
+
+func installRegistrationYAML(reg cfg.Registration) error {
+	registrationInBytes, err := yaml.Marshal(cfg.Config{
+		Elemental: cfg.Elemental{
+			Registration: cfg.Registration{
+				URL:    reg.URL,
+				CACert: reg.CACert,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	f, err := os.Create(afterInstallHook)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+		Name: "Include registration config into installed system",
+		Stages: map[string][]schema.Stage{
+			"after-install": {
+				schema.Stage{
+					Directories: []schema.Directory{
+						{
+							Path:        filepath.Dir(registrationConf),
+							Permissions: 0700,
+						},
+					}, Files: []schema.File{
+						{
+							Path:        registrationConf,
+							Content:     string(registrationInBytes),
+							Permissions: 0600,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	return err
 }
 
 func writeCloudInit(data map[string]interface{}) (string, error) {
