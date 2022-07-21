@@ -70,7 +70,11 @@ func NewRegisterCommand() *cobra.Command {
 			for _, arg := range args {
 				viper.AddConfigPath(arg)
 				_ = filepath.WalkDir(arg, func(path string, d fs.DirEntry, err error) error {
-					if !d.IsDir() && filepath.Ext(d.Name()) == ".yaml" {
+					if d.IsDir() {
+						viper.AddConfigPath(path)
+						return nil
+					}
+					if filepath.Ext(d.Name()) == ".yaml" {
 						viper.SetConfigType("yaml")
 						viper.SetConfigName(d.Name())
 						if err := viper.MergeInConfig(); err != nil {
