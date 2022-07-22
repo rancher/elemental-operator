@@ -44,6 +44,7 @@ const (
 	agentStateDir    = "/var/lib/elemental/agent"
 	agentConfDir     = "/etc/rancher/elemental/agent"
 	afterInstallHook = "/oem/install-hook.yaml"
+	regConfDir       = "/oem/registration"
 
 	// This file stores the registration URL and certificate used for the registration
 	// this file will be stored into the install system by an after-install hook
@@ -64,7 +65,7 @@ func NewRegisterCommand() *cobra.Command {
 			}
 			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			if len(args) == 0 {
-				args = append(args, "/oem")
+				args = append(args, regConfDir)
 			}
 
 			for _, arg := range args {
