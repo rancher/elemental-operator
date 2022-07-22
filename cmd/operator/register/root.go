@@ -70,6 +70,9 @@ func NewRegisterCommand() *cobra.Command {
 			for _, arg := range args {
 				viper.AddConfigPath(arg)
 				_ = filepath.WalkDir(arg, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
 					if !d.IsDir() && filepath.Ext(d.Name()) == ".yaml" {
 						viper.SetConfigType("yaml")
 						viper.SetConfigName(d.Name())
@@ -95,7 +98,6 @@ func NewRegisterCommand() *cobra.Command {
 					config.Elemental.Registration.Labels[parts[0]] = parts[1]
 				}
 			}
-
 			run(config)
 		},
 	}
@@ -116,7 +118,8 @@ func run(config cfg.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
-		return
+		logrus.Fatal("Registration URL is empty")
+		os.Exit(1)
 	}
 
 	var err error
