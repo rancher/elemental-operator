@@ -119,7 +119,6 @@ func run(config cfg.Config) {
 
 	if registration.URL == "" {
 		logrus.Fatal("Registration URL is empty")
-		os.Exit(1)
 	}
 
 	var err error
