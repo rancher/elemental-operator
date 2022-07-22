@@ -58,9 +58,28 @@ unit-tests-deps:
 unit-tests: unit-tests-deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
 
-e2e-tests:
-	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/e2e-tests.sh
+e2e-tests: setup-kind
+	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
+	export BRIDGE_IP="172.18.0.1" && \
+	cd $(ROOT_DIR)/tests && ginkgo -r -v ./e2e
 
-kind-e2e-tests: build-docker chart
+# Only setups the kind cluster
+setup-kind:
+	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/setup-kind-cluster.sh
+
+# setup the cluster but not run any test!
+# This will build the image locally, the chart with that image,
+# setup kind, load the local built image into the cluster,
+# and run a test that does nothing but installs everything for
+# the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
+# So you end up with a clean cluster in which nothing has run
+setup-full-cluster: build-docker chart setup-kind
+	@export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
+	export BRIDGE_IP="172.18.0.1" && \
+	export CHART=$(CHART) && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
+	cd $(ROOT_DIR)/tests && ginkgo -r -v --label-filter="do-nothing" ./e2e
+
+kind-e2e-tests: build-docker chart setup-kind
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
 	CHART=$(CHART) $(MAKE) e2e-tests
