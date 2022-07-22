@@ -31,6 +31,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
+	"github.com/sanity-io/litter"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -69,6 +70,13 @@ func NewRegisterCommand() *cobra.Command {
 			}
 
 			for _, arg := range args {
+				_, err := os.Stat(arg)
+				if err != nil {
+					logrus.Warnf("cannot access config path %s: %s", arg, err.Error())
+					continue
+				} else {
+					logrus.Debugf("scanning config path %s", arg)
+				}
 				viper.AddConfigPath(arg)
 				_ = filepath.WalkDir(arg, func(path string, d fs.DirEntry, err error) error {
 					if err != nil {
@@ -80,6 +88,7 @@ func NewRegisterCommand() *cobra.Command {
 						if err := viper.MergeInConfig(); err != nil {
 							logrus.Fatalf("failed to read config %s: %s", path, err)
 						}
+						logrus.Infof("reading config file %s", path)
 					}
 					return nil
 				})
@@ -99,6 +108,9 @@ func NewRegisterCommand() *cobra.Command {
 					config.Elemental.Registration.Labels[parts[0]] = parts[1]
 				}
 			}
+
+			logrus.Debugf("input config:\n%s", litter.Sdump(config))
+
 			run(config)
 		},
 	}
@@ -134,6 +146,9 @@ func run(config cfg.Config) {
 			logrus.Error(err)
 		}
 	} else {
+		if registration.CACert == "" {
+			logrus.Warn("CACert is empty")
+		}
 		caCert = []byte(registration.CACert)
 	}
 
