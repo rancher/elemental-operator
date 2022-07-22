@@ -64,12 +64,6 @@ require (
 )
 
 require (
-	github.com/pin/tftp v2.1.0+incompatible // indirect
-	github.com/rancher/aks-operator v1.0.2 // indirect
-	github.com/rancher/eks-operator v1.1.1 // indirect
-	github.com/rancher/gke-operator v1.1.1 // indirect
-	github.com/rancher/norman v0.0.0-20210608202517-59b3523c3133 // indirect
-	github.com/rancher/rke v1.3.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -118,11 +112,17 @@ require (
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
+	github.com/pin/tftp v2.1.0+incompatible // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.34.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/rancher/aks-operator v1.0.2 // indirect
+	github.com/rancher/eks-operator v1.1.1 // indirect
+	github.com/rancher/gke-operator v1.1.1 // indirect
+	github.com/rancher/norman v0.0.0-20210608202517-59b3523c3133 // indirect
 	github.com/rancher/remotedialer v0.2.6-0.20220104192242-f3837f8d649a // indirect
+	github.com/rancher/rke v1.3.1 // indirect
 	github.com/rancher/wharfie v0.4.3 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
@@ -181,3 +181,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
 	sigs.k8s.io/yaml v1.3.0
 )
+
+require github.com/sanity-io/litter v1.5.5 // indirect
