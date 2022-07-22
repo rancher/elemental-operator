@@ -32,6 +32,7 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 
 	if len(caCert) > 0 {
 		opts = append(opts, tpm.WithCAs(caCert))
+		opts = append(opts, tpm.AppendCustomCAToSystemCA)
 	}
 
 	header := http.Header{}
