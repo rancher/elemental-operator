@@ -36,7 +36,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/Serial Number}"
+const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/UUID}"
 
 var (
 	sanitize   = regexp.MustCompile("[^0-9a-zA-Z]")
@@ -105,11 +105,6 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 }
 
 func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
-	_, err := writer.Write([]byte("#cloud-config\n"))
-	if err != nil {
-		return err
-	}
-
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
@@ -117,7 +112,6 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 				CACert: i.getRancherCACert(),
 			},
 		},
-		CloudConfig: machineRegistration.Spec.Config.CloudConfig,
 	})
 }
 

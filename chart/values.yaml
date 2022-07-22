@@ -1,6 +1,7 @@
 image:
   empty: rancher/pause:3.1
-  repository: rancher/elemental-operator
+  # elemental-operator image is also build on registry.opensuse.org/isv/rancher/elemental/teal52/15.3/rancher/elemental-operator
+  repository: quay.io/costoolkit/elemental-operator
   tag: ""
   imagePullPolicy: IfNotPresent
 

@@ -52,7 +52,7 @@ validate:
 
 unit-tests-deps:
 	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
-	go get github.com/onsi/gomega/...
+	go install github.com/onsi/gomega/...
 
 .PHONY: unit-tests
 unit-tests: unit-tests-deps
