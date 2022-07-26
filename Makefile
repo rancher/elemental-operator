@@ -42,10 +42,9 @@ build-docker-push: build-docker
 chart:
 	mkdir -p  $(ROOT_DIR)/build
 	cp -rf $(ROOT_DIR)/chart $(ROOT_DIR)/build/chart
-	sed -i -e 's/%OPERATOR_VERSION%/${CHART_VERSION}/' $(ROOT_DIR)/build/chart/values.yaml
-	sed -i -e 's|%OPERATOR_REPOSITORY%|${REPO}|' $(ROOT_DIR)/build/chart/values.yaml
-	sed -i -e 's/%OPERATOR_VERSION%/${CHART_VERSION}/' $(ROOT_DIR)/build/chart/Chart.yaml
-	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
+	sed -i -e 's/tag:.*/tag: '${TAG}'/' $(ROOT_DIR)/build/chart/values.yaml
+	sed -i -e 's|repository:.*|repository: '${REPO}'|' $(ROOT_DIR)/build/chart/values.yaml
+	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
 	rm -Rf $(ROOT_DIR)/build/chart
 
 validate:

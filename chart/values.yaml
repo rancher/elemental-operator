@@ -2,9 +2,8 @@ image:
   empty: rancher/pause:3.1
   # elemental-operator image is also build on:
   #   registry.opensuse.org/isv/rancher/elemental/teal52/15.3/rancher/elemental-operator
-  #   quay.io/costoolkit/elemental-operator
-  repository: "%OPERATOR_REPOSITORY%"
-  tag: "%OPERATOR_VERSION%"
+  repository: quay.io/costoolkit/elemental-operator
+  tag: 0.0.0-noversion
   imagePullPolicy: IfNotPresent
 
 # http[s] proxy server
