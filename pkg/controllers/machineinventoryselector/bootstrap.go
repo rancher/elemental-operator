@@ -106,11 +106,6 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 				Path:        "/var/lib/rancher/bootstrap.sh",
 				Permissions: "0700",
 			},
-			{
-				Path:        "/etc/rancher/rke2/config.yaml.d/40-elemental.yaml",
-				Permissions: "0600",
-				Content:     base64.StdEncoding.EncodeToString([]byte("kubelet-arg: provider-id=" + selector.Spec.ProviderID)),
-			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
