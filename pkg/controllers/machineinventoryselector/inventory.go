@@ -104,14 +104,10 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	// if the adoption succeeded the inventory is ready
-	if err == nil {
+if err == nil {
 		v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
 		return status, nil
 	}
-
-	v1beta1.InventoryReadyCondition.False(&status)
-	v1beta1.InventoryReadyCondition.Message(&status, "waiting for machine inventory")
-	return status, errors.New("waiting for machine inventory")
 }
 
 // adoptMachineInventory attempts to set a controller owner on the inventory
