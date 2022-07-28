@@ -17,7 +17,6 @@ limitations under the License.
 package machineinventoryselector
 
 import (
-	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
@@ -104,10 +103,8 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	// if the adoption succeeded the inventory is ready
-if err == nil {
-		v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
-		return status, nil
-	}
+	v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
+	return status, nil
 }
 
 // adoptMachineInventory attempts to set a controller owner on the inventory
