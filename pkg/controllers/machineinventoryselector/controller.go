@@ -18,7 +18,6 @@ package machineinventoryselector
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
@@ -105,7 +104,6 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventorySelector, status v1b
 		return status, err
 	}
 
-	obj.Spec.ProviderID = "elemental://" + inventory.Name
 	obj, err = h.MachineInventorySelectors.Update(obj)
 	if err != nil {
 		return status, err
@@ -213,17 +211,6 @@ func (h *handler) getInventorySelectorOwner(obj metav1.Object) (*v1beta1.Machine
 	}
 
 	return nil, nil
-}
-
-//nolint:unused
-func (h *handler) getSelectorInventory(selector *v1beta1.MachineInventorySelector) (*v1beta1.MachineInventory, error) {
-	providerID := strings.Replace(selector.Spec.ProviderID, "elemental://", "", 1)
-
-	if providerID == "" {
-		return nil, nil
-	}
-
-	return h.MachineInventoryCache.Get(selector.Namespace, providerID)
 }
 
 func (h *handler) getMachineOwner(obj metav1.Object) (*v1beta12.Machine, error) {

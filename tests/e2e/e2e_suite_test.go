@@ -102,7 +102,7 @@ var _ = BeforeSuite(func() {
 
 	rancherVersion := os.Getenv("RANCHER_VERSION")
 	if rancherVersion == "" {
-		rancherVersion = "2.6.4"
+		rancherVersion = "2.6.6"
 	}
 
 	externalIP = os.Getenv("EXTERNAL_IP")
