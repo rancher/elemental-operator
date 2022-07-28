@@ -69,8 +69,6 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	}
 
 	if inventory.CreationTimestamp.IsZero() {
-		inventory.ObjectMeta.Labels = registration.Spec.MachineInventoryLabels
-		inventory.ObjectMeta.Annotations = registration.Spec.MachineInventoryAnnotations
 		inventory, err = i.createMachineInventory(req, inventory, registration)
 		if err != nil {
 			logrus.Error("error creating machine inventory: ", err)
