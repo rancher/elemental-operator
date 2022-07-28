@@ -84,10 +84,13 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	}
 
 	if len(labels) > 0 {
-		for k, v := range labels {
-			inventory.Labels[k] = v
+		if inventory.Labels == nil {
+			inventory.Labels = labels
+		} else {
+			for k, v := range labels {
+				inventory.Labels[k] = v
+			}
 		}
-
 		inventory, err = i.machineClient.Update(inventory)
 		if err != nil {
 			logrus.Error("failed to update inventory labels: ", err)
