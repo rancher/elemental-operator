@@ -106,6 +106,16 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 				Path:        "/var/lib/rancher/bootstrap.sh",
 				Permissions: "0700",
 			},
+			{
+				Content:     base64.StdEncoding.EncodeToString([]byte("node-name: " + inventory.Name)),
+				Path:        "/etc/rancher/rke2/config.yaml.d/99-elemental-name.yaml",
+				Permissions: "0600",
+			},
+			{
+				Content:     base64.StdEncoding.EncodeToString([]byte("node-name: " + inventory.Name)),
+				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-name.yaml",
+				Permissions: "0600",
+			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
