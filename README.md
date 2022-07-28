@@ -25,14 +25,14 @@ running on each node. The simplest example of this type would be to change
 the image of the local nodes.
 
 ```bash
-kubectl edit -n fleet-local default-os-image
+kubectl edit -n fleet-default default-os-image
 ```
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSImage
 metadata:
   name: default-os-image
-  namespace: fleet-local
+  namespace: fleet-default
 spec:
   osImage: rancher/elemental:v0.0.0
 ```
@@ -41,10 +41,10 @@ A `ManagedOSImage` can also use a `ManagedOSVersion` to drive upgrades.
 To use a `ManagedOSVersion` specify a `managedOSVersionName`, as `osImage` takes precedence, mind to set back as empty:
 
 ```bash
-kubectl edit -n fleet-local default-os-image
+kubectl edit -n fleet-default default-os-image
 ```
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSImage
 metadata:
   name: default-os-image
@@ -60,7 +60,7 @@ spec:
 Below is reference of the full type
 
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSImage
 metadata:
   name: arbitrary
@@ -70,7 +70,7 @@ metadata:
   # you wish to manage nodes in Rancher MCM managed clusters then the
   # namespace must match the namespace of the clusters.provisioning.cattle.io resource
   # which is typically fleet-default.
-  namespace: fleet-local
+  namespace: fleet-default
 spec:
   # The image name to pull for the OS. Overrides managedOSVersionName when specified
   osImage: rancher/os2:v0.0.0
@@ -137,7 +137,7 @@ the mapping of the machine to it's configuration and assigned cluster.
 #### Reference
 
 ```yaml
-apiVersion: rancheros.cattle.io/v1
+apiVersion: elemental.cattle.io/v1beta1
 kind: MachineInventory
 metadata:
   name: machine-a
@@ -156,7 +156,7 @@ spec:
   # the MachineRegister approach
   smbios: {}
   # A reference to a secret that contains a shared secret value to
-  # identify a node.  The secret must be of type "rancheros.cattle.io/token"
+  # identify a node.  The secret must be of type "elemental.cattle.io/token"
   # and have on field "token" which is the value of the shared secret
   machineTokenSecretName: some-secret-name
   # Arbitrary cloud config that will be added to the machines cloud config
@@ -171,6 +171,7 @@ spec:
 #### Reference
 
 ```yaml
+apiVersion: elemental.cattle.io/v1beta1
 kind: MachineRegistration
 metadata:
   name: machine-registration
