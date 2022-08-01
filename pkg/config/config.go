@@ -48,10 +48,10 @@ func (in *Install) DeepCopyInto(out *Install) {
 type Registration struct {
 	URL             string            `json:"url,omitempty" yaml:"url,omitempty" mapstructure:"url"`
 	CACert          string            `json:"ca-cert,omitempty" yaml:"ca-cert,omitempty" mapstructure:"ca-cert"`
-	EmulateTPM      bool              `json:"emulate-tpm,omitempty" yaml:"emulate-tpm,omitempty"`
-	EmulatedTPMSeed int64             `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty"`
-	NoSMBIOS        bool              `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty"`
-	Labels          map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+	EmulateTPM      bool              `json:"emulate-tpm,omitempty" yaml:"emulate-tpm,omitempty" mapstructure:"emulate-tpm"`
+	EmulatedTPMSeed int64             `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty" mapstructure:"emulated-tpm-seed"`
+	NoSMBIOS        bool              `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty" mapstructure:"no-smbios"`
+	Labels          map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" mapstructure:"labels"`
 }
 
 type SystemAgent struct {
