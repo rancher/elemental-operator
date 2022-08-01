@@ -3,6 +3,7 @@ GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
 REPO?=quay.io/costoolkit/elemental-operator-ci
+REPO_REGISTER?=quay.io/costoolkit/elemental-register-ci
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
@@ -17,15 +18,20 @@ LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_CO
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.CommitDate=${COMMITDATE}"
 
 .PHONY: build
-build: operator
+build: operator register
 
 .PHONY: operator
 operator:
 	go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
 
 
-.PHONY: build-docker
-build-docker:
+.PHONE: register
+register:
+	go build -ldflags '$(LDFLAGS)' -o build/elemental-register $(ROOT_DIR)/cmd/register
+
+
+.PHONY: build-docker-operator
+build-docker-operator:
 	DOCKER_BUILDKIT=1 docker build \
 		-f Dockerfile \
 		--target elemental-operator \
@@ -34,9 +40,23 @@ build-docker:
 		--build-arg "COMMITDATE=${COMMITDATE}" \
 		-t ${REPO}:${TAG} .
 
-.PHONY: build-docker-push
-build-docker-push: build-docker
+.PHONY: build-docker-register
+build-docker-register:
+	DOCKER_BUILDKIT=1 docker build \
+		-f Dockerfile \
+		--target elemental-register \
+		--build-arg "TAG=${GIT_TAG}" \
+		--build-arg "COMMIT=${GIT_COMMIT}" \
+		--build-arg "COMMITDATE=${COMMITDATE}" \
+		-t ${REPO_REGISTER}:${TAG} .
+
+.PHONY: build-docker-push-operator
+build-docker-push-operator: build-docker-operator
 	docker push ${REPO}:${TAG}
+
+.PHONY: build-docker-push-register
+build-docker-push-register: build-docker-register
+	docker push ${REPO_REGISTER}:${TAG}
 
 .PHONY: chart
 chart:
@@ -73,13 +93,13 @@ setup-kind:
 # and run a test that does nothing but installs everything for
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
-setup-full-cluster: build-docker chart setup-kind
+setup-full-cluster: build-docker-operator chart setup-kind
 	@export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
 	cd $(ROOT_DIR)/tests && ginkgo -r -v --label-filter="do-nothing" ./e2e
 
-kind-e2e-tests: build-docker chart setup-kind
+kind-e2e-tests: build-docker-operator chart setup-kind
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
 	CHART=$(CHART) $(MAKE) e2e-tests

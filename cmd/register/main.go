@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package registerCmd
+package main
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
-	cfg "github.com/rancher/elemental-operator/pkg/config"
+	"github.com/rancher/elemental-operator/pkg/config"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
@@ -52,19 +52,20 @@ const (
 	registrationConf = "/run/cos/oem/registration/config.yaml"
 )
 
-func NewRegisterCommand() *cobra.Command {
-	var config cfg.Config
+func main() {
+	var cfg config.Config
 	var labels []string
 	var debug bool
 
 	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "Register the node",
+		Use:   "elemental-register",
+		Short: "Elemental register command",
+		Long:  "elemental-register registers a node with the elemental-operator via a config file or flags",
 		Run: func(_ *cobra.Command, args []string) {
 			if debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
-			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+			logrus.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			if len(args) == 0 {
 				args = append(args, regConfDir)
 			}
@@ -94,40 +95,42 @@ func NewRegisterCommand() *cobra.Command {
 				})
 			}
 
-			if err := viper.Unmarshal(&config); err != nil {
+			if err := viper.Unmarshal(&cfg); err != nil {
 				logrus.Fatal("failed to parse configuration: ", err)
 			}
 
-			if config.Elemental.Registration.Labels == nil {
-				config.Elemental.Registration.Labels = map[string]string{}
+			if cfg.Elemental.Registration.Labels == nil {
+				cfg.Elemental.Registration.Labels = map[string]string{}
 			}
 
 			for _, label := range labels {
 				parts := strings.Split(label, "=")
 				if len(parts) == 2 {
-					config.Elemental.Registration.Labels[parts[0]] = parts[1]
+					cfg.Elemental.Registration.Labels[parts[0]] = parts[1]
 				}
 			}
 
-			logrus.Debugf("input config:\n%s", litter.Sdump(config))
+			logrus.Debugf("input config:\n%s", litter.Sdump(cfg))
 
-			run(config)
+			run(cfg)
 		},
 	}
 
 	// Registration
-	cmd.Flags().StringVar(&config.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
-	cmd.Flags().StringVar(&config.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")
-	cmd.Flags().BoolVar(&config.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
-	cmd.Flags().Int64Var(&config.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
-	cmd.Flags().BoolVar(&config.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
+	cmd.Flags().StringVar(&cfg.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
+	cmd.Flags().StringVar(&cfg.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")
+	cmd.Flags().BoolVar(&cfg.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
+	cmd.Flags().Int64Var(&cfg.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
+	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
 	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug logging")
 	cmd.Flags().StringArrayVar(&labels, "label", nil, "")
 
-	return cmd
+	if err := cmd.Execute(); err != nil {
+		logrus.Fatalln(err)
+	}
 }
 
-func run(config cfg.Config) {
+func run(config config.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
@@ -212,10 +215,10 @@ func isSystemInstalled() bool {
 	return err == nil
 }
 
-func installRegistrationYAML(reg cfg.Registration) error {
-	registrationInBytes, err := yaml.Marshal(cfg.Config{
-		Elemental: cfg.Elemental{
-			Registration: cfg.Registration{
+func installRegistrationYAML(reg config.Registration) error {
+	registrationInBytes, err := yaml.Marshal(config.Config{
+		Elemental: config.Elemental{
+			Registration: config.Registration{
 				URL:    reg.URL,
 				CACert: reg.CACert,
 			},
@@ -272,7 +275,7 @@ func writeCloudInit(data map[string]interface{}) (string, error) {
 	return f.Name(), err
 }
 
-func writeSystemAgentConfig(config cfg.Elemental) (string, error) {
+func writeSystemAgentConfig(config config.Elemental) (string, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -347,8 +350,8 @@ func writeSystemAgentConfig(config cfg.Elemental) (string, error) {
 	return f.Name(), err
 }
 
-func callElementalClient(conf cfg.Elemental) error {
-	ev, err := cfg.ToEnv(conf.Install)
+func callElementalClient(conf config.Elemental) error {
+	ev, err := config.ToEnv(conf.Install)
 	if err != nil {
 		return err
 	}

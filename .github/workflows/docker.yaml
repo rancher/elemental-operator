@@ -21,22 +21,41 @@ jobs:
           COMMITDATE=`date -d @$(git log -n1 --format="%at") "+%FT%TZ"`
           echo "::set-output name=operator_tag::$TAG"
           echo "::set-output name=commit_date::$COMMITDATE"
-      - name: Docker meta for tag
+      - name: Docker meta for operator tag
         if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
-        id: meta
+        id: meta-operator
         uses: docker/metadata-action@v3
         with:
           images: |
             quay.io/costoolkit/elemental-operator
           tags: |
             type=semver,pattern={{raw}}
-      - name: Docker meta for master
+      - name: Docker meta for operator master
         if: contains(github.ref, 'refs/heads/main')
-        id: meta
+        id: meta-operator
         uses: docker/metadata-action@v3
         with:
           images: |
             quay.io/costoolkit/elemental-operator-ci
+          tags: |
+            type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
+            type=raw,value=latest
+      - name: Docker meta for register tag
+        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+        id: meta-register
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            quay.io/costoolkit/elemental-register
+          tags: |
+            type=semver,pattern={{raw}}
+      - name: Docker meta for register master
+        if: contains(github.ref, 'refs/heads/main')
+        id: meta-register
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            quay.io/costoolkit/elemental-register-ci
           tags: |
             type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
             type=raw,value=latest
@@ -49,15 +68,29 @@ jobs:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_TOKEN }}
-      - name: Build image
+      - name: Build operator image
         uses: docker/build-push-action@v2
         with:
           context: .
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-operator.outputs.tags }}
+          labels: ${{ steps.meta-operator.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           target: elemental-operator
+          push: true
+          build-args: |
+            TAG=${{ steps.export_tag.outputs.operator_tag }}
+            COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
+            COMMIT=${{ github.sha }}
+      - name: Build register image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          tags: ${{ steps.meta-register.outputs.tags }}
+          labels: ${{ steps.meta-register.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: elemental-register
           push: true
           build-args: |
             TAG=${{ steps.export_tag.outputs.operator_tag }}
