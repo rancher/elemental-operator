@@ -46,6 +46,7 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          target: elemental-operator
           build-args: |
             TAG=${{ steps.export_tag.outputs.operator_tag }}
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
