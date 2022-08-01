@@ -30,10 +30,10 @@ import (
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "os2 Config Suite")
+	RunSpecs(t, "Elemental Config Suite")
 }
 
-var _ = Describe("os2 config unit tests", func() {
+var _ = Describe("Elemental config unit tests", func() {
 	Context("Unmarshall", func() {
 		var v *viper.Viper
 		var fs afero.Fs
