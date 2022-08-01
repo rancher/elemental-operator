@@ -106,11 +106,17 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 }
 
 func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
+	mRRegistration := machineRegistration.Spec.Config.Elemental.Registration
+
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
-				URL:    machineRegistration.Status.RegistrationURL,
-				CACert: i.getRancherCACert(),
+				URL:             machineRegistration.Status.RegistrationURL,
+				CACert:          i.getRancherCACert(),
+				EmulateTPM:      mRRegistration.EmulateTPM,
+				EmulatedTPMSeed: mRRegistration.EmulatedTPMSeed,
+				NoSMBIOS:        mRRegistration.NoSMBIOS,
+				Labels:          mRRegistration.Labels,
 			},
 		},
 	})
