@@ -1,0 +1,74 @@
+name: Docker build and push on tag
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Export tag
+        id: export_tag
+        run: |
+          git describe --abbrev=0 --tags
+          TAG=`git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0"`
+          COMMITDATE=`date -d @$(git log -n1 --format="%at") "+%FT%TZ"`
+          echo "::set-output name=operator_tag::$TAG"
+          echo "::set-output name=commit_date::$COMMITDATE"
+      - name: Docker meta for operator tag
+        id: meta-operator
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            quay.io/costoolkit/elemental-operator
+          tags: |
+            type=semver,pattern={{raw}}
+      - name: Docker meta for register tag
+        id: meta-register
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            quay.io/costoolkit/elemental-register
+          tags: |
+            type=semver,pattern={{raw}}
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to Quay
+        uses: docker/login-action@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+      - name: Build operator image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          tags: ${{ steps.meta-operator.outputs.tags }}
+          labels: ${{ steps.meta-operator.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: elemental-operator
+          push: true
+          build-args: |
+            TAG=${{ steps.export_tag.outputs.operator_tag }}
+            COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
+            COMMIT=${{ github.sha }}
+      - name: Build register image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          tags: ${{ steps.meta-register.outputs.tags }}
+          labels: ${{ steps.meta-register.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: elemental-register
+          push: true
+          build-args: |
+            TAG=${{ steps.export_tag.outputs.operator_tag }}
+            COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
+            COMMIT=${{ github.sha }}
