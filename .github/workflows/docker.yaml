@@ -1,6 +1,8 @@
 name: Docker build and push
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 jobs:
@@ -19,7 +21,8 @@ jobs:
           COMMITDATE=`date -d @$(git log -n1 --format="%at") "+%FT%TZ"`
           echo "::set-output name=operator_tag::$TAG"
           echo "::set-output name=commit_date::$COMMITDATE"
-      - name: Docker meta
+      - name: Docker meta for tag
+        if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
         id: meta
         uses: docker/metadata-action@v3
         with:
@@ -27,6 +30,16 @@ jobs:
             quay.io/costoolkit/elemental-operator
           tags: |
             type=semver,pattern={{raw}}
+      - name: Docker meta for master
+        if: contains(github.ref, 'refs/heads/main')
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            quay.io/costoolkit/elemental-operator-ci
+          tags: |
+            type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
+            type=raw,value=latest
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v1
