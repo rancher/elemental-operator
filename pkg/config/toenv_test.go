@@ -109,7 +109,7 @@ func WSServer(ctx context.Context, data map[string]interface{}) {
 	}()
 }
 
-var _ = Describe("os2 config unit tests", func() {
+var _ = Describe("Elemental config unit tests", func() {
 
 	Context("convert to environment configuration", func() {
 		var c Config
