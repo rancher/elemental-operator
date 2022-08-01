@@ -9,6 +9,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   push-docker:
+    env:
+      REPO: ttl.sh/elemental-operator-ci
     runs-on: ubuntu-latest
     outputs:
       chart_name: ${{ steps.chart.outputs.chart_name }}
@@ -29,7 +31,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/elemental-operator-ci
+            ${{ env.REPO }}
           tags: |
             type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
       - name: Set up Docker Buildx
@@ -55,7 +57,7 @@ jobs:
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
       - name: Make chart
-        run: make chart
+        run: REPO=${{ env.REPO }} make chart
       - name: Set chart output
         id: chart
         run: |
