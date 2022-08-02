@@ -133,7 +133,7 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 					Command: "bash",
 					Args: []string{
 						"-c",
-						"elemental-operator register --label \"elemental.cattle.io/ExternalIP=$(hostname -I | awk '{print $1}')\" --label \"elemental.cattle.io/InternalIP=$(hostname -I | awk '{print $2}')\"",
+						"elemental-register --label \"elemental.cattle.io/ExternalIP=$(hostname -I | awk '{print $1}')\" --label \"elemental.cattle.io/InternalIP=$(hostname -I | awk '{print $2}')\"",
 					},
 				},
 			},
