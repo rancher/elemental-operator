@@ -25,9 +25,13 @@ operator:
 	go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
 
 
-.PHONE: register
+.PHONY: register
 register:
 	go build -ldflags '$(LDFLAGS)' -o build/elemental-register $(ROOT_DIR)/cmd/register
+
+.PHONY: support
+support:
+	go build -ldflags '$(LDFLAGS)' -o build/elemental-support $(ROOT_DIR)/cmd/support
 
 
 .PHONY: build-docker-operator
