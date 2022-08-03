@@ -18,7 +18,7 @@ LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_CO
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.CommitDate=${COMMITDATE}"
 
 .PHONY: build
-build: operator register
+build: operator register support
 
 .PHONY: operator
 operator:
