@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"archive/tar"
+	tar "archive/tar"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -213,13 +213,9 @@ func compress(src string, buf io.Writer) error {
 			return err
 		}
 	} else if mode.IsDir() {
-		filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+		_ = filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
 			// generate tar header
-			header, err := tar.FileInfoHeader(fi, file)
-			if err != nil {
-				return err
-			}
-
+			var header, _ = tar.FileInfoHeader(fi, file)
 			header.Name = filepath.ToSlash(file)
 
 			// write header
