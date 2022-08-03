@@ -116,6 +116,11 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-name.yaml",
 				Permissions: "0600",
 			},
+			{
+				Content:     base64.StdEncoding.EncodeToString([]byte(inventory.Name)),
+				Path:        "/usr/local/etc/hostname",
+				Permissions: "0644",
+			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
@@ -124,6 +129,7 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 					Command: "hostnamectl",
 					Args: []string{
 						"set-hostname",
+						"--transient",
 						inventory.Name,
 					},
 				},
