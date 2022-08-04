@@ -218,10 +218,7 @@ func isSystemInstalled() bool {
 func installRegistrationYAML(reg config.Registration) error {
 	registrationInBytes, err := yaml.Marshal(config.Config{
 		Elemental: config.Elemental{
-			Registration: config.Registration{
-				URL:    reg.URL,
-				CACert: reg.CACert,
-			},
+			Registration: reg,
 		},
 	})
 	if err != nil {
