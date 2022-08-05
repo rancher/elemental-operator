@@ -39,6 +39,8 @@ var (
 	bridgeIP   string
 )
 
+const operatorNamespace = "cattle-elemental-system"
+
 var testResources = []string{"machineregistration", "managedosversionchannel"}
 
 func TestE2e(t *testing.T) {
@@ -47,7 +49,7 @@ func TestE2e(t *testing.T) {
 }
 
 func isOperatorInstalled(k *kubectl.Kubectl) bool {
-	pods, err := k.GetPodNames("cattle-elemental-operator-system", "")
+	pods, err := k.GetPodNames(operatorNamespace, "")
 	Expect(err).ToNot(HaveOccurred())
 	return len(pods) > 0
 }
@@ -56,7 +58,7 @@ func deployOperator(k *kubectl.Kubectl) {
 	By("Deploying elemental-operator chart", func() {
 		err := kubectl.RunHelmBinaryWithCustomErr(
 			"-n",
-			"cattle-elemental-operator-system",
+			operatorNamespace,
 			"install",
 			"--create-namespace",
 			"--set", "sync_interval=30s",
@@ -65,18 +67,18 @@ func deployOperator(k *kubectl.Kubectl) {
 			chart)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = k.WaitForPod("cattle-elemental-operator-system", "app=elemental-operator", "elemental-operator")
+		err = k.WaitForPod(operatorNamespace, "app=elemental-operator", "elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 
-		pods, err := k.GetPodNames("cattle-elemental-operator-system", "app=elemental-operator")
+		pods, err := k.GetPodNames(operatorNamespace, "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(pods)).To(Equal(1))
 
-		err = k.WaitForNamespaceWithPod("cattle-elemental-operator-system", "app=elemental-operator")
+		err = k.WaitForNamespaceWithPod(operatorNamespace, "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() string {
-			str, _ := kubectl.Run("logs", "-n", "cattle-elemental-operator-system", pods[0])
+			str, _ := kubectl.Run("logs", "-n", operatorNamespace, pods[0])
 			return str
 		}, 5*time.Minute, 2*time.Second).Should(
 			And(
@@ -128,10 +130,10 @@ var _ = BeforeSuite(func() {
 		// Upgrade/delete of operator only goes here
 		// (no further bootstrap is required)
 		By("Upgrading the operator only", func() {
-			err := kubectl.DeleteNamespace("cattle-elemental-operator-system")
+			err := kubectl.DeleteNamespace(operatorNamespace)
 			Expect(err).ToNot(HaveOccurred())
 
-			err = k.WaitForNamespaceDelete("cattle-elemental-operator-system")
+			err = k.WaitForNamespaceDelete(operatorNamespace)
 			Expect(err).ToNot(HaveOccurred())
 
 			deployOperator(k)

@@ -29,14 +29,12 @@ import (
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
-const testRegistrationNamespace = "cattle-elemental-operator-system"
-
 var _ = Describe("MachineRegistration e2e tests", func() {
 	k := kubectl.New()
 	Context("registration", func() {
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", testRegistrationNamespace, "machine-registration")
+			kubectl.New().Delete("machineregistration", "-n", operatorNamespace, "machine-registration")
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
@@ -51,12 +49,12 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			spec := catalog.MachineRegistrationSpec{Config: config}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
 			Eventually(func() error {
-				return k.ApplyYAML(testRegistrationNamespace, "machine-registration", mr)
+				return k.ApplyYAML(operatorNamespace, "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData(testRegistrationNamespace, "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
+				e, err := kubectl.GetData(operatorNamespace, "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
 				if err != nil {
 					fmt.Println(err)
 				}
