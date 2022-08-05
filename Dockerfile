@@ -27,9 +27,11 @@ RUN go build  \
 
 
 FROM scratch as elemental-operator
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /usr/sbin/elemental-operator /usr/sbin/elemental-operator
 ENTRYPOINT ["/usr/sbin/elemental-operator"]
 
 FROM scratch as elemental-register
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /usr/sbin/elemental-register /usr/sbin/elemental-register
 ENTRYPOINT ["/usr/sbin/elemental-register"]
