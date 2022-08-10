@@ -1,4 +1,4 @@
-apiVersion: v2
+apiVersion: v3
 name: elemental-operator
 description: Rancher Elemental Operator
 version: 0.0.0
