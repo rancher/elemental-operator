@@ -24,3 +24,18 @@ jobs:
             ${{ runner.os }}-build-go-${{ hashFiles('**/go.sum') }}
       - name: Build
         run: make build
+      - name: Store operator binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: elemental-operator
+          path: build/elemental-operator
+      - name: Store register binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: elemental-register
+          path: build/elemental-register
+      - name: Store support binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: elemental-support
+          path: build/elemental-support
