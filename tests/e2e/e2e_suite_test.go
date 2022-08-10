@@ -172,7 +172,7 @@ var _ = BeforeSuite(func() {
 				return
 			}
 			kubectl.CreateNamespace("ingress-nginx")
-			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/1.22/deploy.yaml")
+			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
 			Expect(err).ToNot(HaveOccurred())
 
 			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")
