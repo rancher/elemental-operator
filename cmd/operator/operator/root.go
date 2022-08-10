@@ -62,7 +62,7 @@ func NewOperatorCommand() *cobra.Command {
 	cmd.PersistentFlags().StringArrayVar(&config.SyncNamespaces, "sync-namespaces", []string{}, "namespace to watch for machine registrations")
 	_ = viper.BindPFlag("sync-namespaces", cmd.PersistentFlags().Lookup("sync-namespaces"))
 
-	cmd.PersistentFlags().StringVar(&config.OperatorImage, "operator-image", "rancher/elemental-operator:"+version.Version, "this image")
+	cmd.PersistentFlags().StringVar(&config.OperatorImage, "operator-image", "", "Operator image. Used to gather the results from the syncer by running the 'display' command")
 	_ = viper.BindPFlag("operator-image", cmd.PersistentFlags().Lookup("operator-image"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "operator-image")
 
