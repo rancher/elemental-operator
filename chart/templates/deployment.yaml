@@ -39,8 +39,10 @@ spec:
         - {{.Values.sync_interval }}
         - --operator-image
         - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        {{- if .Values.global.cattle.systemDefaultRegistry  }}
         - --default-registry
         - {{ .Values.global.cattle.systemDefaultRegistry | quote }}
+        {{- end }}
       serviceAccountName: elemental-operator
       {{- with .Values.tolerations }}
       tolerations:

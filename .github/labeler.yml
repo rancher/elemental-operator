@@ -1,0 +1,29 @@
+area/register:
+  - 'cmd/register/*'
+  - 'pkg/config/*'
+  - 'pkg/tpm/*'
+
+area/tests:
+  - 'tests/*'
+  - 'tests/**'
+  - '*/**/*_test.go'
+
+area/operator:
+  - 'pkg/**/*'
+  - 'cmd/operator/*'
+
+area/build:
+  - '.github/**/*'
+  - '.golangci.yaml'
+  - '.goreleaser.yaml'
+  - 'Dockerfile'
+  - 'Makefile'
+  - 'go.mod'
+  - 'go.sum'
+
+area/docs:
+  - 'Examples/**/*'
+
+area/chart:
+  - 'chart/**/*'
+
