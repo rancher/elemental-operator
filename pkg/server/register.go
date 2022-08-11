@@ -244,24 +244,12 @@ func buildName(data map[string]interface{}, name string) string {
 }
 
 func getSMBios(req *http.Request) (map[string]interface{}, error) {
-	var smbios string
-	// 200 * 875bytes per header = 175Kb of smbios data, should be enough?
-	for i := 1; i <= 200; i++ {
-		header := req.Header.Get(fmt.Sprintf("X-Cattle-Smbios-%d", i))
-		if header == "" {
-			break
-		}
-		smbios = smbios + header
-	}
-
+	smbios := req.Header.Get("X-Cattle-Smbios")
 	if smbios == "" {
-		logrus.Debug("No smbios headers")
 		return nil, nil
 	}
-
 	smbiosData, err := base64.StdEncoding.DecodeString(smbios)
 	if err != nil {
-		logrus.Error("Error decoding smbios string")
 		return nil, err
 	}
 	data := map[string]interface{}{}
