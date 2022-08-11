@@ -28,13 +28,26 @@ import (
 	"github.com/rancher/wrangler/pkg/kv"
 )
 
+var smbiosTypes = []string{
+	"0",  // BIOS info
+	"1",  // System information
+	"2",  // Base Board Information
+	"3",  // Chassis Information
+	"4",  // Processor information
+	"11", // OEM strings
+}
+
 func Decode() (map[string]interface{}, error) {
 	buf := &bytes.Buffer{}
-	cmd := exec.Command("dmidecode")
-	cmd.Stdout = buf
+	for _, handle := range smbiosTypes {
+		tempBuf := &bytes.Buffer{}
+		cmd := exec.Command("dmidecode", "-t", handle)
+		cmd.Stdout = tempBuf
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("looking up SMBIOS tables (using dmidecode): %w", err)
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("looking up SMBIOS tables (using dmidecode): %w", err)
+		}
+		buf.Write(tempBuf.Bytes())
 	}
 
 	return dmiOutputToMap(buf), nil
