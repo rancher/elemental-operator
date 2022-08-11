@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -51,7 +53,20 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 		}
 
 		_ = b64Enc.Close()
-		header.Set("X-Cattle-Smbios", buf.String())
+
+		chunk := make([]byte, 875) //the chunk size
+		part := 1
+		for {
+			n, err := buf.Read(chunk)
+			if err != nil {
+				if err != io.EOF {
+					return nil, errors.Wrap(err, "failed to read file in chunks")
+				}
+				break
+			}
+			header.Set(fmt.Sprintf("X-Cattle-Smbios-%d", part), string(chunk[0:n]))
+			part++
+		}
 	}
 
 	if len(labels) > 0 {
