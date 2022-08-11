@@ -2,6 +2,7 @@ area/register:
   - 'cmd/register/*'
   - 'pkg/config/*'
   - 'pkg/tpm/*'
+  - 'pkg/dmidecode/*'
 
 area/tests:
   - 'tests/*'
