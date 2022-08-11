@@ -17,11 +17,14 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"path"
 	"regexp"
@@ -248,6 +251,20 @@ func getSMBios(req *http.Request) (map[string]interface{}, error) {
 	if smbios == "" {
 		return nil, nil
 	}
+	reader := bytes.NewReader([]byte(smbios))
+	gz, err := gzip.NewReader(reader)
+	defer func(gz *gzip.Reader) {
+		_ = gz.Close()
+	}(gz)
+	if err == nil {
+		// got compressed header, read it
+		output, err := ioutil.ReadAll(gz)
+		if err != nil {
+			return nil, err
+		}
+		smbios = string(output)
+	}
+
 	smbiosData, err := base64.StdEncoding.DecodeString(smbios)
 	if err != nil {
 		return nil, err

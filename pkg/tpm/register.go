@@ -18,6 +18,7 @@ package tpm
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -51,7 +52,14 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 		}
 
 		_ = b64Enc.Close()
-		header.Set("X-Cattle-Smbios", buf.String())
+		var b bytes.Buffer
+		gz, _ := gzip.NewWriterLevel(&b, gzip.BestCompression)
+		_, err = gz.Write(buf.Bytes())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to gzip dmidecode data")
+		}
+		_ = gz.Close()
+		header.Set("X-Cattle-Smbios", b.String())
 	}
 
 	if len(labels) > 0 {
