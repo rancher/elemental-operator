@@ -320,10 +320,6 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 							"value": "rancher/elemental",
 						},
 						{
-							"name":  "REPOSITORY",
-							"value": "rancher/elemental",
-						},
-						{
 							"name":  "IMAGE_PREFIX",
 							"value": "quay.io/costoolkit/elemental",
 						},
