@@ -245,13 +245,21 @@ func buildName(data map[string]interface{}, name string) string {
 
 func getSMBios(req *http.Request) (map[string]interface{}, error) {
 	var smbios string
-	// 200 * 875bytes per header = 175Kb of smbios data, should be enough?
-	for i := 1; i <= 200; i++ {
-		header := req.Header.Get(fmt.Sprintf("X-Cattle-Smbios-%d", i))
-		if header == "" {
-			break
+	// Old header sent by clients on commit < be788bcfd899977770d84c996abd967c30942822
+	headerOld := req.Header.Get("X-Cattle-Smbios")
+
+	// If old header not found try to get the new ones
+	if headerOld == "" {
+		// 200 * 875bytes per header = 175Kb of smbios data, should be enough?
+		for i := 1; i <= 200; i++ {
+			header := req.Header.Get(fmt.Sprintf("X-Cattle-Smbios-%d", i))
+			if header == "" {
+				break
+			}
+			smbios = smbios + header
 		}
-		smbios = smbios + header
+	} else {
+		smbios = headerOld
 	}
 
 	if smbios == "" {
