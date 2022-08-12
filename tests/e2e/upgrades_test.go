@@ -317,15 +317,15 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 					"envs": []map[string]string{
 						{
 							"name":  "REPOSITORY",
-							"value": "rancher-sandbox/os2",
+							"value": "rancher/elemental",
 						},
 						{
 							"name":  "REPOSITORY",
-							"value": "rancher-sandbox/os2",
+							"value": "rancher/elemental",
 						},
 						{
 							"name":  "IMAGE_PREFIX",
-							"value": "quay.io/costoolkit/os2",
+							"value": "quay.io/costoolkit/elemental",
 						},
 						{
 							"name":  "VERSION_SUFFIX",
@@ -338,17 +338,17 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			)
 			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel5")
 
-			waitTestChannelPopulate(k, mr, "testchannel5", "quay.io/costoolkit/os2:v0.1.0-alpha22-amd64", "v0.1.0-alpha22-amd64")
+			waitTestChannelPopulate(k, mr, "testchannel5", "quay.io/costoolkit/elemental:v0.1.0-amd64", "v0.1.0-amd64")
 
 			err := k.ApplyYAML(fleetNamespace, osImage,
-				catalog.NewManagedOSImage(osImage, []map[string]interface{}{}, "", "v0.1.0-alpha22-amd64"))
+				catalog.NewManagedOSImage(osImage, []map[string]interface{}{}, "", "v0.1.0-amd64"))
 			Expect(err).ToNot(HaveOccurred())
 
 			checkUpgradePod(k,
 				And(
-					ContainElement("METADATA_UPGRADEIMAGE=quay.io/costoolkit/os2:v0.1.0-alpha22-amd64"),
+					ContainElement("METADATA_UPGRADEIMAGE=quay.io/costoolkit/elemental:v0.1.0-amd64"),
 				),
-				Equal("quay.io/costoolkit/os2:v0.1.0-alpha22-amd64"),
+				Equal("quay.io/costoolkit/elemental:v0.1.0-amd64"),
 				Equal([]string{"/usr/sbin/suc-upgrade"}),
 				BeNil(),
 				And(
