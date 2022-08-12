@@ -348,7 +348,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				And(
 					ContainElement("METADATA_UPGRADEIMAGE=quay.io/costoolkit/elemental:v0.1.0-amd64"),
 				),
-				Equal("quay.io/costoolkit/os2:v0.1.0-amd64"),
+				Equal("quay.io/costoolkit/elemental:v0.1.0-amd64"),
 				Equal([]string{"/usr/sbin/suc-upgrade"}),
 				BeNil(),
 				And(
