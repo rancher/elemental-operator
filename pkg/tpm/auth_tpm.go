@@ -122,8 +122,14 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 }
 
 func (a *AuthServer) Authenticate(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, io.WriteCloser, error) {
+	if !websocket.IsWebSocketUpgrade(req) {
+		logrus.Debugf("plain HTTP request from %s", req.RemoteAddr)
+		return nil, true, nil, nil
+	}
+
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
+		logrus.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)
 		return nil, true, nil, nil
 	}
 
