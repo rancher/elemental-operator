@@ -109,11 +109,9 @@ func (i *InventoryServer) getRancherCACert() string {
 func (i *InventoryServer) getRancherServerURL() (string, error) {
 	setting, err := i.settingCache.Get("server-url")
 	if err != nil {
-		logrus.Errorf("Error getting server-url setting: %s", err.Error())
 		return "", err
 	}
 	if setting.Value == "" {
-		logrus.Error("server-url is not set")
 		return "", fmt.Errorf("server-url is not set")
 	}
 	return setting.Value, nil
