@@ -26,7 +26,9 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/gorilla/websocket"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/config"
 	values "github.com/rancher/wrangler/pkg/data"
@@ -45,6 +47,7 @@ var (
 )
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	logrus.Debugf("Incoming HTTP request for %s", req.URL.Path)
 	// get the machine registration relevant to this request
 	registration, err := i.getMachineRegistration(req)
 	if err != nil {
@@ -52,18 +55,33 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	// attempt to authenticate the machine, if the machine is nil, authentication has failed
-	inventory, w, err := i.authMachine(resp, req, registration.Namespace)
+	if !websocket.IsWebSocketUpgrade(req) {
+		logrus.Debug("got a plain HTTP request: send unauthenticated registration")
+		if err = i.unauthenticatedResponse(registration, resp); err != nil {
+			logrus.Error("error sending unauthenticated response: ", err)
+		}
+		return
+	}
+
+	// upgrade to websocket
+	conn, err := upgrade(resp, req)
+	if err != nil {
+		logrus.Error("failed to upgrade connection to websocket: %w", err)
+		return
+	}
+	defer conn.Close()
+
+	// attempt to authenticate the machine, if err, authentication has failed
+	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
 		logrus.Error("failed to authenticate inventory: ", err)
 		return
 	}
-
-	// by default return the cloud init for this machine registration
+	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
+		logrus.Info("websocket connection without recognized Auth header")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
-			logrus.Error("error writing unauthenticated response: ", err)
-			return
+			logrus.Error("error sending unauthenticated response: ", err)
 		}
 		return
 	}
@@ -74,6 +92,7 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 			logrus.Error("error creating machine inventory: ", err)
 			return
 		}
+		logrus.Infof("new machine inventory created: %s", inventory.Name)
 	}
 
 	labels, err := getLabels(req)
@@ -96,13 +115,28 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	err = i.writeMachineInventoryCloudConfig(w, inventory, registration)
+	err = i.writeMachineInventoryCloudConfig(conn, inventory, registration)
 	if err != nil {
-		logrus.Error("failed to write machine inventory cloud config: ", err)
+		logrus.Error("failed sending elemental cloud config: %w", err)
 		return
 	}
+	logrus.Debug("elemental cloud config sent")
+}
 
-	_ = w.Close()
+func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
+	upgrader := websocket.Upgrader{
+		HandshakeTimeout: 5 * time.Second,
+		CheckOrigin:      func(r *http.Request) bool { return true },
+	}
+
+	conn, err := upgrader.Upgrade(resp, req, nil)
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+	return conn, err
 }
 
 func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
@@ -171,7 +205,7 @@ func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.Machin
 
 }
 
-func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inventory *elm.MachineInventory, registration *elm.MachineRegistration) error {
+func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, inventory *elm.MachineInventory, registration *elm.MachineRegistration) error {
 	var err error
 
 	sa, err := i.serviceAccountCache.Get(registration.Status.ServiceAccountRef.Namespace,
@@ -187,9 +221,14 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(writer io.Writer, inv
 
 	serverURL, err := i.getRancherServerURL()
 	if err != nil {
-		logrus.Errorf("Failed to get server-url: %s", err.Error())
+		return fmt.Errorf("failed to get server-url: %s", err.Error())
+	}
+
+	writer, err := conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
 		return err
 	}
+	defer writer.Close()
 
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{

@@ -18,9 +18,9 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 
+	"github.com/gorilla/websocket"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
@@ -38,7 +38,7 @@ var (
 )
 
 type authenticator interface {
-	Authenticate(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, io.WriteCloser, error)
+	Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, error)
 }
 
 type InventoryServer struct {
@@ -117,15 +117,15 @@ func (i *InventoryServer) getRancherServerURL() (string, error) {
 	return setting.Value, nil
 }
 
-func (i *InventoryServer) authMachine(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, io.WriteCloser, error) {
+func (i *InventoryServer) authMachine(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elm.MachineInventory, error) {
 	for _, auth := range i.authenticators {
-		machine, cont, writer, err := auth.Authenticate(resp, req, registerNamespace)
+		machine, cont, err := auth.Authenticate(conn, req, registerNamespace)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if machine != nil || !cont {
-			return machine, writer, nil
+			return machine, nil
 		}
 	}
-	return nil, nil, nil
+	return nil, nil
 }
