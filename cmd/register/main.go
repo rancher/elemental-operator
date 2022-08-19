@@ -28,7 +28,7 @@ import (
 
 	"github.com/mudler/yip/pkg/schema"
 	"github.com/rancher/elemental-operator/pkg/config"
-	"github.com/rancher/elemental-operator/pkg/tpm"
+	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sanity-io/litter"
@@ -156,7 +156,7 @@ func run(config config.Config) {
 	}
 
 	for {
-		data, err = tpm.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed, registration.Labels)
+		data, err = register.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed, registration.Labels)
 		if err != nil {
 			logrus.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)
