@@ -205,6 +205,7 @@ func run(config config.Config) {
 		if err != nil {
 			logrus.Fatal("failed calling elemental client: ", err)
 		}
+		logrus.Info("elemental installation completed, please reboot")
 	}
 }
 
