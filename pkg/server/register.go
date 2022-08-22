@@ -95,19 +95,12 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		logrus.Infof("new machine inventory created: %s", inventory.Name)
 	}
 
-	labels, err := getLabels(req)
+	invUpdated, err := fillLabels(req, inventory)
 	if err != nil {
-		logrus.Warn("failed to parse labels header: ", err)
+		logrus.Warn("error extracting labels from headers: ", err)
 	}
 
-	if len(labels) > 0 {
-		if inventory.Labels == nil {
-			inventory.Labels = labels
-		} else {
-			for k, v := range labels {
-				inventory.Labels[k] = v
-			}
-		}
+	if invUpdated {
 		inventory, err = i.machineClient.Update(inventory)
 		if err != nil {
 			logrus.Error("failed to update inventory labels: ", err)
@@ -327,4 +320,27 @@ func getLabels(req *http.Request) (map[string]string, error) {
 	}
 	var labels map[string]string
 	return labels, json.Unmarshal(labelString, &labels)
+}
+
+func fillLabels(req *http.Request, inventory *elm.MachineInventory) (bool, error) {
+	updated := false
+	labels, err := getLabels(req)
+
+	if err != nil {
+		return updated, fmt.Errorf("extracting labels from headers: %w", err)
+	}
+	if len(labels) == 0 {
+		return updated, nil
+	}
+
+	updated = true
+	logrus.Debugf("found labels in request headers: %#v", labels)
+	if inventory.Labels == nil {
+		inventory.Labels = labels
+	} else {
+		for k, v := range labels {
+			inventory.Labels[k] = v
+		}
+	}
+	return updated, nil
 }
