@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -91,6 +92,8 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 		return nil, err
 	}
 	defer conn.Close()
+	_ = conn.SetWriteDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 
 	err = tpmAuth.Init(conn)
 	if err != nil {
