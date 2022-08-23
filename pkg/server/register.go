@@ -31,6 +31,7 @@ import (
 	"github.com/gorilla/websocket"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/config"
+	"github.com/rancher/elemental-operator/pkg/register"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -126,8 +127,8 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	if err != nil {
 		return nil, err
 	}
-	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
 
 	return conn, err
 }
