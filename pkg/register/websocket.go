@@ -16,4 +16,121 @@ limitations under the License.
 
 package register
 
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+
+	"github.com/gorilla/websocket"
+)
+
 const RegistrationDeadlineSeconds = 10
+
+type MessageType byte
+
+const (
+	MsgUndefined MessageType = iota
+	MsgReady
+	MsgSmbios
+	MsgLabels
+	MsgGet
+	MsgLast = MsgGet // MsgLast must point to the last message
+)
+
+func (mt MessageType) String() string {
+	switch mt {
+	case MsgUndefined:
+		return "Undefined"
+	case MsgReady:
+		return "Ready"
+	case MsgSmbios:
+		return "SMBIOS"
+	case MsgLabels:
+		return "Labels"
+	case MsgGet:
+		return "Get"
+	default:
+		return "Unknown"
+	}
+}
+
+// ReadMessage reads from the websocket connection returning the MessageType
+// and the actual data
+func ReadMessage(conn *websocket.Conn) (MessageType, []byte, error) {
+	msgType := MsgUndefined
+
+	t, r, err := conn.NextReader()
+	if err != nil {
+		return msgType, nil, err
+	}
+	if t != websocket.BinaryMessage {
+		return msgType, nil, fmt.Errorf("got non binary message (type %d)", t)
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return msgType, nil, err
+	}
+	return extractMessageType(data)
+}
+
+// WriteMessage attaches msgType to the actual data before sending it to the
+// websocket connection
+func WriteMessage(conn *websocket.Conn, msgType MessageType, data []byte) error {
+	w, err := conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	buf := insertMessageType(msgType, data)
+	if _, err := w.Write(buf); err != nil {
+		return err
+	}
+	return nil
+}
+
+// SendJSONData transmits json encoded data to the websocket connection, attaching to
+// it msgType. It needs a `MsgReady` reply on the websocket channel in order to report
+// a successful transmission
+func SendJSONData(conn *websocket.Conn, msgType MessageType, data interface{}) error {
+	var buf []byte
+
+	w, err := conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(insertMessageType(msgType, buf))
+	if err != nil {
+		return err
+	}
+	if err = json.NewEncoder(w).Encode(data); err != nil {
+		return err
+	}
+	w.Close()
+
+	mt, _, err := ReadMessage(conn)
+	if err != nil {
+		return err
+	}
+	if mt != MsgReady {
+		return fmt.Errorf("expecting '%v' but got '%v'", MsgReady, mt)
+	}
+
+	return nil
+}
+
+func extractMessageType(buf []byte) (MessageType, []byte, error) {
+	if len(buf) < 1 {
+		return MsgUndefined, buf, fmt.Errorf("empty message")
+	}
+	if buf[0] > byte(MsgLast) {
+		return MsgUndefined, buf, fmt.Errorf("unknown message")
+	}
+
+	return MessageType(buf[0]), buf[1:], nil
+}
+
+func insertMessageType(msg MessageType, buf []byte) []byte {
+	msgBuf := []byte{byte(msg)}
+	return append(msgBuf, buf...)
+}
