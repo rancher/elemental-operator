@@ -48,7 +48,7 @@ var (
 )
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	logrus.Debugf("Incoming HTTP request for %s", req.URL.Path)
+	logrus.Infof("Incoming HTTP request for %s", req.URL.Path)
 	// get the machine registration relevant to this request
 	registration, err := i.getMachineRegistration(req)
 	if err != nil {
@@ -71,50 +71,39 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		return
 	}
 	defer conn.Close()
+	logrus.Debug("connection upgraded to websocket")
 
 	// attempt to authenticate the machine, if err, authentication has failed
 	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
-		logrus.Error("failed to authenticate inventory: ", err)
+		logrus.Error("authentication failed: ", err)
 		return
 	}
 	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
-		logrus.Info("websocket connection without recognized Auth header")
+		logrus.Warn("websocket connection: unrecognized authentication method")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			logrus.Error("error sending unauthenticated response: ", err)
 		}
 		return
 	}
+	logrus.Debug("attestation completed")
 
-	if inventory.CreationTimestamp.IsZero() {
-		inventory, err = i.createMachineInventory(req, inventory, registration)
-		if err != nil {
-			logrus.Error("error creating machine inventory: ", err)
-			return
-		}
-		logrus.Infof("new machine inventory created: %s", inventory.Name)
-	}
-
-	invUpdated, err := fillLabels(req, inventory)
-	if err != nil {
-		logrus.Warn("error extracting labels from headers: ", err)
-	}
-
-	if invUpdated {
-		inventory, err = i.machineClient.Update(inventory)
-		if err != nil {
-			logrus.Error("failed to update inventory labels: ", err)
-			return
-		}
-	}
-
-	err = i.writeMachineInventoryCloudConfig(conn, inventory, registration)
-	if err != nil {
-		logrus.Error("failed sending elemental cloud config: %w", err)
+	if err := register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
+		logrus.Error("cannot finalize the authentication process: %w", err)
 		return
 	}
-	logrus.Debug("elemental cloud config sent")
+
+	isNewInventory := inventory.CreationTimestamp.IsZero()
+	if isNewInventory {
+		initInventory(inventory, registration)
+	}
+
+	_, err = i.serveLoop(conn, inventory, registration)
+	if err != nil {
+		logrus.Error(err)
+		return
+	}
 }
 
 func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
@@ -150,23 +139,28 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 	})
 }
 
-func (i *InventoryServer) createMachineInventory(req *http.Request, inventory *elm.MachineInventory, registration *elm.MachineRegistration) (*elm.MachineInventory, error) {
-	inventory.Name = registration.Spec.MachineName
-	if inventory.Name == "" {
-		inventory.Name = defaultName
-	}
-	sMBios, _ := getSMBios(req)
-	inventory.Name = buildName(sMBios, inventory.Name)
-	inventory.Namespace = registration.Namespace
-	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
-	inventory.Labels = registration.Spec.MachineInventoryLabels
-
+func (i *InventoryServer) createMachineInventory(inventory *elm.MachineInventory) (*elm.MachineInventory, error) {
 	machines, err := i.machineCache.GetByIndex(tpmHashIndex, inventory.Spec.TPMHash)
 	if err != nil || len(machines) > 0 {
 		return nil, err
 	}
+	if len(machines) > 0 {
+		return nil, fmt.Errorf("machine with TPM hash %s is already registered", machines[0].Spec.TPMHash)
+	}
 
-	return i.machineClient.Create(inventory)
+	inventory, err = i.machineClient.Create(inventory)
+	if err == nil {
+		logrus.Infof("new machine inventory created: %s", inventory.Name)
+	}
+	return inventory, err
+}
+
+func (i *InventoryServer) updateMachineInventory(inventory *elm.MachineInventory) (*elm.MachineInventory, error) {
+	inventory, err := i.machineClient.Update(inventory)
+	if err == nil {
+		logrus.Infof("machine inventory updated: %s", inventory.Name)
+	}
+	return inventory, err
 }
 
 func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.MachineRegistration, error) {
@@ -274,6 +268,91 @@ func buildName(data map[string]interface{}, name string) string {
 		resultStr = resultStr[:58]
 	}
 	return strings.ToLower(resultStr)
+}
+
+func initInventory(inventory *elm.MachineInventory, registration *elm.MachineRegistration) {
+	if registration.Spec.MachineName != "" {
+		inventory.Name = registration.Spec.MachineName
+	} else {
+		inventory.Name = defaultName
+	}
+	inventory.Namespace = registration.Namespace
+	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
+	inventory.Labels = registration.Spec.MachineInventoryLabels
+}
+
+func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.MachineInventory, reg *elm.MachineRegistration) (msgType register.MessageType, err error) {
+	updated := false
+	for {
+		var data []byte
+
+		msgType, data, err = register.ReadMessage(conn)
+		if err != nil {
+			return msgType, fmt.Errorf("websocket communication interrupted: %w", err)
+		}
+
+		switch msgType {
+		case register.MsgSmbios:
+			smbiosData := map[string]interface{}{}
+			if err = json.Unmarshal(data, &smbiosData); err != nil {
+				return msgType, fmt.Errorf("cannot extract SMBios data: %w", err)
+			}
+			inventory.Name = buildName(smbiosData, inventory.Name)
+			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
+		case register.MsgLabels:
+			if err := mergeInventoryLabels(inventory, data); err != nil {
+				return msgType, err
+			}
+			updated = true
+		case register.MsgGet:
+			inventory, err = i.commitMachineInventory(inventory, updated)
+			if err != nil {
+				return msgType, err
+			}
+			err = i.writeMachineInventoryCloudConfig(conn, inventory, reg)
+			if err != nil {
+				return msgType, fmt.Errorf("failed sending elemental cloud config: %w", err)
+			}
+			logrus.Debug("elemental cloud config sent")
+			return msgType, nil
+
+		default:
+			return msgType, fmt.Errorf("got unexpected message: %s", msgType)
+		}
+		if err := register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
+			return msgType, fmt.Errorf("cannot complete %s exchange", msgType)
+		}
+	}
+}
+
+func mergeInventoryLabels(inventory *elm.MachineInventory, data []byte) error {
+	labels := map[string]string{}
+	if err := json.Unmarshal(data, &labels); err != nil {
+		return fmt.Errorf("cannot extract inventory labels: %w", err)
+	}
+	logrus.Debugf("received labels: %v", labels)
+	if inventory.Labels == nil {
+		inventory.Labels = labels
+	} else {
+		for k, v := range labels {
+			inventory.Labels[k] = v
+		}
+	}
+	return nil
+}
+
+func (i *InventoryServer) commitMachineInventory(inventory *elm.MachineInventory, updated bool) (*elm.MachineInventory, error) {
+	var err error
+	if inventory.CreationTimestamp.IsZero() {
+		if inventory, err = i.createMachineInventory(inventory); err != nil {
+			return nil, fmt.Errorf("MachineInventory creation failed: %w", err)
+		}
+	} else if updated {
+		if inventory, err = i.updateMachineInventory(inventory); err != nil {
+			return nil, fmt.Errorf("MachineInventory update failed: %w", err)
+		}
+	}
+	return inventory, nil
 }
 
 func getSMBios(req *http.Request) (map[string]interface{}, error) {

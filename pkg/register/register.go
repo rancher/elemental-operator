@@ -17,13 +17,9 @@ limitations under the License.
 package register
 
 import (
-	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -33,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	"github.com/sanity-io/litter"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,18 +61,6 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 
 	header := http.Header{}
 	header.Add("Authorization", authToken)
-	if smbios {
-		err = addSMBIOSHeaders(&header)
-		if err != nil {
-			return nil, fmt.Errorf("add SMBIOS headers: %w", err)
-		}
-	}
-	if len(labels) > 0 {
-		err = addLabelsHeaders(&header, labels)
-		if err != nil {
-			return nil, fmt.Errorf("add labels in header: %w", err)
-		}
-	}
 
 	conn, resp, err := dialer.Dial(wsURL, header)
 	if err != nil {
@@ -95,17 +80,59 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	_ = conn.SetWriteDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 	_ = conn.SetReadDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 
+	logrus.Debug("start TPM attestation")
 	err = tpmAuth.Init(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed TPM based authentication: %w", err)
 	}
 
-	_, msg, err := conn.NextReader()
+	msgType, _, err := ReadMessage(conn)
 	if err != nil {
-		return nil, fmt.Errorf("reading elemental config: %w", err)
+		return nil, fmt.Errorf("expecting auth reply: %w", err)
+	}
+	if msgType != MsgReady {
+		return nil, fmt.Errorf("expecting '%v' but got '%v'", MsgReady, msgType)
+	}
+	logrus.Info("TPM attestation successful")
+
+	err = sendData(conn, smbios, labels)
+	if err != nil {
+		return nil, err
 	}
 
-	return ioutil.ReadAll(msg)
+	logrus.Debug("get elemental configuration")
+	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
+		return nil, fmt.Errorf("request elemental configuration: %w", err)
+	}
+	_, r, err := conn.NextReader()
+	if err != nil {
+		return nil, fmt.Errorf("read elemental configuration: %w", err)
+	}
+	return ioutil.ReadAll(r)
+}
+
+func sendData(conn *websocket.Conn, smbios bool, labels map[string]string) error {
+	if smbios {
+		logrus.Debug("send SMBIOS data")
+		data, err := dmidecode.Decode()
+		if err != nil {
+			return errors.Wrap(err, "failed to read dmidecode data")
+		}
+		err = SendJSONData(conn, MsgSmbios, data)
+		if err != nil {
+			logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
+			return fmt.Errorf("sending SMBIOS data: %w", err)
+		}
+	}
+	if len(labels) > 0 {
+		logrus.Debug("send labels")
+		err := SendJSONData(conn, MsgLabels, labels)
+		if err != nil {
+			logrus.Debugf("Labels:\n%s", litter.Sdump(labels))
+			return fmt.Errorf("sending labels: %w", err)
+		}
+	}
+	return nil
 }
 
 func addSMBIOSHeaders(header *http.Header) error {
