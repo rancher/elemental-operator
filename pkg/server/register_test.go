@@ -19,6 +19,7 @@ package server
 import (
 	"testing"
 
+	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"gotest.tools/assert"
 )
 
@@ -93,5 +94,63 @@ func TestBuildName(t *testing.T) {
 
 	for _, testCase := range testCase {
 		assert.Equal(t, testCase.Output, buildName(data, testCase.Format))
+	}
+}
+
+func TestMergeInventoryLabels(t *testing.T) {
+	testCase := []struct {
+		data     []byte            // labels to add to the inventory
+		labels   map[string]string // labels already in the inventory
+		fail     bool
+		expected map[string]string
+	}{
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			false,
+			map[string]string{"key1": "val1", "key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":2}`),
+			map[string]string{"key1": "val1"},
+			true,
+			map[string]string{"key1": "val1"},
+		},
+		{
+			[]byte(`{"key2":"val2", "key3":"val3"}`),
+			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4"},
+			false,
+			map[string]string{"key1": "val1", "key2": "val2", "key3": "val3"},
+		},
+		{
+			[]byte{},
+			map[string]string{"key1": "val1"},
+			true,
+			map[string]string{"key1": "val1"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			nil,
+			false,
+			map[string]string{"key2": "val2"},
+		},
+	}
+
+	for _, test := range testCase {
+		inventory := &elm.MachineInventory{}
+		inventory.Labels = test.labels
+
+		err := mergeInventoryLabels(inventory, test.data)
+		if test.fail {
+			assert.Assert(t, err != nil)
+		} else {
+			assert.Equal(t, err, nil)
+		}
+		for k, v := range test.expected {
+			val, ok := inventory.Labels[k]
+			assert.Equal(t, ok, true)
+			assert.Equal(t, v, val)
+		}
+
 	}
 }
