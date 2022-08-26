@@ -17,13 +17,8 @@ limitations under the License.
 package server
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"net/http"
 	"testing"
 
-	values "github.com/rancher/wrangler/pkg/data"
 	"gotest.tools/assert"
 )
 
@@ -98,60 +93,5 @@ func TestBuildName(t *testing.T) {
 
 	for _, testCase := range testCase {
 		assert.Equal(t, testCase.Output, buildName(data, testCase.Format))
-	}
-}
-
-func TestSmbios(t *testing.T) {
-	dmiEncoded := map[string]interface{}{}
-	values.PutValue(dmiEncoded, "Myself", "System Information", "Manufacturer")
-	var buf bytes.Buffer
-	b64Enc := base64.NewEncoder(base64.StdEncoding, &buf)
-	json.NewEncoder(b64Enc).Encode(dmiEncoded)
-	_ = b64Enc.Close()
-
-	testCase := []struct {
-		header http.Header
-		path   []string // Path to the value
-		value  string   // Actual value
-		gotIt  bool     // Did we get the value
-	}{
-		{
-			http.Header{"X-Cattle-Smbios": {buf.String()}}, // Old header
-			[]string{"System Information", "Manufacturer"},
-			"Myself",
-			true,
-		},
-		{
-			http.Header{"X-Cattle-Smbios-1": {buf.String()}}, // New header
-			[]string{"System Information", "Manufacturer"},
-			"Myself",
-			true,
-		},
-		{
-			http.Header{"X-Cattle-Smbios-2": {buf.String()}}, // New header but missing the first part
-			[]string{"System Information", "Manufacturer"},
-			"",
-			false,
-		},
-		{
-			http.Header{}, // Empty header
-			[]string{"System Information", "Manufacturer"},
-			"",
-			false,
-		},
-	}
-
-	for _, test := range testCase {
-		data, err := getSMBios(&http.Request{Header: test.header})
-		assert.Equal(t, err, nil)
-		d, gotIt := values.GetValue(data, test.path...)
-		assert.Equal(t, gotIt, test.gotIt)
-		// Cant compare string and nil and values.GetValue returns either a string or a nil
-		if test.value == "" {
-			assert.Equal(t, d, nil)
-		} else {
-			assert.Equal(t, d, test.value)
-		}
-
 	}
 }

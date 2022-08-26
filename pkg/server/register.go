@@ -17,7 +17,6 @@ limitations under the License.
 package server
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -353,74 +352,4 @@ func (i *InventoryServer) commitMachineInventory(inventory *elm.MachineInventory
 		}
 	}
 	return inventory, nil
-}
-
-func getSMBios(req *http.Request) (map[string]interface{}, error) {
-	var smbios string
-	// Old header sent by clients on commit < be788bcfd899977770d84c996abd967c30942822
-	headerOld := req.Header.Get("X-Cattle-Smbios")
-
-	// If old header not found try to get the new ones
-	if headerOld == "" {
-		// 200 * 875bytes per header = 175Kb of smbios data, should be enough?
-		for i := 1; i <= 200; i++ {
-			header := req.Header.Get(fmt.Sprintf("X-Cattle-Smbios-%d", i))
-			if header == "" {
-				break
-			}
-			smbios = smbios + header
-		}
-	} else {
-		smbios = headerOld
-	}
-
-	if smbios == "" {
-		logrus.Debug("No smbios headers")
-		return nil, nil
-	}
-
-	smbiosData, err := base64.StdEncoding.DecodeString(smbios)
-	if err != nil {
-		logrus.Error("Error decoding smbios string")
-		return nil, err
-	}
-	data := map[string]interface{}{}
-	return data, json.Unmarshal(smbiosData, &data)
-}
-
-func getLabels(req *http.Request) (map[string]string, error) {
-	in := req.Header.Get("X-Cattle-Labels")
-	if in == "" {
-		return nil, nil
-	}
-
-	labelString, err := base64.StdEncoding.DecodeString(in)
-	if err != nil {
-		return nil, err
-	}
-	var labels map[string]string
-	return labels, json.Unmarshal(labelString, &labels)
-}
-
-func fillLabels(req *http.Request, inventory *elm.MachineInventory) (bool, error) {
-	updated := false
-	labels, err := getLabels(req)
-
-	if err != nil {
-		return updated, fmt.Errorf("extracting labels from headers: %w", err)
-	}
-	if len(labels) == 0 {
-		return updated, nil
-	}
-
-	updated = true
-	logrus.Debugf("found labels in request headers: %#v", labels)
-	if inventory.Labels == nil {
-		inventory.Labels = labels
-	} else {
-		for k, v := range labels {
-			inventory.Labels[k] = v
-		}
-	}
-	return updated, nil
 }
