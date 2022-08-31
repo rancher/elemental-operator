@@ -35,6 +35,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 
 		AfterEach(func() {
 			kubectl.New().Delete("machineregistration", "-n", operatorNamespace, "machine-registration")
+
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
@@ -48,6 +49,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			}}
 			spec := catalog.MachineRegistrationSpec{Config: config}
 			mr := catalog.NewMachineRegistration("machine-registration", spec)
+
 			Eventually(func() error {
 				return k.ApplyYAML(operatorNamespace, "machine-registration", mr)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
@@ -79,6 +81,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 					ContainSubstring("END CERTIFICATE"),
 				),
 			)
+
 			// TODO: We should check that the install values that we passed are indeed returned by the registration?
 		})
 	})
