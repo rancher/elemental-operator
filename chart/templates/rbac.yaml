@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: elemental-operator
+  name: {{ .Release.Name }}
 rules:
 - apiGroups:
     - management.cattle.io
@@ -94,12 +94,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: elemental-operator
+  name: {{ .Release.Name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: elemental-operator
+  name: {{ .Release.Name }}
 subjects:
 - kind: ServiceAccount
-  name: elemental-operator
+  name: {{ .Release.Name }}
   namespace: {{.Release.Namespace}}

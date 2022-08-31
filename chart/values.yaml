@@ -5,6 +5,9 @@ image:
   tag: latest
   imagePullPolicy: IfNotPresent
 
+# number of operator replicas to deploy
+replicas: 1
+
 # http[s] proxy server
 # proxy: http://<username>@<password>:<url>:<port>
 

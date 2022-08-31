@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,8 +41,10 @@ var (
 )
 
 const operatorNamespace = "cattle-elemental-system"
+const operatorName = "elemental-operator"
 
 var testResources = []string{"machineregistration", "managedosversionchannel"}
+var replicas = "1"
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -63,16 +66,19 @@ func deployOperator(k *kubectl.Kubectl) {
 			"--create-namespace",
 			"--set", "sync_interval=30s",
 			"--set", "debug=true",
-			"elemental-operator",
+			"--set", fmt.Sprintf("replicas=%s", replicas),
+			operatorName,
 			chart)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = k.WaitForPod(operatorNamespace, "app=elemental-operator", "elemental-operator")
+		err = k.WaitForPod(operatorNamespace, "app=elemental-operator", operatorName)
 		Expect(err).ToNot(HaveOccurred())
 
 		pods, err := k.GetPodNames(operatorNamespace, "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(len(pods)).To(Equal(1))
+		parsedReplicas, err := strconv.Atoi(replicas)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(pods)).To(Equal(parsedReplicas))
 
 		err = k.WaitForNamespaceWithPod(operatorNamespace, "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
@@ -89,7 +95,6 @@ func deployOperator(k *kubectl.Kubectl) {
 		// We need to manually set this value, which is the same value you would get from doing the bootstrap
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("https://%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
-
 	})
 }
 
@@ -117,6 +122,10 @@ var _ = BeforeSuite(func() {
 		bridgeIP = "172.17.0.1"
 	}
 
+	if rp := os.Getenv("OPERATOR_REPLICAS"); rp != "" {
+		replicas = os.Getenv("OPERATOR_REPLICAS")
+	}
+
 	if os.Getenv("NO_SETUP") != "" {
 		By("No setup")
 		return
@@ -138,7 +147,7 @@ var _ = BeforeSuite(func() {
 
 			deployOperator(k)
 
-			// Somehow rancher needs to be restarted after a elemental-operator upgrade
+			// Somehow rancher needs to be restarted after an elemental-operator upgrade
 			// to get machineregistration working
 			pods, err := k.GetPodNames("cattle-system", "")
 			Expect(err).ToNot(HaveOccurred())
