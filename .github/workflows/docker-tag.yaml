@@ -3,9 +3,15 @@ on:
   push:
     tags:
       - 'v*'
+env:
+  OPERATOR_REPO: quay.io/costoolkit/elemental-operator
+  REGISTER_REPO: quay.io/costoolkit/elemental-register
 jobs:
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # OIDC support.
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -24,7 +30,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/elemental-operator
+            ${{ env.OPERATOR_REPO }}
           tags: |
             type=semver,pattern={{raw}}
       - name: Docker meta for register tag
@@ -32,7 +38,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/elemental-register
+            ${{ env.REGISTER_REPO }}
           tags: |
             type=semver,pattern={{raw}}
       - name: Set up Docker Buildx
@@ -72,3 +78,11 @@ jobs:
             TAG=${{ steps.export_tag.outputs.operator_tag }}
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
+      - name: Sign image
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run:
+          cosign sign ${{ env.OPERATOR_REPO }}:${{ steps.export_tag.outputs.operator_tag }}
+          cosign sign ${{ env.OPERATOR_REPO }}:latest
+          cosign sign ${{ env.REGISTER_REPO }}:${{ steps.export_tag.outputs.operator_tag }}
+          cosign sign ${{ env.REGISTER_REPO }}:latest

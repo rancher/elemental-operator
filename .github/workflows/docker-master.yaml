@@ -3,9 +3,15 @@ on:
   push:
     branches:
       - main
+env:
+  OPERATOR_REPO: quay.io/costoolkit/elemental-operator-ci
+  REGISTER_REPO: quay.io/costoolkit/elemental-register-ci
 jobs:
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # OIDC support.
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -24,7 +30,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/elemental-operator-ci
+            ${{ env.OPERATOR_REPO }}
           tags: |
             type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
             type=raw,value=latest
@@ -33,7 +39,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            quay.io/costoolkit/elemental-register-ci
+            ${{ env.REGISTER_REPO }}
           tags: |
             type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
             type=raw,value=latest
@@ -74,3 +80,11 @@ jobs:
             TAG=${{ steps.export_tag.outputs.operator_tag }}
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
+      - name: Sign images
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run:
+          cosign sign ${{ env.OPERATOR_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}
+          cosign sign ${{ env.OPERATOR_REPO }}:latest
+          cosign sign ${{ env.REGISTER_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}
+          cosign sign ${{ env.REGISTER_REPO }}:latest
