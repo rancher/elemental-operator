@@ -18,11 +18,9 @@ package tpm
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/go-attestation/attest"
@@ -31,7 +29,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/wrangler/pkg/merr"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -105,71 +102,36 @@ func writeRead(conn *websocket.Conn, input []byte) ([]byte, error) {
 	return ioutil.ReadAll(reader)
 }
 
-func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
-	upgrader := websocket.Upgrader{
-		HandshakeTimeout: 5 * time.Second,
-		CheckOrigin:      func(r *http.Request) bool { return true },
-	}
-
-	conn, err := upgrader.Upgrade(resp, req, nil)
-	if err != nil {
-		return nil, err
-	}
-	_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	return conn, err
-}
-
-func (a *AuthServer) Authenticate(resp http.ResponseWriter, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, io.WriteCloser, error) {
+func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, error) {
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
-		return nil, true, nil, nil
+		logrus.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)
+		return nil, true, nil
 	}
 
 	ek, attestationData, err := gotpm.GetAttestationData(header)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 
 	machine, err := a.validHash(ek, registerNamespace)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 
 	secret, challenge, err := gotpm.GenerateChallenge(ek, attestationData)
 	if err != nil {
-		return nil, false, nil, err
-	}
-
-	conn, err := upgrade(resp, req)
-	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 
 	challResp, err := writeRead(conn, challenge)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 
 	if err := gotpm.ValidateChallenge(secret, challResp); err != nil {
-		return nil, false, nil, err
+		return nil, false, err
 	}
 
-	writer, err := conn.NextWriter(websocket.BinaryMessage)
-	return machine, false, &responseWriter{
-		WriteCloser: writer,
-		conn:        conn,
-	}, err
-}
-
-type responseWriter struct {
-	io.WriteCloser
-	conn *websocket.Conn
-}
-
-func (r *responseWriter) Close() error {
-	err := r.WriteCloser.Close()
-	err2 := r.conn.Close()
-	return merr.NewErrors(err, err2)
+	return machine, false, nil
 }
