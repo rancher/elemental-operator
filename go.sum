@@ -1226,6 +1226,8 @@ github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95 h1
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95/go.mod h1:rZj2a+V44LvtFVH/vsFXtHYIWMP1Q9aSrl6RGLbk49A=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e h1:MFYTJkPeV3Lq6bIBTwyCv2+sKW2kV0vfe820v6n0Vig=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e/go.mod h1:cUw+h4wm01VdavMOjUMVQ5m/b2oiOjZ7gweI8AlybO4=
+github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda h1:TMkKDQTmjYpxl8/3XDh0oAJDvjM0C0vtQYdGs2I9MoE=
+github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda/go.mod h1:cUw+h4wm01VdavMOjUMVQ5m/b2oiOjZ7gweI8AlybO4=
 github.com/rancher/aks-operator v1.0.2 h1:R6niUq/IlhzKpzRFmRR9YMiMePJh1flEqFO86us7OMY=
 github.com/rancher/aks-operator v1.0.2/go.mod h1:Nafxvj+HQOMXb418Oj6eFVOUf0fnq8e4RBqi9S+Q5WQ=
 github.com/rancher/apiserver v0.0.0-20210922180056-297b6df8d714/go.mod h1:8W0EwaR9dH5NDFw6mpAX437D0q+EZqKWbZyX71+z2WI=

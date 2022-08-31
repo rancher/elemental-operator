@@ -17,76 +17,68 @@ limitations under the License.
 package tpm
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-
-	"github.com/pkg/errors"
-	"github.com/rancher-sandbox/go-tpm"
-	"github.com/rancher/elemental-operator/pkg/dmidecode"
+	"github.com/gorilla/websocket"
+	gotpm "github.com/rancher-sandbox/go-tpm"
 )
 
-func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulatedSeed int64, labels map[string]string) ([]byte, error) {
-	var opts []tpm.Option
+type AttestationChannel struct {
+	conn *websocket.Conn
+}
 
-	if len(caCert) > 0 {
-		opts = append(opts, tpm.WithCAs(caCert))
-		opts = append(opts, tpm.AppendCustomCAToSystemCA)
+func (att *AttestationChannel) Read(p []byte) (int, error) {
+	_, r, err := att.conn.NextReader()
+	if err != nil {
+		return 0, err
+	}
+	return r.Read(p)
+}
+
+func (att *AttestationChannel) Write(p []byte) (int, error) {
+	w, err := att.conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return 0, err
+	}
+	defer w.Close()
+
+	return w.Write(p)
+}
+
+type AuthClient struct {
+	emulateTPM bool
+	seed       int64
+	ak         []byte
+}
+
+func (auth *AuthClient) EmulateTPM(seed int64) {
+	auth.emulateTPM = true
+	auth.seed = seed
+}
+
+func (auth *AuthClient) GetAuthToken() (string, string, error) {
+	var opts []gotpm.Option
+	if auth.emulateTPM {
+		opts = append(opts, gotpm.Emulated)
+		opts = append(opts, gotpm.WithSeed(auth.seed))
+	}
+	token, akBytes, err := gotpm.GetAuthToken(opts...)
+	if err != nil {
+		return "", "", err
+	}
+	auth.ak = akBytes
+
+	hash, err := gotpm.GetPubHash(opts...)
+	if err != nil {
+		return "", "", err
+	}
+	return token, hash, nil
+}
+
+func (auth *AuthClient) Init(conn *websocket.Conn) error {
+	var opts []gotpm.Option
+	if auth.emulateTPM {
+		opts = append(opts, gotpm.Emulated)
+		opts = append(opts, gotpm.WithSeed(auth.seed))
 	}
 
-	header := http.Header{}
-
-	if smbios {
-		data, err := dmidecode.Decode()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read dmidecode data")
-		}
-
-		var buf bytes.Buffer
-		b64Enc := base64.NewEncoder(base64.StdEncoding, &buf)
-
-		if err = json.NewEncoder(b64Enc).Encode(data); err != nil {
-			return nil, errors.Wrap(err, "failed to encode dmidecode data")
-		}
-
-		_ = b64Enc.Close()
-
-		chunk := make([]byte, 875) //the chunk size
-		part := 1
-		for {
-			n, err := buf.Read(chunk)
-			if err != nil {
-				if err != io.EOF {
-					return nil, errors.Wrap(err, "failed to read file in chunks")
-				}
-				break
-			}
-			header.Set(fmt.Sprintf("X-Cattle-Smbios-%d", part), string(chunk[0:n]))
-			part++
-		}
-	}
-
-	if len(labels) > 0 {
-		var buf bytes.Buffer
-		b64Enc := base64.NewEncoder(base64.StdEncoding, &buf)
-
-		if err := json.NewEncoder(b64Enc).Encode(labels); err != nil {
-			return nil, errors.Wrap(err, "failed to encode labels")
-		}
-
-		_ = b64Enc.Close()
-		header.Set("X-Cattle-Labels", buf.String())
-	}
-
-	if emulatedTPM {
-		opts = append(opts, tpm.Emulated)
-		opts = append(opts, tpm.WithSeed(emulatedSeed))
-	}
-
-	opts = append(opts, tpm.WithHeader(header))
-
-	return tpm.Get(url, opts...)
+	return gotpm.Authenticate(auth.ak, &AttestationChannel{conn}, opts...)
 }
