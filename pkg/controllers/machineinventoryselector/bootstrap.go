@@ -83,6 +83,24 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	return status, nil
 }
 
+// getStopElementalAgentLocalPlan returns the local plan to stop elemental-system-agent service in json format
+func getStopElementalAgentLocalPlan() ([]byte, error) {
+	stopElementalAgent := applyinator.Plan{
+		OneTimeInstructions: []applyinator.OneTimeInstruction{
+			{
+				CommonInstruction: applyinator.CommonInstruction{
+					Command: "systemctl",
+					Args: []string{
+						"stop",
+						"elemental-system-agent",
+					},
+				},
+			},
+		},
+	}
+	return json.Marshal(stopElementalAgent)
+}
+
 // getBootstrapPlan the bootstrap plan will determine the machine's ip addresses, set the hostname to the inventory name and run the bootstrap provider's script
 func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, inventory *v1beta1.MachineInventory) (string, []byte, error) {
 	machine, err := h.getMachineOwner(selector)
@@ -95,6 +113,11 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 	}
 
 	bootstrap, err := h.SecretCache.Get(selector.Namespace, *machine.Spec.Bootstrap.DataSecretName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	stopAgentPlan, err := getStopElementalAgentLocalPlan()
 	if err != nil {
 		return "", nil, err
 	}
@@ -119,6 +142,11 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 			{
 				Content:     base64.StdEncoding.EncodeToString([]byte(inventory.Name)),
 				Path:        "/usr/local/etc/hostname",
+				Permissions: "0644",
+			},
+			{
+				Content:     base64.StdEncoding.EncodeToString(stopAgentPlan),
+				Path:        "/var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip",
 				Permissions: "0644",
 			},
 		},
@@ -146,6 +174,21 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 			{
 				CommonInstruction: applyinator.CommonInstruction{
 					Command: "/var/lib/rancher/bootstrap.sh",
+					// Ensure local plans will be enabled, this is required to ensure the local
+					// plan stopping elemental-system-agent is executed
+					Env: []string{
+						"CATTLE_LOCAL_ENABLED=true",
+					},
+				},
+			},
+			{
+				// Ensure the local plan can only be executed after bootstrapping script is done
+				CommonInstruction: applyinator.CommonInstruction{
+					Command: "bash",
+					Args: []string{
+						"-c",
+						"mv /var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip /var/lib/rancher/agent/plans/elemental-agent-stop.plan",
+					},
 				},
 			},
 		},
