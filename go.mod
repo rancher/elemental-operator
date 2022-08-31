@@ -40,7 +40,7 @@ require (
 	github.com/onsi/gomega v1.19.0
 	github.com/pkg/errors v0.9.1
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95
-	github.com/rancher-sandbox/go-tpm v0.0.0-20220512105546-a8efc2a6448e
+	github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
 	github.com/rancher/rancher/pkg/apis v0.0.0-20211013185633-a636bda2a00e // indirect
