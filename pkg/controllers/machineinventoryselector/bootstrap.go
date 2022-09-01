@@ -164,15 +164,6 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 			},
 			{
 				CommonInstruction: applyinator.CommonInstruction{
-					Command: "bash",
-					Args: []string{
-						"-c",
-						"elemental-register --label \"elemental.cattle.io/ExternalIP=$(hostname -I | awk '{print $1}')\" --label \"elemental.cattle.io/InternalIP=$(hostname -I | awk '{print $2}')\"",
-					},
-				},
-			},
-			{
-				CommonInstruction: applyinator.CommonInstruction{
 					Command: "/var/lib/rancher/bootstrap.sh",
 					// Ensure local plans will be enabled, this is required to ensure the local
 					// plan stopping elemental-system-agent is executed
