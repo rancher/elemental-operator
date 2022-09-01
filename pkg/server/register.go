@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/config"
@@ -37,8 +38,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
-
-const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/UUID}"
 
 var (
 	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
@@ -271,10 +270,15 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 }
 
 func initInventory(inventory *elm.MachineInventory, registration *elm.MachineRegistration) {
-	if registration.Spec.MachineName != "" {
-		inventory.Name = registration.Spec.MachineName
-	} else {
-		inventory.Name = defaultName
+	const namePrefix = "m-"
+
+	inventory.Name = registration.Spec.MachineName
+	if inventory.Name == "" {
+		if registration.Spec.Config.Elemental.Registration.NoSMBIOS {
+			inventory.Name = namePrefix + uuid.NewString()
+		} else {
+			inventory.Name = namePrefix + "${System Information/UUID}"
+		}
 	}
 	inventory.Namespace = registration.Namespace
 	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
