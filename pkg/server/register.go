@@ -43,7 +43,7 @@ const defaultName = "m-${System Information/Manufacturer}-${System Information/P
 var (
 	sanitize   = regexp.MustCompile("[^0-9a-zA-Z]")
 	doubleDash = regexp.MustCompile("--+")
-	start      = regexp.MustCompile("^[a-zA-Z]")
+	start      = regexp.MustCompile("^[a-zA-Z0-9]")
 )
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -235,7 +235,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	})
 }
 
-func buildName(data map[string]interface{}, name string) string {
+func buildStringFromSmbiosData(data map[string]interface{}, name string) string {
 	str := name
 	result := &strings.Builder{}
 	for {
@@ -296,7 +296,22 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 			if err = json.Unmarshal(data, &smbiosData); err != nil {
 				return msgType, fmt.Errorf("cannot extract SMBios data: %w", err)
 			}
-			inventory.Name = buildName(smbiosData, inventory.Name)
+			inventory.Name = buildStringFromSmbiosData(smbiosData, inventory.Name)
+			logrus.Debug("Adding extra labels")
+			// Add extra label info from data coming from smbios
+			newLabels := map[string]string{
+				"manufacturer":    buildStringFromSmbiosData(smbiosData, "${System Information/Manufacturer}"),
+				"productName":     buildStringFromSmbiosData(smbiosData, "${System Information/Product Name}"),
+				"serialNumber":    buildStringFromSmbiosData(smbiosData, "${System Information/Serial Number}"),
+				"uuid":            buildStringFromSmbiosData(smbiosData, "${System Information/UUID}"),
+				"cpuManufacturer": buildStringFromSmbiosData(smbiosData, "${Processor Information/Manufacturer}"),
+				"cpuFamily":       buildStringFromSmbiosData(smbiosData, "${Processor Information/Family}"),
+				"cpuCore":         buildStringFromSmbiosData(smbiosData, "${Processor Information/Core Count}"),
+				"cpuThreads":      buildStringFromSmbiosData(smbiosData, "${Processor Information/Thread Count}"),
+			}
+			for k, v := range newLabels {
+				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(v, "-"), "-")
+			}
 			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
 		case register.MsgLabels:
 			if err := mergeInventoryLabels(inventory, data); err != nil {

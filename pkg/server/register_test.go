@@ -93,7 +93,7 @@ func TestBuildName(t *testing.T) {
 	}
 
 	for _, testCase := range testCase {
-		assert.Equal(t, testCase.Output, buildName(data, testCase.Format))
+		assert.Equal(t, testCase.Output, buildStringFromSmbiosData(data, testCase.Format))
 	}
 }
 
