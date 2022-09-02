@@ -41,9 +41,10 @@ import (
 const defaultName = "m-${System Information/Manufacturer}-${System Information/Product Name}-${System Information/UUID}"
 
 var (
-	sanitize   = regexp.MustCompile("[^0-9a-zA-Z]")
-	doubleDash = regexp.MustCompile("--+")
-	start      = regexp.MustCompile("^[a-zA-Z0-9]")
+	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
+	sanitizeHostname = regexp.MustCompile("[^0-9a-zA-Z]")
+	doubleDash       = regexp.MustCompile("--+")
+	start            = regexp.MustCompile("^[a-zA-Z0-9]")
 )
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -266,7 +267,7 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 	if len(resultStr) > 58 {
 		resultStr = resultStr[:58]
 	}
-	return strings.ToLower(resultStr)
+	return resultStr
 }
 
 func initInventory(inventory *elm.MachineInventory, registration *elm.MachineRegistration) {
@@ -296,24 +297,18 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 			if err = json.Unmarshal(data, &smbiosData); err != nil {
 				return msgType, fmt.Errorf("cannot extract SMBios data: %w", err)
 			}
-			inventory.Name = buildStringFromSmbiosData(smbiosData, inventory.Name)
-			logrus.Debug("Adding extra labels")
-			// Add extra label info from data coming from smbios
-			newLabels := map[string]string{
-				"manufacturer":    buildStringFromSmbiosData(smbiosData, "${System Information/Manufacturer}"),
-				"productName":     buildStringFromSmbiosData(smbiosData, "${System Information/Product Name}"),
-				"serialNumber":    buildStringFromSmbiosData(smbiosData, "${System Information/Serial Number}"),
-				"uuid":            buildStringFromSmbiosData(smbiosData, "${System Information/UUID}"),
-				"cpuManufacturer": buildStringFromSmbiosData(smbiosData, "${Processor Information/Manufacturer}"),
-				"cpuFamily":       buildStringFromSmbiosData(smbiosData, "${Processor Information/Family}"),
-				"cpuCore":         buildStringFromSmbiosData(smbiosData, "${Processor Information/Core Count}"),
-				"cpuThreads":      buildStringFromSmbiosData(smbiosData, "${Processor Information/Thread Count}"),
-			}
+			// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
+			// to set the machine hostname. Also set it to lowercase
+			inventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(buildStringFromSmbiosData(smbiosData, inventory.Name), "-"))
+			logrus.Debug("Adding labels from registration")
+			// Add extra label info from data coming from smbios and based on the registration data
 			if inventory.Labels == nil {
 				inventory.Labels = map[string]string{}
 			}
-			for k, v := range newLabels {
-				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(v, "-"), "-")
+			for k, v := range reg.Spec.MachineInventoryLabels {
+				parsedData := buildStringFromSmbiosData(smbiosData, v)
+				logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
+				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
 			}
 			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
 		case register.MsgLabels:

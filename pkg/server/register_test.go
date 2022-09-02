@@ -40,15 +40,15 @@ func TestBuildName(t *testing.T) {
 	}{
 		{
 			Format: "${level1B}",
-			Output: "level1bvalue",
+			Output: "level1BValue",
 		},
 		{
 			Format: "${level1B",
-			Output: "m-level1b",
+			Output: "m-level1B",
 		},
 		{
 			Format: "a${level1B",
-			Output: "a-level1b",
+			Output: "a-level1B",
 		},
 		{
 			Format: "${}",
@@ -80,15 +80,15 @@ func TestBuildName(t *testing.T) {
 		},
 		{
 			Format: "a${level1A/level2A}c",
-			Output: "alevel2avaluec",
+			Output: "alevel2AValuec",
 		},
 		{
 			Format: "a${level1A/level2B/level3A}c",
-			Output: "alevel3avaluec",
+			Output: "alevel3AValuec",
 		},
 		{
 			Format: "a${level1A/level2B/level3A}c${level1B}",
-			Output: "alevel3avalueclevel1bvalue",
+			Output: "alevel3AValueclevel1BValue",
 		},
 	}
 

@@ -107,3 +107,10 @@ setup-full-cluster: build-docker-operator chart setup-kind
 kind-e2e-tests: build-docker-operator chart setup-kind
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
 	CHART=$(CHART) $(MAKE) e2e-tests
+
+# This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
+# useful to test changes into the operator with a running system, without clearing the operator namespace
+# thus losing any registration/inventories/os CRDs already created
+reload-operator: build-docker-operator chart
+	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
+	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
