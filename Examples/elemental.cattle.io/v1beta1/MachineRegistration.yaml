@@ -20,3 +20,7 @@ spec:
         iso: https://something.example.com
   machineInventoryLabels:
     clusterName: test
+    manufacturer: "${System Information/Manufacturer}"
+    productName: "${System Information/Product Name}"
+    serialNumber: "${System Information/Serial Number}"
+    machineUUID: "${System Information/UUID}"
