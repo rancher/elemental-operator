@@ -309,6 +309,9 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 				"cpuCore":         buildStringFromSmbiosData(smbiosData, "${Processor Information/Core Count}"),
 				"cpuThreads":      buildStringFromSmbiosData(smbiosData, "${Processor Information/Thread Count}"),
 			}
+			if inventory.Labels == nil {
+				inventory.Labels = map[string]string{}
+			}
 			for k, v := range newLabels {
 				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(v, "-"), "-")
 			}
