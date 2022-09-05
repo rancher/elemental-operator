@@ -160,7 +160,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2"}`),
 			map[string]string{"key1": "val1"},
 			false,
-			map[string]string{"key1": "val1", "key2": "val2"},
+			map[string]string{"key1": "val1"},
 		},
 		{
 			[]byte(`{"key2":2}`),
@@ -172,7 +172,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2", "key3":"val3"}`),
 			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4"},
 			false,
-			map[string]string{"key1": "val1", "key2": "val2", "key3": "val3"},
+			map[string]string{"key1": "val1", "key3": "previous_val"},
 		},
 		{
 			[]byte{},
@@ -184,7 +184,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2"}`),
 			nil,
 			false,
-			map[string]string{"key2": "val2"},
+			map[string]string{},
 		},
 	}
 

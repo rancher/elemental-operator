@@ -33,7 +33,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulatedSeed int64, labels map[string]string) ([]byte, error) {
+func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulatedSeed int64) ([]byte, error) {
 
 	dialer := websocket.DefaultDialer
 
@@ -95,7 +95,7 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	}
 	logrus.Info("TPM attestation successful")
 
-	err = sendData(conn, smbios, labels)
+	err = sendData(conn, smbios)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	return ioutil.ReadAll(r)
 }
 
-func sendData(conn *websocket.Conn, smbios bool, labels map[string]string) error {
+func sendData(conn *websocket.Conn, smbios bool) error {
 	if smbios {
 		logrus.Debug("send SMBIOS data")
 		data, err := dmidecode.Decode()
@@ -122,14 +122,6 @@ func sendData(conn *websocket.Conn, smbios bool, labels map[string]string) error
 		if err != nil {
 			logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
 			return fmt.Errorf("sending SMBIOS data: %w", err)
-		}
-	}
-	if len(labels) > 0 {
-		logrus.Debug("send labels")
-		err := SendJSONData(conn, MsgLabels, labels)
-		if err != nil {
-			logrus.Debugf("Labels:\n%s", litter.Sdump(labels))
-			return fmt.Errorf("sending labels: %w", err)
 		}
 	}
 	return nil
