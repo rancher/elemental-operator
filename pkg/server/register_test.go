@@ -17,11 +17,63 @@ limitations under the License.
 package server
 
 import (
+	"regexp"
 	"testing"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/config"
 	"gotest.tools/assert"
 )
+
+func TestInitNewInventory(t *testing.T) {
+	const alphanum = "[0-9a-fA-F]"
+	// m  '-'  8 alphanum chars  '-'  3 blocks of 4 alphanum chars  '-'  12 alphanum chars
+	mUUID := regexp.MustCompile("^m-" + alphanum + "{8}-(" + alphanum + "{4}-){3}" + alphanum + "{12}")
+	// e.g., m-66588488-3eb6-4a6d-b642-c994f128c6f1
+
+	testCase := []struct {
+		noSMBIOS     bool
+		initName     string
+		expectedName string
+	}{
+		{
+			noSMBIOS:     false,
+			initName:     "custom-name",
+			expectedName: "custom-name",
+		},
+		{
+			noSMBIOS:     false,
+			expectedName: "m-${System Information/UUID}",
+		},
+		{
+			noSMBIOS: true,
+		},
+	}
+
+	for _, test := range testCase {
+		registration := &elm.MachineRegistration{
+			Spec: elm.MachineRegistrationSpec{
+				MachineName: test.initName,
+				Config: &config.Config{
+					Elemental: config.Elemental{
+						Registration: config.Registration{
+							NoSMBIOS: test.noSMBIOS,
+						},
+					},
+				},
+			},
+		}
+
+		inventory := &elm.MachineInventory{}
+		initInventory(inventory, registration)
+
+		if test.noSMBIOS {
+			assert.Check(t, mUUID.Match([]byte(inventory.Name)), inventory.Name+" is not UUID based")
+		} else {
+			assert.Equal(t, inventory.Name, test.expectedName)
+		}
+	}
+}
 
 func TestBuildName(t *testing.T) {
 	data := map[string]interface{}{
