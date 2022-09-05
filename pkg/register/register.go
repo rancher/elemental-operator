@@ -112,6 +112,14 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 }
 
 func sendData(conn *websocket.Conn, smbios bool, labels map[string]string) error {
+	if len(labels) > 0 {
+		logrus.Debug("send labels")
+		err := SendJSONData(conn, MsgLabels, labels)
+		if err != nil {
+			logrus.Debugf("Labels:\n%s", litter.Sdump(labels))
+			return fmt.Errorf("sending labels: %w", err)
+		}
+	}
 	if smbios {
 		logrus.Debug("send SMBIOS data")
 		data, err := dmidecode.Decode()
@@ -122,14 +130,6 @@ func sendData(conn *websocket.Conn, smbios bool, labels map[string]string) error
 		if err != nil {
 			logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
 			return fmt.Errorf("sending SMBIOS data: %w", err)
-		}
-	}
-	if len(labels) > 0 {
-		logrus.Debug("send labels")
-		err := SendJSONData(conn, MsgLabels, labels)
-		if err != nil {
-			logrus.Debugf("Labels:\n%s", litter.Sdump(labels))
-			return fmt.Errorf("sending labels: %w", err)
 		}
 	}
 	return nil
