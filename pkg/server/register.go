@@ -132,7 +132,6 @@ func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.Machi
 				EmulateTPM:      mRRegistration.EmulateTPM,
 				EmulatedTPMSeed: mRRegistration.EmulatedTPMSeed,
 				NoSMBIOS:        mRRegistration.NoSMBIOS,
-				Labels:          mRRegistration.Labels,
 			},
 		},
 	})
@@ -319,7 +318,6 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 			if err := mergeInventoryLabels(inventory, data); err != nil {
 				return msgType, err
 			}
-			updated = true
 		case register.MsgGet:
 			inventory, err = i.commitMachineInventory(inventory, updated)
 			if err != nil {
@@ -347,12 +345,9 @@ func mergeInventoryLabels(inventory *elm.MachineInventory, data []byte) error {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
 	}
 	logrus.Debugf("received labels: %v", labels)
+	logrus.Warn("received labels from registering client: no more supported, skipping")
 	if inventory.Labels == nil {
-		inventory.Labels = labels
-	} else {
-		for k, v := range labels {
-			inventory.Labels[k] = v
-		}
+		inventory.Labels = map[string]string{}
 	}
 	return nil
 }

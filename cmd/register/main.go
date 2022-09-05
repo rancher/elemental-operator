@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
@@ -54,7 +53,6 @@ const (
 
 func main() {
 	var cfg config.Config
-	var labels []string
 	var debug bool
 
 	cmd := &cobra.Command{
@@ -99,17 +97,6 @@ func main() {
 				logrus.Fatal("failed to parse configuration: ", err)
 			}
 
-			if cfg.Elemental.Registration.Labels == nil {
-				cfg.Elemental.Registration.Labels = map[string]string{}
-			}
-
-			for _, label := range labels {
-				parts := strings.Split(label, "=")
-				if len(parts) == 2 {
-					cfg.Elemental.Registration.Labels[parts[0]] = parts[1]
-				}
-			}
-
 			logrus.Debugf("input config:\n%s", litter.Sdump(cfg))
 
 			run(cfg)
@@ -123,7 +110,6 @@ func main() {
 	cmd.Flags().Int64Var(&cfg.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
 	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug logging")
-	cmd.Flags().StringArrayVar(&labels, "label", nil, "")
 
 	if err := cmd.Execute(); err != nil {
 		logrus.Fatalln(err)
@@ -156,7 +142,7 @@ func run(config config.Config) {
 	}
 
 	for {
-		data, err = register.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed, registration.Labels)
+		data, err = register.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed)
 		if err != nil {
 			logrus.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)
