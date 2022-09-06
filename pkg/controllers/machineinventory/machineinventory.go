@@ -94,7 +94,7 @@ func (h *handler) planMachineInventoryIndexer(obj *v1beta1.MachineInventory) ([]
 // initializeHandler creates the machine inventory plan secret and sets the initial plan checksum
 func (h *handler) initializeHandler(obj *v1beta1.MachineInventory, status v1beta1.MachineInventoryStatus) ([]runtime.Object, v1beta1.MachineInventoryStatus, error) {
 	if obj == nil || obj.DeletionTimestamp != nil {
-		return nil, obj.Status, generic.ErrSkip
+		return nil, status, generic.ErrSkip
 	}
 
 	// ensure we only initialize the machine once
