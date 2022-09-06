@@ -18,8 +18,6 @@ package clients
 
 import (
 	"context"
-	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/apply"
 
 	elmscheme "github.com/rancher/elemental-operator/pkg/generated/clientset/versioned/scheme"
 	capicontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io"
@@ -30,6 +28,8 @@ import (
 	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
 	"github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io"
 	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher/lasso/pkg/controller"
+	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/rancher/wrangler/pkg/clients"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	rbaccontrollers "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
