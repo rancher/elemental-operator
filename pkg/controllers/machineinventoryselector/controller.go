@@ -50,29 +50,29 @@ type handler struct {
 	Secrets                              core.SecretClient
 }
 
-func Register(ctx context.Context, clients *clients.Clients) {
+func Register(ctx context.Context, clients clients.ClientInterface) {
 	h := &handler{
-		MachineInventoryEnqueue:              clients.Elemental.MachineInventory().Enqueue,
-		MachineInventorySelectorEnqueueAfter: clients.Elemental.MachineInventorySelector().EnqueueAfter,
-		MachineInventoryCache:                clients.Elemental.MachineInventory().Cache(),
-		MachineInventories:                   clients.Elemental.MachineInventory(),
-		MachineInventorySelectorCache:        clients.Elemental.MachineInventorySelector().Cache(),
-		MachineInventorySelectors:            clients.Elemental.MachineInventorySelector(),
-		MachineCache:                         clients.CAPI.Machine().Cache(),
-		SecretCache:                          clients.Core.Secret().Cache(),
-		Secrets:                              clients.Core.Secret(),
+		MachineInventoryEnqueue:              clients.Elemental().MachineInventory().Enqueue,
+		MachineInventorySelectorEnqueueAfter: clients.Elemental().MachineInventorySelector().EnqueueAfter,
+		MachineInventoryCache:                clients.Elemental().MachineInventory().Cache(),
+		MachineInventories:                   clients.Elemental().MachineInventory(),
+		MachineInventorySelectorCache:        clients.Elemental().MachineInventorySelector().Cache(),
+		MachineInventorySelectors:            clients.Elemental().MachineInventorySelector(),
+		MachineCache:                         clients.CAPI().Machine().Cache(),
+		SecretCache:                          clients.Core().Secret().Cache(),
+		Secrets:                              clients.Core().Secret(),
 	}
 
 	// indexers
-	clients.Elemental.MachineInventorySelector().Cache().AddIndexer(OpenInventorySelectorIndex, h.indexOpenInventorySelector)
+	clients.Elemental().MachineInventorySelector().Cache().AddIndexer(OpenInventorySelectorIndex, h.indexOpenInventorySelector)
 
 	/// MachineInventorySelector status handlers
-	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental.MachineInventorySelector(), "", ControllerName+"-ready", h.readyHandler)
-	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental.MachineInventorySelector(), "", ControllerName+"-inventory-ready", h.inventoryReadyHandler)
-	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental.MachineInventorySelector(), "", ControllerName+"-bootstrap", h.bootstrapReadyHandler)
+	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental().MachineInventorySelector(), "", ControllerName+"-ready", h.readyHandler)
+	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental().MachineInventorySelector(), "", ControllerName+"-inventory-ready", h.inventoryReadyHandler)
+	elm.RegisterMachineInventorySelectorStatusHandler(ctx, clients.Elemental().MachineInventorySelector(), "", ControllerName+"-bootstrap", h.bootstrapReadyHandler)
 
 	// Inventory handlers
-	clients.Elemental.MachineInventory().OnChange(ctx, ControllerName, h.onInventoryChange)
+	clients.Elemental().MachineInventory().OnChange(ctx, ControllerName, h.onInventoryChange)
 }
 
 // readyHandler waits until an inventory has been adopted and bootstrapped. The provider id, addresses and status ready will only be set once.  Once a selector is ready

@@ -100,7 +100,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 	managedosversionchannel.Register(ctx, o.requeuer, clients)
 	machineinventoryselector.Register(ctx, clients)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients))
+	aggregation.Watch(ctx, clients.Core().Secret(), o.namespace, "elemental-operator", server.New(clients))
 
 	for _, s := range o.services {
 		go s(ctx, clients) //nolint:golint,errcheck

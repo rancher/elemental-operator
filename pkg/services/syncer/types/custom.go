@@ -69,9 +69,9 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 	}
 
 	serviceAccount := false
-	p, err := c.Clients.Core.Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
+	p, err := c.Clients.Core().Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
 	if err != nil {
-		_, err = c.Clients.Core.Pod().Create(&corev1.Pod{
+		_, err = c.Clients.Core().Pod().Create(&corev1.Pod{
 			TypeMeta: v1.TypeMeta{
 				APIVersion: "v1",
 				Kind:       "Pod",
@@ -124,7 +124,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 		// reattempt
 		logrus.Infof("'%s/%s' failed, retrying", p.Namespace, p.Name)
 
-		err = c.Clients.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
+		err = c.Clients.Core().Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +134,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req := c.Clients.K8s.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
+	req := c.Clients.K8s().CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		c.Requeuer.Requeue()
@@ -149,7 +149,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 		return nil, fmt.Errorf("error in copy information from podLogs to buf")
 	}
 
-	err = c.Clients.Core.Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
+	err = c.Clients.Core().Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
 	if err != nil {
 		c.Requeuer.Requeue()
 		return nil, err

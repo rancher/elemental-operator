@@ -34,11 +34,11 @@ type AuthServer struct {
 	secretCache   corecontrollers.SecretCache
 }
 
-func New(clients *clients.Clients) *AuthServer {
+func New(clients clients.ClientInterface) *AuthServer {
 	a := &AuthServer{
-		machineCache:  clients.Elemental.MachineInventory().Cache(),
-		machineClient: clients.Elemental.MachineInventory(),
-		secretCache:   clients.Core.Secret().Cache(),
+		machineCache:  clients.Elemental().MachineInventory().Cache(),
+		machineClient: clients.Elemental().MachineInventory(),
+		secretCache:   clients.Core().Secret().Cache(),
 	}
 
 	a.machineCache.AddIndexer(machineByHash, func(obj *elm.MachineInventory) ([]string, error) {

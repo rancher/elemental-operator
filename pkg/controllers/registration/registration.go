@@ -38,19 +38,19 @@ var controllerName = "machine-registration"
 type handler struct {
 	ctx          context.Context
 	Recorder     record.EventRecorder
-	clients      *clients.Clients
+	clients      clients.ClientInterface
 	settingCache ranchercontrollers.SettingCache
 }
 
-func Register(ctx context.Context, clients *clients.Clients) {
+func Register(ctx context.Context, clients clients.ClientInterface) {
 	h := handler{
 		ctx:          ctx,
 		clients:      clients,
 		Recorder:     clients.EventRecorder(controllerName),
-		settingCache: clients.Rancher.Setting().Cache(),
+		settingCache: clients.Rancher().Setting().Cache(),
 	}
-	elmcontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.Elemental.MachineRegistration(), "Ready", controllerName, h.OnChange)
-	h.clients.Elemental.MachineRegistration().OnRemove(ctx, controllerName, h.OnRemove)
+	elmcontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.Elemental().MachineRegistration(), "Ready", controllerName, h.OnChange)
+	h.clients.Elemental().MachineRegistration().OnRemove(ctx, controllerName, h.OnRemove)
 }
 
 func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegistrationStatus) (elm.MachineRegistrationStatus, error) {
@@ -71,7 +71,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 
 	status.RegistrationURL = fmt.Sprintf("%s/elemental/registration/%s", serverURL, status.RegistrationToken)
 
-	_, err = h.clients.RBAC.Role().Create(&rbacv1.Role{
+	_, err = h.clients.RBAC().Role().Create(&rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
@@ -91,7 +91,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		return status, err
 	}
 
-	_, err = h.clients.Core.ServiceAccount().Create(&corev1.ServiceAccount{
+	_, err = h.clients.Core().ServiceAccount().Create(&corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
@@ -101,7 +101,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		return status, err
 	}
 
-	_, err = h.clients.RBAC.RoleBinding().Create(&rbacv1.RoleBinding{
+	_, err = h.clients.RBAC().RoleBinding().Create(&rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: obj.Namespace,
 			Name:      obj.Name,
@@ -131,15 +131,15 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 }
 
 func (h *handler) OnRemove(_ string, obj *elm.MachineRegistration) (*elm.MachineRegistration, error) {
-	err := h.clients.RBAC.RoleBinding().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
+	err := h.clients.RBAC().RoleBinding().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	err = h.clients.RBAC.Role().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
+	err = h.clients.RBAC().Role().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
-	err = h.clients.Core.ServiceAccount().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
+	err = h.clients.Core().ServiceAccount().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
 	}
