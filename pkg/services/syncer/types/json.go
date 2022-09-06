@@ -18,7 +18,7 @@ package types
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -52,7 +52,7 @@ func (j *JSONSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm
 		return nil, err
 	}
 
-	buf, err := ioutil.ReadAll(resp.Body)
+	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
