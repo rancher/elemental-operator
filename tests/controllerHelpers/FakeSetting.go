@@ -18,6 +18,8 @@ package controllerHelpers
 
 import (
 	"context"
+	"time"
+
 	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/generic"
@@ -26,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 type FakeSetting struct {

@@ -18,6 +18,7 @@ package controllerHelpers
 
 import (
 	"context"
+	"time"
 
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 type FakeMachineRegistration struct {

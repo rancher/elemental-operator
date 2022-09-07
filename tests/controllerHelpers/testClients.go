@@ -19,6 +19,7 @@ package controllerHelpers
 import (
 	"context"
 	"fmt"
+
 	capi "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
 	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"

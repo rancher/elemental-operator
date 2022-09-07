@@ -18,6 +18,8 @@ package controllerHelpers
 
 import (
 	"context"
+	"time"
+
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 type FakeCore struct {

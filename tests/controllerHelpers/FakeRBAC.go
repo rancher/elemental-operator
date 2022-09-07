@@ -18,6 +18,7 @@ package controllerHelpers
 
 import (
 	"context"
+	"time"
 
 	rbaccontrollers "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/generic"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"time"
 )
 
 type FakeRBAC struct {
