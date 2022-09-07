@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -130,7 +129,7 @@ func run(config config.Config) {
 	_, err = os.Stat(registration.CACert)
 	if err == nil {
 		logrus.Debug("CACert passed as a file")
-		caCert, err = ioutil.ReadFile(registration.CACert)
+		caCert, err = os.ReadFile(registration.CACert)
 		if err != nil {
 			logrus.Error(err)
 		}

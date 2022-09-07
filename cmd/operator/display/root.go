@@ -18,7 +18,6 @@ package displayCmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -60,7 +59,7 @@ func displayRun(path string) {
 		os.Exit(0)
 	}()
 
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		logrus.Fatal(err)
 	}

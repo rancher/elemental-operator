@@ -45,19 +45,19 @@ type handler struct {
 	SecretCache           v1.SecretCache
 }
 
-func Register(ctx context.Context, clients *clients.Clients) {
+func Register(ctx context.Context, clients clients.ClientInterface) {
 	h := handler{
 		ctx:                   ctx,
-		machineInventories:    clients.Elemental.MachineInventory(),
-		MachineInventoryCache: clients.Elemental.MachineInventory().Cache(),
-		Secrets:               clients.Core.Secret(),
-		SecretCache:           clients.Core.Secret().Cache(),
+		machineInventories:    clients.Elemental().MachineInventory(),
+		MachineInventoryCache: clients.Elemental().MachineInventory().Cache(),
+		Secrets:               clients.Core().Secret(),
+		SecretCache:           clients.Core().Secret().Cache(),
 	}
 
 	elemental.RegisterMachineInventoryGeneratingHandler(
 		ctx,
-		clients.Elemental.MachineInventory(),
-		clients.Apply.WithNoDelete().WithCacheTypes(clients.Core.Secret()).WithSetOwnerReference(true, true),
+		clients.Elemental().MachineInventory(),
+		clients.Apply().WithNoDelete().WithCacheTypes(clients.Core().Secret()).WithSetOwnerReference(true, true),
 		"",
 		controllerName+"-generate",
 		h.initializeHandler,
@@ -65,21 +65,21 @@ func Register(ctx context.Context, clients *clients.Clients) {
 
 	elemental.RegisterMachineInventoryStatusHandler(
 		ctx,
-		clients.Elemental.MachineInventory(),
+		clients.Elemental().MachineInventory(),
 		"",
 		controllerName+"-ready",
 		h.readyHandler)
 
 	elemental.RegisterMachineInventoryStatusHandler(
 		ctx,
-		clients.Elemental.MachineInventory(),
+		clients.Elemental().MachineInventory(),
 		"",
 		controllerName+"-plan-applied",
 		h.planReadyHandler)
 
-	clients.Elemental.MachineInventory().Cache().AddIndexer(planMachineInventoryIndex, h.planMachineInventoryIndexer)
+	clients.Elemental().MachineInventory().Cache().AddIndexer(planMachineInventoryIndex, h.planMachineInventoryIndexer)
 
-	clients.Core.Secret().OnChange(ctx, controllerName, h.onInventoryPlanChange)
+	clients.Core().Secret().OnChange(ctx, controllerName, h.onInventoryPlanChange)
 }
 
 // planMachineInventoryIndexer index machine inventories by their plan reference

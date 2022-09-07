@@ -36,10 +36,10 @@ import (
 
 var controllerName = "mos-bundle"
 
-func Register(ctx context.Context, clients *clients.Clients, defaultRegistry string) {
+func Register(ctx context.Context, clients clients.ClientInterface, defaultRegistry string) {
 	h := &handler{
-		bundleCache:         clients.Fleet.Bundle().Cache(),
-		managedVersionCache: clients.Elemental.ManagedOSVersion().Cache(),
+		bundleCache:         clients.Fleet().Bundle().Cache(),
+		managedVersionCache: clients.Elemental().ManagedOSVersion().Cache(),
 		Recorder:            clients.EventRecorder(controllerName),
 		DefaultRegistry:     defaultRegistry,
 	}
@@ -47,15 +47,15 @@ func Register(ctx context.Context, clients *clients.Clients, defaultRegistry str
 	relatedresource.Watch(ctx,
 		"mcc-from-bundle-trigger",
 		relatedresource.OwnerResolver(true, elm.SchemeGroupVersion.String(), "ManagedOSImage"),
-		clients.Elemental.ManagedOSImage(),
-		clients.Fleet.Bundle())
+		clients.Elemental().ManagedOSImage(),
+		clients.Fleet().Bundle())
 	elmcontrollers.RegisterManagedOSImageGeneratingHandler(ctx,
-		clients.Elemental.ManagedOSImage(),
-		clients.Apply.
+		clients.Elemental().ManagedOSImage(),
+		clients.Apply().
 			WithSetOwnerReference(true, true).
 			WithCacheTypes(
-				clients.Elemental.ManagedOSImage(),
-				clients.Fleet.Bundle()),
+				clients.Elemental().ManagedOSImage(),
+				clients.Fleet().Bundle()),
 		"Defined",
 		controllerName,
 		h.OnChange,

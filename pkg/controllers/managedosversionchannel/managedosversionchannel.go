@@ -19,6 +19,7 @@ package managedosversionchannel
 import (
 	"context"
 
+	"github.com/pkg/errors"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	"github.com/rancher/elemental-operator/pkg/types"
@@ -29,23 +30,23 @@ import (
 const controllerAgentName = "mos-sync"
 
 // Register registers the ManagedOSVersionChannel controller to the clients with the given options
-func Register(ctx context.Context, r types.Requeuer, c *clients.Clients) {
+func Register(ctx context.Context, r types.Requeuer, c clients.ClientInterface) {
 	h := &handler{
 		requer:  r,
 		clients: c,
 	}
-	c.Elemental.ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.onChange)
+	c.Elemental().ManagedOSVersionChannel().OnChange(ctx, controllerAgentName, h.onChange)
 }
 
 type handler struct {
 	requer  types.Requeuer
-	clients *clients.Clients
+	clients clients.ClientInterface
 }
 
-func (h *handler) onChange(s string, moc *elm.ManagedOSVersionChannel) (*elm.ManagedOSVersionChannel, error) {
+func (h *handler) onChange(name string, moc *elm.ManagedOSVersionChannel) (*elm.ManagedOSVersionChannel, error) {
 
 	if moc == nil {
-		return nil, nil
+		return nil, errors.New("ManagedOSVersionChannel object was empty")
 	}
 
 	recorder := h.clients.EventRecorder(controllerAgentName)
@@ -54,7 +55,7 @@ func (h *handler) onChange(s string, moc *elm.ManagedOSVersionChannel) (*elm.Man
 		copy := moc.DeepCopy()
 		copy.Status.Status = "error"
 		recorder.Event(moc, corev1.EventTypeWarning, "error", "No ManagedOSVersionChannel type defined")
-		_, err := h.clients.Elemental.ManagedOSVersionChannel().UpdateStatus(copy)
+		_, err := h.clients.Elemental().ManagedOSVersionChannel().UpdateStatus(copy)
 		return nil, err
 	}
 

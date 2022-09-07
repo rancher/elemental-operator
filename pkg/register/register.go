@@ -20,7 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -66,7 +66,7 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	if err != nil {
 		if resp != nil {
 			if resp.StatusCode == http.StatusUnauthorized {
-				data, err := ioutil.ReadAll(resp.Body)
+				data, err := io.ReadAll(resp.Body)
 				if err == nil {
 					return nil, errors.New(string(data))
 				}
@@ -108,7 +108,7 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	if err != nil {
 		return nil, fmt.Errorf("read elemental configuration: %w", err)
 	}
-	return ioutil.ReadAll(r)
+	return io.ReadAll(r)
 }
 
 func sendData(conn *websocket.Conn, smbios bool) error {
