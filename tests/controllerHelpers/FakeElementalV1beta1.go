@@ -39,8 +39,7 @@ func (f *FakeElementalV1beta1) MachineInventorySelectorTemplate() elmcontrollers
 }
 
 func (f *FakeElementalV1beta1) MachineRegistration() elmcontrollers.MachineRegistrationController {
-	//TODO implement me
-	panic("MachineRegistration implement me")
+	return FakeMachineRegistration{}
 }
 
 func (f *FakeElementalV1beta1) ManagedOSImage() elmcontrollers.ManagedOSImageController {

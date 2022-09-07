@@ -17,18 +17,52 @@ limitations under the License.
 package controllerHelpers
 
 import (
+	"context"
 	"fmt"
-
-	"github.com/rancher/elemental-operator/pkg/clients"
+	capi "github.com/rancher/elemental-operator/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
+	fleetcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/fleet.cattle.io/v1alpha1"
+	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/apply"
+	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	rbaccontrollers "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 )
 
 // TestClients is a test client that fills the clients.ClientInterface
 type TestClients struct {
-	clients.Clients
 	Recorder *FakeRecorder
+}
+
+func (c *TestClients) Start(ctx context.Context) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *TestClients) K8s() kubernetes.Interface {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *TestClients) CAPI() capi.Interface {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *TestClients) Apply() apply.Apply {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *TestClients) Fleet() fleetcontrollers.Interface {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c *TestClients) Rancher() ranchercontrollers.Interface {
+	return FakeRancher{}
 }
 
 func (c *TestClients) Elemental() elmcontrollers.Interface {
@@ -40,6 +74,14 @@ func (c *TestClients) EventRecorder(name string) record.EventRecorder {
 		c.Recorder = &FakeRecorder{}
 	}
 	return c.Recorder
+}
+
+func (c *TestClients) RBAC() rbaccontrollers.Interface {
+	return &FakeRBAC{}
+}
+
+func (c *TestClients) Core() corecontrollers.Interface {
+	return &FakeCore{}
 }
 
 type FakeRecorder struct {
