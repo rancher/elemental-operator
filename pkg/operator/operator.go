@@ -45,7 +45,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 		logrus.Fatalf("failed to find kubeconfig: %v", err)
 	}
 
-	clients, err := clients.NewFromConfig(restConfig)
+	cl, err := clients.NewFromConfig(restConfig)
 	if err != nil {
 		logrus.Fatalf("Error building controller: %s", err.Error())
 	}
@@ -94,17 +94,23 @@ func Run(ctx context.Context, settings ...Setting) error {
 		logrus.Fatalf("Failed to create CRDs: %v", err)
 	}
 
-	managedos.Register(ctx, clients, o.DefaultRegistry)
-	registration.Register(ctx, clients)
-	machineinventory.Register(ctx, clients)
-	managedosversionchannel.Register(ctx, o.requeuer, clients)
-	machineinventoryselector.Register(ctx, clients)
+	managedos.Register(ctx, cl, o.DefaultRegistry)
+	registration.Register(ctx, cl)
+	machineinventory.Register(ctx, cl)
+	managedosversionchannel.Register(ctx, o.requeuer, cl)
+	machineinventoryselector.Register(ctx, cl)
 
-	aggregation.Watch(ctx, clients.Core.Secret(), o.namespace, "elemental-operator", server.New(clients))
+	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(cl))
 
 	for _, s := range o.services {
-		go s(ctx, clients) //nolint:golint,errcheck
+		s := s
+		go func() {
+			err = s(ctx, cl)
+			if err != nil {
+				logrus.Errorf("Error running services: %s", err)
+			}
+		}()
 	}
 
-	return clients.Start(ctx)
+	return cl.Start(ctx)
 }

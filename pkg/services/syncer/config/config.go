@@ -24,7 +24,7 @@ import (
 
 type Config struct {
 	Requeuer      types.Requeuer
-	Clients       *clients.Clients
+	Clients       clients.ClientInterface
 	OperatorImage string
 	Recorder      record.EventRecorder
 }

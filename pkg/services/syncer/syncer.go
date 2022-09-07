@@ -87,7 +87,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer elmTypes.Requeuer, imag
 }
 
 func syncNamespace(config config.Config, namespace string) error {
-	list, err := config.Clients.Elemental.ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
+	list, err := config.Clients.Elemental().ManagedOSVersionChannel().List(namespace, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func syncNamespace(config config.Config, namespace string) error {
 				vcpy.Spec.UpgradeContainer = vc.Spec.UpgradeContainer
 			}
 
-			cli := config.Clients.Elemental.ManagedOSVersion()
+			cli := config.Clients.Elemental().ManagedOSVersion()
 
 			_, err := cli.Get(namespace, vcpy.ObjectMeta.Name, metav1.GetOptions{})
 			if err == nil {

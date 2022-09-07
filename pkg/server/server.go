@@ -56,12 +56,12 @@ func New(clients *clients.Clients) *InventoryServer {
 		authenticators: []authenticator{
 			tpm.New(clients),
 		},
-		secretCache:              clients.Core.Secret().Cache(),
-		serviceAccountCache:      clients.Core.ServiceAccount().Cache(),
-		machineCache:             clients.Elemental.MachineInventory().Cache(),
-		machineClient:            clients.Elemental.MachineInventory(),
-		machineRegistrationCache: clients.Elemental.MachineRegistration().Cache(),
-		settingCache:             clients.Rancher.Setting().Cache(),
+		secretCache:              clients.Core().Secret().Cache(),
+		serviceAccountCache:      clients.Core().ServiceAccount().Cache(),
+		machineCache:             clients.Elemental().MachineInventory().Cache(),
+		machineClient:            clients.Elemental().MachineInventory(),
+		machineRegistrationCache: clients.Elemental().MachineRegistration().Cache(),
+		settingCache:             clients.Rancher().Setting().Cache(),
 	}
 
 	server.settingCache.AddIndexer(settingsIndex, func(obj *v3.Setting) ([]string, error) {
