@@ -3,6 +3,8 @@ builds:
   - main: ./cmd/operator
     binary: elemental-operator
     id: elemental-operator
+    env:
+      - CGO_ENABLED=0
     ldflags:
       - -w -s
       - -X github.com/rancher/elemental-operator/pkg/version.Version={{.Tag}}
@@ -20,6 +22,8 @@ builds:
   - main: ./cmd/register
     binary: elemental-register
     id: elemental-register
+    env:
+      - CGO_ENABLED=1
     ldflags:
       - -w -s
       - -X github.com/rancher/elemental-operator/pkg/version.Version={{.Tag}}
