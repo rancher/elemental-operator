@@ -22,16 +22,16 @@ build: operator register support
 
 .PHONY: operator
 operator:
-	go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
 
 
 .PHONY: register
 register:
-	go build -ldflags '$(LDFLAGS)' -o build/elemental-register $(ROOT_DIR)/cmd/register
+	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o build/elemental-register $(ROOT_DIR)/cmd/register
 
 .PHONY: support
 support:
-	go build -ldflags '$(LDFLAGS)' -o build/elemental-support $(ROOT_DIR)/cmd/support
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-support $(ROOT_DIR)/cmd/support
 
 
 .PHONY: build-docker-operator
