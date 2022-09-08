@@ -1,5 +1,5 @@
 FROM golang:1.17-alpine AS build
-ENV CGO_ENABLED=0
+RUN apk add --no-cache make build-base openssl-dev
 WORKDIR /src
 COPY go.mod go.sum /src/
 RUN go mod download
@@ -14,6 +14,7 @@ FROM build AS build-operator
 ARG TAG=v0.0.0
 ARG COMMIT=""
 ARG COMMITDATE=""
+ENV CGO_ENABLED=0
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
@@ -25,12 +26,14 @@ FROM build AS build-register
 ARG TAG=v0.0.0
 ARG COMMIT=""
 ARG COMMITDATE=""
+ENV CGO_ENABLED=1
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
     -X github.com/rancher/elemental-operator/pkg/version.Commit=$COMMIT  \
     -X github.com/rancher/elemental-operator/pkg/version.CommitDate=$COMMITDATE"  \
     -o /usr/sbin/elemental-register ./cmd/register
+ENV CGO_ENABLED=0
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
