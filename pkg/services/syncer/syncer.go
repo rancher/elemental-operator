@@ -40,7 +40,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer elmTypes.Requeuer, imag
 	reSync := func(c *clients.Clients) {
 		recorder := c.EventRecorder(controllerAgentName)
 
-		config := config.Config{
+		cfg := config.Config{
 			Requeuer:      requeuer,
 			OperatorImage: image,
 			Clients:       c,
@@ -48,7 +48,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer elmTypes.Requeuer, imag
 		}
 		if len(namespace) == 0 {
 			logrus.Debug("Listing all namespaces")
-			err := syncNamespace(config, "")
+			err := syncNamespace(cfg, "")
 			if err != nil {
 				logrus.Warn(err)
 			}
@@ -56,7 +56,7 @@ func UpgradeChannelSync(interval time.Duration, requeuer elmTypes.Requeuer, imag
 		}
 
 		for _, n := range namespace {
-			err := syncNamespace(config, n)
+			err := syncNamespace(cfg, n)
 			if err != nil {
 				logrus.Warn(err)
 			}
