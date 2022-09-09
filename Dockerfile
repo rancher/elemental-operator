@@ -1,5 +1,5 @@
-FROM golang:1.17-alpine AS build
-RUN apk add --no-cache make build-base openssl-dev
+FROM registry.suse.com/bci/golang:1.18 AS build
+RUN zypper -n install -l openssl-devel
 WORKDIR /src
 COPY go.mod go.sum /src/
 RUN go mod download
@@ -43,12 +43,12 @@ RUN go build  \
 
 
 FROM scratch AS elemental-operator
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /var/lib/ca-certificates/ca-bundle.pem /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-operator /usr/sbin/elemental-operator /usr/sbin/elemental-operator
 ENTRYPOINT ["/usr/sbin/elemental-operator"]
 
 FROM scratch AS elemental-register
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /var/lib/ca-certificates/ca-bundle.pem /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-register /usr/sbin/elemental-register /usr/sbin/elemental-register
 COPY --from=build-register /usr/sbin/elemental-support /usr/sbin/elemental-support
 ENTRYPOINT ["/usr/sbin/elemental-register"]
