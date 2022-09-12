@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"os"
 	"os/exec"
@@ -72,7 +73,7 @@ var hostName = "unknown"
 func main() {
 	cmd := &cobra.Command{
 		Use:   "elemental-support",
-		Short: "Gathers logs about the running syste",
+		Short: "Gathers logs about the running system",
 		Long:  "elemental-support tries to gather as much info as possible with logs about the running system for troubleshooting purposes",
 		RunE: func(_ *cobra.Command, args []string) error {
 			if viper.GetBool("debug") {
@@ -157,6 +158,12 @@ func run() (err error) {
 	for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
 		logrus.Infof("Getting k8s info for %s", crd)
 		getK8sResource(crd, tempDir)
+	}
+
+	// get k8s logs
+	for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx"} {
+		logrus.Infof("Getting k8s logs for namespace %s", namespace)
+		getK8sPodsLogs("", namespace, tempDir)
 	}
 
 	// All done, pack it up into a nice gzip file
@@ -250,18 +257,30 @@ func compress(src string, buf io.Writer) error {
 	return nil
 }
 
-func getK8sResource(resource string, dest string) {
+func getKubeConfig() (string, error) {
 	var kubectlconfig string
-	if existsNoWarn(k3sKubeConfig) {
-		kubectlconfig = k3sKubeConfig
+	// First use it the env var if available
+	kubectlconfig = os.Getenv("KUBECONFIG")
+	if kubectlconfig == "" {
+		if existsNoWarn(k3sKubeConfig) {
+			kubectlconfig = k3sKubeConfig
+		}
+		if existsNoWarn(rkeKubeConfig) {
+			kubectlconfig = rkeKubeConfig
+		}
+		// This should not happen as far as I understand
+		if existsNoWarn(k3sKubeConfig) && existsNoWarn(rkeKubeConfig) {
+			return "", errors.New("both kubeconfig exists for k3s and rke2, maybe the deployment is wrong....")
+		}
 	}
-	if existsNoWarn(rkeKubeConfig) {
-		kubectlconfig = rkeKubeConfig
-	}
+	return kubectlconfig, nil
+}
 
-	// This should not happen as fast as I understand
-	if existsNoWarn(k3sKubeConfig) && existsNoWarn(rkeKubeConfig) {
-		logrus.Warn("Both kubeconfig exists for k3s and rke2, maybe the deployment is wrong....")
+func getK8sResource(resource string, dest string) {
+	kubectlconfig, err := getKubeConfig()
+	if err != nil {
+		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
+		return
 	}
 
 	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
@@ -280,7 +299,56 @@ func getK8sResource(resource string, dest string) {
 			logrus.Warnf("Failed to get %s", resource)
 		}
 		// We still want to write the output if the resource was not found or another issue occured as that can shed info on whats going on
-		_ = os.WriteFile(fmt.Sprintf("%s/%s.log", dest, resource), out, os.ModePerm)
+		_ = os.WriteFile(fmt.Sprintf("%s/%s-resource.log", dest, resource), out, os.ModePerm)
+	}
+}
+
+// getK8sPodsLogs gets the logs of the given resource on the given namespace, unless the resource is empty, in which case it
+// will get ALL the logs for ALL the pods in a given namespace
+func getK8sPodsLogs(resource, namespace, dest string) {
+	var podNames []string
+	kubectlconfig, err := getKubeConfig()
+	if err != nil {
+		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
+		return
+	}
+
+	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
+		if resource == "" {
+			cmd := exec.Command(
+				"kubectl",
+				"get",
+				"pods",
+				"-n",
+				namespace,
+				"-o",
+				"jsonpath='{.items[*].metadata.name}'",
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				logrus.Warnf("Failed to get pod names in namespace %s: %s", namespace, err)
+			}
+			podNames = strings.Split(string(out), " ")
+		} else {
+			podNames = []string{resource}
+		}
+
+		for _, pod := range podNames {
+			cmd := exec.Command(
+				"kubectl",
+				fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
+				"logs",
+				pod,
+				"-n",
+				namespace,
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				logrus.Warnf("Failed to get %s on namespace %s: %s", resource, pod, err)
+			}
+			// We still want to write the output if the resource was not found or another issue occurred as that can shed info on what's going on
+			_ = os.WriteFile(fmt.Sprintf("%s/%s-%s-logs.log", dest, resource, pod), out, os.ModePerm)
+		}
 	}
 }
 
