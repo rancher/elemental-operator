@@ -157,16 +157,20 @@ func run() (err error) {
 	out, _ = cmd.CombinedOutput()
 	_ = os.WriteFile(fmt.Sprintf("%s/elemental-register.version", tempDir), out, os.ModePerm)
 
-	// get k8s info
-	for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
-		logrus.Infof("Getting k8s info for %s", crd)
-		getK8sResource(crd, tempDir)
-	}
-
-	// get k8s logs
-	for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx"} {
-		logrus.Infof("Getting k8s logs for namespace %s", namespace)
-		getK8sPodsLogs("", namespace, tempDir)
+	// Check if we have a kubeconfig before starting
+	if k, err := getKubeConfig(); k != "" && err == nil {
+		// get k8s info
+		for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
+			logrus.Infof("Getting k8s info for %s", crd)
+			getK8sResource(crd, tempDir)
+		}
+		// get k8s logs
+		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx"} {
+			logrus.Infof("Getting k8s logs for namespace %s", namespace)
+			getK8sPodsLogs("", namespace, tempDir)
+		}
+	} else {
+		logrus.Warnf("No kubeconfig available, skipping getting k8s items")
 	}
 
 	// All done, pack it up into a nice gzip file
@@ -273,7 +277,7 @@ func getKubeConfig() (string, error) {
 		}
 		// This should not happen as far as I understand
 		if existsNoWarn(k3sKubeConfig) && existsNoWarn(rkeKubeConfig) {
-			return "", errors.New("both kubeconfig exists for k3s and rke2, maybe the deployment is wrong....")
+			return "", errors.New("both kubeconfig exists for k3s and rke2, maybe the deployment is wrong")
 		}
 	}
 	return kubectlconfig, nil
