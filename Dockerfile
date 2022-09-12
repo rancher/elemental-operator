@@ -1,5 +1,5 @@
-FROM golang:1.17-alpine AS build
-ENV CGO_ENABLED=0
+FROM registry.suse.com/bci/golang:1.18 AS build
+RUN zypper -n install -l openssl-devel
 WORKDIR /src
 COPY go.mod go.sum /src/
 RUN go mod download
@@ -14,6 +14,7 @@ FROM build AS build-operator
 ARG TAG=v0.0.0
 ARG COMMIT=""
 ARG COMMITDATE=""
+ENV CGO_ENABLED=0
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
@@ -25,12 +26,14 @@ FROM build AS build-register
 ARG TAG=v0.0.0
 ARG COMMIT=""
 ARG COMMITDATE=""
+ENV CGO_ENABLED=1
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
     -X github.com/rancher/elemental-operator/pkg/version.Commit=$COMMIT  \
     -X github.com/rancher/elemental-operator/pkg/version.CommitDate=$COMMITDATE"  \
     -o /usr/sbin/elemental-register ./cmd/register
+ENV CGO_ENABLED=0
 RUN go build  \
     -ldflags "-w -s  \
     -X github.com/rancher/elemental-operator/pkg/version.Version=$TAG  \
@@ -40,12 +43,12 @@ RUN go build  \
 
 
 FROM scratch AS elemental-operator
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /var/lib/ca-certificates/ca-bundle.pem /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-operator /usr/sbin/elemental-operator /usr/sbin/elemental-operator
 ENTRYPOINT ["/usr/sbin/elemental-operator"]
 
 FROM scratch AS elemental-register
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /var/lib/ca-certificates/ca-bundle.pem /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-register /usr/sbin/elemental-register /usr/sbin/elemental-register
 COPY --from=build-register /usr/sbin/elemental-support /usr/sbin/elemental-support
 ENTRYPOINT ["/usr/sbin/elemental-register"]
