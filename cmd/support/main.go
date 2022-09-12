@@ -17,14 +17,12 @@ limitations under the License.
 package main
 
 import (
-	tar "archive/tar"
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"compress/gzip"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -490,7 +489,7 @@ func copySingleFile(src string, dest string) {
 }
 
 func copyDir(srcdir string, destdir string) {
-	contents, err := ioutil.ReadDir(srcdir)
+	contents, err := os.ReadDir(srcdir)
 	if err != nil {
 		return
 	}
