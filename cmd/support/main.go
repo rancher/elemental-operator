@@ -24,10 +24,11 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -123,7 +124,9 @@ func run() (err error) {
 	// any sensitive fields?
 	for _, f := range []string{elementalAgentPlanDir, rancherAgentPlanDir, systemOEMDir, oemDir} {
 		logrus.Infof("Copying dir %s", f)
-		copyFilesInDir(f, tempDir)
+		// Full dest is the /tmp dir + the full real path of the source, so we store the paths as they are in the node
+		fullDest := filepath.Join(tempDir, f)
+		copyFilesInDir(f, fullDest)
 	}
 
 	for _, service := range getServices() {
@@ -352,18 +355,6 @@ func getK8sPodsLogs(resource, namespace, dest string) {
 	}
 }
 
-// copyFilesInDir copies all files in the source dir to destination path, keeping the name. Follows dirs inside dirs.
-func copyFilesInDir(sourceDir string, destpath string) {
-	destDir := path.Base(destpath)
-	fullDestDir := fmt.Sprintf("%s/%s", destpath, destDir)
-	_ = os.MkdirAll(fullDestDir, os.ModeDir)
-	cmd := exec.Command("cp", "--recursive", sourceDir, fullDestDir)
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		logrus.Warnf("Failed to copy %s to %s", sourceDir, fullDestDir)
-	}
-}
-
 // copyFile copies a files from source to a destination path, keeping the name. Ignore any errors, we dont care
 func copyFile(sourceFile string, destpath string) {
 	copyFileWithAltName(sourceFile, destpath, "")
@@ -448,4 +439,59 @@ func getServiceLog(service string, dest string) {
 		logrus.Warningf("Failed to get log for service %s", service)
 	}
 
+}
+
+// redactPasswords removes any occurrences of a passwd or password set in yaml/cloud-config files usually
+func redactPasswords(input []byte) []byte {
+	passwd := regexp.MustCompile(`(passwd)([\s=\t\:]{1,3})(.*)`)
+	password := regexp.MustCompile(`(password)([\s=\t\:]{1,3})(.*)`)
+	redacted := passwd.ReplaceAll(input, []byte("$1$2*****"))
+	redacted = password.ReplaceAll(redacted, []byte("$1$2*****"))
+	return redacted
+}
+
+// copyFilesInDir copies all files in the source dir to destination path, keeping the name. Follows dirs inside dirs.
+func copyFilesInDir(src, dest string) {
+	info, err := os.Lstat(src)
+	if err != nil {
+		logrus.Warnf("Error opening %s", src)
+		return
+	}
+	switch {
+	case info.IsDir():
+		copyDir(src, dest)
+	default:
+		copySingleFile(src, dest)
+	}
+}
+
+func copySingleFile(src string, dest string) {
+	logrus.Debugf("Copying %s into %s", src, dest)
+	original, err := os.ReadFile(src)
+	if err != nil {
+		logrus.Warnf("Failed to read: %s", err)
+		return
+	}
+	redacted := redactPasswords(original)
+	err = os.MkdirAll(filepath.Dir(dest), os.ModeDir|os.ModePerm)
+	if err != nil {
+		logrus.Warnf("Failed to create dir: %s", err)
+		return
+	}
+	err = os.WriteFile(dest, redacted, os.ModePerm)
+	if err != nil {
+		logrus.Warnf("Failed to write: %s", err)
+		return
+	}
+}
+
+func copyDir(srcdir string, destdir string) {
+	contents, err := ioutil.ReadDir(srcdir)
+	if err != nil {
+		return
+	}
+	for _, content := range contents {
+		cs, cd := filepath.Join(srcdir, content.Name()), filepath.Join(destdir, content.Name())
+		copyFilesInDir(cs, cd)
+	}
 }
