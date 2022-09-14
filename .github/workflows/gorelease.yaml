@@ -8,6 +8,9 @@ on:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -31,4 +34,25 @@ jobs:
           version: latest
           args: release --rm-dist
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install the bom command
+        shell: bash
+        run: go install sigs.k8s.io/bom/cmd/bom@v0.2.2
+      - name: Create SBOM file
+        shell: bash
+        run: |
+          mkdir signatures
+          bom generate -o /signatures/elemental-operator.spdx .
+      - name: Sign BOM file
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          cosign sign-blob --output-certificate signatures/elemental-operator.spdx.cert \
+          --output-signature signatures/elemental-operator.spdx.sig \
+          signatures/elemental-operator.spdx
+      - name: Release sbom
+        uses: fnkr/github-action-ghr@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GHR_PATH: signatures/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
