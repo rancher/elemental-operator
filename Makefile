@@ -10,12 +10,62 @@ CHART_VERSION?=$(subst v,,$(GIT_TAG))
 KUBE_VERSION?="v1.22.7"
 CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
-COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
+
+ifeq ($(shell go env GOOS),darwin) # Use the darwin/amd64 binary until an arm64 version is available
+	KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path --arch amd64 $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
+	COMMITDATE?=$(shell gdate -d @"${RAWCOMMITDATE}" "+%FT%TZ")
+else
+	KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
+	COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
+endif
 
 LDFLAGS := -w -s
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Version=${GIT_TAG}"
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_COMMIT}"
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.CommitDate=${COMMITDATE}"
+
+# Directories
+BIN_DIR := bin
+TOOLS_DIR := hack/tools
+TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/$(BIN_DIR))
+
+GO_INSTALL := ./scripts/go_install.sh
+
+# Binaries.
+# Need to use abspath so we can invoke these from subdirectories
+CONTROLLER_GEN_VER := v0.9.2
+CONTROLLER_GEN_BIN := controller-gen
+CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
+CONTROLLER_GEN_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
+
+GINKGO_VER := v1.16.5
+GINKGO_BIN := ginkgo
+GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
+GINKGO_PKG := github.com/onsi/ginkgo/ginkgo
+
+SETUP_ENVTEST_VER := v0.0.0-20211110210527-619e6b92dab9
+SETUP_ENVTEST_BIN := setup-envtest
+SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
+SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
+
+controller-gen: $(CONTROLLER_GEN) ## Build a local copy of controller-gen.
+ginkgo: $(GINKGO) ## Build a local copy of ginkgo.
+setup-envtest: $(SETUP_ENVTEST) ## Build a local copy of setup-envtest.
+
+.PHONY: $(CONTROLLER_GEN_BIN)
+$(CONTROLLER_GEN_BIN): $(CONTROLLER_GEN) ## Build a local copy of controller-gen.
+
+.PHONY: $(SETUP_ENVTEST_BIN)
+$(SETUP_ENVTEST_BIN): $(SETUP_ENVTEST) ## Build a local copy of setup-envtest.
+
+$(CONTROLLER_GEN): # Build controller-gen from tools folder.
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) $(CONTROLLER_GEN_BIN) $(CONTROLLER_GEN_VER)
+
+$(GINKGO): ## Build ginkgo from tools folder.
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(GINKGO_PKG) $(GINKGO_BIN) $(GINKGO_VER)
+
+$(SETUP_ENVTEST): # Build setup-envtest from tools folder.
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(SETUP_ENVTEST_PKG) $(SETUP_ENVTEST_BIN) $(SETUP_ENVTEST_VER)
 
 .PHONY: build
 build: operator register support
@@ -24,6 +74,8 @@ build: operator register support
 operator:
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
 
+operator-ctrl-runtime:
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-operator-ctrl-runtime $(ROOT_DIR)/cmd/operator-ctrl-runtime
 
 .PHONY: register
 register:
@@ -74,13 +126,9 @@ chart:
 validate:
 	scripts/validate
 
-unit-tests-deps:
-	go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest
-	go install github.com/onsi/gomega/...
-
 .PHONY: unit-tests
-unit-tests: unit-tests-deps
-	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
+unit-tests: $(SETUP_ENVTEST) $(GINKGO)
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -p -r --trace ./pkg/... ./controllers/...
 
 e2e-tests: setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
@@ -114,3 +162,26 @@ kind-e2e-tests: build-docker-operator chart setup-kind
 reload-operator: build-docker-operator chart
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
 	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
+
+.PHONY: generate
+generate: $(CONTROLLER_GEN) ## Generate code
+	$(MAKE) generate-go
+	$(MAKE) generate-manifests
+
+.PHONY: generate-manifests
+generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g. CRD, RBAC etc.
+	$(CONTROLLER_GEN) \
+		paths=./api/... \
+		paths=./controllers/... \
+		crd:crdVersions=v1 \
+		rbac:roleName=manager-role \
+		output:crd:dir=./config/crd/bases \
+		output:rbac:dir=./config/rbac \
+		output:webhook:dir=./config/webhook \
+		webhook
+
+.PHONY: generate-go
+generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator
+	$(CONTROLLER_GEN) \
+		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
+		paths=./api/...

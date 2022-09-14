@@ -21,11 +21,8 @@ import (
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
-	"github.com/rancher/elemental-operator/pkg/controllers/registration"
 	"github.com/rancher/elemental-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/wrangler/pkg/crd"
@@ -95,10 +92,10 @@ func Run(ctx context.Context, settings ...Setting) error {
 	}
 
 	managedos.Register(ctx, cl, o.DefaultRegistry)
-	registration.Register(ctx, cl)
-	machineinventory.Register(ctx, cl)
+	// registration.Register(ctx, cl)
+	// machineinventory.Register(ctx, cl)
 	managedosversionchannel.Register(ctx, o.requeuer, cl)
-	machineinventoryselector.Register(ctx, cl)
+	// machineinventoryselector.Register(ctx, cl)
 
 	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(cl))
 
