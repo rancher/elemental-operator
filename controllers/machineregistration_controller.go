@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
@@ -19,6 +20,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -32,6 +35,7 @@ type MachineRegistrationReconciler struct {
 func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineRegistration{}).
+		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
 		Complete(r)
 }
 
@@ -42,7 +46,7 @@ func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req recon
 	err := r.Get(ctx, req.NamespacedName, mRegistration)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Object was not found")
+			logger.Info("Object was not found, registration client has to create it")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get machine registration object: %w", err)
@@ -86,6 +90,11 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 		return r.reconcileDelete(ctx, mRegistration)
 	}
 
+	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
+		logger.V(5).Info("Machine registration is ready, no need to reconcile it")
+		return ctrl.Result{}, nil
+	}
+
 	controllerutil.AddFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
 
 	if err := r.setRegistrationTokenAndUrl(ctx, mRegistration); err != nil {
@@ -95,7 +104,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 			Reason:  elementalv1.MissingTokenOrServerUrlReason,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("failed to set registration token and url: %w", err)
 	}
 
 	if err := r.createRBACObjects(ctx, mRegistration); err != nil {
@@ -105,7 +114,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 			Reason:  elementalv1.RbacCreationFailureReason,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
 
 	meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
@@ -119,11 +128,6 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 func (r *MachineRegistrationReconciler) setRegistrationTokenAndUrl(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
 	logger := ctrl.LoggerFrom(ctx)
-
-	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
-		logger.Info("Registration token and url already set")
-		return nil
-	}
 
 	logger.Info("Setting registration token and url")
 
@@ -269,4 +273,27 @@ func (r *MachineRegistrationReconciler) reconcileDelete(ctx context.Context, mRe
 	controllerutil.RemoveFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *MachineRegistrationReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
+	return predicate.Funcs{
+		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
+		// for MachineRegistration resources only
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineRegistration" {
+				return true
+			}
+
+			oldMRegistration := e.ObjectOld.(*elementalv1.MachineRegistration).DeepCopy()
+			newMregistration := e.ObjectNew.(*elementalv1.MachineRegistration).DeepCopy()
+
+			oldMRegistration.Status = elementalv1.MachineRegistrationStatus{}
+			newMregistration.Status = elementalv1.MachineRegistrationStatus{}
+
+			oldMRegistration.ObjectMeta.ResourceVersion = ""
+			newMregistration.ObjectMeta.ResourceVersion = ""
+
+			return !cmp.Equal(oldMRegistration, newMregistration)
+		},
+	}
 }

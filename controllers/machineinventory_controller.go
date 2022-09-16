@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,7 +16,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -28,7 +31,6 @@ type MachineInventoryReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;update;delete
 
 func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	mapFunc := r.machineInventorySelectorMapFunc()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineInventory{}).
 		Owns(&corev1.Secret{}).
@@ -39,12 +41,7 @@ func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&handler.EnqueueRequestForOwner{
 				IsController: true,
 				OwnerType:    &elementalv1.MachineInventory{}}).
-		Watches(
-			&source.Kind{
-				Type: &elementalv1.MachineInventorySelector{},
-			},
-			handler.EnqueueRequestsFromMapFunc(mapFunc),
-		).
+		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
 		Complete(r)
 }
 
@@ -107,7 +104,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("failed to create plan secret: %w", err)
 	}
 
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
@@ -117,7 +114,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("failed to update inventory status with plan %w", err)
 	}
 
 	controllerutil.AddFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
@@ -225,21 +222,25 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 	}
 }
 
-// machineInventorySelectorMapFunc is used to filter out machine inventory selector that we
-// don't want to trigger a reconciliation of machine inventory. Currenly all selector will pass.
-func (r *MachineInventoryReconciler) machineInventorySelectorMapFunc() handler.MapFunc {
-	return func(o client.Object) []reconcile.Request {
-		mInventorySelector, ok := o.(*elementalv1.MachineInventorySelector)
-		if !ok {
-			return nil
-		}
-		return []reconcile.Request{
-			{
-				NamespacedName: client.ObjectKey{
-					Namespace: mInventorySelector.Namespace,
-					Name:      mInventorySelector.Name,
-				},
-			},
-		}
+func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
+	return predicate.Funcs{
+		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
+		// for MachineInventory resources only
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineInventory" {
+				return true
+			}
+
+			oldMInventory := e.ObjectOld.(*elementalv1.MachineInventory).DeepCopy()
+			newMInventory := e.ObjectNew.(*elementalv1.MachineInventory).DeepCopy()
+
+			oldMInventory.Status = elementalv1.MachineInventoryStatus{}
+			newMInventory.Status = elementalv1.MachineInventoryStatus{}
+
+			oldMInventory.ObjectMeta.ResourceVersion = ""
+			newMInventory.ObjectMeta.ResourceVersion = ""
+
+			return !cmp.Equal(oldMInventory, newMInventory)
+		},
 	}
 }

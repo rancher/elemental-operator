@@ -9,18 +9,26 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
+	"github.com/google/go-cmp/cmp"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // MachineInventorySelectorReconciler reconciles a MachineInventorySelector object.
@@ -33,6 +41,13 @@ type MachineInventorySelectorReconciler struct {
 func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineInventorySelector{}).
+		Watches(
+			&source.Kind{
+				Type: &elementalv1.MachineInventory{},
+			},
+			handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
+		).
+		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
 		Complete(r)
 }
 
@@ -84,19 +99,37 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 	logger.Info("Reconciling machine inventory selector object")
 
 	if miSelector.GetDeletionTimestamp() != nil {
-		// return r.reconcileDelete(ctx, machineRegistration)
+		// return r.reconcileDelete(ctx, machineRegistration) // TODO: add deletion logic if needed
 		return ctrl.Result{}, nil
 	}
 
 	if err := r.findAndAdoptInventory(ctx, miSelector); err != nil {
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.FailedToAdoptInventoryReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
 		return ctrl.Result{}, fmt.Errorf("failed to find and adopt machine inventory: %w", err)
 	}
 
 	if err := r.updatePlanSecretWithBootstrap(ctx, miSelector); err != nil {
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.FailedToUpdatePlanReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
 		return ctrl.Result{}, fmt.Errorf("failed to set bootstrap plan: %w", err)
 	}
 
 	if err := r.setInvetorySelectorAddresses(ctx, miSelector); err != nil {
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.FailedToSetAdressesReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
 		return ctrl.Result{}, fmt.Errorf("failed to set inventory selector address: %w", err)
 	}
 
@@ -125,22 +158,27 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	if len(machineInventories.Items) == 0 {
 		logger.Info("No matching machine inventories found")
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.ReadyCondition,
+			Reason: elementalv1.WaitingForInventoryReason,
+			Status: metav1.ConditionFalse,
+		})
+
 		return nil
 	}
 
-	machineInventory := &elementalv1.MachineInventory{}
+	mInventory := &elementalv1.MachineInventory{}
 	for _, mi := range machineInventories.Items {
 		if isAlreadyOwned(mi) {
 			continue
 		}
-		machineInventory = &mi
+		mInventory = &mi
 		break
 	}
 
-	patchBase := client.MergeFrom(machineInventory.DeepCopy())
-	machineInventoryStatusCopy := machineInventory.Status.DeepCopy() // Patch call will erase the status
+	patchBase := client.MergeFrom(mInventory.DeepCopy())
 
-	machineInventory.OwnerReferences = []metav1.OwnerReference{
+	mInventory.OwnerReferences = []metav1.OwnerReference{
 		{
 			APIVersion: elementalv1.GroupVersion.String(),
 			Kind:       "MachineInventorySelector",
@@ -150,16 +188,20 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		},
 	}
 
-	if err := r.Status().Patch(ctx, machineInventory, patchBase); err != nil {
+	if err := r.Status().Patch(ctx, mInventory, patchBase); err != nil {
 		return fmt.Errorf("failed to patch machine inventory status: %w", err)
 	}
 
-	machineInventory.Status = *machineInventoryStatusCopy
-
 	miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-		Name:      machineInventory.Name,
-		Namespace: machineInventory.Namespace,
+		Name:      mInventory.Name,
+		Namespace: mInventory.Namespace,
 	}
+
+	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+		Type:   elementalv1.ReadyCondition,
+		Reason: elementalv1.SuccefullyAdoptedInventoryReason,
+		Status: metav1.ConditionFalse,
+	})
 
 	return nil
 }
@@ -168,12 +210,17 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.V(5).Info("Waiting for machine inventory to be adopted")
+		logger.V(5).Info("Waiting for machine inventory to be adopted before updating plan secret")
 		return nil
 	}
 
 	if miSelector.Status.BootstrapPlanChecksum != "" {
-		logger.V(5).Info("Secret plan already update with bootstrap")
+		logger.V(5).Info("Secret plan already updated with bootstrap")
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.ReadyCondition,
+			Reason: elementalv1.SuccefullyUpdatedPlanReason,
+			Status: metav1.ConditionFalse,
+		})
 		return nil
 	}
 
@@ -185,6 +232,11 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 		mInventory,
 	); err != nil {
 		return fmt.Errorf("failed to get machine inventory: %w", err)
+	}
+
+	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
+		logger.V(5).Info("Machine inventory plan reference not set yet")
+		return nil
 	}
 
 	checksum, plan, err := r.newBootstrapPlan(ctx, miSelector, mInventory)
@@ -346,7 +398,7 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.V(5).Info("Waiting for machine inventory to be adopted")
+		logger.V(5).Info("Waiting for machine inventory to be adopted before setting adresses")
 		return nil
 	}
 
@@ -383,6 +435,12 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 
 	miSelector.Status.Ready = true
 
+	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+		Type:   elementalv1.ReadyCondition,
+		Reason: elementalv1.SelectorReadyReason,
+		Status: metav1.ConditionTrue,
+	})
+
 	return nil
 }
 
@@ -401,4 +459,93 @@ func planChecksum(input []byte) string {
 	h.Write(input)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (r *MachineInventorySelectorReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
+	return predicate.Funcs{
+		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
+		// for MachineInventorySelector resources only
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineInventorySelector" {
+				return true
+			}
+
+			oldMISelector := e.ObjectOld.(*elementalv1.MachineInventorySelector).DeepCopy()
+			newMISelector := e.ObjectNew.(*elementalv1.MachineInventorySelector).DeepCopy()
+
+			oldMISelector.Status = elementalv1.MachineInventorySelectorStatus{}
+			newMISelector.Status = elementalv1.MachineInventorySelectorStatus{}
+
+			oldMISelector.ObjectMeta.ResourceVersion = ""
+			newMISelector.ObjectMeta.ResourceVersion = ""
+
+			return !cmp.Equal(oldMISelector, newMISelector)
+		},
+	}
+}
+
+// MachineInventoryToSelector is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
+// for MachineInventoryToSelector that might adopt a MachineInventory.
+func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client.Object) []reconcile.Request {
+	result := []reconcile.Request{}
+
+	mInventory, ok := o.(*elementalv1.MachineInventory)
+	if !ok {
+		panic(fmt.Sprintf("Expected a MachineInventory but got a %T", o))
+	}
+
+	// This won't log unless the global logger is set
+	ctx := context.Background()
+	log := ctrl.LoggerFrom(ctx, "MachineInventory", klog.KObj(mInventory))
+
+	// If machine inventory has no labels it can't be adopted.
+	if mInventory.Labels == nil {
+		return nil
+	}
+
+	miSelectorList := &elementalv1.MachineInventorySelectorList{}
+	err := r.List(context.Background(), miSelectorList, client.InNamespace(mInventory.Namespace))
+	if err != nil {
+		log.Error(err, "Failed to list machine inventories")
+		return nil
+	}
+
+	var miSelectors []*elementalv1.MachineInventorySelector
+	for i := range miSelectorList.Items {
+		miSelector := &miSelectorList.Items[i]
+		if hasMatchingLabels(ctx, miSelector, mInventory) {
+			miSelectors = append(miSelectors, miSelector)
+		}
+	}
+
+	result = append(result, reconcile.Request{})
+
+	for _, miSelector := range miSelectors {
+		name := client.ObjectKey{Namespace: miSelector.Namespace, Name: miSelector.Name}
+		result = append(result, reconcile.Request{NamespacedName: name})
+	}
+
+	return result
+}
+
+func hasMatchingLabels(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) bool {
+	log := ctrl.LoggerFrom(ctx)
+
+	selector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
+	if err != nil {
+		log.Error(err, "Unable to convert selector")
+		return false
+	}
+
+	if selector.Empty() {
+		log.V(5).Info("machine selector has empty selector", "mInventory.Name", miSelector.Name)
+		return false
+	}
+
+	if !selector.Matches(labels.Set(mInventory.Labels)) {
+		log.V(5).Info("machine inventory has mismatch labels", "mInventory.Name", mInventory.Name)
+		return false
+	}
+
+	return true
 }
