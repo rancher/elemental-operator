@@ -51,7 +51,7 @@ type MachineRegistrationStatus struct {
 	RegistrationToken string `json:"registrationToken,omitempty"`
 	// ServiceAccountRef a reference to the service account created by the machine registration.
 	// +optional
-	ServiceAccountRef *corev1.ObjectReference `json:"serviceAccountRef,omitempty"` // use LocalObjectReference
+	ServiceAccountRef *corev1.ObjectReference `json:"serviceAccountRef,omitempty"` // TODO: use LocalObjectReference
 }
 
 // +kubebuilder:object:root=true

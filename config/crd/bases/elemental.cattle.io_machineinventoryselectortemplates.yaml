@@ -127,6 +127,8 @@ spec:
                         description: BootstrapPlanChecksum bootstrap plan checksum
                         type: string
                       conditions:
+                        description: Conditions describe the state of the machine
+                          selector object.
                         items:
                           description: "Condition contains details for one aspect
                             of the current state of this API Resource. --- This struct
@@ -247,8 +249,6 @@ spec:
             required:
             - template
             type: object
-        required:
-        - spec
         type: object
     served: true
     storage: true

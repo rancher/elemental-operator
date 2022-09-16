@@ -31,3 +31,27 @@ const (
 	// PlanSuccefullyAppliedReason documents that plan owned by the machine inventory object was succefully applied.
 	PlanSuccefullyAppliedReason = "PlanSuccefullyApplied"
 )
+
+// Machine Selector conditions
+const (
+	// WaitingForInventory documents that the machine selector is waiting for a matching machine inventory.
+	WaitingForInventoryReason = "WaitingForInventory"
+
+	// SuccefullyAdoptedInventoryReason documents that the machine selector succesfully adopted machine inventory.
+	SuccefullyAdoptedInventoryReason = "SuccefullyAdoptedInventory"
+
+	// FailedToAdoptInventoryReason documents that the machine selector failed to adopt machine inventory.
+	FailedToAdoptInventoryReason = "FailedToAdoptInventory"
+
+	// SuccefullyUpdatedPlanReason documents that the machine selector succesfully updated secret plan with bootstrap.
+	SuccefullyUpdatedPlanReason = "SuccefullyUpdatedPlan"
+
+	// FailedToUpdatePlanReason documents that the machine selector failed to update secret plan with bootstrap.
+	FailedToUpdatePlanReason = "FailedToUpdatePlan"
+
+	// SelectorReadyReason documents that the machine selector is ready.
+	SelectorReadyReason = "SelectorReady"
+
+	// FailedToSetAdressesReason documents that the machine selector controller failed to set adresses.
+	FailedToSetAdressesReason = "FailedToSetAdresses"
+)

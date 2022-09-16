@@ -22,13 +22,19 @@ type MachineInventorySelectorSpec struct {
 }
 
 type MachineInventorySelectorStatus struct {
+	// Conditions describe the state of the machine selector object.
+	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	Ready      bool               `json:"ready,omitempty"`
+	// +optional
+	Ready bool `json:"ready,omitempty"`
 	// Addresses machine addresses
+	// +optional
 	Addresses clusterv1.MachineAddresses `json:"addresses,omitempty"`
 	// BootstrapPlanChecksum bootstrap plan checksum
+	// +optional
 	BootstrapPlanChecksum string `json:"bootstrapPlanChecksum,omitempty"`
 	// MachineInventoryRef reference to the machine inventory that belongs to the selector
+	// +optional
 	MachineInventoryRef *corev1.ObjectReference `json:"machineInventoryRef,omitempty"` // TODO: use LocalObjectReference
 }
 
