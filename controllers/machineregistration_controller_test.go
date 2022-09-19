@@ -11,7 +11,6 @@ import (
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -156,15 +155,6 @@ var _ = Describe("setRegistrationTokenAndUrl", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("server-url is not set"))
 		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
-	})
-
-	It("don't attempt to do anything if ready condition is true", func() {
-		meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
-			Type:   elementalv1.ReadyCondition,
-			Reason: elementalv1.SuccefullyCreatedReason,
-			Status: metav1.ConditionTrue,
-		})
-		Expect(r.setRegistrationTokenAndUrl(ctx, mRegistration)).To(Succeed())
 	})
 })
 

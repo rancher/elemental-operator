@@ -168,11 +168,11 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	}
 
 	mInventory := &elementalv1.MachineInventory{}
-	for _, mi := range machineInventories.Items {
-		if isAlreadyOwned(mi) {
+	for i := range machineInventories.Items {
+		if isAlreadyOwned(machineInventories.Items[i]) {
 			continue
 		}
-		mInventory = &mi
+		mInventory = &machineInventories.Items[i]
 		break
 	}
 
@@ -188,8 +188,8 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		},
 	}
 
-	if err := r.Status().Patch(ctx, mInventory, patchBase); err != nil {
-		return fmt.Errorf("failed to patch machine inventory status: %w", err)
+	if err := r.Patch(ctx, mInventory, patchBase); err != nil {
+		return fmt.Errorf("failed to patch machine inventory: %w", err)
 	}
 
 	miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
@@ -216,11 +216,6 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	if miSelector.Status.BootstrapPlanChecksum != "" {
 		logger.V(5).Info("Secret plan already updated with bootstrap")
-		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
-			Type:   elementalv1.ReadyCondition,
-			Reason: elementalv1.SuccefullyUpdatedPlanReason,
-			Status: metav1.ConditionFalse,
-		})
 		return nil
 	}
 
@@ -249,7 +244,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 		Namespace: mInventory.Status.Plan.PlanSecretRef.Namespace,
 		Name:      mInventory.Status.Plan.PlanSecretRef.Name,
 	}, planSecret); err != nil {
-		return fmt.Errorf("failed to get plan secret %w", err)
+		return fmt.Errorf("failed to get plan secret: %w", err)
 	}
 
 	patchBase := client.MergeFrom(planSecret.DeepCopy())
@@ -262,6 +257,12 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	miSelector.Status.BootstrapPlanChecksum = checksum
 
+	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+		Type:   elementalv1.ReadyCondition,
+		Reason: elementalv1.SuccefullyUpdatedPlanReason,
+		Status: metav1.ConditionFalse,
+	})
+
 	return nil
 }
 
@@ -269,6 +270,10 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 	machine, err := r.getOwnerMachine(ctx, miSelector)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to find an owner machine for inventory selector: %w", err)
+	}
+
+	if machine == nil {
+		return "", nil, fmt.Errorf("machine for machine inventory selector doesn't exist")
 	}
 
 	if machine.Spec.Bootstrap.DataSecretName == nil {
@@ -444,23 +449,6 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 	return nil
 }
 
-func isAlreadyOwned(machineInventory elementalv1.MachineInventory) bool {
-	for _, owner := range machineInventory.GetOwnerReferences() {
-		if owner.APIVersion == elementalv1.GroupVersion.String() && owner.Kind == "MachineInventorySelector" {
-			return true
-		}
-	}
-
-	return false
-}
-
-func planChecksum(input []byte) string {
-	h := sha256.New()
-	h.Write(input)
-
-	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
 func (r *MachineInventorySelectorReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
 	return predicate.Funcs{
 		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
@@ -482,6 +470,23 @@ func (r *MachineInventorySelectorReconciler) ignoreIncrementalStatusUpdate() pre
 			return !cmp.Equal(oldMISelector, newMISelector)
 		},
 	}
+}
+
+func isAlreadyOwned(machineInventory elementalv1.MachineInventory) bool {
+	for _, owner := range machineInventory.GetOwnerReferences() {
+		if owner.APIVersion == elementalv1.GroupVersion.String() && owner.Kind == "MachineInventorySelector" {
+			return true
+		}
+	}
+
+	return false
+}
+
+func planChecksum(input []byte) string {
+	h := sha256.New()
+	h.Write(input)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // MachineInventoryToSelector is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation

@@ -29,7 +29,7 @@ var _ = Describe("reconcile machine inventory", func() {
 
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-name",
+				Name:      "machine-inventory-suite",
 				Namespace: "default",
 			},
 		}
@@ -119,7 +119,7 @@ var _ = Describe("createPlanSecret", func() {
 
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-name",
+				Name:      "machine-inventory-suite",
 				Namespace: "default",
 			},
 		}
@@ -198,7 +198,7 @@ var _ = Describe("updateInventoryWithPlanStatus", func() {
 
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-name",
+				Name:      "machine-inventory-suite",
 				Namespace: "default",
 			},
 		}
