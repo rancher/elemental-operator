@@ -196,8 +196,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 
 	sa, err := i.serviceAccountCache.Get(registration.Status.ServiceAccountRef.Namespace,
 		registration.Status.ServiceAccountRef.Name)
-	if err != nil || len(sa.Secrets) < 1 {
+	if err != nil {
 		return err
+	}
+
+	if len(sa.Secrets) < 1 {
+		return fmt.Errorf("no secrets associated to the %s service account", sa.Name)
 	}
 
 	tokenSecret, err := i.secretCache.Get(sa.Namespace, sa.Secrets[0].Name)
