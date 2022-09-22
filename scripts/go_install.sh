@@ -1,6 +1,5 @@
 set -o errexit
 set -o nounset
-set -o pipefail
 
 if [ -z "${1}" ]; then
   echo "must provide module as first parameter"
