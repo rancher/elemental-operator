@@ -48,15 +48,19 @@ SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
-controller-gen: $(CONTROLLER_GEN) ## Build a local copy of controller-gen.
-ginkgo: $(GINKGO) ## Build a local copy of ginkgo.
-setup-envtest: $(SETUP_ENVTEST) ## Build a local copy of setup-envtest.
+KUSTOMIZE_VER := v4.5.2
+KUSTOMIZE_BIN := kustomize
+KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER))
+KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v4
 
 .PHONY: $(CONTROLLER_GEN_BIN)
 $(CONTROLLER_GEN_BIN): $(CONTROLLER_GEN) ## Build a local copy of controller-gen.
 
 .PHONY: $(SETUP_ENVTEST_BIN)
 $(SETUP_ENVTEST_BIN): $(SETUP_ENVTEST) ## Build a local copy of setup-envtest.
+
+.PHONY: $(KUSTOMIZE_BIN)
+$(KUSTOMIZE_BIN): $(KUSTOMIZE) ## Build a local copy of kustomize.
 
 $(CONTROLLER_GEN): # Build controller-gen from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) $(CONTROLLER_GEN_BIN) $(CONTROLLER_GEN_VER)
@@ -66,6 +70,9 @@ $(GINKGO): ## Build ginkgo from tools folder.
 
 $(SETUP_ENVTEST): # Build setup-envtest from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(SETUP_ENVTEST_PKG) $(SETUP_ENVTEST_BIN) $(SETUP_ENVTEST_VER)
+	
+$(KUSTOMIZE): # Build kustomize from tools folder.
+	CGO_ENABLED=0 GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) $(KUSTOMIZE_BIN) $(KUSTOMIZE_VER)
 
 .PHONY: build
 build: operator register support
@@ -185,3 +192,6 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 	$(CONTROLLER_GEN) \
 		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
 		paths=./api/...
+
+build-crds: $(KUSTOMIZE)
+	$(KUSTOMIZE) build config/crd > chart/templates/crds.yaml

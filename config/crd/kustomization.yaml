@@ -1,0 +1,12 @@
+# This kustomization.yaml is not intended to be run by itself,
+# since it depends on service name and namespace that are out of this kustomize package.
+# It should be run by config/default
+resources:
+- bases/elemental.cattle.io_machineinventories.yaml
+- bases/elemental.cattle.io_machineinventoryselectors.yaml
+- bases/elemental.cattle.io_machineinventoryselectortemplates.yaml
+- bases/elemental.cattle.io_machineregistrations.yaml
+# +kubebuilder:scaffold:crdkustomizeresource
+
+commonLabels:
+  app: '{{ .Release.Name }}'
