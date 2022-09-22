@@ -31,12 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var (
-	registrationTokenIndex = "registrationTokenIndex"
-	tpmHashIndex           = "tpmHashIndex"
-	settingsIndex          = "settingsIndex"
-)
-
 type authenticator interface {
 	Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error)
 }

@@ -137,10 +137,10 @@ validate:
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -p -r --trace ./pkg/... ./controllers/...
 
-e2e-tests: setup-kind
+e2e-tests: $(GINKGO) setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
-	cd $(ROOT_DIR)/tests && ginkgo -r -v ./e2e
+	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
 
 # Only setups the kind cluster
 setup-kind:
@@ -157,7 +157,7 @@ setup-full-cluster: build-docker-operator chart setup-kind
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
-	cd $(ROOT_DIR)/tests && ginkgo -r -v --label-filter="do-nothing" ./e2e
+	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
 
 kind-e2e-tests: build-docker-operator chart setup-kind
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}

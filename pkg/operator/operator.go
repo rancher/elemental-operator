@@ -22,7 +22,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
+	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
 	"github.com/rancher/elemental-operator/pkg/server"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -33,14 +33,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -89,12 +87,16 @@ func Run(ctx context.Context, settings ...Setting) error {
 			SchemaObject: elm.ManagedOSVersionChannel{},
 			Status:       true,
 		},
+		crd.CRD{
+			SchemaObject: elm.ManagedOSImage{},
+			Status:       true,
+		},
 	).BatchWait()
 	if err != nil {
 		logrus.Fatalf("Failed to create CRDs: %v", err)
 	}
 
-	machineinventory.Register(ctx, cl)
+	managedos.Register(ctx, cl, o.DefaultRegistry)
 	managedosversionchannel.Register(ctx, o.requeuer, cl)
 	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(ctx, ctrlRuntimeCl))
 

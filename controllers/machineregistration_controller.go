@@ -1,3 +1,19 @@
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
@@ -97,11 +113,11 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 	controllerutil.AddFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
 
-	if err := r.setRegistrationTokenAndUrl(ctx, mRegistration); err != nil {
+	if err := r.setRegistrationTokenAndURL(ctx, mRegistration); err != nil {
 		meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Status:  metav1.ConditionFalse,
-			Reason:  elementalv1.MissingTokenOrServerUrlReason,
+			Reason:  elementalv1.MissingTokenOrServerURLReason,
 			Message: err.Error(),
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to set registration token and url: %w", err)
@@ -126,7 +142,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineRegistrationReconciler) setRegistrationTokenAndUrl(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
+func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Setting registration token and url")

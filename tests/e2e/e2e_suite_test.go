@@ -19,10 +19,6 @@ package e2e_test
 import (
 	"bytes"
 	"fmt"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	"github.com/rancher/elemental-operator/tests/catalog"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -31,6 +27,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
 var (
@@ -78,24 +79,54 @@ func deployOperator(k *kubectl.Kubectl) {
 		Expect(err).ToNot(HaveOccurred())
 		parsedReplicas, err := strconv.Atoi(replicas)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(len(pods)).To(Equal(parsedReplicas))
+		Expect(pods).To(HaveLen(parsedReplicas))
 
 		err = k.WaitForNamespaceWithPod(operatorNamespace, "app=elemental-operator")
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() string {
-			str, _ := kubectl.Run("logs", "-n", operatorNamespace, pods[0])
+			str, _ := kubectl.Run("logs", "-n", operatorNamespace, pods[0], "-c", "elemental-operator")
 			return str
 		}, 5*time.Minute, 2*time.Second).Should(
 			And(
-				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
+				ContainSubstring("Starting steve aggregation client"),
 			))
+
+		Eventually(func() string {
+			str, _ := kubectl.Run("logs", "-n", operatorNamespace, pods[0], "-c", "elemental-operator-ctrl-runtime")
+			return str
+		}, 5*time.Minute, 2*time.Second).Should(
+			And(
+				ContainSubstring("Starting workers"),
+			))
+
+		crds := []string{
+			"managedosimages.elemental.cattle.io",
+			"machineinventories.elemental.cattle.io",
+			"machineregistrations.elemental.cattle.io",
+			"managedosversions.elemental.cattle.io",
+			"managedosversionchannels.elemental.cattle.io",
+			"machineinventoryselectors.elemental.cattle.io",
+			"machineinventoryselectortemplates.elemental.cattle.io",
+		}
+
+		for _, crd := range crds {
+			By(fmt.Sprintf("waiting for CRD: %s\n", crd))
+			waitForCRD(crd)
+		}
 
 		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
 		// We need to manually set this value, which is the same value you would get from doing the bootstrap
 		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("https://%s.%s", externalIP, magicDNS)))
 		Expect(err).ToNot(HaveOccurred())
 	})
+}
+
+func waitForCRD(fullName string) {
+	Eventually(func() string {
+		str, _ := kubectl.Run("get", "crd", fullName)
+		return str
+	}, 2*time.Minute, 2*time.Second).ShouldNot(ContainSubstring("Error from server (NotFound)"))
 }
 
 var _ = BeforeSuite(func() {

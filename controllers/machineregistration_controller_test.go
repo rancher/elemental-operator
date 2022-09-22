@@ -1,3 +1,19 @@
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
@@ -107,7 +123,7 @@ var _ = Describe("reconcile machine registration", func() {
 	})
 })
 
-var _ = Describe("setRegistrationTokenAndUrl", func() {
+var _ = Describe("setRegistrationTokenAndURL", func() {
 	var r *MachineRegistrationReconciler
 	var mRegistration *elementalv1.MachineRegistration
 
@@ -132,14 +148,14 @@ var _ = Describe("setRegistrationTokenAndUrl", func() {
 			Value: "https://example.com",
 		}
 		Expect(cl.Create(ctx, setting)).To(Succeed())
-		Expect(r.setRegistrationTokenAndUrl(ctx, mRegistration)).To(Succeed())
+		Expect(r.setRegistrationTokenAndURL(ctx, mRegistration)).To(Succeed())
 		Expect(mRegistration.Status.RegistrationToken).ToNot(BeEmpty())
 		Expect(mRegistration.Status.RegistrationURL).To(ContainSubstring("https://example.com/elemental/registration/"))
 		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
 	})
 
 	It("should return error when setting doesn't exist", func() {
-		err := r.setRegistrationTokenAndUrl(ctx, mRegistration)
+		err := r.setRegistrationTokenAndURL(ctx, mRegistration)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get server url setting"))
 	})
@@ -151,7 +167,7 @@ var _ = Describe("setRegistrationTokenAndUrl", func() {
 			},
 		}
 		Expect(cl.Create(ctx, setting)).To(Succeed())
-		err := r.setRegistrationTokenAndUrl(ctx, mRegistration)
+		err := r.setRegistrationTokenAndURL(ctx, mRegistration)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("server-url is not set"))
 		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
