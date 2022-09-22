@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
@@ -20,6 +21,7 @@ func init() {
 	utilruntime.Must(elementalv1.AddToScheme(scheme.Scheme))
 	utilruntime.Must(managementv3.AddToScheme(scheme.Scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme.Scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
 }
 
 func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, error) {
@@ -29,6 +31,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 
 	testEnv.CRDs = []*apiextensionsv1.CustomResourceDefinition{
 		fakeSettingCRD,
+		fakeMachineCRD,
 	}
 	testEnv.CRDDirectoryPaths = []string{
 		path.Join(root, "config", "crd", "bases"),

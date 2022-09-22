@@ -13,11 +13,16 @@ import (
 
 var (
 	managementGroupVersion = schema.GroupVersion{Group: "management.cattle.io", Version: "v3"}
+	clusterGroupVersion    = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta1"}
 
 	// fakeSettingKind is the Kind for the Setting object.
 	fakeSettingKind = "Setting"
 	// fakeCoreProviderCRD is a fake Setting CRD.
 	fakeSettingCRD = generateCRD(managementGroupVersion.WithKind(fakeSettingKind), apiextensionsv1.ClusterScoped)
+
+	// fakeMachineKind is the Kind for the Machine object.
+	fakeMachineKind = "Machine"
+	fakeMachineCRD  = generateCRD(clusterGroupVersion.WithKind(fakeMachineKind), apiextensionsv1.NamespaceScoped)
 )
 
 func generateCRD(gvk schema.GroupVersionKind, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition {
