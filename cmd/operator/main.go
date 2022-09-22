@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	ctrlruntimeCmd "github.com/rancher/elemental-operator/cmd/operator/ctrl-runtime-operator"
 	displayCmd "github.com/rancher/elemental-operator/cmd/operator/display"
 	operatorCmd "github.com/rancher/elemental-operator/cmd/operator/operator"
 	"github.com/sirupsen/logrus"
@@ -31,8 +32,8 @@ func main() {
 
 	cmd.AddCommand(
 		operatorCmd.NewOperatorCommand(),
+		ctrlruntimeCmd.NewOperatorCtrlRuntimeCommand(),
 		displayCmd.NewDisplayCommand())
-
 	if err := cmd.Execute(); err != nil {
 		logrus.Fatalln(err)
 	}
