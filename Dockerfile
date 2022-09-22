@@ -5,6 +5,8 @@ COPY go.mod go.sum /src/
 RUN go mod download
 COPY cmd/operator/main.go /src/
 COPY pkg /src/pkg
+COPY api /src/api
+COPY controllers /src/controllers
 COPY cmd/operator /src/cmd/operator
 COPY cmd/register /src/cmd/register
 COPY cmd/support /src/cmd/support
