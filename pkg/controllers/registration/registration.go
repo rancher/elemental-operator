@@ -55,6 +55,7 @@ func Register(ctx context.Context, clients clients.ClientInterface) {
 
 func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegistrationStatus) (elm.MachineRegistrationStatus, error) {
 	var err error
+	var isNewRegistration bool
 
 	serverURL, err := h.getRancherServerURL()
 	if err != nil {
@@ -62,6 +63,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	}
 
 	if status.RegistrationToken == "" {
+		isNewRegistration = true
 		status.RegistrationToken, err = randomtoken.Generate()
 		if err != nil {
 			h.Recorder.Event(obj, corev1.EventTypeWarning, "error", err.Error())
@@ -144,6 +146,10 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		Kind:      "ServiceAccount",
 		Namespace: obj.Namespace,
 		Name:      obj.Name,
+	}
+
+	if isNewRegistration {
+		logrus.Infof("Got new MachineRegistration '%s': generated token '%s'", obj.Name, status.RegistrationToken)
 	}
 
 	return status, nil
