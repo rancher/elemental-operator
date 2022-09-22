@@ -28,17 +28,20 @@ import (
 	gotpm "github.com/rancher-sandbox/go-tpm"
 
 	"github.com/gorilla/websocket"
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func (a *AuthServer) verifyChain(ek *attest.EK, namespace string) error {
-	secret, err := a.secretCache.Get(namespace, tpmCACert)
-	if apierrors.IsNotFound(err) {
-		return nil
+	secret := &corev1.Secret{}
+	if err := a.Get(a, types.NamespacedName{
+		Name:      tpmCACert,
+		Namespace: namespace,
+	}, secret); err != nil {
+		return fmt.Errorf("failed to get secret: %v", err)
 	}
 
 	roots := x509.NewCertPool()
@@ -46,11 +49,11 @@ func (a *AuthServer) verifyChain(ek *attest.EK, namespace string) error {
 	opts := x509.VerifyOptions{
 		Roots: roots,
 	}
-	_, err = ek.Certificate.Verify(opts)
+	_, err := ek.Certificate.Verify(opts)
 	return err
 }
 
-func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elm.MachineInventory, error) {
+func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elementalv1.MachineInventory, error) {
 	hashEncoded, err := gotpm.DecodePubHash(ek)
 	if err != nil {
 		return nil, fmt.Errorf("tpm: could not get public key hash: %v", err)
@@ -60,24 +63,39 @@ func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elm.Ma
 		return nil, fmt.Errorf("verifying chain: %w", err)
 	}
 
-	var machines, _ = a.machineCache.GetByIndex(machineByHash, hashEncoded)
-	if len(machines) != 1 {
-		if len(machines) > 1 {
-			logrus.Errorf("multiple machines for same hash %s found: %v", hashEncoded, machines)
-			return nil, fmt.Errorf("failed to find machine")
-		}
+	return a.findMachineInventoryForHash(hashEncoded, registerNamespace)
+}
 
-		return &elm.MachineInventory{
+func (a *AuthServer) findMachineInventoryForHash(hashEncoded, registerNamespace string) (*elementalv1.MachineInventory, error) {
+	mInventoryList := elementalv1.MachineInventoryList{}
+	if err := a.List(a, &mInventoryList); err != nil {
+		return nil, err
+	}
+
+	if len(mInventoryList.Items) == 0 {
+		return &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: registerNamespace,
 			},
-			Spec: elm.MachineInventorySpec{
+			Spec: elementalv1.MachineInventorySpec{
 				TPMHash: hashEncoded,
 			},
 		}, nil
 	}
 
-	return machines[0], nil
+	tmpHashMap := map[string]string{}
+	mInventory := &elementalv1.MachineInventory{}
+	for _, mi := range mInventoryList.Items {
+		if _, ok := tmpHashMap[mi.Spec.TPMHash]; ok {
+			return nil, fmt.Errorf("machine inventories with TPM hash %s is already registered", hashEncoded)
+		}
+		if mi.Spec.TPMHash != "" && mi.Spec.TPMHash == hashEncoded {
+			tmpHashMap[mi.Spec.TPMHash] = ""
+			mInventory = &mi
+		}
+	}
+
+	return mInventory, nil
 }
 
 func writeRead(conn *websocket.Conn, input []byte) ([]byte, error) {
@@ -102,7 +120,7 @@ func writeRead(conn *websocket.Conn, input []byte) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elm.MachineInventory, bool, error) {
+func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error) {
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
 		logrus.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)

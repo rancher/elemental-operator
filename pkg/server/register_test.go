@@ -17,12 +17,17 @@ limitations under the License.
 package server
 
 import (
+	"net/http"
+	"net/url"
 	"regexp"
 	"testing"
 
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/config"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"gotest.tools/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestInitNewInventory(t *testing.T) {
@@ -51,12 +56,12 @@ func TestInitNewInventory(t *testing.T) {
 	}
 
 	for _, test := range testCase {
-		registration := &elm.MachineRegistration{
-			Spec: elm.MachineRegistrationSpec{
+		registration := &elementalv1.MachineRegistration{
+			Spec: elementalv1.MachineRegistrationSpec{
 				MachineName: test.initName,
-				Config: &config.Config{
-					Elemental: config.Elemental{
-						Registration: config.Registration{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Registration: elementalv1.Registration{
 							NoSMBIOS: test.noSMBIOS,
 						},
 					},
@@ -64,7 +69,7 @@ func TestInitNewInventory(t *testing.T) {
 			},
 		}
 
-		inventory := &elm.MachineInventory{}
+		inventory := &elementalv1.MachineInventory{}
 		initInventory(inventory, registration)
 
 		if test.noSMBIOS {
@@ -189,7 +194,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 	}
 
 	for _, test := range testCase {
-		inventory := &elm.MachineInventory{}
+		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
 		err := mergeInventoryLabels(inventory, test.data)
@@ -204,5 +209,242 @@ func TestMergeInventoryLabels(t *testing.T) {
 			assert.Equal(t, v, val)
 		}
 
+	}
+}
+
+func TestCreateMachineInventory(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		inputMInventory      *elementalv1.MachineInventory
+		existingMInventories []*elementalv1.MachineInventory
+		expectedError        bool
+	}{
+		{
+			name: "succesfully create inventory",
+			inputMInventory: &elementalv1.MachineInventory{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "name",
+					Namespace: "namespace",
+				},
+				Spec: elementalv1.MachineInventorySpec{
+					TPMHash: "test",
+				},
+			},
+			existingMInventories: []*elementalv1.MachineInventory{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name1",
+						Namespace: "namespace",
+					},
+					Spec: elementalv1.MachineInventorySpec{
+						TPMHash: "test1",
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name2",
+						Namespace: "namespace",
+					},
+					Spec: elementalv1.MachineInventorySpec{
+						TPMHash: "test2",
+					},
+				},
+			},
+		},
+		{
+			name: "fail when machine inventory with similar tpm hash exists",
+			inputMInventory: &elementalv1.MachineInventory{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "name",
+					Namespace: "namespace",
+				},
+				Spec: elementalv1.MachineInventorySpec{
+					TPMHash: "test",
+				},
+			},
+			existingMInventories: []*elementalv1.MachineInventory{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name1",
+						Namespace: "namespace",
+					},
+					Spec: elementalv1.MachineInventorySpec{
+						TPMHash: "test1",
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name2",
+						Namespace: "namespace",
+					},
+					Spec: elementalv1.MachineInventorySpec{
+						TPMHash: "test",
+					},
+				},
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			elementalv1.AddToScheme(scheme)
+
+			objs := []runtime.Object{}
+			for _, mInventory := range tc.existingMInventories {
+				objs = append(objs, mInventory)
+			}
+			inventoryServer := InventoryServer{
+				Client: fake.NewFakeClientWithScheme(scheme, objs...),
+			}
+
+			_, err := inventoryServer.createMachineInventory(tc.inputMInventory)
+			if tc.expectedError {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("did not expect error")
+				}
+			}
+		})
+	}
+}
+
+func TestGetMachineRegistration(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		inputUrl               string
+		existingMRegistrations []*elementalv1.MachineRegistration
+		expectedError          bool
+	}{
+		{
+			name:     "succesfully find machine registration for the token",
+			inputUrl: "https://example.com/token",
+			existingMRegistrations: []*elementalv1.MachineRegistration{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name1",
+						Namespace: "namespace",
+					},
+					Status: elementalv1.MachineRegistrationStatus{
+						RegistrationToken: "token",
+						Conditions: []metav1.Condition{
+							{
+								Type:   elementalv1.ReadyCondition,
+								Reason: elementalv1.SuccefullyCreatedReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name2",
+						Namespace: "namespace",
+					},
+					Status: elementalv1.MachineRegistrationStatus{
+						RegistrationToken: "token1",
+						Conditions: []metav1.Condition{
+							{
+								Type:   elementalv1.ReadyCondition,
+								Reason: elementalv1.SuccefullyCreatedReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:     "fail when two registrations with similar token exist",
+			inputUrl: "https://example.com/token",
+			existingMRegistrations: []*elementalv1.MachineRegistration{
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name1",
+						Namespace: "namespace",
+					},
+					Status: elementalv1.MachineRegistrationStatus{
+						RegistrationToken: "token1",
+						Conditions: []metav1.Condition{
+							{
+								Type:   elementalv1.ReadyCondition,
+								Reason: elementalv1.SuccefullyCreatedReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name2",
+						Namespace: "namespace",
+					},
+					Status: elementalv1.MachineRegistrationStatus{
+						RegistrationToken: "token",
+						Conditions: []metav1.Condition{
+							{
+								Type:   elementalv1.ReadyCondition,
+								Reason: elementalv1.SuccefullyCreatedReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: v1.ObjectMeta{
+						Name:      "name3",
+						Namespace: "namespace",
+					},
+					Status: elementalv1.MachineRegistrationStatus{
+						RegistrationToken: "token",
+						Conditions: []metav1.Condition{
+							{
+								Type:   elementalv1.ReadyCondition,
+								Reason: elementalv1.SuccefullyCreatedReason,
+								Status: metav1.ConditionTrue,
+							},
+						},
+					},
+				},
+			},
+			expectedError: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			elementalv1.AddToScheme(scheme)
+
+			objs := []runtime.Object{}
+			for _, mInventory := range tc.existingMRegistrations {
+				objs = append(objs, mInventory)
+			}
+			inventoryServer := InventoryServer{
+				Client: fake.NewFakeClientWithScheme(scheme, objs...),
+			}
+
+			url, err := url.Parse(tc.inputUrl)
+			if err != nil {
+				t.Fatalf("failed to parse url: %s", err.Error())
+			}
+
+			_, err = inventoryServer.getMachineRegistration(&http.Request{
+				URL: url,
+			})
+
+			if tc.expectedError {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("did not expect error")
+				}
+			}
+		})
 	}
 }
