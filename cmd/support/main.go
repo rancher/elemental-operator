@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	tar "archive/tar"
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -25,11 +25,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -72,7 +73,7 @@ var hostName = "unknown"
 func main() {
 	cmd := &cobra.Command{
 		Use:   "elemental-support",
-		Short: "Gathers logs about the running syste",
+		Short: "Gathers logs about the running system",
 		Long:  "elemental-support tries to gather as much info as possible with logs about the running system for troubleshooting purposes",
 		RunE: func(_ *cobra.Command, args []string) error {
 			if viper.GetBool("debug") {
@@ -122,7 +123,9 @@ func run() (err error) {
 	// any sensitive fields?
 	for _, f := range []string{elementalAgentPlanDir, rancherAgentPlanDir, systemOEMDir, oemDir} {
 		logrus.Infof("Copying dir %s", f)
-		copyFilesInDir(f, tempDir)
+		// Full dest is the /tmp dir + the full real path of the source, so we store the paths as they are in the node
+		fullDest := filepath.Join(tempDir, f)
+		copyFilesInDir(f, fullDest)
 	}
 
 	for _, service := range getServices() {
@@ -153,10 +156,20 @@ func run() (err error) {
 	out, _ = cmd.CombinedOutput()
 	_ = os.WriteFile(fmt.Sprintf("%s/elemental-register.version", tempDir), out, os.ModePerm)
 
-	// get k8s info
-	for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
-		logrus.Infof("Getting k8s info for %s", crd)
-		getK8sResource(crd, tempDir)
+	// Check if we have a kubeconfig before starting
+	if k, err := getKubeConfig(); k != "" && err == nil {
+		// get k8s info
+		for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
+			logrus.Infof("Getting k8s info for %s", crd)
+			getK8sResource(crd, tempDir)
+		}
+		// get k8s logs
+		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx"} {
+			logrus.Infof("Getting k8s logs for namespace %s", namespace)
+			getK8sPodsLogs("", namespace, tempDir)
+		}
+	} else {
+		logrus.Warnf("No kubeconfig available, skipping getting k8s items")
 	}
 
 	// All done, pack it up into a nice gzip file
@@ -250,18 +263,30 @@ func compress(src string, buf io.Writer) error {
 	return nil
 }
 
-func getK8sResource(resource string, dest string) {
+func getKubeConfig() (string, error) {
 	var kubectlconfig string
-	if existsNoWarn(k3sKubeConfig) {
-		kubectlconfig = k3sKubeConfig
+	// First use it the env var if available
+	kubectlconfig = os.Getenv("KUBECONFIG")
+	if kubectlconfig == "" {
+		if existsNoWarn(k3sKubeConfig) {
+			kubectlconfig = k3sKubeConfig
+		}
+		if existsNoWarn(rkeKubeConfig) {
+			kubectlconfig = rkeKubeConfig
+		}
+		// This should not happen as far as I understand
+		if existsNoWarn(k3sKubeConfig) && existsNoWarn(rkeKubeConfig) {
+			return "", errors.New("both kubeconfig exists for k3s and rke2, maybe the deployment is wrong")
+		}
 	}
-	if existsNoWarn(rkeKubeConfig) {
-		kubectlconfig = rkeKubeConfig
-	}
+	return kubectlconfig, nil
+}
 
-	// This should not happen as fast as I understand
-	if existsNoWarn(k3sKubeConfig) && existsNoWarn(rkeKubeConfig) {
-		logrus.Warn("Both kubeconfig exists for k3s and rke2, maybe the deployment is wrong....")
+func getK8sResource(resource string, dest string) {
+	kubectlconfig, err := getKubeConfig()
+	if err != nil {
+		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
+		return
 	}
 
 	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
@@ -280,19 +305,56 @@ func getK8sResource(resource string, dest string) {
 			logrus.Warnf("Failed to get %s", resource)
 		}
 		// We still want to write the output if the resource was not found or another issue occured as that can shed info on whats going on
-		_ = os.WriteFile(fmt.Sprintf("%s/%s.log", dest, resource), out, os.ModePerm)
+		_ = os.WriteFile(fmt.Sprintf("%s/%s-resource.log", dest, resource), out, os.ModePerm)
 	}
 }
 
-// copyFilesInDir copies all files in the source dir to destination path, keeping the name. Follows dirs inside dirs.
-func copyFilesInDir(sourceDir string, destpath string) {
-	destDir := path.Base(destpath)
-	fullDestDir := fmt.Sprintf("%s/%s", destpath, destDir)
-	_ = os.MkdirAll(fullDestDir, os.ModeDir)
-	cmd := exec.Command("cp", "--recursive", sourceDir, fullDestDir)
-	_, err := cmd.CombinedOutput()
+// getK8sPodsLogs gets the logs of the given resource on the given namespace, unless the resource is empty, in which case it
+// will get ALL the logs for ALL the pods in a given namespace
+func getK8sPodsLogs(resource, namespace, dest string) {
+	var podNames []string
+	kubectlconfig, err := getKubeConfig()
 	if err != nil {
-		logrus.Warnf("Failed to copy %s to %s", sourceDir, fullDestDir)
+		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
+		return
+	}
+
+	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
+		if resource == "" {
+			cmd := exec.Command(
+				"kubectl",
+				"get",
+				"pods",
+				"-n",
+				namespace,
+				"-o",
+				"jsonpath='{.items[*].metadata.name}'",
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				logrus.Warnf("Failed to get pod names in namespace %s: %s", namespace, err)
+			}
+			podNames = strings.Split(string(out), " ")
+		} else {
+			podNames = []string{resource}
+		}
+
+		for _, pod := range podNames {
+			cmd := exec.Command(
+				"kubectl",
+				fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
+				"logs",
+				pod,
+				"-n",
+				namespace,
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				logrus.Warnf("Failed to get %s on namespace %s: %s", resource, pod, err)
+			}
+			// We still want to write the output if the resource was not found or another issue occurred as that can shed info on what's going on
+			_ = os.WriteFile(fmt.Sprintf("%s/%s-%s-logs.log", dest, resource, pod), out, os.ModePerm)
+		}
 	}
 }
 
@@ -380,4 +442,59 @@ func getServiceLog(service string, dest string) {
 		logrus.Warningf("Failed to get log for service %s", service)
 	}
 
+}
+
+// redactPasswords removes any occurrences of a passwd or password set in yaml/cloud-config files usually
+func redactPasswords(input []byte) []byte {
+	passwd := regexp.MustCompile(`(passwd)([\s=\t\:]{1,3})(.*)`)
+	password := regexp.MustCompile(`(password)([\s=\t\:]{1,3})(.*)`)
+	redacted := passwd.ReplaceAll(input, []byte("$1$2*****"))
+	redacted = password.ReplaceAll(redacted, []byte("$1$2*****"))
+	return redacted
+}
+
+// copyFilesInDir copies all files in the source dir to destination path, keeping the name. Follows dirs inside dirs.
+func copyFilesInDir(src, dest string) {
+	info, err := os.Lstat(src)
+	if err != nil {
+		logrus.Warnf("Error opening %s", src)
+		return
+	}
+	switch {
+	case info.IsDir():
+		copyDir(src, dest)
+	default:
+		copySingleFile(src, dest)
+	}
+}
+
+func copySingleFile(src string, dest string) {
+	logrus.Debugf("Copying %s into %s", src, dest)
+	original, err := os.ReadFile(src)
+	if err != nil {
+		logrus.Warnf("Failed to read: %s", err)
+		return
+	}
+	redacted := redactPasswords(original)
+	err = os.MkdirAll(filepath.Dir(dest), os.ModeDir|os.ModePerm)
+	if err != nil {
+		logrus.Warnf("Failed to create dir: %s", err)
+		return
+	}
+	err = os.WriteFile(dest, redacted, os.ModePerm)
+	if err != nil {
+		logrus.Warnf("Failed to write: %s", err)
+		return
+	}
+}
+
+func copyDir(srcdir string, destdir string) {
+	contents, err := os.ReadDir(srcdir)
+	if err != nil {
+		return
+	}
+	for _, content := range contents {
+		cs, cd := filepath.Join(srcdir, content.Name()), filepath.Join(destdir, content.Name())
+		copyFilesInDir(cs, cd)
+	}
 }
