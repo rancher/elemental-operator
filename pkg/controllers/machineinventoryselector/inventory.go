@@ -21,13 +21,15 @@ import (
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
 // indexOpenInventorySelector indexes selectors by all their inventory selector labels
 func (h *handler) indexOpenInventorySelector(obj *v1beta1.MachineInventorySelector) ([]string, error) {
-	if v1beta1.InventoryReadyCondition.IsTrue(obj) {
+	if meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InventoryReadyCondition) {
 		return nil, nil
 	}
 
@@ -52,7 +54,11 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	if status.Ready {
-		v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.InventoryReadyCondition,
+			Reason: "InventoryReady",
+			Status: metav1.ConditionTrue,
+		})
 		return status, nil
 	}
 
@@ -76,8 +82,13 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 			}
 		}
 
-		v1beta1.InventoryReadyCondition.False(&status)
-		v1beta1.InventoryReadyCondition.Message(&status, "waiting for machine inventory")
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.InventoryReadyCondition,
+			Reason:  "WaitingForInventory",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for machine inventory",
+		})
+
 		return status, nil
 	}
 
@@ -92,8 +103,12 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	// if the inventory is already adopted abandon it
 	if errors2.IsInvalid(err) {
 		status.MachineInventoryRef = nil
-		v1beta1.InventoryReadyCondition.False(&status)
-		v1beta1.InventoryReadyCondition.Message(&status, "waiting for machine inventory")
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.InventoryReadyCondition,
+			Reason:  "WaitingForInventory",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for machine inventory",
+		})
 		return status, nil
 	}
 
@@ -103,7 +118,11 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	// if the adoption succeeded the inventory is ready
-	v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:   v1beta1.InventoryReadyCondition,
+		Reason: "InventoryReady",
+		Status: metav1.ConditionTrue,
+	})
 	return status, nil
 }
 

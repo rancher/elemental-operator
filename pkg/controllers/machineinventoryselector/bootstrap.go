@@ -26,6 +26,8 @@ import (
 	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/wrangler/pkg/generic"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // bootstrapReadyHandler once the `InventoryReady` condition is true the bootstrap will set the bootstrap plan and record the checksum.  Once the bootstrap checksum is applied to the machine inventory bootstrap is considered complete.
@@ -35,14 +37,23 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	if status.Ready {
-		v1beta1.BootstrapReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.BootstrapReadyCondition,
+			Reason: "BootstrapReady",
+			Status: metav1.ConditionTrue,
+		})
 		return status, nil
 	}
 
 	// we must own a machine inventory before we can bootstrap it
-	if !v1beta1.InventoryReadyCondition.IsTrue(obj) {
-		v1beta1.BootstrapReadyCondition.False(&status)
-		v1beta1.BootstrapReadyCondition.Message(&status, "waiting for machine inventory")
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InventoryReadyCondition) {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.BootstrapReadyCondition,
+			Reason:  "Waiting for the machine inventory",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for machine inventory",
+		})
+
 		return status, nil
 	}
 
@@ -74,12 +85,21 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 
 	// if the bootstrap plan is applied bootstrap is ready
 	if inventory.Status.Plan.AppliedChecksum == status.BootstrapPlanChecksum {
-		v1beta1.BootstrapReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.BootstrapReadyCondition,
+			Reason: "BootstrapReady",
+			Status: metav1.ConditionTrue,
+		})
 		return status, nil
 	}
 
-	v1beta1.BootstrapReadyCondition.False(&status)
-	v1beta1.BootstrapReadyCondition.Message(&status, "waiting for bootstrap plan to be applied")
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:    v1beta1.BootstrapReadyCondition,
+		Reason:  "WaitingForBootstrap",
+		Status:  metav1.ConditionFalse,
+		Message: "waiting for bootstrap plan to be applied",
+	})
+
 	return status, nil
 }
 

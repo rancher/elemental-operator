@@ -28,6 +28,7 @@ import (
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	v1beta12 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -83,19 +84,31 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventorySelector, status v1b
 	}
 
 	if status.Ready {
-		v1beta1.ReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.PlanReadyCondition,
+			Reason: "InventoryReady",
+			Status: metav1.ConditionTrue,
+		})
 		return status, nil
 	}
 
-	if !v1beta1.InventoryReadyCondition.IsTrue(obj) {
-		v1beta1.ReadyCondition.False(&status)
-		v1beta1.ReadyCondition.Message(&status, "waiting for machine inventory")
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InventoryReadyCondition) {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.ReadyCondition,
+			Reason:  "WaitingForInventory",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for machine inventory",
+		})
 		return status, nil
 	}
 
-	if !v1beta1.BootstrapReadyCondition.IsTrue(obj) {
-		v1beta1.ReadyCondition.False(&status)
-		v1beta1.ReadyCondition.Message(&status, "waiting for bootstrap to be applied")
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.BootstrapReadyCondition) {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.ReadyCondition,
+			Reason:  "WaitingForBootstrap",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for bootstrap to be applied",
+		})
 		return status, nil
 	}
 
@@ -134,7 +147,11 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventorySelector, status v1b
 		})
 	}
 
-	v1beta1.ReadyCondition.SetError(&status, "", nil)
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:   v1beta1.ReadyCondition,
+		Reason: "InventoryReady",
+		Status: metav1.ConditionTrue,
+	})
 	return status, nil
 }
 
@@ -144,7 +161,7 @@ func (h *handler) onInventoryChange(_ string, obj *v1beta1.MachineInventory) (*v
 		return nil, nil
 	}
 
-	if !v1beta1.ReadyCondition.IsTrue(obj) {
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.ReadyCondition) {
 		return nil, generic.ErrSkip
 	}
 

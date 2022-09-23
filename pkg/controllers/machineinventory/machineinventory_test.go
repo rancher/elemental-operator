@@ -17,14 +17,16 @@ limitations under the License.
 package machineinventory
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	helpers "github.com/rancher/elemental-operator/tests/controllerHelpers"
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 )
 
 func Test(t *testing.T) {
@@ -193,7 +195,11 @@ var _ = Describe("Machine Inventory", func() {
 			st, err := hl.planReadyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 			// as the applied checksum coincides with the checksum, it should set the plan ready to true
-			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.PlanReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("PlanApplied"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+
 			// If plan is ready and matches the applied the controller cleans up any failed checksum
 			Expect(st.Plan.FailedChecksum).To(Equal(""))
 			Expect(st.Plan.Checksum).To(Equal("check"))
@@ -206,7 +212,11 @@ var _ = Describe("Machine Inventory", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// it sets the PlanReady to True...I guess this is ok now, but we should really set it to failed or something?
 			// According to the controller: "a plan is ready if it fails or is applied"
-			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.PlanReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("PlanApplied"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+
 			Expect(st.Plan.FailedChecksum).ToNot(Equal(""))
 			Expect(st.Plan.Checksum).To(Equal("check"))
 			Expect(st.Plan.FailedChecksum).To(Equal("check"))
@@ -216,7 +226,11 @@ var _ = Describe("Machine Inventory", func() {
 			status.Plan.Checksum = "check"
 			st, err := hl.planReadyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("False"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.PlanReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("WaitingForPlan"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+			Expect(st.Conditions[0].Message).To(Equal("waiting for plan to be applied"))
 			Expect(st.Plan.Checksum).To(Equal("check"))
 			Expect(st.Plan.FailedChecksum).To(Equal(""))
 			Expect(st.Plan.AppliedChecksum).To(Equal(""))
@@ -228,30 +242,52 @@ var _ = Describe("Machine Inventory", func() {
 			st, err := hl.readyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("False"))
-			Expect(v1beta1.ReadyCondition.GetMessage(st)).To(Equal("waiting for initialization"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.ReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("WaitingForInitialization"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+			Expect(st.Conditions[0].Message).To(Equal("waiting for initialization"))
 
 		})
 		It("plan is not ready, sets Ready to false", func() {
-			v1beta1.InitializedCondition.True(inventory)
+			meta.SetStatusCondition(&inventory.Status.Conditions, metav1.Condition{
+				Type:   v1beta1.InitializedCondition,
+				Status: metav1.ConditionTrue,
+			})
 
 			st, err := hl.readyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("False"))
-			Expect(v1beta1.ReadyCondition.GetMessage(st)).To(Equal("waiting for plan to be applied"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.ReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("WaitingForPlan"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+			Expect(st.Conditions[0].Message).To(Equal("waiting for plan to be applied"))
 		})
 		It("Sets Ready to true when plan and inventory are ready", func() {
-			v1beta1.InitializedCondition.True(inventory)
-			v1beta1.PlanReadyCondition.True(inventory)
+			meta.SetStatusCondition(&inventory.Status.Conditions, metav1.Condition{
+				Type:   v1beta1.InitializedCondition,
+				Status: metav1.ConditionTrue,
+			})
+
+			meta.SetStatusCondition(&inventory.Status.Conditions, metav1.Condition{
+				Type:   v1beta1.PlanReadyCondition,
+				Status: metav1.ConditionTrue,
+			})
 
 			st, err := hl.readyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(st.Conditions).To(HaveLen(1))
+			Expect(st.Conditions[0].Type).To(Equal(v1beta1.ReadyCondition))
+			Expect(st.Conditions[0].Reason).To(Equal("MachineInventoryReady"))
+			Expect(st.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 		})
 	})
 	Describe("initializeHandler", func() {
 		It("does not initializes the inventory if its already initialized", func() {
-			v1beta1.InitializedCondition.True(inventory)
+			meta.SetStatusCondition(&inventory.Status.Conditions, metav1.Condition{
+				Type:   v1beta1.InitializedCondition,
+				Status: metav1.ConditionTrue,
+			})
 			_, _, err := hl.initializeHandler(inventory, status)
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(Equal(generic.ErrSkip))
@@ -266,7 +302,10 @@ var _ = Describe("Machine Inventory", func() {
 			_, s, err := hl.initializeHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 			// Should be initialized
-			Expect(v1beta1.InitializedCondition.GetStatus(s)).To(Equal("True"))
+			Expect(s.Conditions[0].Type).To(Equal(v1beta1.InitializedCondition))
+			Expect(s.Conditions[0].Reason).To(Equal("SuccefullyInitializedPlan"))
+			Expect(s.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+
 			// Should have created a plan in a secret
 			Expect(s.Plan.SecretRef).ToNot(BeNil())
 			// should inherit the name/namespace of the inventory

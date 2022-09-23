@@ -28,6 +28,7 @@ import (
 	v1 "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -84,7 +85,7 @@ func Register(ctx context.Context, clients clients.ClientInterface) {
 
 // planMachineInventoryIndexer index machine inventories by their plan reference
 func (h *handler) planMachineInventoryIndexer(obj *v1beta1.MachineInventory) ([]string, error) {
-	if !v1beta1.InitializedCondition.IsTrue(obj) {
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InitializedCondition) {
 		return nil, nil
 	}
 
@@ -98,7 +99,7 @@ func (h *handler) initializeHandler(obj *v1beta1.MachineInventory, status v1beta
 	}
 
 	// ensure we only initialize the machine once
-	if v1beta1.InitializedCondition.IsTrue(obj) {
+	if meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InitializedCondition) {
 		return nil, status, generic.ErrSkip
 	}
 
@@ -120,26 +121,43 @@ func (h *handler) initializeHandler(obj *v1beta1.MachineInventory, status v1beta
 		Checksum: PlanChecksum([]byte(plan.StringData["plan"])),
 	}
 
-	v1beta1.InitializedCondition.SetError(&status, "", nil)
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:   v1beta1.InitializedCondition,
+		Reason: "SuccefullyInitializedPlan",
+		Status: metav1.ConditionTrue,
+	})
 
 	return []runtime.Object{plan}, status, nil
 }
 
 // readyHandler inventories are considered ready when they are initialized and do not have any pending plans
 func (h *handler) readyHandler(obj *v1beta1.MachineInventory, status v1beta1.MachineInventoryStatus) (v1beta1.MachineInventoryStatus, error) {
-	if !v1beta1.InitializedCondition.IsTrue(obj) {
-		v1beta1.ReadyCondition.False(&status)
-		v1beta1.ReadyCondition.Message(&status, "waiting for initialization")
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.InitializedCondition) {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.ReadyCondition,
+			Reason:  "WaitingForInitialization",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for initialization",
+		})
 		return status, nil
 	}
 
-	if !v1beta1.PlanReadyCondition.IsTrue(obj) {
-		v1beta1.ReadyCondition.False(&status)
-		v1beta1.ReadyCondition.Message(&status, "waiting for plan to be applied")
+	if !meta.IsStatusConditionTrue(obj.Status.Conditions, v1beta1.PlanReadyCondition) {
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.ReadyCondition,
+			Reason:  "WaitingForPlan",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for plan to be applied",
+		})
 		return status, nil
 	}
 
-	v1beta1.ReadyCondition.SetError(&status, "", nil)
+	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+		Type:   v1beta1.ReadyCondition,
+		Reason: "MachineInventoryReady",
+		Status: metav1.ConditionTrue,
+	})
+
 	return status, nil
 }
 
@@ -155,15 +173,27 @@ func (h *handler) planReadyHandler(obj *v1beta1.MachineInventory, status v1beta1
 
 	switch status.Plan.Checksum {
 	case status.Plan.FailedChecksum:
-		v1beta1.PlanReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.PlanReadyCondition,
+			Reason: "PlanApplied",
+			Status: metav1.ConditionTrue,
+		})
 		return status, nil
 	case status.Plan.AppliedChecksum:
-		v1beta1.PlanReadyCondition.SetError(&status, "", nil)
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:   v1beta1.PlanReadyCondition,
+			Reason: "PlanApplied",
+			Status: metav1.ConditionTrue,
+		})
 		status.Plan.FailedChecksum = ""
 		return status, nil
 	default:
-		v1beta1.PlanReadyCondition.False(&status)
-		v1beta1.PlanReadyCondition.Message(&status, "waiting for plan to be applied")
+		meta.SetStatusCondition(&status.Conditions, metav1.Condition{
+			Type:    v1beta1.PlanReadyCondition,
+			Reason:  "WaitingForPlan",
+			Status:  metav1.ConditionFalse,
+			Message: "waiting for plan to be applied",
+		})
 		return status, nil
 	}
 }
