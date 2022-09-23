@@ -18,7 +18,6 @@ package v1beta1
 
 import (
 	"github.com/rancher/elemental-operator/pkg/config"
-	"github.com/rancher/wrangler/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -42,8 +41,8 @@ type MachineRegistrationSpec struct {
 }
 
 type MachineRegistrationStatus struct {
-	Conditions        []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	RegistrationURL   string                              `json:"registrationURL,omitempty"`
-	RegistrationToken string                              `json:"registrationToken,omitempty"`
-	ServiceAccountRef *corev1.ObjectReference             `json:"serviceAccountRef,omitempty"`
+	Conditions        []metav1.Condition      `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	RegistrationURL   string                  `json:"registrationURL,omitempty"`
+	RegistrationToken string                  `json:"registrationToken,omitempty"`
+	ServiceAccountRef *corev1.ObjectReference `json:"serviceAccountRef,omitempty"`
 }

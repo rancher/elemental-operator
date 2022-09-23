@@ -17,16 +17,14 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/rancher/wrangler/pkg/condition"
-	"github.com/rancher/wrangler/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	PlanReadyCondition   = condition.Cond("PlanReady")
-	ReadyCondition       = condition.Cond("Ready")
-	InitializedCondition = condition.Cond("Initialized")
+	PlanReadyCondition   = "PlanReady"
+	ReadyCondition       = "Ready"
+	InitializedCondition = "Initialized"
 
 	PlanSecretType corev1.SecretType = "elemental.cattle.io/plan"
 )
@@ -54,6 +52,6 @@ type PlanStatus struct {
 }
 
 type MachineInventoryStatus struct {
-	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Plan       *PlanStatus                         `json:"plan,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Plan       *PlanStatus        `json:"plan,omitempty"`
 }

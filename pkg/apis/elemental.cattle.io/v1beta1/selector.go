@@ -17,8 +17,6 @@ limitations under the License.
 package v1beta1
 
 import (
-	"github.com/rancher/wrangler/pkg/condition"
-	"github.com/rancher/wrangler/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -40,11 +38,11 @@ type MachineInventorySelectorSpec struct {
 }
 
 type MachineInventorySelectorStatus struct {
-	Conditions            []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	Ready                 bool                                `json:"ready,omitempty"`
-	Addresses             capi.MachineAddresses               `json:"addresses,omitempty"`
-	BootstrapPlanChecksum string                              `json:"bootstrapPlanChecksum,omitempty"`
-	MachineInventoryRef   *corev1.ObjectReference             `json:"machineInventoryRef,omitempty"`
+	Conditions            []metav1.Condition      `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Ready                 bool                    `json:"ready,omitempty"`
+	Addresses             capi.MachineAddresses   `json:"addresses,omitempty"`
+	BootstrapPlanChecksum string                  `json:"bootstrapPlanChecksum,omitempty"`
+	MachineInventoryRef   *corev1.ObjectReference `json:"machineInventoryRef,omitempty"`
 }
 
 // +genclient
@@ -61,6 +59,6 @@ type MachineInventorySelectorTemplateSpec struct {
 }
 
 var (
-	InventoryReadyCondition = condition.Cond("InventoryReady")
-	BootstrapReadyCondition = condition.Cond("BootstrapReady")
+	InventoryReadyCondition = "InventoryReady"
+	BootstrapReadyCondition = "BootstrapReady"
 )

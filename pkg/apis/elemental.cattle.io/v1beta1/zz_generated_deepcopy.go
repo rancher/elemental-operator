@@ -24,7 +24,6 @@ package v1beta1
 import (
 	v1alpha1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradecattleiov1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	genericcondition "github.com/rancher/wrangler/pkg/genericcondition"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -209,7 +208,7 @@ func (in *MachineInventorySelectorStatus) DeepCopyInto(out *MachineInventorySele
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]genericcondition.GenericCondition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		copy(*out, *in)
 	}
 	if in.Addresses != nil {
@@ -333,7 +332,7 @@ func (in *MachineInventoryStatus) DeepCopyInto(out *MachineInventoryStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]genericcondition.GenericCondition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		copy(*out, *in)
 	}
 	if in.Plan != nil {
@@ -454,7 +453,7 @@ func (in *MachineRegistrationStatus) DeepCopyInto(out *MachineRegistrationStatus
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]genericcondition.GenericCondition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		copy(*out, *in)
 	}
 	if in.ServiceAccountRef != nil {
