@@ -69,8 +69,7 @@ func (f FakeCore) Pod() corecontrollers.PodController {
 }
 
 func (f FakeCore) Secret() corecontrollers.SecretController {
-	//TODO implement me
-	panic("implement me")
+	return FakeSecret{}
 }
 
 func (f FakeCore) Service() corecontrollers.ServiceController {
@@ -80,6 +79,93 @@ func (f FakeCore) Service() corecontrollers.ServiceController {
 
 func (f FakeCore) ServiceAccount() corecontrollers.ServiceAccountController {
 	return FakeServiceAccount{}
+}
+
+type FakeSecret struct {
+}
+
+func (f FakeSecret) Informer() cache.SharedIndexInformer {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) GroupVersionKind() schema.GroupVersionKind {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) AddGenericHandler(ctx context.Context, name string, handler generic.Handler) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) AddGenericRemoveHandler(ctx context.Context, name string, handler generic.Handler) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Updater() generic.Updater {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Create(secret *corev1.Secret) (*corev1.Secret, error) {
+	return secret, nil
+}
+
+func (f FakeSecret) Update(*corev1.Secret) (*corev1.Secret, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Delete(namespace, name string, options *metav1.DeleteOptions) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Get(namespace, name string, options metav1.GetOptions) (*corev1.Secret, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) List(namespace string, opts metav1.ListOptions) (*corev1.SecretList, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *corev1.Secret, err error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (f FakeSecret) OnChange(ctx context.Context, name string, sync corecontrollers.SecretHandler) {
+	// TODO implememnt me
+	panic("implement me")
+}
+
+func (f FakeSecret) OnRemove(ctx context.Context, name string, sync corecontrollers.SecretHandler) {
+	// TODO implememnt me
+	panic("implement me")
+}
+
+func (f FakeSecret) Enqueue(namespace, name string) {
+	// TODO implememnt me
+	panic("implement me")
+}
+
+func (f FakeSecret) EnqueueAfter(namespace, name string, duration time.Duration) {
+	// TODO implememnt me
+	panic("implement me")
+}
+
+func (f FakeSecret) Cache() corecontrollers.SecretCache {
+	// TODO implememnt me
+	panic("implement me")
 }
 
 type FakeServiceAccount struct {

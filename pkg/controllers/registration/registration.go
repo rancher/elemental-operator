@@ -55,6 +55,7 @@ func Register(ctx context.Context, clients clients.ClientInterface) {
 
 func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegistrationStatus) (elm.MachineRegistrationStatus, error) {
 	var err error
+	var isNewRegistration bool
 
 	serverURL, err := h.getRancherServerURL()
 	if err != nil {
@@ -62,6 +63,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	}
 
 	if status.RegistrationToken == "" {
+		isNewRegistration = true
 		status.RegistrationToken, err = randomtoken.Generate()
 		if err != nil {
 			h.Recorder.Event(obj, corev1.EventTypeWarning, "error", err.Error())
@@ -91,10 +93,29 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		return status, err
 	}
 
+	secretName := obj.Name + "-token"
+	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: obj.Namespace,
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": obj.Name,
+			},
+		},
+		Type: "kubernetes.io/service-account-token",
+	})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return status, fmt.Errorf("add Secret to %s ServiceAccount: %w", obj.Name, err)
+	}
 	_, err = h.clients.Core().ServiceAccount().Create(&corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
+		},
+		Secrets: []corev1.ObjectReference{
+			{
+				Name: secretName,
+			},
 		},
 	})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -125,6 +146,10 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		Kind:      "ServiceAccount",
 		Namespace: obj.Namespace,
 		Name:      obj.Name,
+	}
+
+	if isNewRegistration {
+		logrus.Infof("Got new MachineRegistration '%s': generated token '%s'", obj.Name, status.RegistrationToken)
 	}
 
 	return status, nil
