@@ -35,7 +35,7 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	if status.Ready {
-		v1beta1.BootstrapReadyCondition.SetError(&status, "", nil)
+		v1beta1.BootstrapReadyCondition.SetError(&status, v1beta1.BootstrapReadyReason, nil)
 		return status, nil
 	}
 
@@ -43,6 +43,7 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	if !v1beta1.InventoryReadyCondition.IsTrue(obj) {
 		v1beta1.BootstrapReadyCondition.False(&status)
 		v1beta1.BootstrapReadyCondition.Message(&status, "waiting for machine inventory")
+		v1beta1.BootstrapReadyCondition.Reason(&status, v1beta1.WaitingForMachineInventoryReason)
 		return status, nil
 	}
 
@@ -74,12 +75,13 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 
 	// if the bootstrap plan is applied bootstrap is ready
 	if inventory.Status.Plan.AppliedChecksum == status.BootstrapPlanChecksum {
-		v1beta1.BootstrapReadyCondition.SetError(&status, "", nil)
+		v1beta1.BootstrapReadyCondition.SetError(&status, v1beta1.BootstrapReadyReason, nil)
 		return status, nil
 	}
 
 	v1beta1.BootstrapReadyCondition.False(&status)
 	v1beta1.BootstrapReadyCondition.Message(&status, "waiting for bootstrap plan to be applied")
+	v1beta1.BootstrapReadyCondition.Reason(&status, v1beta1.WaitingForBootstrapReason)
 	return status, nil
 }
 

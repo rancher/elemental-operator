@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
@@ -56,7 +57,7 @@ func Register(ctx context.Context, clients clients.ClientInterface, defaultRegis
 			WithCacheTypes(
 				clients.Elemental().ManagedOSImage(),
 				clients.Fleet().Bundle()),
-		"Defined",
+		"",
 		controllerName,
 		h.OnChange,
 		nil)
@@ -106,6 +107,8 @@ func (h *handler) OnChange(mos *elm.ManagedOSImage, status elm.ManagedOSImageSta
 	if mos.Namespace == "fleet-local" {
 		bundle.Spec.Targets = []v1alpha1.BundleTarget{{ClusterName: "local"}}
 	}
+
+	v1beta1.DefinedCondition.SetError(&status, v1beta1.MOSDefinedReason, nil)
 
 	status, err = h.updateStatus(status, bundle)
 	return []runtime.Object{

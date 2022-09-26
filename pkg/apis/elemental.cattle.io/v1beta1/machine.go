@@ -28,6 +28,12 @@ var (
 	ReadyCondition       = condition.Cond("Ready")
 	InitializedCondition = condition.Cond("Initialized")
 
+	InitializedPlanReason           = "InitializedPlan"
+	WaitingForPlanToBeAppliedReason = "WaitingForPlanToBeApplied"
+	WaitingForInitializationReason  = "WaitingForInitialization"
+	PlanSuccefullyAppliedReason     = "PlanSuccefullyApplied"
+	PlanFailedToBeAppliedReason     = "PlanFailedToBeApplied"
+
 	PlanSecretType corev1.SecretType = "elemental.cattle.io/plan"
 )
 

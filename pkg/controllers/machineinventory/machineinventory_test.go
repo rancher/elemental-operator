@@ -17,6 +17,8 @@ limitations under the License.
 package machineinventory
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
@@ -24,7 +26,6 @@ import (
 	"github.com/rancher/wrangler/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 )
 
 func Test(t *testing.T) {
@@ -194,6 +195,7 @@ var _ = Describe("Machine Inventory", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// as the applied checksum coincides with the checksum, it should set the plan ready to true
 			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(v1beta1.PlanReadyCondition.GetReason(st)).To(Equal(v1beta1.PlanSuccefullyAppliedReason))
 			// If plan is ready and matches the applied the controller cleans up any failed checksum
 			Expect(st.Plan.FailedChecksum).To(Equal(""))
 			Expect(st.Plan.Checksum).To(Equal("check"))
@@ -207,6 +209,7 @@ var _ = Describe("Machine Inventory", func() {
 			// it sets the PlanReady to True...I guess this is ok now, but we should really set it to failed or something?
 			// According to the controller: "a plan is ready if it fails or is applied"
 			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(v1beta1.PlanReadyCondition.GetReason(st)).To(Equal(v1beta1.PlanFailedToBeAppliedReason))
 			Expect(st.Plan.FailedChecksum).ToNot(Equal(""))
 			Expect(st.Plan.Checksum).To(Equal("check"))
 			Expect(st.Plan.FailedChecksum).To(Equal("check"))
@@ -217,6 +220,7 @@ var _ = Describe("Machine Inventory", func() {
 			st, err := hl.planReadyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(v1beta1.PlanReadyCondition.GetStatus(st)).To(Equal("False"))
+			Expect(v1beta1.PlanReadyCondition.GetReason(st)).To(Equal(v1beta1.WaitingForPlanToBeAppliedReason))
 			Expect(st.Plan.Checksum).To(Equal("check"))
 			Expect(st.Plan.FailedChecksum).To(Equal(""))
 			Expect(st.Plan.AppliedChecksum).To(Equal(""))
@@ -229,6 +233,7 @@ var _ = Describe("Machine Inventory", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("False"))
+			Expect(v1beta1.ReadyCondition.GetReason(st)).To(Equal(v1beta1.WaitingForInitializationReason))
 			Expect(v1beta1.ReadyCondition.GetMessage(st)).To(Equal("waiting for initialization"))
 
 		})
@@ -238,6 +243,7 @@ var _ = Describe("Machine Inventory", func() {
 			st, err := hl.readyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("False"))
+			Expect(v1beta1.ReadyCondition.GetReason(st)).To(Equal(v1beta1.WaitingForPlanToBeAppliedReason))
 			Expect(v1beta1.ReadyCondition.GetMessage(st)).To(Equal("waiting for plan to be applied"))
 		})
 		It("Sets Ready to true when plan and inventory are ready", func() {
@@ -247,6 +253,7 @@ var _ = Describe("Machine Inventory", func() {
 			st, err := hl.readyHandler(inventory, status)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(v1beta1.ReadyCondition.GetStatus(st)).To(Equal("True"))
+			Expect(v1beta1.ReadyCondition.GetReason(st)).To(Equal(v1beta1.PlanSuccefullyAppliedReason))
 		})
 	})
 	Describe("initializeHandler", func() {
@@ -267,6 +274,7 @@ var _ = Describe("Machine Inventory", func() {
 			Expect(err).ToNot(HaveOccurred())
 			// Should be initialized
 			Expect(v1beta1.InitializedCondition.GetStatus(s)).To(Equal("True"))
+			Expect(v1beta1.InitializedCondition.GetReason(s)).To(Equal(v1beta1.InitializedPlanReason))
 			// Should have created a plan in a secret
 			Expect(s.Plan.SecretRef).ToNot(BeNil())
 			// should inherit the name/namespace of the inventory

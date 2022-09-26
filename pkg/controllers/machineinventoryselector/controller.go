@@ -83,19 +83,20 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventorySelector, status v1b
 	}
 
 	if status.Ready {
-		v1beta1.ReadyCondition.SetError(&status, "", nil)
+		v1beta1.ReadyCondition.SetError(&status, v1beta1.MachineInventorySelectorReadyReason, nil)
 		return status, nil
 	}
 
 	if !v1beta1.InventoryReadyCondition.IsTrue(obj) {
 		v1beta1.ReadyCondition.False(&status)
 		v1beta1.ReadyCondition.Message(&status, "waiting for machine inventory")
+		v1beta1.ReadyCondition.Reason(&status, v1beta1.WaitingForMachineInventoryReason)
 		return status, nil
 	}
 
 	if !v1beta1.BootstrapReadyCondition.IsTrue(obj) {
 		v1beta1.ReadyCondition.False(&status)
-		v1beta1.ReadyCondition.Message(&status, "waiting for bootstrap to be applied")
+		v1beta1.ReadyCondition.Message(&status, v1beta1.WaitingForBootstrapReason)
 		return status, nil
 	}
 
@@ -134,7 +135,7 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventorySelector, status v1b
 		})
 	}
 
-	v1beta1.ReadyCondition.SetError(&status, "", nil)
+	v1beta1.ReadyCondition.SetError(&status, v1beta1.MachineInventorySelectorReadyReason, nil)
 	return status, nil
 }
 
