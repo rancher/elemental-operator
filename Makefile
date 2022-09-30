@@ -11,6 +11,7 @@ KUBE_VERSION?="v1.22.7"
 CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
 COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
+GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
 
 LDFLAGS := -w -s
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Version=${GIT_TAG}"
@@ -114,3 +115,11 @@ kind-e2e-tests: build-docker-operator chart setup-kind
 reload-operator: build-docker-operator chart
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
 	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
+
+.PHONY: vendor
+vendor:
+	go mod vendor
+	curl -L 'https://github.com/google/go-tpm-tools/archive/refs/tags/$(GO_TPM_TAG).tar.gz' --output go-tpm-tools.tar.gz
+	tar xaf go-tpm-tools.tar.gz --strip-components=1 -C vendor/github.com/google/go-tpm-tools
+	rm go-tpm-tools.tar.gz
+
