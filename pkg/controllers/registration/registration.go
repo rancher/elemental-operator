@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
@@ -49,7 +50,7 @@ func Register(ctx context.Context, clients clients.ClientInterface) {
 		Recorder:     clients.EventRecorder(controllerName),
 		settingCache: clients.Rancher().Setting().Cache(),
 	}
-	elmcontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.Elemental().MachineRegistration(), "Ready", controllerName, h.OnChange)
+	elmcontrollers.RegisterMachineRegistrationStatusHandler(ctx, clients.Elemental().MachineRegistration(), "", controllerName, h.OnChange)
 	h.clients.Elemental().MachineRegistration().OnRemove(ctx, controllerName, h.OnRemove)
 }
 
@@ -151,6 +152,8 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	if isNewRegistration {
 		logrus.Infof("Got new MachineRegistration '%s': generated token '%s'", obj.Name, status.RegistrationToken)
 	}
+
+	v1beta1.ReadyCondition.SetError(&status, v1beta1.MachineRegistrationReadyReason, nil)
 
 	return status, nil
 }

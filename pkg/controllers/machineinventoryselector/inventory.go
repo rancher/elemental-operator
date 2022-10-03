@@ -52,7 +52,7 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	if status.Ready {
-		v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
+		v1beta1.InventoryReadyCondition.SetError(&status, v1beta1.MachineInventorySelectorReadyReason, nil)
 		return status, nil
 	}
 
@@ -78,6 +78,8 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 
 		v1beta1.InventoryReadyCondition.False(&status)
 		v1beta1.InventoryReadyCondition.Message(&status, "waiting for machine inventory")
+		v1beta1.InventoryReadyCondition.Reason(&status, v1beta1.WaitingForMachineInventoryReason)
+
 		return status, nil
 	}
 
@@ -94,6 +96,8 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 		status.MachineInventoryRef = nil
 		v1beta1.InventoryReadyCondition.False(&status)
 		v1beta1.InventoryReadyCondition.Message(&status, "waiting for machine inventory")
+		v1beta1.InventoryReadyCondition.Reason(&status, v1beta1.WaitingForMachineInventoryReason)
+
 		return status, nil
 	}
 
@@ -103,7 +107,7 @@ func (h *handler) inventoryReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	}
 
 	// if the adoption succeeded the inventory is ready
-	v1beta1.InventoryReadyCondition.SetError(&status, "", nil)
+	v1beta1.InventoryReadyCondition.SetError(&status, v1beta1.MachineInventorySelectorReadyReason, nil)
 	return status, nil
 }
 

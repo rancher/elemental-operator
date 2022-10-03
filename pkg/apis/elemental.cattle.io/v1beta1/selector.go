@@ -24,6 +24,13 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+const (
+	MachineInventorySelectorReadyReason = "MachineInventorySelectorReady"
+	BootstrapReadyReason                = "BootstrapReady"
+	WaitingForMachineInventoryReason    = "WaitingForMachineInventory"
+	WaitingForBootstrapReason           = "WaitingForBootstrapReason"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

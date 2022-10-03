@@ -120,7 +120,7 @@ func (h *handler) initializeHandler(obj *v1beta1.MachineInventory, status v1beta
 		Checksum: PlanChecksum([]byte(plan.StringData["plan"])),
 	}
 
-	v1beta1.InitializedCondition.SetError(&status, "", nil)
+	v1beta1.InitializedCondition.SetError(&status, v1beta1.InitializedPlanReason, nil)
 
 	return []runtime.Object{plan}, status, nil
 }
@@ -130,16 +130,18 @@ func (h *handler) readyHandler(obj *v1beta1.MachineInventory, status v1beta1.Mac
 	if !v1beta1.InitializedCondition.IsTrue(obj) {
 		v1beta1.ReadyCondition.False(&status)
 		v1beta1.ReadyCondition.Message(&status, "waiting for initialization")
+		v1beta1.ReadyCondition.Reason(&status, v1beta1.WaitingForInitializationReason)
 		return status, nil
 	}
 
 	if !v1beta1.PlanReadyCondition.IsTrue(obj) {
 		v1beta1.ReadyCondition.False(&status)
 		v1beta1.ReadyCondition.Message(&status, "waiting for plan to be applied")
+		v1beta1.ReadyCondition.Reason(&status, v1beta1.WaitingForPlanToBeAppliedReason)
 		return status, nil
 	}
 
-	v1beta1.ReadyCondition.SetError(&status, "", nil)
+	v1beta1.ReadyCondition.SetError(&status, v1beta1.PlanSuccefullyAppliedReason, nil)
 	return status, nil
 }
 
@@ -155,15 +157,16 @@ func (h *handler) planReadyHandler(obj *v1beta1.MachineInventory, status v1beta1
 
 	switch status.Plan.Checksum {
 	case status.Plan.FailedChecksum:
-		v1beta1.PlanReadyCondition.SetError(&status, "", nil)
+		v1beta1.PlanReadyCondition.SetError(&status, v1beta1.PlanFailedToBeAppliedReason, nil)
 		return status, nil
 	case status.Plan.AppliedChecksum:
-		v1beta1.PlanReadyCondition.SetError(&status, "", nil)
+		v1beta1.PlanReadyCondition.SetError(&status, v1beta1.PlanSuccefullyAppliedReason, nil)
 		status.Plan.FailedChecksum = ""
 		return status, nil
 	default:
 		v1beta1.PlanReadyCondition.False(&status)
 		v1beta1.PlanReadyCondition.Message(&status, "waiting for plan to be applied")
+		v1beta1.PlanReadyCondition.Reason(&status, v1beta1.WaitingForPlanToBeAppliedReason)
 		return status, nil
 	}
 }
