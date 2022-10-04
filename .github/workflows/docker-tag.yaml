@@ -19,6 +19,11 @@ jobs:
           fetch-depth: 0
       - name: cosign-installer
         uses: sigstore/cosign-installer@v2.5.1
+      - name: Install the bom command
+        shell: bash
+        run: |
+          curl -L  https://github.com/kubernetes-sigs/bom/releases/download/v0.3.0/bom-linux-amd64.tar.gz | tar xvz
+          sudo mv ./bom /usr/bin/bom
       - name: Export tag
         id: export_tag
         run: |
@@ -80,6 +85,19 @@ jobs:
             TAG=${{ steps.export_tag.outputs.operator_tag }}
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
+      - name: Create SBOM file
+        shell: bash
+        run: |
+          bom generate -o elemental-operator.spdx .
+          bom generate -o elemental-register.spdx .
+      - name: Attach SBOM file in the container image
+        shell: bash
+        run: |
+          set -e
+          cosign attach sbom --sbom elemental-operator.spdx "${{ env.OPERATOR_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}"
+          cosign attach sbom --sbom elemental-operator.spdx "${{ env.OPERATOR_REPO }}:latest"
+          cosign attach sbom --sbom elemental-register.spdx "${{ env.REGISTER_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}"
+          cosign attach sbom --sbom elemental-register.spdx "${{ env.REGISTER_REPO }}:latest"
       - name: Sign image
         env:
           COSIGN_EXPERIMENTAL: 1
