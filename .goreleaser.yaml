@@ -38,6 +38,21 @@ builds:
     goarm:
       - 6
       - 7
+    overrides: # Disable CGO on arm platforms, means that we don't support emulated TPM under arm
+      - goarch: arm
+        goos: linux
+        goarm: 6
+        env:
+          - CGO_ENABLED=0
+      - goarch: arm
+        goos: linux
+        goarm: 7
+        env:
+          - CGO_ENABLED=0
+      - goarch: arm64
+        goos: linux
+        env:
+          - CGO_ENABLED=0
   - main: ./cmd/support
     binary: elemental-support
     id: elemental-support
