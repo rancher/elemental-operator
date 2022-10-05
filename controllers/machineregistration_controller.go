@@ -46,7 +46,11 @@ type MachineRegistrationReconciler struct {
 	client.Client
 }
 
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings;roles,verbs=watch;create;delete
 // +kubebuilder:rbac:groups="management.cattle.io",resources=setting,verbs=get
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;delete;watch
 
 func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).

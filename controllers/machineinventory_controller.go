@@ -44,7 +44,9 @@ type MachineInventoryReconciler struct {
 	client.Client
 }
 
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;update;delete
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create
 
 func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).

@@ -40,6 +40,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 )
 
+// IMPORTANT: The RBAC permissions below should be reviewed after old code is deprecated.
+
+// +kubebuilder:rbac:groups="",resources=events,verbs=patch;create
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;create;delete;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+// +kubebuilder:rbac:groups="fleet.cattle.io",resources=bundles,verbs=*
+// +kubebuilder:rbac:groups="apiextensions.k8s.io",resources=customresourcedefinitions,verbs=*
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")

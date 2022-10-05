@@ -52,7 +52,10 @@ type MachineInventorySelectorReconciler struct {
 	client.Client
 }
 
-// +kubebuilder:rbac:groups="management.cattle.io",resources=setting,verbs=get
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventoryselectors,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventoryselectors/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;patch
 
 func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
