@@ -2,3 +2,5 @@ build/
 coverage.out
 .idea/*
 _artifacts/
+hack/tools/bin/
+.vscode/
