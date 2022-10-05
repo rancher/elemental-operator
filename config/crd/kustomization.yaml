@@ -7,6 +7,3 @@ resources:
 - bases/elemental.cattle.io_machineinventoryselectortemplates.yaml
 - bases/elemental.cattle.io_machineregistrations.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
-
-commonLabels:
-  app: '{{ .Release.Name }}'

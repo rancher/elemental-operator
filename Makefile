@@ -180,10 +180,11 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./controllers/... \
+		paths=./cmd/operator/ctrl-runtime-operator/... \
 		crd:crdVersions=v1 \
 		rbac:roleName=manager-role \
 		output:crd:dir=./config/crd/bases \
-		output:rbac:dir=./config/rbac \
+		output:rbac:dir=./config/rbac/bases \
 		output:webhook:dir=./config/webhook \
 		webhook
 
@@ -195,3 +196,6 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > chart/templates/crds.yaml
+
+build-rbac: $(KUSTOMIZE)
+	$(KUSTOMIZE) build config/rbac > chart/templates/cluster_role.yaml
