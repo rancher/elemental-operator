@@ -1,3 +1,5 @@
 build/
 coverage.out
 .idea/*
+hack/tools/bin/
+.vscode/
