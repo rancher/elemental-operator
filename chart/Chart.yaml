@@ -1,8 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#!BuildTag: elemental/elemental-operator:latest
+#!BuildTag: elemental/elemental-operator:0.0.0-noversion
+#!BuildTag: elemental/elemental-operator:0.0.0-noversion-build%RELEASE%
 apiVersion: v2
 name: elemental-operator
 description: Rancher Elemental Operator
-version: 0.0.0
-appVersion: 0.0.0
+version: 0.0.0-noversion
+appVersion: 0.0.0-noversion
 annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/experimental: "true"
