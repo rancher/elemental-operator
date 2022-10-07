@@ -76,19 +76,22 @@ source:
   enabled: true
   name_template: '{{ .ProjectName }}-{{ .Tag }}-source'
 archives:
-  # Default template uses underscores instead of -
-  - name_template: "{{ .ProjectName }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
-    replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      amd64: x86_64
+  - format: binary  # This disables creating an archive and leaves the binaries only in the release
 checksum:
   name_template: '{{ .ProjectName }}-{{ .Tag }}-checksums.txt'
 snapshot:
   name_template: "{{ .Tag }}-next"
+sboms:
+  - artifacts: binary
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args: ["sign-blob", "--oidc-issuer=https://token.actions.githubusercontent.com", "--output-certificate=${certificate}", "--output-signature=${signature}", "${artifact}"]
+    artifacts: all
 changelog:
   sort: asc
+  use: github
   filters:
     exclude:
       - '^docs:'
