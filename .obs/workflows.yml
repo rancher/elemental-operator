@@ -1,13 +1,21 @@
-workflow:
+dev_workflow:
   steps:
     - trigger_services:
-        project: home:kwk:elemental
-        package: rancheros-operator
-    - rebuild_package:
-        project: home:kwk:elemental
-        package: rancheros-operator
+        project: isv:Rancher:Elemental:Dev
+        package: elemental-operator
   filters:
-    event: push
     branches:
       only:
         - main
+    event: push
+
+staging_workflow:
+  steps:
+    - trigger_services:
+        project: isv:Rancher:Elemental:Staging
+        package: elemental-operator
+  filters:
+    branches:
+      only:
+        - main
+    event: tag_push
