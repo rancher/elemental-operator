@@ -206,7 +206,7 @@ var _ = BeforeSuite(func() {
 				"--set", fmt.Sprintf("hostname=%s.%s", e2eCfg.ExternalIP, e2eCfg.MagicDNS),
 				"--create-namespace",
 				rancherName,
-				fmt.Sprintf(e2eCfg.RancherChartUrl),
+				fmt.Sprintf(e2eCfg.RancherChartURL),
 			)).To(Succeed())
 			Eventually(func() bool {
 				return isDeploymentReady(rancherNamespace, rancherName)

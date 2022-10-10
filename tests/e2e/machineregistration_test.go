@@ -91,8 +91,9 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			Eventually(func() string {
 				mReg := &elementalv1.MachineRegistration{}
 				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), mReg); err != nil {
-					Fail(fmt.Sprintf("failed to get machine registration: %s", err))
+					return err.Error()
 				}
+				url = mReg.Status.RegistrationURL
 				return mReg.Status.RegistrationURL
 			}, 1*time.Minute, 2*time.Second).Should(
 				ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", e2eCfg.ExternalIP, e2eCfg.MagicDNS)))
@@ -100,13 +101,15 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			Eventually(func() string {
 				out, err := http.GetInsecure(url)
 				if err != nil {
-					Fail(fmt.Sprintf("failed to get url %s: %s", url, err))
+					return err.Error()
 				}
 				return out
 			}, 1*time.Minute, 2*time.Second).Should(
-				ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", e2eCfg.ExternalIP, e2eCfg.MagicDNS)),
-				ContainSubstring("BEGIN CERTIFICATE"),
-				ContainSubstring("END CERTIFICATE"),
+				And(
+					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", e2eCfg.ExternalIP, e2eCfg.MagicDNS)),
+					ContainSubstring("BEGIN CERTIFICATE"),
+					ContainSubstring("END CERTIFICATE"),
+				),
 			)
 
 			Eventually(func() bool {
@@ -121,7 +124,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 				}
 				if err := cl.Get(ctx, client.ObjectKey{
 					Namespace: mRegistration.Namespace,
-					Name:      mRegistration.Name + "token",
+					Name:      mRegistration.Name + "-token",
 				}, &corev1.Secret{}); err != nil {
 					return false
 				}

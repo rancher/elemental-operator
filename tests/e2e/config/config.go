@@ -1,3 +1,19 @@
+/*
+Copyright © 2022 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -24,7 +40,7 @@ type E2EConfig struct {
 	CertManagerChartURL string `yaml:"certManagerChartURL"`
 
 	RancherVersion  string `yaml:"rancherVersion"`
-	RancherChartUrl string `yaml:"rancherChartURL"`
+	RancherChartURL string `yaml:"rancherChartURL"`
 
 	SystemUpgradeControllerVersion string `yaml:"systemUpgradeControllerVersion"`
 	SystemUpgradeControllerURL     string `yaml:"systemUpgradeControllerURL"`
@@ -32,7 +48,7 @@ type E2EConfig struct {
 
 // ReadE2EConfig read config from yaml and substitute variables using envsubst.
 // All variables can be overridden by environmental variables.
-func ReadE2EConfig(configPath string) (*E2EConfig, error) {
+func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 	config := &E2EConfig{}
 
 	configData, err := os.ReadFile(configPath)
@@ -97,11 +113,11 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) {
 	}
 
 	if rancherVersion := os.Getenv("RANCHER_VERSION"); rancherVersion != "" {
-		config.RancherChartUrl = rancherVersion
+		config.RancherChartURL = rancherVersion
 	}
 
 	if rancherURL := os.Getenv("RANCHER_CHART_URL"); rancherURL != "" {
-		config.RancherChartUrl = rancherURL
+		config.RancherChartURL = rancherURL
 	}
 
 	if sysUpgradeControllerVersion := os.Getenv("SYSTEM_UPGRADE_CONTROLLER_VERSION"); sysUpgradeControllerVersion != "" {
@@ -136,13 +152,13 @@ func substituteVersions(config *E2EConfig) error {
 	}
 	config.CertManagerChartURL = certManagerURL
 
-	rancherURL, err := envsubst.Eval(config.RancherChartUrl, func(s string) string {
+	rancherURL, err := envsubst.Eval(config.RancherChartURL, func(s string) string {
 		return config.RancherVersion
 	})
 	if err != nil {
 		return fmt.Errorf("failed to substiture rancher chart url: %w", err)
 	}
-	config.RancherChartUrl = rancherURL
+	config.RancherChartURL = rancherURL
 
 	sysUpgradeControllerURL, err := envsubst.Eval(config.SystemUpgradeControllerURL, func(s string) string {
 		return config.SystemUpgradeControllerVersion
