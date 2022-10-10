@@ -175,7 +175,10 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.22 // indirect
 	sigs.k8s.io/cli-utils v0.16.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
+	sigs.k8s.io/yaml v1.3.0
 )
 
-require github.com/sanity-io/litter v1.5.5
+require (
+	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
+	github.com/sanity-io/litter v1.5.5
+)

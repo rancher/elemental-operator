@@ -23,66 +23,110 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-
+	elementalv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/config"
-	"github.com/rancher/elemental-operator/tests/catalog"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("MachineRegistration e2e tests", func() {
-	k := kubectl.New()
 	Context("registration", func() {
+		var mRegistration *elementalv1.MachineRegistration
+
+		BeforeEach(func() {
+			mRegistration = &elementalv1.MachineRegistration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "machine-registration",
+					Namespace: operatorNamespace,
+				},
+			}
+		})
 
 		AfterEach(func() {
-			kubectl.New().Delete("machineregistration", "-n", operatorNamespace, "machine-registration")
+			Expect(cl.Delete(ctx, mRegistration)).To(Succeed())
 
+			Eventually(func() bool {
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &rbacv1.Role{}); !apierrors.IsNotFound(err) {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &corev1.ServiceAccount{}); !apierrors.IsNotFound(err) {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &rbacv1.RoleBinding{}); !apierrors.IsNotFound(err) {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKey{
+					Namespace: mRegistration.Namespace,
+					Name:      mRegistration.Name + "token",
+				}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+					return false
+				}
+				return true
+			}, 2*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-			install := config.Install{Device: "/dev/vda", ISO: "https://something.example.com"}
-			elemental := config.Elemental{Install: install}
-			config := &config.Config{Elemental: elemental, CloudConfig: map[string]interface{}{
-				"write_files": map[string]string{
-					"content":  "V2h5IGFyZSB5b3UgY2hlY2tpbmcgdGhpcz8K",
-					"encoding": "b64",
-				},
-			}}
-			spec := catalog.MachineRegistrationSpec{Config: config}
-			mr := catalog.NewMachineRegistration("machine-registration", spec)
+			mRegistration.Spec = elementalv1.MachineRegistrationSpec{
+				Config: &config.Config{
+					Elemental: config.Elemental{
+						Install: config.Install{
+							Device: "/dev/vda",
+							ISO:    "https://something.example.com",
+						},
+					},
+					CloudConfig: map[string]interface{}{
+						"write_files": map[string]string{
+							"content":  "V2h5IGFyZSB5b3UgY2hlY2tpbmcgdGhpcz8K",
+							"encoding": "b64",
+						},
+					}},
+			}
 
-			Eventually(func() error {
-				return k.ApplyYAML(operatorNamespace, "machine-registration", mr)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 
 			var url string
 			Eventually(func() string {
-				e, err := kubectl.GetData(operatorNamespace, "machineregistration", "machine-registration", `jsonpath={.status.registrationURL}`)
-				if err != nil {
-					fmt.Println(err)
+				mReg := &elementalv1.MachineRegistration{}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), mReg); err != nil {
+					Fail(fmt.Sprintf("failed to get machine registration: %s", err))
 				}
-				url = string(e)
-				return string(e)
+				return mReg.Status.RegistrationURL
 			}, 1*time.Minute, 2*time.Second).Should(
-				And(
-					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
-				),
-			)
+				ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", e2eCfg.ExternalIP, e2eCfg.MagicDNS)))
 
 			Eventually(func() string {
 				out, err := http.GetInsecure(url)
 				if err != nil {
-					fmt.Println(err)
+					Fail(fmt.Sprintf("failed to get url %s: %s", url, err))
 				}
 				return out
 			}, 1*time.Minute, 2*time.Second).Should(
-				And(
-					ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", externalIP, magicDNS)),
-					ContainSubstring("BEGIN CERTIFICATE"),
-					ContainSubstring("END CERTIFICATE"),
-				),
+				ContainSubstring(fmt.Sprintf("%s.%s/elemental/registration", e2eCfg.ExternalIP, e2eCfg.MagicDNS)),
+				ContainSubstring("BEGIN CERTIFICATE"),
+				ContainSubstring("END CERTIFICATE"),
 			)
 
-			// TODO: We should check that the install values that we passed are indeed returned by the registration?
+			Eventually(func() bool {
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &rbacv1.Role{}); err != nil {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &corev1.ServiceAccount{}); err != nil {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKeyFromObject(mRegistration), &rbacv1.RoleBinding{}); err != nil {
+					return false
+				}
+				if err := cl.Get(ctx, client.ObjectKey{
+					Namespace: mRegistration.Namespace,
+					Name:      mRegistration.Name + "token",
+				}, &corev1.Secret{}); err != nil {
+					return false
+				}
+				return true
+			}, 2*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 	})
 })
