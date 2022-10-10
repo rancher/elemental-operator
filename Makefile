@@ -12,6 +12,7 @@ CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
 COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
+E2E_CONF_FILE ?= $(ROOT_DIR)/tests/e2e/config/config.yaml
 
 LDFLAGS := -w -s
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Version=${GIT_TAG}"
@@ -83,9 +84,10 @@ unit-tests-deps:
 unit-tests: unit-tests-deps
 	ginkgo -r -v  --covermode=atomic --coverprofile=coverage.out -p -r ./pkg/...
 
-e2e-tests: setup-kind
+e2e-tests: chart setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
+	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	cd $(ROOT_DIR)/tests && ginkgo -r -v ./e2e
 
 # Only setups the kind cluster
@@ -102,12 +104,14 @@ setup-full-cluster: build-docker-operator chart setup-kind
 	@export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
+	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
 	cd $(ROOT_DIR)/tests && ginkgo -r -v --label-filter="do-nothing" ./e2e
 
 kind-e2e-tests: build-docker-operator chart setup-kind
+	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
-	CHART=$(CHART) $(MAKE) e2e-tests
+	$(MAKE) e2e-tests
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
