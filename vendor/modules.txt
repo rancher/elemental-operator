@@ -33,6 +33,11 @@ github.com/docker/docker/pkg/homedir
 ## explicit
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
+# github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
+## explicit; go 1.13
+github.com/drone/envsubst/v2
+github.com/drone/envsubst/v2/parse
+github.com/drone/envsubst/v2/path
 # github.com/evanphx/json-patch v4.12.0+incompatible
 ## explicit
 github.com/evanphx/json-patch
