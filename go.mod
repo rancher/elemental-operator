@@ -160,7 +160,7 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.23.0 // indirect
+	k8s.io/apiextensions-apiserver v0.23.0
 	k8s.io/apiserver v0.23.0 // indirect
 	k8s.io/code-generator v0.22.2 // indirect
 	k8s.io/component-base v0.23.0 // indirect
@@ -175,7 +175,10 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.22 // indirect
 	sigs.k8s.io/cli-utils v0.16.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.0 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
+	sigs.k8s.io/yaml v1.3.0
 )
 
-require github.com/sanity-io/litter v1.5.5
+require (
+	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
+	github.com/sanity-io/litter v1.5.5
+)

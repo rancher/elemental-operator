@@ -38,7 +38,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 	var k *kubectl.Kubectl
 
 	AfterEach(func() {
-		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", "fleet-local")
+		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", fleetNamespace)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
@@ -52,17 +52,17 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"invalid",
 				"",
-				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
+				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
 				nil,
 			)
 
-			err := k.ApplyYAML("fleet-local", "invalid", ui)
+			err := k.ApplyYAML(fleetNamespace, "invalid", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "invalid")
+			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "invalid")
 
 			By("Check that reports event failure")
 			Eventually(func() string {
-				r, _ := kubectl.Run("describe", "-n", "fleet-local", "managedosversionchannel", "invalid")
+				r, _ := kubectl.Run("describe", "-n", fleetNamespace, "managedosversionchannel", "invalid")
 
 				return r
 			}, 1*time.Minute, 2*time.Second).Should(
@@ -106,46 +106,46 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			b, err := json.Marshal(versions)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			http.Server(ctx, bridgeIP+":9999", string(b))
+			http.Server(ctx, e2eCfg.BridgeIP+":9999", string(b))
 
 			By("Create a ManagedOSVersionChannel")
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",
 				"json",
-				map[string]interface{}{"uri": "http://" + bridgeIP + ":9999"},
+				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
 				nil,
 			)
 
-			err = k.ApplyYAML("fleet-local", "testchannel", ui)
+			err = k.ApplyYAML(fleetNamespace, "testchannel", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel")
+			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel")
 
-			r, _ := kubectl.GetData("fleet-local", "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
+			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("json"))
 
 			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
-				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 5*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
 
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
 			)
 
-			err = k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel")
+			err = k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel")
 			Expect(err).ShouldNot(HaveOccurred())
 
 			By("Check ManagedOSVersions are deleted on channel clean up")
 			Eventually(func() string {
-				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "v2", `jsonpath={}`)
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v2", `jsonpath={}`)
 
 				return string(r)
 			}, 1*time.Minute, 2*time.Second).Should(
@@ -201,23 +201,23 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				nil,
 			)
 
-			err = k.ApplyYAML("fleet-local", "testchannel2", ui)
+			err = k.ApplyYAML(fleetNamespace, "testchannel2", ui)
 			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", "fleet-local", "testchannel2")
+			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel2")
 
-			r, _ := kubectl.GetData("fleet-local", "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
+			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
 
 			Expect(string(r)).To(Equal("custom"))
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v1"),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData("fleet-local", "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
 
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(

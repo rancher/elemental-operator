@@ -18,147 +18,94 @@ package e2e_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	"github.com/rancher/elemental-operator/tests/catalog"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	elementalv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	e2eConfig "github.com/rancher/elemental-operator/tests/e2e/config"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+)
+
+func init() {
+	utilruntime.Must(clientgoscheme.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(managementv3.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(elementalv1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(apiextensionsv1.AddToScheme(clientgoscheme.Scheme))
+}
+
+const (
+	operatorNamespace         = "cattle-elemental-system"
+	operatorName              = "elemental-operator"
+	nginxNamespace            = "ingress-nginx"
+	nginxName                 = "ingress-nginx-controller"
+	certManagerNamespace      = "cert-manager"
+	certManagerName           = "cert-manager"
+	certManagerCAInjectorName = "cert-manager-cainjector"
+	cattleSystemNamespace     = "cattle-system"
+	rancherName               = "rancher"
+	cattleFleetNamespace      = "cattle-fleet-local-system"
+	fleetNamespace            = "fleet-local"
+	cattleFleetName           = "fleet-agent"
+	sysUpgradeControllerName  = "system-upgrade-controller"
 )
 
 var (
-	chart      string
-	externalIP string
-	magicDNS   string
-	bridgeIP   string
+	e2eCfg        *e2eConfig.E2EConfig
+	cl            runtimeclient.Client
+	ctx           = context.Background()
+	k             = kubectl.New()
+	testResources = []string{"machineregistration", "managedosversionchannel"}
+	crdNames      = []string{
+		"managedosimages.elemental.cattle.io",
+		"machineinventories.elemental.cattle.io",
+		"machineregistrations.elemental.cattle.io",
+		"managedosversions.elemental.cattle.io",
+		"managedosversionchannels.elemental.cattle.io",
+		"machineinventoryselectors.elemental.cattle.io",
+		"machineinventoryselectortemplates.elemental.cattle.io",
+	}
 )
-
-const operatorNamespace = "cattle-elemental-system"
-const operatorName = "elemental-operator"
-
-var testResources = []string{"machineregistration", "managedosversionchannel"}
-var replicas = "1"
 
 func TestE2e(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "elemental-operator e2e test Suite")
 }
 
-func isOperatorInstalled(k *kubectl.Kubectl) bool {
-	pods, err := k.GetPodNames(operatorNamespace, "")
-	Expect(err).ToNot(HaveOccurred())
-	return len(pods) > 0
-}
-
-func deployOperator(k *kubectl.Kubectl) {
-	By("Deploying elemental-operator chart", func() {
-		err := kubectl.RunHelmBinaryWithCustomErr(
-			"-n",
-			operatorNamespace,
-			"install",
-			"--create-namespace",
-			"--set", "sync_interval=30s",
-			"--set", "debug=true",
-			"--set", fmt.Sprintf("replicas=%s", replicas),
-			operatorName,
-			chart)
-		Expect(err).ToNot(HaveOccurred())
-
-		err = k.WaitForPod(operatorNamespace, "app=elemental-operator", operatorName)
-		Expect(err).ToNot(HaveOccurred())
-
-		pods, err := k.GetPodNames(operatorNamespace, "app=elemental-operator")
-		Expect(err).ToNot(HaveOccurred())
-		parsedReplicas, err := strconv.Atoi(replicas)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(len(pods)).To(Equal(parsedReplicas))
-
-		err = k.WaitForNamespaceWithPod(operatorNamespace, "app=elemental-operator")
-		Expect(err).ToNot(HaveOccurred())
-
-		Eventually(func() string {
-			str, _ := kubectl.Run("logs", "-n", operatorNamespace, pods[0])
-			return str
-		}, 5*time.Minute, 2*time.Second).Should(
-			And(
-				ContainSubstring("Starting management.cattle.io/v3, Kind=Setting controller"),
-			))
-
-		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
-		// We need to manually set this value, which is the same value you would get from doing the bootstrap
-		err = k.ApplyYAML("", "server-url", catalog.NewSetting("server-url", "env", fmt.Sprintf("https://%s.%s", externalIP, magicDNS)))
-		Expect(err).ToNot(HaveOccurred())
-	})
-}
-
 var _ = BeforeSuite(func() {
-
-	k := kubectl.New()
-
-	magicDNS = os.Getenv("MAGIC_DNS")
-	if magicDNS == "" {
-		magicDNS = "sslip.io"
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		Fail("config path can't be empty")
 	}
 
-	rancherVersion := os.Getenv("RANCHER_VERSION")
-	if rancherVersion == "" {
-		rancherVersion = "2.6.6"
-	}
+	var err error
+	e2eCfg, err = e2eConfig.ReadE2EConfig(configPath)
+	Expect(err).ToNot(HaveOccurred())
 
-	externalIP = os.Getenv("EXTERNAL_IP")
-	if externalIP == "" {
-		Fail("No EXTERNAL_IP provided, a known (reachable) node external ip it is required to run e2e tests")
-	}
+	cfg, err := runtimeconfig.GetConfig()
+	Expect(err).ToNot(HaveOccurred())
 
-	bridgeIP = os.Getenv("BRIDGE_IP")
-	if bridgeIP == "" {
-		bridgeIP = "172.17.0.1"
-	}
+	cl, err = runtimeclient.New(cfg, runtimeclient.Options{})
+	Expect(err).ToNot(HaveOccurred())
 
-	if rp := os.Getenv("OPERATOR_REPLICAS"); rp != "" {
-		replicas = os.Getenv("OPERATOR_REPLICAS")
-	}
-
-	if os.Getenv("NO_SETUP") != "" {
+	if e2eCfg.NoSetup {
 		By("No setup")
-		return
-	}
-
-	chart = os.Getenv("CHART")
-	if chart == "" && !isOperatorInstalled(k) {
-		Fail("No CHART provided, a elemental operator helm chart is required to run e2e tests")
-	} else if isOperatorInstalled(k) {
-		//
-		// Upgrade/delete of operator only goes here
-		// (no further bootstrap is required)
-		By("Upgrading the operator only", func() {
-			err := kubectl.DeleteNamespace(operatorNamespace)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForNamespaceDelete(operatorNamespace)
-			Expect(err).ToNot(HaveOccurred())
-
-			deployOperator(k)
-
-			// Somehow rancher needs to be restarted after an elemental-operator upgrade
-			// to get machineregistration working
-			pods, err := k.GetPodNames("cattle-system", "")
-			Expect(err).ToNot(HaveOccurred())
-			for _, p := range pods {
-				err = k.Delete("pod", "-n", "cattle-system", p)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
-			Expect(err).ToNot(HaveOccurred())
-		})
 		return
 	}
 
@@ -167,77 +114,110 @@ var _ = BeforeSuite(func() {
 		return
 	}
 
-	installed := func(n string) bool {
-		pods, err := k.GetPodNames(n, "")
-		if err == nil && len(pods) > 0 {
+	if isOperatorInstalled(k) { // only operator upgrade required, no furher bootstrap
+		By("Upgrading the operator only", func() {
+			err := kubectl.DeleteNamespace(operatorNamespace)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k.WaitForNamespaceDelete(operatorNamespace)
+			Expect(err).ToNot(HaveOccurred())
+
+			deployOperator(k, e2eCfg)
+
+			// Somehow rancher needs to be restarted after an elemental-operator upgrade
+			// to get machineregistration working
+			pods, err := k.GetPodNames(cattleSystemNamespace, "")
+			Expect(err).ToNot(HaveOccurred())
+			for _, p := range pods {
+				err = k.Delete("pod", "-n", cattleSystemNamespace, p)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			err = k.WaitForNamespaceWithPod(cattleSystemNamespace, "app=rancher")
+			Expect(err).ToNot(HaveOccurred())
+		})
+		return
+	}
+
+	isAlreadyInstalled := func(n string) bool {
+		podList := &corev1.PodList{}
+		if err := cl.List(ctx, podList, &runtimeclient.ListOptions{
+			Namespace: n,
+		}); err != nil {
+			return false
+		}
+
+		if len(podList.Items) > 0 {
 			return true
 		}
+
 		return false
 	}
+
 	By("Deploying elemental-operator chart dependencies", func() {
 		By("installing nginx", func() {
-			if installed("ingress-nginx") {
+			if isAlreadyInstalled(nginxNamespace) {
 				By("already installed")
 				return
 			}
-			kubectl.CreateNamespace("ingress-nginx")
-			err := kubectl.Apply("ingress-nginx", "https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml")
-			Expect(err).ToNot(HaveOccurred())
+			Expect(kubectl.Apply(nginxNamespace, e2eCfg.NginxURL)).To(Succeed())
 
-			err = k.WaitForNamespaceWithPod("ingress-nginx", "app.kubernetes.io/component=controller")
-			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() bool {
+				return isDeploymentReady(nginxNamespace, nginxName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
 		By("installing cert-manager", func() {
-			if installed("cert-manager") {
+			if isAlreadyInstalled(certManagerNamespace) {
 				By("already installed")
 				return
 			}
-
-			err := kubectl.RunHelmBinaryWithCustomErr("-n", "cert-manager", "install", "--set", "installCRDs=true", "--create-namespace", "cert-manager", "https://charts.jetstack.io/charts/cert-manager-v1.5.3.tgz")
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForPod("cert-manager", "app.kubernetes.io/instance=cert-manager", "cert-manager-cainjector")
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForNamespaceWithPod("cert-manager", "app.kubernetes.io/instance=cert-manager")
-			Expect(err).ToNot(HaveOccurred())
+			Expect(kubectl.RunHelmBinaryWithCustomErr(
+				"-n",
+				certManagerNamespace,
+				"install",
+				"--set",
+				"installCRDs=true",
+				"--create-namespace",
+				certManagerNamespace,
+				e2eCfg.CertManagerChartURL,
+			)).To(Succeed())
+			Eventually(func() bool {
+				return isDeploymentReady(certManagerNamespace, certManagerName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			Eventually(func() bool {
+				return isDeploymentReady(certManagerNamespace, certManagerCAInjectorName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
 		By("installing rancher", func() {
-			if installed("cattle-system") {
+			if isAlreadyInstalled(cattleSystemNamespace) {
 				By("already installed")
 				return
 			}
-
-			err := kubectl.RunHelmBinaryWithCustomErr(
+			Expect(kubectl.RunHelmBinaryWithCustomErr(
 				"-n",
-				"cattle-system",
+				cattleSystemNamespace,
 				"install",
 				"--set",
 				"bootstrapPassword=admin",
 				"--set",
 				"replicas=1",
-				"--set", fmt.Sprintf("hostname=%s.%s", externalIP, magicDNS),
+				"--set", fmt.Sprintf("hostname=%s.%s", e2eCfg.ExternalIP, e2eCfg.MagicDNS),
 				"--create-namespace",
-				"rancher",
-				fmt.Sprintf("https://releases.rancher.com/server-charts/stable/rancher-%s.tgz", rancherVersion),
-			)
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForPod("cattle-system", "app=rancher", "rancher")
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForNamespaceWithPod("cattle-system", "app=rancher")
-			Expect(err).ToNot(HaveOccurred())
-
-			err = k.WaitForNamespaceWithPod("cattle-fleet-local-system", "app=fleet-agent")
-			Expect(err).ToNot(HaveOccurred())
+				rancherName,
+				fmt.Sprintf(e2eCfg.RancherChartURL),
+			)).To(Succeed())
+			Eventually(func() bool {
+				return isDeploymentReady(cattleSystemNamespace, rancherName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			Eventually(func() bool {
+				return isDeploymentReady(cattleFleetNamespace, cattleFleetName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
 		By("installing system-upgrade-controller", func() {
-
-			resp, err := http.Get("https://github.com/rancher/system-upgrade-controller/releases/download/v0.9.1/system-upgrade-controller.yaml")
+			resp, err := http.Get(e2eCfg.SystemUpgradeControllerURL)
 			Expect(err).ToNot(HaveOccurred())
 			defer resp.Body.Close()
 			data := bytes.NewBuffer([]byte{})
@@ -252,16 +232,17 @@ var _ = BeforeSuite(func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.RemoveAll(temp.Name())
-			err = ioutil.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(ioutil.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)).To(Succeed())
+			Expect(kubectl.Apply(cattleSystemNamespace, temp.Name())).To(Succeed())
 
-			err = kubectl.Apply("cattle-system", temp.Name())
-			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() bool {
+				return isDeploymentReady(cattleSystemNamespace, sysUpgradeControllerName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
 	})
 
-	deployOperator(k)
+	deployOperator(k, e2eCfg)
 })
 
 var _ = AfterSuite(func() {
@@ -270,3 +251,80 @@ var _ = AfterSuite(func() {
 		kubectl.New().Delete(r, "--all", "--all-namespaces")
 	}
 })
+
+func isOperatorInstalled(k *kubectl.Kubectl) bool {
+	pods, err := k.GetPodNames(operatorNamespace, "")
+	Expect(err).ToNot(HaveOccurred())
+	return len(pods) > 0
+}
+
+func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
+	By("Deploying elemental-operator chart", func() {
+		Expect(kubectl.RunHelmBinaryWithCustomErr(
+			"-n",
+			operatorNamespace,
+			"install",
+			"--create-namespace",
+			"--set", "sync_interval=30s",
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			operatorName,
+			config.Chart,
+		)).To(Succeed())
+
+		By("Waiting for elemental-operator deployment to be available")
+		Eventually(func() bool {
+			return isDeploymentReady(operatorNamespace, operatorName)
+		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+		By("Waiting for CRDs to be created")
+		Eventually(func() bool {
+			for _, crdName := range crdNames {
+				crd := &apiextensionsv1.CustomResourceDefinition{}
+				if err := cl.Get(ctx,
+					runtimeclient.ObjectKey{
+						Name: crdName,
+					},
+					crd,
+				); err != nil {
+					return false
+				}
+			}
+			return true
+		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
+		// We need to manually set this value, which is the same value you would get from doing the bootstrap
+		setting := &managementv3.Setting{}
+		Expect(cl.Get(ctx,
+			runtimeclient.ObjectKey{
+				Name: "server-url",
+			},
+			setting,
+		)).To(Succeed())
+
+		setting.Source = "env"
+		setting.Value = fmt.Sprintf("https://%s.%s", config.ExternalIP, config.MagicDNS)
+
+		Expect(cl.Update(ctx, setting)).To(Succeed())
+	})
+}
+
+func isDeploymentReady(namespace, name string) bool {
+	deployment := &appsv1.Deployment{}
+	if err := cl.Get(ctx,
+		runtimeclient.ObjectKey{
+			Namespace: namespace,
+			Name:      name,
+		},
+		deployment,
+	); err != nil {
+		return false
+	}
+
+	if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas {
+		return true
+	}
+
+	return false
+}

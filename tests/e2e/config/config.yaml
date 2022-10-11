@@ -1,0 +1,18 @@
+# E2E Tests config
+
+magicDNS: sslip.io
+bridgeIP: 172.17.0.1
+operatorReplicas: 1
+noSetup: false
+
+nginxVersion: controller-v1.4.0
+nginxURL: https://raw.githubusercontent.com/kubernetes/ingress-nginx/${NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml
+
+certManagerVersion: v1.5.3
+certManagerChartURL: https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_VERSION}.tgz
+
+rancherVersion: 2.6.6
+rancherChartURL: https://releases.rancher.com/server-charts/stable/rancher-${RANCHER_VERSION}.tgz
+
+systemUpgradeControllerVersion: v0.9.1
+systemUpgradeControllerURL: https://github.com/rancher/system-upgrade-controller/releases/download/${SYSTEM_UPGRADE_CONTROLLER_VERSION}/system-upgrade-controller.yaml
