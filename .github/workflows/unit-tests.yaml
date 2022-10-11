@@ -24,12 +24,6 @@ jobs:
         key: ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
-    - name: Get dependencies
-      run: |
-        # Needed for github.com/google/go-tspi/tspi
-        # in opensuse this is trousers-devel
-        sudo apt-get install libtspi-dev
-        make unit-tests-deps
     - name: Run tests
       run: |
         make unit-tests

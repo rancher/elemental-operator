@@ -27,7 +27,7 @@ const (
 
 type MachineRegistrationSpec struct {
 	// +optional
-	MachineName string `json:"machineName,omitempty"` // TODO: review this API field, it might be dropped
+	MachineName string `json:"machineName,omitempty"`
 	// MachineInventoryLabels label to be added to the created MachineInventory object.
 	// +optional
 	MachineInventoryLabels map[string]string `json:"machineInventoryLabels,omitempty"`
