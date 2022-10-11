@@ -25,63 +25,58 @@ LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_CO
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.CommitDate=${COMMITDATE}"
 
 # Directories
-BIN_DIR := bin
-TOOLS_DIR := hack/tools
-TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/$(BIN_DIR))
+BUILD_DIR := build
+ABS_TOOLS_DIR :=  $(abspath tools/)
 
 GO_INSTALL := ./scripts/go_install.sh
 
 # Binaries.
 # Need to use abspath so we can invoke these from subdirectories
 CONTROLLER_GEN_VER := v0.9.2
-CONTROLLER_GEN_BIN := controller-gen
-CONTROLLER_GEN := $(abspath $(TOOLS_BIN_DIR)/$(CONTROLLER_GEN_BIN)-$(CONTROLLER_GEN_VER))
+CONTROLLER_GEN := $(ABS_TOOLS_DIR)/controller-gen-$(CONTROLLER_GEN_VER)
 CONTROLLER_GEN_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
 
 GINKGO_VER := v1.16.5
-GINKGO_BIN := ginkgo
-GINKGO := $(TOOLS_BIN_DIR)/$(GINKGO_BIN)-$(GINKGO_VER)
+GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
 GINKGO_PKG := github.com/onsi/ginkgo/ginkgo
 
 SETUP_ENVTEST_VER := v0.0.0-20211110210527-619e6b92dab9
-SETUP_ENVTEST_BIN := setup-envtest
-SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
+SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
 KUSTOMIZE_VER := v4.5.2
-KUSTOMIZE_BIN := kustomize
-KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER))
+KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v4
 
 $(CONTROLLER_GEN): 
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) $(CONTROLLER_GEN_BIN) $(CONTROLLER_GEN_VER)
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) controller-gen $(CONTROLLER_GEN_VER)
 
 $(GINKGO):
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(GINKGO_PKG) $(GINKGO_BIN) $(GINKGO_VER)
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(GINKGO_PKG) ginkgo $(GINKGO_VER)
 
 $(SETUP_ENVTEST): 
-	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(SETUP_ENVTEST_PKG) $(SETUP_ENVTEST_BIN) $(SETUP_ENVTEST_VER)
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(SETUP_ENVTEST_PKG) setup-envtest $(SETUP_ENVTEST_VER)
 
 $(KUSTOMIZE):
-	CGO_ENABLED=0 GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) $(KUSTOMIZE_BIN) $(KUSTOMIZE_VER)
+	CGO_ENABLED=0 GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) kustomize $(KUSTOMIZE_VER)
 
 .PHONY: build
 build: operator register support
 
 .PHONY: operator
 operator:
-	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-operator $(ROOT_DIR)/cmd/operator
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-operator $(ROOT_DIR)/cmd/operator
 
 operator-kubebuilder:
-	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-operator-kubebuilder $(ROOT_DIR)/cmd/operator-kubebuilder
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-operator-kubebuilder $(ROOT_DIR)/cmd/operator-kubebuilder
 
 .PHONY: register
 register:
-	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o build/elemental-register $(ROOT_DIR)/cmd/register
+	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-register $(ROOT_DIR)/cmd/register
 
 .PHONY: support
 support:
-	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o build/elemental-support $(ROOT_DIR)/cmd/support
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-support $(ROOT_DIR)/cmd/support
 
 
 .PHONY: build-docker-operator
