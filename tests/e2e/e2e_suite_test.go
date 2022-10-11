@@ -58,7 +58,7 @@ const (
 	certManagerNamespace      = "cert-manager"
 	certManagerName           = "cert-manager"
 	certManagerCAInjectorName = "cert-manager-cainjector"
-	rancherNamespace          = "cattle-system"
+	cattleSystemNamespace     = "cattle-system"
 	rancherName               = "rancher"
 	cattleFleetNamespace      = "cattle-fleet-local-system"
 	fleetNamespace            = "fleet-local"
@@ -126,14 +126,14 @@ var _ = BeforeSuite(func() {
 
 			// Somehow rancher needs to be restarted after an elemental-operator upgrade
 			// to get machineregistration working
-			pods, err := k.GetPodNames(rancherNamespace, "")
+			pods, err := k.GetPodNames(cattleSystemNamespace, "")
 			Expect(err).ToNot(HaveOccurred())
 			for _, p := range pods {
-				err = k.Delete("pod", "-n", rancherNamespace, p)
+				err = k.Delete("pod", "-n", cattleSystemNamespace, p)
 				Expect(err).ToNot(HaveOccurred())
 			}
 
-			err = k.WaitForNamespaceWithPod(rancherNamespace, "app=rancher")
+			err = k.WaitForNamespaceWithPod(cattleSystemNamespace, "app=rancher")
 			Expect(err).ToNot(HaveOccurred())
 		})
 		return
@@ -191,13 +191,13 @@ var _ = BeforeSuite(func() {
 		})
 
 		By("installing rancher", func() {
-			if isAlreadyInstalled(rancherNamespace) {
+			if isAlreadyInstalled(cattleSystemNamespace) {
 				By("already installed")
 				return
 			}
 			Expect(kubectl.RunHelmBinaryWithCustomErr(
 				"-n",
-				rancherNamespace,
+				cattleSystemNamespace,
 				"install",
 				"--set",
 				"bootstrapPassword=admin",
@@ -209,7 +209,7 @@ var _ = BeforeSuite(func() {
 				fmt.Sprintf(e2eCfg.RancherChartURL),
 			)).To(Succeed())
 			Eventually(func() bool {
-				return isDeploymentReady(rancherNamespace, rancherName)
+				return isDeploymentReady(cattleSystemNamespace, rancherName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 			Eventually(func() bool {
 				return isDeploymentReady(cattleFleetNamespace, cattleFleetName)
@@ -233,10 +233,10 @@ var _ = BeforeSuite(func() {
 
 			defer os.RemoveAll(temp.Name())
 			Expect(ioutil.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)).To(Succeed())
-			Expect(kubectl.Apply(rancherNamespace, temp.Name())).To(Succeed())
+			Expect(kubectl.Apply(cattleSystemNamespace, temp.Name())).To(Succeed())
 
 			Eventually(func() bool {
-				return isDeploymentReady(rancherNamespace, sysUpgradeControllerName)
+				return isDeploymentReady(cattleSystemNamespace, sysUpgradeControllerName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 

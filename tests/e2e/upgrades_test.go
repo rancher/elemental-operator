@@ -36,7 +36,7 @@ const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.4.0
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
-	err = kubectl.GetObject(s, rancherNamespace, "plan", up)
+	err = kubectl.GetObject(s, cattleSystemNamespace, "plan", up)
 	return
 }
 
@@ -57,7 +57,7 @@ func waitTestChannelPopulate(k *kubectl.Kubectl, mr *catalog.ManagedOSVersionCha
 }
 
 func upgradePod(k *kubectl.Kubectl) string {
-	pods, err := k.GetPodNames(rancherNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
+	pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	podName := ""
@@ -72,7 +72,7 @@ func upgradePod(k *kubectl.Kubectl) string {
 func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.GomegaMatcher) {
 	// Wait for the upgrade pod to appear
 	k.EventuallyPodMatch(
-		rancherNamespace,
+		cattleSystemNamespace,
 		"upgrade.cattle.io/controller=system-upgrade-controller",
 		3*time.Minute, 2*time.Second,
 		ContainElement(ContainSubstring("apply-os-upgrader-on-operator-e2e-control-plane-with")),
@@ -81,7 +81,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	podName := upgradePod(k)
 
 	pod := &corev1.Pod{}
-	err := kubectl.GetObject(podName, rancherNamespace, "pods", pod)
+	err := kubectl.GetObject(podName, cattleSystemNamespace, "pods", pod)
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	container := pod.Spec.Containers[0]
@@ -125,7 +125,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			// delete dangling upgrade pods
 			EventuallyWithOffset(1, func() []string {
-				pods, err := k.GetPodNames(rancherNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
+				pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -139,8 +139,8 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 					if strings.Contains(p, "apply-os-upgrader") {
 						By("deleting " + p)
-						k.Delete("pod", "-n", rancherNamespace, "--wait", "--force", p)
-						err = k.WaitForPodDelete(rancherNamespace, p)
+						k.Delete("pod", "-n", cattleSystemNamespace, "--wait", "--force", p)
+						err = k.WaitForPodDelete(cattleSystemNamespace, p)
 						Expect(err).ToNot(HaveOccurred())
 					}
 				}
@@ -356,7 +356,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			Eventually(func() string {
 				podName := upgradePod(k)
-				str, _ := kubectl.Run("logs", "-n", rancherNamespace, podName)
+				str, _ := kubectl.Run("logs", "-n", cattleSystemNamespace, podName)
 				fmt.Println(str)
 				return str
 			}, 5*time.Minute, 2*time.Second).Should(
