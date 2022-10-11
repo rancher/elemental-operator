@@ -19,6 +19,7 @@ package main
 import (
 	displayCmd "github.com/rancher/elemental-operator/cmd/operator/display"
 	operatorCmd "github.com/rancher/elemental-operator/cmd/operator/operator"
+	kubebuilderCmd "github.com/rancher/elemental-operator/cmd/operator/operator-kubebuilder"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +32,7 @@ func main() {
 
 	cmd.AddCommand(
 		operatorCmd.NewOperatorCommand(),
+		kubebuilderCmd.NewOperatorCtrlRuntimeCommand(),
 		displayCmd.NewDisplayCommand())
 
 	if err := cmd.Execute(); err != nil {
