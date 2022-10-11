@@ -105,7 +105,7 @@ build-docker-push-register: build-docker-register
 	docker push ${REPO_REGISTER}:${TAG}
 
 .PHONY: chart
-chart: generate build-manifests
+chart:
 	mkdir -p  $(ROOT_DIR)/build
 	cp -rf $(ROOT_DIR)/chart $(ROOT_DIR)/build/chart
 	sed -i -e 's/tag:.*/tag: '${TAG}'/' $(ROOT_DIR)/build/chart/values.yaml
