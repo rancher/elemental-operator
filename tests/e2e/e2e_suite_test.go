@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -246,9 +247,11 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	collectArtifacts()
+
 	// Note, this prevents concurrent tests on same cluster, but makes sure we don't leave any dangling resources from the e2e tests
 	for _, r := range testResources {
-		kubectl.New().Delete(r, "--all", "--all-namespaces")
+		Expect(kubectl.New().Delete(r, "--all", "--all-namespaces")).To(Succeed())
 	}
 })
 
@@ -327,4 +330,27 @@ func isDeploymentReady(namespace, name string) bool {
 	}
 
 	return false
+}
+
+func collectArtifacts() {
+	By("Creating artifact directory")
+	if _, err := os.Stat(e2eCfg.ArtifactsDir); os.IsNotExist(err) {
+		Expect(os.Mkdir(e2eCfg.ArtifactsDir, os.ModePerm)).To(Succeed())
+	}
+	By("Getting elemental operator logs")
+	getElementalOperatorLogs()
+}
+
+func getElementalOperatorLogs() {
+	podList := &corev1.PodList{}
+	Expect(cl.List(ctx, podList, runtimeclient.MatchingLabels{
+		"app": "elemental-operator",
+	},
+	)).To(Succeed())
+
+	for _, pod := range podList.Items {
+		output, err := kubectl.Run("logs", pod.Name, "-n", pod.Namespace)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(os.WriteFile(filepath.Join(e2eCfg.ArtifactsDir, pod.Name+".log"), []byte(output), 0644)).To(Succeed())
+	}
 }

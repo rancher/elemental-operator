@@ -4,6 +4,7 @@ magicDNS: sslip.io
 bridgeIP: 172.17.0.1
 operatorReplicas: 1
 noSetup: false
+artifactsDir: ../../_artifacts
 
 nginxVersion: controller-v1.4.0
 nginxURL: https://raw.githubusercontent.com/kubernetes/ingress-nginx/${NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml

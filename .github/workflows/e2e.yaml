@@ -103,3 +103,8 @@ jobs:
           skipClusterCreation: "true"
       - name: e2e tests
         run: make e2e-tests
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ci-artifacts
+          path: _artifacts

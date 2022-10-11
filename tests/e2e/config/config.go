@@ -32,6 +32,7 @@ type E2EConfig struct {
 	BridgeIP         string `yaml:"bridgeIP"`
 	OperatorReplicas string `yaml:"operatorReplicas"`
 	NoSetup          bool   `yaml:"noSetup"`
+	ArtifactsDir     string `yaml:"artifactsDir"`
 
 	NginxVersion string `yaml:"nginxVersion"`
 	NginxURL     string `yaml:"nginxURL"`
@@ -94,6 +95,10 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 
 	if noSetup := os.Getenv("NO_SETUP"); noSetup != "" {
 		config.NoSetup = true
+	}
+
+	if artifactsDir := os.Getenv("ARTIFACTS_DIR"); artifactsDir != "" {
+		config.ArtifactsDir = artifactsDir
 	}
 
 	if nginxVersion := os.Getenv("NGINX_VERSION"); nginxVersion != "" {
