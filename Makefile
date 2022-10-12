@@ -67,9 +67,6 @@ build: operator register support
 operator:
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-operator $(ROOT_DIR)/cmd/operator
 
-operator-kubebuilder:
-	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-operator-kubebuilder $(ROOT_DIR)/cmd/operator-kubebuilder
-
 .PHONY: register
 register:
 	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-register $(ROOT_DIR)/cmd/register
@@ -165,10 +162,11 @@ generate: $(CONTROLLER_GEN) ## Generate code
 generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
+		paths=./cmd/operator/operator-kubebuilder/... \
 		crd:crdVersions=v1 \
 		rbac:roleName=manager-role \
 		output:crd:dir=./config/crd/bases \
-		output:rbac:dir=./config/rbac \
+		output:rbac:dir=./config/rbac/bases \
 		output:webhook:dir=./config/webhook \
 		webhook
 
@@ -181,5 +179,9 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > chart/templates/crds.yaml
 
+build-rbac: $(KUSTOMIZE)
+	$(KUSTOMIZE) build config/rbac > chart/templates/cluster_role.yaml
+
 build-manifests: $(KUSTOMIZE)
 	$(MAKE) build-crds
+	$(MAKE) build-rbac
