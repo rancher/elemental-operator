@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- bases/role.yaml
+
+patchesJson6902: ## this is used to patch role name so we can use in helm chart template
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRole
+      name: manager-role
+    path: patches/name_in_role.yaml

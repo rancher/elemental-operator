@@ -4,6 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum /src/
 RUN go mod download
 COPY cmd/operator/main.go /src/
+COPY api /src/api
 COPY pkg /src/pkg
 COPY cmd/operator /src/cmd/operator
 COPY cmd/register /src/cmd/register
