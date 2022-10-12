@@ -51,6 +51,7 @@ type MachineRegistrationReconciler struct {
 // +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings;roles,verbs=create;delete
 // +kubebuilder:rbac:groups="management.cattle.io",resources=setting,verbs=get
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;delete
 
 func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
