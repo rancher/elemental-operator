@@ -44,6 +44,20 @@ spec:
         - --default-registry
         - {{ .Values.global.cattle.systemDefaultRegistry | quote }}
         {{- end }}
+      - env:
+        - name: NO_PROXY
+          value: {{ .Values.noProxy }}
+        {{- if .Values.proxy }}
+        - name: HTTP_PROXY
+          value: {{ .Values.proxy }}
+        - name: HTTPS_PROXY
+          value: {{ .Values.proxy }}
+        {{- end }}
+        name: {{ .Release.Name }}-kubebuilder
+        imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
+        image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        args:
+        - ctrl-runtime-operator
       serviceAccountName: {{ .Release.Name }}
       {{- with .Values.tolerations }}
       tolerations:
