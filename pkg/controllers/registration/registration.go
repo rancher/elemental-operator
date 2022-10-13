@@ -30,6 +30,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/record"
 )
 
@@ -60,6 +61,13 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	serverURL, err := h.getRancherServerURL()
 	if err != nil {
 		return status, err
+	}
+
+	if obj.Spec.Config == nil || obj.Spec.Config.Elemental.Install.Device == "" {
+		// Let's deal with the error here and avoid the worker to requeue the resource
+		utilruntime.HandleError(fmt.Errorf("MachineRegistration '%s' misses the target device (spec:config:elemental:install:device)",
+			obj.Namespace+"/"+obj.Name))
+		return status, nil
 	}
 
 	if status.RegistrationToken == "" {
