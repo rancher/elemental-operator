@@ -25,11 +25,12 @@ type Install struct {
 	ISO        string   `json:"iso,omitempty" yaml:"iso,omitempty"`
 	SystemURI  string   `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
 
-	Debug    bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
-	TTY      string `json:"tty,omitempty" yaml:"tty,omitempty"`
-	PowerOff bool   `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
-	Reboot   bool   `json:"reboot,omitempty" yaml:"reboot,omitempty"`
-	EjectCD  bool   `json:"eject-cd,omitempty" yaml:"eject-cd,omitempty"`
+	Debug     bool   `json:"debug,omitempty" yaml:"debug,omitempty"`
+	TTY       string `json:"tty,omitempty" yaml:"tty,omitempty"`
+	PowerOff  bool   `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
+	Reboot    bool   `json:"reboot,omitempty" yaml:"reboot,omitempty"`
+	EjectCD   bool   `json:"eject-cd,omitempty" yaml:"eject-cd,omitempty"`
+	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 }
 
 func (in *Install) DeepCopy() *Install {

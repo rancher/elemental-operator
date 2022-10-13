@@ -343,6 +343,9 @@ func callElementalClient(conf config.Elemental) error {
 	if conf.Install.Debug {
 		installerOpts = append(installerOpts, "--debug")
 	}
+	if conf.Install.ConfigDir != "" {
+		installerOpts = append(installerOpts, "--config-dir", conf.Install.ConfigDir)
+	}
 	installerOpts = append(installerOpts, "install")
 
 	cmd := exec.Command("elemental")
