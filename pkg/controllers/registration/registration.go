@@ -65,8 +65,10 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 
 	if obj.Spec.Config == nil || obj.Spec.Config.Elemental.Install.Device == "" {
 		// Let's deal with the error here and avoid the worker to requeue the resource
-		utilruntime.HandleError(fmt.Errorf("MachineRegistration '%s' misses the target device (spec:config:elemental:install:device)",
+		utilruntime.HandleError(fmt.Errorf("MachineRegistration '%s' misses the target device config (spec:config:elemental:install:device)",
 			obj.Namespace+"/"+obj.Name))
+		elm.ReadyCondition.SetError(&status, elm.MachineRegistrationMissTargetDeviceReason,
+			fmt.Errorf("'spec:config:elemental:install:device' is required"))
 		return status, nil
 	}
 

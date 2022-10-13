@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	MachineRegistrationReadyReason = "MachineRegistrationReady"
+	MachineRegistrationReadyReason            = "MachineRegistrationReady"
+	MachineRegistrationMissTargetDeviceReason = "NoTargetDeviceProvided"
 )
 
 // +genclient
