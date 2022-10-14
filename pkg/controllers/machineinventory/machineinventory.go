@@ -107,6 +107,9 @@ func (h *handler) initializeHandler(obj *v1beta1.MachineInventory, status v1beta
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: obj.Namespace,
 			Name:      obj.Name,
+			Labels: map[string]string{
+				v1beta1.ManagedSecretLabel: "true",
+			},
 		},
 		Type:       v1beta1.PlanSecretType,
 		StringData: map[string]string{"plan": "{}"},

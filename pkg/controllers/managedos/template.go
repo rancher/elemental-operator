@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -207,6 +208,9 @@ func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "os-upgrader-data",
 				Namespace: clients.SystemNamespace,
+				Labels: map[string]string{
+					v1beta1.ManagedSecretLabel: "true",
+				},
 			},
 			Data: map[string][]byte{
 				"cloud-config": cloudConfig,
