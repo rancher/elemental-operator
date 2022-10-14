@@ -121,17 +121,17 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	return conn, err
 }
 
-func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
-	if machineRegistration.Spec.Config == nil {
-		machineRegistration.Spec.Config = &config.Config{}
+func (i *InventoryServer) unauthenticatedResponse(registration *elm.MachineRegistration, writer io.Writer) error {
+	if registration.Spec.Config == nil {
+		registration.Spec.Config = &config.Config{}
 	}
 
-	mRRegistration := machineRegistration.Spec.Config.Elemental.Registration
+	mRRegistration := registration.Spec.Config.Elemental.Registration
 
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
-				URL:             machineRegistration.Status.RegistrationURL,
+				URL:             registration.Status.RegistrationURL,
 				CACert:          i.getRancherCACert(),
 				EmulateTPM:      mRRegistration.EmulateTPM,
 				EmulatedTPMSeed: mRRegistration.EmulatedTPMSeed,
