@@ -34,6 +34,8 @@ var (
 	PlanSuccefullyAppliedReason     = "PlanSuccefullyApplied"
 	PlanFailedToBeAppliedReason     = "PlanFailedToBeApplied"
 
+	ManagedSecretLabel = "elemental.cattle.io/managed"
+
 	PlanSecretType corev1.SecretType = "elemental.cattle.io/plan"
 )
 
