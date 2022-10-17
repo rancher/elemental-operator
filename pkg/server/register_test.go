@@ -67,6 +67,10 @@ func TestInitNewInventory(t *testing.T) {
 				},
 			},
 		},
+		{
+			config:       nil,
+			expectedName: "m-${System Information/UUID}",
+		},
 	}
 
 	for _, test := range testCase {
@@ -80,7 +84,7 @@ func TestInitNewInventory(t *testing.T) {
 		inventory := &elm.MachineInventory{}
 		initInventory(inventory, registration)
 
-		if test.config.Elemental.Registration.NoSMBIOS {
+		if test.config != nil && test.config.Elemental.Registration.NoSMBIOS {
 			assert.Check(t, mUUID.Match([]byte(inventory.Name)), inventory.Name+" is not UUID based")
 		} else {
 			assert.Equal(t, inventory.Name, test.expectedName)
