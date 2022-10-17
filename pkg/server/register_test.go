@@ -32,21 +32,40 @@ func TestInitNewInventory(t *testing.T) {
 	// e.g., m-66588488-3eb6-4a6d-b642-c994f128c6f1
 
 	testCase := []struct {
-		noSMBIOS     bool
+		config       *config.Config
 		initName     string
 		expectedName string
 	}{
 		{
-			noSMBIOS:     false,
+			config: &config.Config{
+				Elemental: config.Elemental{
+					Registration: config.Registration{
+						NoSMBIOS: false,
+					},
+				},
+			},
 			initName:     "custom-name",
 			expectedName: "custom-name",
 		},
+
 		{
-			noSMBIOS:     false,
+			config: &config.Config{
+				Elemental: config.Elemental{
+					Registration: config.Registration{
+						NoSMBIOS: false,
+					},
+				},
+			},
 			expectedName: "m-${System Information/UUID}",
 		},
 		{
-			noSMBIOS: true,
+			config: &config.Config{
+				Elemental: config.Elemental{
+					Registration: config.Registration{
+						NoSMBIOS: true,
+					},
+				},
+			},
 		},
 	}
 
@@ -54,20 +73,14 @@ func TestInitNewInventory(t *testing.T) {
 		registration := &elm.MachineRegistration{
 			Spec: elm.MachineRegistrationSpec{
 				MachineName: test.initName,
-				Config: &config.Config{
-					Elemental: config.Elemental{
-						Registration: config.Registration{
-							NoSMBIOS: test.noSMBIOS,
-						},
-					},
-				},
+				Config:      test.config,
 			},
 		}
 
 		inventory := &elm.MachineInventory{}
 		initInventory(inventory, registration)
 
-		if test.noSMBIOS {
+		if test.config.Elemental.Registration.NoSMBIOS {
 			assert.Check(t, mUUID.Match([]byte(inventory.Name)), inventory.Name+" is not UUID based")
 		} else {
 			assert.Equal(t, inventory.Name, test.expectedName)
