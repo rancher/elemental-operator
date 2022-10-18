@@ -18,7 +18,7 @@ package main
 
 import (
 	"encoding/json"
-	"io/fs"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,21 +75,23 @@ func main() {
 				} else {
 					logrus.Debugf("scanning config path %s", arg)
 				}
+
+				files, err := ioutil.ReadDir(arg)
+				if err != nil {
+					logrus.Warnf("cannot read config path contents %s: %s", arg, err.Error())
+					continue
+				}
 				viper.AddConfigPath(arg)
-				_ = filepath.WalkDir(arg, func(path string, d fs.DirEntry, err error) error {
-					if err != nil {
-						return err
-					}
-					if !d.IsDir() && filepath.Ext(d.Name()) == ".yaml" {
+				for _, f := range files {
+					if filepath.Ext(f.Name()) == ".yaml" {
 						viper.SetConfigType("yaml")
-						viper.SetConfigName(d.Name())
+						viper.SetConfigName(f.Name())
 						if err := viper.MergeInConfig(); err != nil {
-							logrus.Fatalf("failed to read config %s: %s", path, err)
+							logrus.Fatalf("failed to read config %s: %s", f.Name(), err)
 						}
-						logrus.Infof("reading config file %s", path)
+						logrus.Infof("reading config file %s", f.Name())
 					}
-					return nil
-				})
+				}
 			}
 
 			if err := viper.Unmarshal(&cfg); err != nil {
