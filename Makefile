@@ -88,7 +88,7 @@ e2e-tests: chart setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
-	cd $(ROOT_DIR)/tests && ginkgo -r -v ./e2e
+	cd $(ROOT_DIR)/tests && ginkgo -progress --fail-fast -r -v ./e2e
 
 # Only setups the kind cluster
 setup-kind:
