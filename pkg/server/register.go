@@ -121,13 +121,17 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	return conn, err
 }
 
-func (i *InventoryServer) unauthenticatedResponse(machineRegistration *elm.MachineRegistration, writer io.Writer) error {
-	mRRegistration := machineRegistration.Spec.Config.Elemental.Registration
+func (i *InventoryServer) unauthenticatedResponse(registration *elm.MachineRegistration, writer io.Writer) error {
+	if registration.Spec.Config == nil {
+		registration.Spec.Config = &config.Config{}
+	}
+
+	mRRegistration := registration.Spec.Config.Elemental.Registration
 
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
-				URL:             machineRegistration.Status.RegistrationURL,
+				URL:             registration.Status.RegistrationURL,
 				CACert:          i.getRancherCACert(),
 				EmulateTPM:      mRRegistration.EmulateTPM,
 				EmulatedTPMSeed: mRRegistration.EmulatedTPMSeed,
@@ -220,6 +224,10 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	}
 	defer writer.Close()
 
+	if registration.Spec.Config == nil {
+		registration.Spec.Config = &config.Config{}
+	}
+
 	return yaml.NewEncoder(writer).Encode(config.Config{
 		Elemental: config.Elemental{
 			Registration: config.Registration{
@@ -275,6 +283,9 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 func initInventory(inventory *elm.MachineInventory, registration *elm.MachineRegistration) {
 	const namePrefix = "m-"
 
+	if registration.Spec.Config == nil {
+		registration.Spec.Config = &config.Config{}
+	}
 	inventory.Name = registration.Spec.MachineName
 	if inventory.Name == "" {
 		if registration.Spec.Config.Elemental.Registration.NoSMBIOS {
