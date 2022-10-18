@@ -118,7 +118,7 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 	}
 
 	if rancherVersion := os.Getenv("RANCHER_VERSION"); rancherVersion != "" {
-		config.RancherChartURL = rancherVersion
+		config.RancherVersion = rancherVersion
 	}
 
 	if rancherURL := os.Getenv("RANCHER_CHART_URL"); rancherURL != "" {
