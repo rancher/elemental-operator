@@ -22,6 +22,7 @@ import (
 	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/controllers"
 	"github.com/rancher/elemental-operator/pkg/version"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/sirupsen/logrus"
@@ -188,5 +189,10 @@ func setupChecks(mgr ctrl.Manager) {
 }
 
 func setupReconcilers(mgr ctrl.Manager) {
-	// to be implemented
+	if err := (&controllers.MachineRegistrationReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineRegistration")
+		os.Exit(1)
+	}
 }
