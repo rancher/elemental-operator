@@ -78,6 +78,9 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
+			Labels: map[string]string{
+				v1beta1.ManagedSecretLabel: "true",
+			},
 		},
 		Rules: []rbacv1.PolicyRule{{
 			APIGroups: []string{""},
@@ -115,6 +118,9 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
+			Labels: map[string]string{
+				v1beta1.ManagedSecretLabel: "true",
+			},
 		},
 		Secrets: []corev1.ObjectReference{
 			{
@@ -128,8 +134,11 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 
 	_, err = h.clients.RBAC().RoleBinding().Create(&rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: obj.Namespace,
 			Name:      obj.Name,
+			Namespace: obj.Namespace,
+			Labels: map[string]string{
+				v1beta1.ManagedSecretLabel: "true",
+			},
 		},
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
