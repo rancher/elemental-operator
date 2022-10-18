@@ -232,6 +232,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(role.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(role.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 		Expect(role.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(role.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		Expect(role.Rules).To(HaveLen(2))
 		Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
@@ -249,6 +250,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(sa.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(sa.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 		Expect(sa.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(sa.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		secret := &corev1.Secret{}
 		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, secret)).To(Succeed())
@@ -258,6 +260,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(secret.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(secret.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 		Expect(secret.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(secret.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 		Expect(secret.Annotations).To(HaveKeyWithValue("kubernetes.io/service-account.name", mRegistration.Name))
 		Expect(secret.Type).To(Equal(corev1.SecretTypeServiceAccountToken))
 
@@ -269,6 +272,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(roleBinding.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(roleBinding.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 		Expect(roleBinding.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(roleBinding.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		Expect(roleBinding.Subjects).To(HaveLen(1))
 		Expect(roleBinding.Subjects[0].Kind).To(Equal("ServiceAccount"))

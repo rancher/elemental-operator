@@ -207,6 +207,9 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Name:            mRegistration.Name,
 			Namespace:       mRegistration.Namespace,
 			OwnerReferences: ownerReferences,
+			Labels: map[string]string{
+				elementalv1.ElementalManagedLabel: "",
+			},
 		},
 		Rules: []rbacv1.PolicyRule{{
 			APIGroups: []string{""},
@@ -228,6 +231,9 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Name:            mRegistration.Name,
 			Namespace:       mRegistration.Namespace,
 			OwnerReferences: ownerReferences,
+			Labels: map[string]string{
+				elementalv1.ElementalManagedLabel: "",
+			},
 		},
 	}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create service account: %w", err)
@@ -242,6 +248,9 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Annotations: map[string]string{
 				"kubernetes.io/service-account.name": mRegistration.Name,
 			},
+			Labels: map[string]string{
+				elementalv1.ElementalManagedLabel: "",
+			},
 		},
 		Type: corev1.SecretTypeServiceAccountToken,
 	}); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -254,6 +263,9 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Namespace:       mRegistration.Namespace,
 			Name:            mRegistration.Name,
 			OwnerReferences: ownerReferences,
+			Labels: map[string]string{
+				elementalv1.ElementalManagedLabel: "",
+			},
 		},
 		Subjects: []rbacv1.Subject{{
 			Kind:      "ServiceAccount",
