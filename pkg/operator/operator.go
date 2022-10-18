@@ -25,7 +25,6 @@ import (
 	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
-	"github.com/rancher/elemental-operator/pkg/controllers/registration"
 	"github.com/rancher/elemental-operator/pkg/server"
 	"github.com/rancher/steve/pkg/aggregation"
 	"github.com/rancher/wrangler/pkg/crd"
@@ -65,10 +64,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 			Status:       true,
 		},
 		crd.CRD{
-			SchemaObject: elm.MachineRegistration{},
-			Status:       true,
-		},
-		crd.CRD{
 			SchemaObject: elm.ManagedOSVersion{},
 			Status:       true,
 		},
@@ -95,7 +90,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 	}
 
 	managedos.Register(ctx, cl, o.DefaultRegistry)
-	registration.Register(ctx, cl)
 	machineinventory.Register(ctx, cl)
 	managedosversionchannel.Register(ctx, o.requeuer, cl)
 	machineinventoryselector.Register(ctx, cl)
