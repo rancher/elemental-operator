@@ -17,13 +17,85 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
 	"regexp"
+	"strings"
 	"testing"
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/config"
+	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"gopkg.in/yaml.v2"
 	"gotest.tools/assert"
+	"k8s.io/apimachinery/pkg/labels"
 )
+
+type fakeSettingCache struct {
+}
+
+func (f fakeSettingCache) Get(name string) (*v3.Setting, error) {
+	return &v3.Setting{Value: "cacert"}, nil
+}
+func (f fakeSettingCache) List(selector labels.Selector) ([]*v3.Setting, error) {
+	return nil, nil
+}
+func (f fakeSettingCache) AddIndexer(indexName string, indexer ranchercontrollers.SettingIndexer) {
+}
+func (f fakeSettingCache) GetByIndex(indexName, key string) ([]*v3.Setting, error) {
+	return nil, nil
+}
+
+func TestUnauthenticatedResponse(t *testing.T) {
+	testCase := []struct {
+		config *config.Config
+		regUrl string
+	}{
+		{
+			config: nil,
+			regUrl: "https://rancher/url1",
+		},
+		{
+			config: &config.Config{
+				Elemental: config.Elemental{
+					Registration: config.Registration{
+						EmulateTPM:      true,
+						EmulatedTPMSeed: 127,
+						NoSMBIOS:        true,
+					},
+				},
+			},
+			regUrl: "https://rancher/url2",
+		},
+	}
+
+	for _, test := range testCase {
+		i := &InventoryServer{}
+		i.settingCache = fakeSettingCache{}
+		registration := elm.MachineRegistration{}
+		registration.Spec.Config = test.config
+		registration.Status.RegistrationURL = test.regUrl
+
+		buffer := new(bytes.Buffer)
+
+		err := i.unauthenticatedResponse(&registration, buffer)
+		assert.NilError(t, err, err)
+
+		conf := config.Config{}
+		err = yaml.NewDecoder(buffer).Decode(&conf)
+		assert.NilError(t, err, strings.TrimSpace(buffer.String()))
+		assert.Equal(t, conf.Elemental.Registration.URL, test.regUrl)
+
+		confReg := conf.Elemental.Registration
+		testReg := config.Registration{}
+		if test.config != nil {
+			testReg = test.config.Elemental.Registration
+		}
+		assert.Equal(t, confReg.EmulateTPM, testReg.EmulateTPM)
+		assert.Equal(t, confReg.EmulatedTPMSeed, testReg.EmulatedTPMSeed)
+		assert.Equal(t, confReg.NoSMBIOS, testReg.NoSMBIOS)
+	}
+}
 
 func TestInitNewInventory(t *testing.T) {
 	const alphanum = "[0-9a-fA-F]"
