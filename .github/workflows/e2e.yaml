@@ -108,7 +108,7 @@ jobs:
           make unit-tests-deps
       - uses: engineerd/setup-kind@v0.5.0
         with:
-          version: "v0.11.1"
+          version: "v0.16.0"
           skipClusterCreation: "true"
       - name: e2e tests
         run: make e2e-tests
