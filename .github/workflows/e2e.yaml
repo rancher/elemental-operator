@@ -66,15 +66,24 @@ jobs:
   e2e-tests:
     strategy:
       matrix:
-        kubernetes: [ "v1.22.7" ]
-        replicas: ["1", "2"]
+        kubernetes: [ "v1.24.6", "v1.23.12"]
+        replicas: ["1"]
+        rancherVersion : ["2.6.9-rc6", "2.6.8", "2.6.7"]
+        include:
+          - kubernetes: "v1.23.12"
+            replicas: "1"
+            rancherVersion: "2.6.6"  # 2.6.6 doesnt support k8s 1.24
+          - kubernetes: "v1.24.6"
+            replicas: "2"
+            rancherVersion: "2.6.9-rc6"  # Run just one job with latest for 2 replicas
     runs-on: ubuntu-latest
     needs: push-docker
-    name: k8s ${{ matrix.kubernetes }} - ${{ matrix.replicas }} replicas
+    name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
     env:
       CHART: ${{ github.workspace }}/build/${{ needs.push-docker.outputs.chart_name }}
       KUBE_VERSION: ${{ matrix.kubernetes }}
       OPERATOR_REPLICAS: ${{ matrix.replicas }}
+      RANCHER_VERSION: ${{ matrix.rancherVersion }}
     steps:
       - uses: actions/checkout@v2
       - name: Download chart
