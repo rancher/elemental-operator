@@ -96,59 +96,9 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		return status, err
 	}
 
-	secretName := obj.Name + "-token"
-	_, err = h.clients.Core().ServiceAccount().Create(&corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      obj.Name,
-			Namespace: obj.Namespace,
-			Labels: map[string]string{
-				elm.ManagedSecretLabel: "true",
-			},
-		},
-		Secrets: []corev1.ObjectReference{
-			{
-				Name: secretName,
-			},
-		},
-	})
+	err = h.createServiceAccountWithSecret(obj.Namespace, obj.Name)
 	if err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			return status, err
-		}
-		// Ensure the ServiceAccount is linked to a Secret
-		sa, err := h.clients.Core().ServiceAccount().Get(obj.Namespace, obj.Name, metav1.GetOptions{})
-		if err != nil {
-			logrus.Warnf("Skip checks on '%s' ServiceAccount: %s", obj.Name, err.Error())
-		} else {
-			if len(sa.Secrets) == 0 {
-				sa.Secrets = []corev1.ObjectReference{
-					{
-						Name: secretName,
-					},
-				}
-				_, err = h.clients.Core().ServiceAccount().Update(sa)
-				if err != nil {
-					return status, fmt.Errorf("update %s ServiceAccount: %s", obj.Name, err.Error())
-				}
-				logrus.Info("'%s' ServiceAccount: updated Secret link", obj.Name)
-			}
-		}
-	}
-	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: obj.Namespace,
-			Labels: map[string]string{
-				elm.ManagedSecretLabel: "true",
-			},
-			Annotations: map[string]string{
-				"kubernetes.io/service-account.name": obj.Name,
-			},
-		},
-		Type: "kubernetes.io/service-account-token",
-	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return status, fmt.Errorf("add Secret to %s ServiceAccount: %w", obj.Name, err)
+		return status, err
 	}
 
 	_, err = h.clients.RBAC().RoleBinding().Create(&rbacv1.RoleBinding{
@@ -217,4 +167,63 @@ func (h *handler) getRancherServerURL() (string, error) {
 		return "", fmt.Errorf("server-url is not set")
 	}
 	return setting.Value, nil
+}
+
+func (h *handler) createServiceAccountWithSecret(namespace string, name string) error {
+	secretName := name + "-token"
+
+	_, err := h.clients.Core().ServiceAccount().Create(&corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				elm.ManagedSecretLabel: "true",
+			},
+		},
+		Secrets: []corev1.ObjectReference{
+			{
+				Name: secretName,
+			},
+		},
+	})
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return err
+		}
+		// Ensure the ServiceAccount is linked to a Secret
+		sa, err := h.clients.Core().ServiceAccount().Get(namespace, name, metav1.GetOptions{})
+		if err != nil {
+			logrus.Warnf("Skip checks on '%s' ServiceAccount: %s", name, err.Error())
+		} else {
+			if len(sa.Secrets) == 0 {
+				sa.Secrets = []corev1.ObjectReference{
+					{
+						Name: secretName,
+					},
+				}
+				_, err = h.clients.Core().ServiceAccount().Update(sa)
+				if err != nil {
+					return fmt.Errorf("update %s ServiceAccount: %s", name, err.Error())
+				}
+				logrus.Info("'%s' ServiceAccount: updated Secret link", name)
+			}
+		}
+	}
+	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				elm.ManagedSecretLabel: "true",
+			},
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": name,
+			},
+		},
+		Type: "kubernetes.io/service-account-token",
+	})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("add Secret to %s ServiceAccount: %w", name, err)
+	}
+	return nil
 }
