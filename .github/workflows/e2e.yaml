@@ -66,9 +66,9 @@ jobs:
   e2e-tests:
     strategy:
       matrix:
-        kubernetes: [ "v1.24.6", "v1.23.12"]
+        kubernetes: [ "v1.23.12"]
         replicas: ["1"]
-        rancherVersion : ["2.6.9-rc6"]
+        rancherVersion : ["2.6.9"]
         include:
           - kubernetes: "v1.22.7"
             replicas: "1"
