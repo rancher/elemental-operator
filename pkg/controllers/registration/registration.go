@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
 	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
@@ -79,7 +78,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				v1beta1.ManagedSecretLabel: "true",
+				elm.ManagedSecretLabel: "true",
 			},
 		},
 		Rules: []rbacv1.PolicyRule{{
@@ -103,7 +102,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				v1beta1.ManagedSecretLabel: "true",
+				elm.ManagedSecretLabel: "true",
 			},
 		},
 		Secrets: []corev1.ObjectReference{
@@ -140,7 +139,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			Name:      secretName,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				v1beta1.ManagedSecretLabel: "true",
+				elm.ManagedSecretLabel: "true",
 			},
 			Annotations: map[string]string{
 				"kubernetes.io/service-account.name": obj.Name,
@@ -157,7 +156,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			Name:      obj.Name,
 			Namespace: obj.Namespace,
 			Labels: map[string]string{
-				v1beta1.ManagedSecretLabel: "true",
+				elm.ManagedSecretLabel: "true",
 			},
 		},
 		Subjects: []rbacv1.Subject{{
