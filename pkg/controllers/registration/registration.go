@@ -98,22 +98,6 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	}
 
 	secretName := obj.Name + "-token"
-	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: obj.Namespace,
-			Labels: map[string]string{
-				v1beta1.ManagedSecretLabel: "true",
-			},
-			Annotations: map[string]string{
-				"kubernetes.io/service-account.name": obj.Name,
-			},
-		},
-		Type: "kubernetes.io/service-account-token",
-	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return status, fmt.Errorf("add Secret to %s ServiceAccount: %w", obj.Name, err)
-	}
 	_, err = h.clients.Core().ServiceAccount().Create(&corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      obj.Name,
@@ -130,6 +114,22 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return status, err
+	}
+	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: obj.Namespace,
+			Labels: map[string]string{
+				v1beta1.ManagedSecretLabel: "true",
+			},
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": obj.Name,
+			},
+		},
+		Type: "kubernetes.io/service-account-token",
+	})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return status, fmt.Errorf("add Secret to %s ServiceAccount: %w", obj.Name, err)
 	}
 
 	_, err = h.clients.RBAC().RoleBinding().Create(&rbacv1.RoleBinding{
