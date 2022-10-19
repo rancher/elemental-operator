@@ -12,7 +12,7 @@ nginxURL: https://raw.githubusercontent.com/kubernetes/ingress-nginx/${NGINX_VER
 certManagerVersion: v1.7.1
 certManagerChartURL: https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_VERSION}.tgz
 
-rancherVersion: 2.6.6
+rancherVersion: 2.6.9
 rancherChartURL: https://releases.rancher.com/server-charts/latest/rancher-${RANCHER_VERSION}.tgz
 
 systemUpgradeControllerVersion: v0.9.1
