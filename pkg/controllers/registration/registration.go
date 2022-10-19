@@ -112,8 +112,28 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			},
 		},
 	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return status, err
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return status, err
+		}
+		// Ensure the ServiceAccount is linked to a Secret
+		sa, err := h.clients.Core().ServiceAccount().Get(obj.Namespace, obj.Name, metav1.GetOptions{})
+		if err != nil {
+			logrus.Warnf("Skip checks on '%s' ServiceAccount: %s", obj.Name, err.Error())
+		} else {
+			if len(sa.Secrets) == 0 {
+				sa.Secrets = []corev1.ObjectReference{
+					{
+						Name: secretName,
+					},
+				}
+				_, err = h.clients.Core().ServiceAccount().Update(sa)
+				if err != nil {
+					return status, fmt.Errorf("update %s ServiceAccount: %s", obj.Name, err.Error())
+				}
+				logrus.Info("'%s' ServiceAccount: updated Secret link", obj.Name)
+			}
+		}
 	}
 	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
