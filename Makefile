@@ -7,7 +7,7 @@ REPO_REGISTER?=quay.io/costoolkit/elemental-register-ci
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
-KUBE_VERSION?="v1.22.7"
+KUBE_VERSION?="v1.24.6"
 CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
 COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
@@ -88,7 +88,7 @@ e2e-tests: chart setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
-	cd $(ROOT_DIR)/tests && ginkgo -r -v ./e2e
+	cd $(ROOT_DIR)/tests && ginkgo -progress --fail-fast -r -v ./e2e
 
 # Only setups the kind cluster
 setup-kind:
