@@ -57,6 +57,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	var err error
 	var isNewRegistration bool
 
+	logrus.Debugf("MachineRegistration %s/%s: OnChange event", obj.Namespace, obj.Name)
 	serverURL, err := h.getRancherServerURL()
 	if err != nil {
 		return status, err
@@ -92,8 +93,12 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 		},
 		},
 	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return status, err
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return status, err
+		}
+	} else {
+		logrus.Debugf("Created Role %s/%s", obj.Namespace, obj.Name)
 	}
 
 	err = h.createServiceAccountWithSecret(obj.Namespace, obj.Name)
@@ -120,8 +125,12 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 			APIGroup: "rbac.authorization.k8s.io",
 		},
 	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return status, err
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return status, err
+		}
+	} else {
+		logrus.Debugf("Created RoleBinding %s/%s", obj.Namespace, obj.Name)
 	}
 
 	status.ServiceAccountRef = &corev1.ObjectReference{
@@ -131,7 +140,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 	}
 
 	if isNewRegistration {
-		logrus.Infof("Got new MachineRegistration '%s': generated token '%s'", obj.Name, status.RegistrationToken)
+		logrus.Infof("Got new MachineRegistration '%s/%s': generated token '%s'", obj.Namespace, obj.Name, status.RegistrationToken)
 	}
 
 	elm.ReadyCondition.SetError(&status, elm.MachineRegistrationReadyReason, nil)
@@ -140,6 +149,7 @@ func (h *handler) OnChange(obj *elm.MachineRegistration, status elm.MachineRegis
 }
 
 func (h *handler) OnRemove(_ string, obj *elm.MachineRegistration) (*elm.MachineRegistration, error) {
+	logrus.Infof("MachineRegistration '%s/%s' deletion event", obj.Namespace, obj.Name)
 	err := h.clients.RBAC().RoleBinding().Delete(obj.Namespace, obj.Name, &metav1.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return nil, err
@@ -205,10 +215,13 @@ func (h *handler) createServiceAccountWithSecret(namespace string, name string) 
 				if err != nil {
 					return fmt.Errorf("update %s ServiceAccount: %s", name, err.Error())
 				}
-				logrus.Info("'%s' ServiceAccount: updated Secret link", name)
+				logrus.Infof("Updated ServiceAccount %s/%s Secret link", namespace, name)
 			}
 		}
+	} else {
+		logrus.Debugf("Created ServiceAccount %s/%s", namespace, name)
 	}
+
 	_, err = h.clients.Core().Secret().Create(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -222,8 +235,12 @@ func (h *handler) createServiceAccountWithSecret(namespace string, name string) 
 		},
 		Type: "kubernetes.io/service-account-token",
 	})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("add Secret to %s ServiceAccount: %w", name, err)
+	if err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("add Secret to %s ServiceAccount: %w", name, err)
+		}
+	} else {
+		logrus.Debugf("Created Secret %s/%s", namespace, name)
 	}
 	return nil
 }
