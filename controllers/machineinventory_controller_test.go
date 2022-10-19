@@ -165,6 +165,7 @@ var _ = Describe("createPlanSecret", func() {
 		Expect(planSecret.OwnerReferences[0].Name).To(Equal(mInventory.Name))
 		Expect(planSecret.OwnerReferences[0].UID).To(Equal(mInventory.UID))
 		Expect(planSecret.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(planSecret.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 		Expect(planSecret.Type).To(Equal(elementalv1.PlanSecretType))
 		Expect(planSecret.Data).To(HaveKey("plan"))
 

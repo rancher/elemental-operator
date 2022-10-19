@@ -163,6 +163,9 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 					Controller: pointer.Bool(true),
 				},
 			},
+			Labels: map[string]string{
+				elementalv1.ElementalManagedLabel: "",
+			},
 		},
 		Type:       elementalv1.PlanSecretType,
 		StringData: map[string]string{"plan": "{}"},
