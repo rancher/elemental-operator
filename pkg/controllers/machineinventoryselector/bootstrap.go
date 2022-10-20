@@ -18,12 +18,13 @@ package machineinventoryselector
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
@@ -192,7 +193,14 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 	_ = json.NewEncoder(&buf).Encode(p)
 	plan := buf.Bytes()
 
-	checksum := machineinventory.PlanChecksum(plan)
+	checksum := planChecksum(plan)
 
 	return checksum, plan, nil
+}
+
+func planChecksum(input []byte) string {
+	h := sha256.New()
+	h.Write(input)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
