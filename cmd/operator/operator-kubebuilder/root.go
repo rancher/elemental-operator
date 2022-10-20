@@ -195,4 +195,16 @@ func setupReconcilers(mgr ctrl.Manager) {
 		setupLog.Error(err, "unable to create reconciler", "controller", "MachineRegistration")
 		os.Exit(1)
 	}
+	if err := (&controllers.MachineInventoryReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineInventory")
+		os.Exit(1)
+	}
+	if err := (&controllers.MachineInventorySelectorReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineInventorySelector")
+		os.Exit(1)
+	}
 }
