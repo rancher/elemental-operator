@@ -18,6 +18,7 @@ package machineinventoryselector
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -222,7 +223,14 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 	_ = json.NewEncoder(&buf).Encode(p)
 	plan := buf.Bytes()
 
-	checksum := machineinventory.PlanChecksum(plan)
+	checksum := planChecksum(plan)
 
 	return checksum, plan, nil
+}
+
+func planChecksum(input []byte) string {
+	h := sha256.New()
+	h.Write(input)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
