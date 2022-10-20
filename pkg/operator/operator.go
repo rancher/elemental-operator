@@ -21,7 +21,6 @@ import (
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
@@ -78,12 +77,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 			Labels:       helmLabels,
 		},
 		crd.CRD{
-			SchemaObject: elm.MachineInventory{},
-			Status:       true,
-			Annotations:  helmAnnotations,
-			Labels:       helmLabels,
-		},
-		crd.CRD{
 			SchemaObject: elm.ManagedOSVersion{},
 			Status:       true,
 			Annotations:  helmAnnotations,
@@ -112,7 +105,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 	}
 
 	managedos.Register(ctx, cl, o.DefaultRegistry)
-	machineinventory.Register(ctx, cl)
 	managedosversionchannel.Register(ctx, o.requeuer, cl)
 	machineinventoryselector.Register(ctx, cl)
 
