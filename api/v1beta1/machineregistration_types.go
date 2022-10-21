@@ -67,7 +67,7 @@ type MachineRegistration struct {
 
 // +kubebuilder:object:root=true
 
-// MachineRegistrationList contains a list of MachineRegistration.
+// MachineRegistrationList contains a list of MachineRegistrations.
 type MachineRegistrationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
