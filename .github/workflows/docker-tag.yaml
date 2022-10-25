@@ -94,9 +94,9 @@ jobs:
         shell: bash
         run: |
           set -e
-          cosign attach sbom --sbom elemental-operator.spdx "${{ env.OPERATOR_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}"
+          cosign attach sbom --sbom elemental-operator.spdx "${{ env.OPERATOR_REPO }}:${{ steps.export_tag.outputs.operator_tag }}"
           cosign attach sbom --sbom elemental-operator.spdx "${{ env.OPERATOR_REPO }}:latest"
-          cosign attach sbom --sbom elemental-register.spdx "${{ env.REGISTER_REPO }}:${{ steps.export_tag.outputs.operator_tag }}-${GITHUB_SHA::7}"
+          cosign attach sbom --sbom elemental-register.spdx "${{ env.REGISTER_REPO }}:${{ steps.export_tag.outputs.operator_tag }}"
           cosign attach sbom --sbom elemental-register.spdx "${{ env.REGISTER_REPO }}:latest"
       - name: Sign image
         env:
