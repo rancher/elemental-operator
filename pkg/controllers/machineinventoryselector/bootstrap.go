@@ -84,7 +84,11 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 		}
 
 		logrus.Info("bootstrap plan succeeded, setting plan to stop elemental-system-agent")
-		plan := getStopElementalAgentPlan()
+		plan, err := getStopElementalAgentPlan()
+		if err != nil {
+			logrus.Warn("failed creating stop elemental-system-agent plan")
+			return status, nil
+		}
 
 		planSecret, err := h.SecretCache.Get(inventory.Status.Plan.SecretRef.Namespace, inventory.Status.Plan.SecretRef.Name)
 		if err != nil {
@@ -94,8 +98,7 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 
 		planSecret.Data["plan"] = plan
 
-		_, err = h.Secrets.Update(planSecret)
-		if err != nil {
+		if _, err := h.Secrets.Update(planSecret); err != nil {
 			logrus.Warn("failed to update plan secret, stop elemental-system-agent plan is not set")
 		}
 		return status, nil
@@ -108,7 +111,7 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 }
 
 // getStopElementalAgentPlan returns the local plan to stop elemental-system-agent service in json format
-func getStopElementalAgentPlan() []byte {
+func getStopElementalAgentPlan() ([]byte, error) {
 	stopElementalAgent := applyinator.Plan{
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
@@ -123,8 +126,7 @@ func getStopElementalAgentPlan() []byte {
 			},
 		},
 	}
-	plan, _ := json.Marshal(stopElementalAgent)
-	return plan
+	return json.Marshal(stopElementalAgent)
 }
 
 // getBootstrapPlan the bootstrap plan will determine the machine's ip addresses, set the hostname to the inventory name and run the bootstrap provider's script
