@@ -59,7 +59,7 @@ type MachineInventorySelectorStatus struct {
 
 // +kubebuilder:object:root=true
 
-// MachineInventorySelectorList contains a list of MachineInventorySelector.
+// MachineInventorySelectorList contains a list of MachineInventorySelectors.
 type MachineInventorySelectorList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
