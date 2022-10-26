@@ -26,6 +26,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/wrangler/pkg/generic"
+	"github.com/sirupsen/logrus"
 )
 
 // bootstrapReadyHandler once the `InventoryReady` condition is true the bootstrap will set the bootstrap plan and record the checksum.  Once the bootstrap checksum is applied to the machine inventory bootstrap is considered complete.
@@ -76,6 +77,30 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	// if the bootstrap plan is applied bootstrap is ready
 	if inventory.Status.Plan.AppliedChecksum == status.BootstrapPlanChecksum {
 		v1beta1.BootstrapReadyCondition.SetError(&status, v1beta1.BootstrapReadyReason, nil)
+
+		if inventory.Status.Plan.FailedChecksum == status.BootstrapPlanChecksum {
+			logrus.Warn("boostrap plan failed...")
+			return status, nil
+		}
+
+		logrus.Info("bootstrap plan succeeded, setting plan to stop elemental-system-agent")
+		plan, err := getStopElementalAgentPlan()
+		if err != nil {
+			logrus.Warn("failed creating stop elemental-system-agent plan")
+			return status, nil
+		}
+
+		planSecret, err := h.SecretCache.Get(inventory.Status.Plan.SecretRef.Namespace, inventory.Status.Plan.SecretRef.Name)
+		if err != nil {
+			logrus.Warn("failed to get plan secret, stop elemental-system-agent plan is not set")
+			return status, nil
+		}
+
+		planSecret.Data["plan"] = plan
+
+		if _, err := h.Secrets.Update(planSecret); err != nil {
+			logrus.Warn("failed to update plan secret, stop elemental-system-agent plan is not set")
+		}
 		return status, nil
 	}
 
@@ -85,14 +110,15 @@ func (h *handler) bootstrapReadyHandler(obj *v1beta1.MachineInventorySelector, s
 	return status, nil
 }
 
-// getStopElementalAgentLocalPlan returns the local plan to stop elemental-system-agent service in json format
-func getStopElementalAgentLocalPlan() ([]byte, error) {
+// getStopElementalAgentPlan returns the local plan to stop elemental-system-agent service in json format
+func getStopElementalAgentPlan() ([]byte, error) {
 	stopElementalAgent := applyinator.Plan{
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
 				CommonInstruction: applyinator.CommonInstruction{
 					Command: "systemctl",
 					Args: []string{
+						"--no-block",
 						"stop",
 						"elemental-system-agent",
 					},
@@ -119,11 +145,6 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 		return "", nil, err
 	}
 
-	stopAgentPlan, err := getStopElementalAgentLocalPlan()
-	if err != nil {
-		return "", nil, err
-	}
-
 	p := applyinator.Plan{
 		Files: []applyinator.File{
 			{
@@ -146,11 +167,6 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 				Path:        "/usr/local/etc/hostname",
 				Permissions: "0644",
 			},
-			{
-				Content:     base64.StdEncoding.EncodeToString(stopAgentPlan),
-				Path:        "/var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip",
-				Permissions: "0644",
-			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
@@ -167,21 +183,6 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 			{
 				CommonInstruction: applyinator.CommonInstruction{
 					Command: "/var/lib/rancher/bootstrap.sh",
-					// Ensure local plans will be enabled, this is required to ensure the local
-					// plan stopping elemental-system-agent is executed
-					Env: []string{
-						"CATTLE_LOCAL_ENABLED=true",
-					},
-				},
-			},
-			{
-				// Ensure the local plan can only be executed after bootstrapping script is done
-				CommonInstruction: applyinator.CommonInstruction{
-					Command: "bash",
-					Args: []string{
-						"-c",
-						"mv /var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip /var/lib/rancher/agent/plans/elemental-agent-stop.plan",
-					},
 				},
 			},
 		},
