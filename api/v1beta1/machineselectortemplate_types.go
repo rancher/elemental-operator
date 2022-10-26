@@ -35,7 +35,7 @@ type MachineInventorySelectorTemplateSpec struct {
 
 // +kubebuilder:object:root=true
 
-// MachineInventorySelectorTemplateList contains a list of MachineInventorySelectorTemplate.
+// MachineInventorySelectorTemplateList contains a list of MachineInventorySelectorTemplates.
 type MachineInventorySelectorTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

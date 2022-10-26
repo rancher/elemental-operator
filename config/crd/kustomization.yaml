@@ -6,6 +6,9 @@ resources:
 - bases/elemental.cattle.io_machineinventoryselectors.yaml
 - bases/elemental.cattle.io_machineinventoryselectortemplates.yaml
 - bases/elemental.cattle.io_machineregistrations.yaml
+- bases/elemental.cattle.io_managedosversionchannels.yaml
+- bases/elemental.cattle.io_managedosimages.yaml
+- bases/elemental.cattle.io_managedosversions.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 commonLabels:
