@@ -21,7 +21,6 @@ import (
 
 	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventoryselector"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
 	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
 	"github.com/rancher/elemental-operator/pkg/server"
@@ -88,17 +87,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 			Annotations:  helmAnnotations,
 			Labels:       helmLabels,
 		},
-		crd.CRD{
-			SchemaObject: elm.MachineInventorySelector{},
-			Status:       true,
-			Annotations:  helmAnnotations,
-			Labels:       helmCAPILabels,
-		},
-		crd.CRD{
-			SchemaObject: elm.MachineInventorySelectorTemplate{},
-			Annotations:  helmAnnotations,
-			Labels:       helmCAPILabels,
-		},
 	).BatchWait()
 	if err != nil {
 		logrus.Fatalf("Failed to create CRDs: %v", err)
@@ -106,7 +94,6 @@ func Run(ctx context.Context, settings ...Setting) error {
 
 	managedos.Register(ctx, cl, o.DefaultRegistry)
 	managedosversionchannel.Register(ctx, o.requeuer, cl)
-	machineinventoryselector.Register(ctx, cl)
 
 	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(cl))
 
