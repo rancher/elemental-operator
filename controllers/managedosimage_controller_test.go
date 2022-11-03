@@ -188,6 +188,7 @@ var _ = Describe("createFleetBundle", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
+				UID:       "test",
 			},
 			Spec: elementalv1.ManagedOSImageSpec{
 				ClusterRolloutStrategy: &fleetv1.RolloutStrategy{
