@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/rancher/elemental-operator/pkg/clients"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type service func(context.Context, *clients.Clients) error
+type service func(context.Context, *clients.Clients, client.Client) error
