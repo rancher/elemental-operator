@@ -30,37 +30,54 @@ type ManagedOSImage struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ManagedOSImageSpec   `json:"spec"`
-	Status ManagedOSImageStatus `json:"status"`
+	Spec   ManagedOSImageSpec   `json:"spec,omitempty"`
+	Status ManagedOSImageStatus `json:"status,omitempty"`
 }
 
 type ManagedOSImageSpec struct {
-	OSImage      string                `json:"osImage,omitempty"`
-	CloudConfig  *fleet.GenericMap     `json:"cloudConfig,omitempty"`
+	// +optional
+	OSImage string `json:"osImage,omitempty"`
+	// +optional
+	CloudConfig *fleet.GenericMap `json:"cloudConfig,omitempty"`
+	// +optional
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
-	Concurrency  *int64                `json:"concurrency,omitempty"`
+	// +optional
+	Concurrency *int64 `json:"concurrency,omitempty"`
 
-	Prepare              *upgradev1.ContainerSpec `json:"prepare,omitempty"`
-	Cordon               *bool                    `json:"cordon,omitempty"`
-	Drain                *upgradev1.DrainSpec     `json:"drain,omitempty"`
-	UpgradeContainer     *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
-	ManagedOSVersionName string                   `json:"managedOSVersionName,omitempty"`
+	// +optional
+	Prepare *upgradev1.ContainerSpec `json:"prepare,omitempty"`
+	// +optional
+	Cordon *bool `json:"cordon,omitempty"`
+	// +optional
+	Drain *upgradev1.DrainSpec `json:"drain,omitempty"`
+	// +optional
+	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
+	// +optional
+	ManagedOSVersionName string `json:"managedOSVersionName,omitempty"`
 
+	// +optional
 	ClusterRolloutStrategy *fleet.RolloutStrategy `json:"clusterRolloutStrategy,omitempty"`
-	Targets                []BundleTarget         `json:"clusterTargets,omitempty"`
+	// +optional
+	Targets []BundleTarget `json:"clusterTargets,omitempty"`
 }
 
 type BundleTarget struct {
-	fleet.BundleDeploymentOptions `json:""`             //nolint
-	Name                          string                `json:"name,omitempty"`
-	ClusterName                   string                `json:"clusterName,omitempty"`
-	ClusterSelector               *metav1.LabelSelector `json:"clusterSelector,omitempty"`
-	ClusterGroup                  string                `json:"clusterGroup,omitempty"`
-	ClusterGroupSelector          *metav1.LabelSelector `json:"clusterGroupSelector,omitempty"`
+	fleet.BundleDeploymentOptions `json:""` //nolint
+	// +optional
+	Name string `json:"name,omitempty"`
+	// +optional
+	ClusterName string `json:"clusterName,omitempty"`
+	// +optional
+	ClusterSelector *metav1.LabelSelector `json:"clusterSelector,omitempty"`
+	// +optional
+	ClusterGroup string `json:"clusterGroup,omitempty"`
+	// +optional
+	ClusterGroupSelector *metav1.LabelSelector `json:"clusterGroupSelector,omitempty"`
 }
 
 type ManagedOSImageStatus struct {
-	fleet.BundleStatus `json:""` //nolint
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true
