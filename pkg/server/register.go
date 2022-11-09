@@ -47,7 +47,9 @@ var (
 )
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	logrus.Infof("Incoming HTTP request for %s", req.URL.Path)
+	escapedPath := strings.Replace(req.URL.Path, "\n", "", -1)
+	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
+	logrus.Infof("Incoming HTTP request for %s", escapedPath)
 	// get the machine registration relevant to this request
 	registration, err := i.getMachineRegistration(req)
 	if err != nil {
@@ -167,11 +169,13 @@ func (i *InventoryServer) updateMachineInventory(inventory *elm.MachineInventory
 
 func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.MachineRegistration, error) {
 	token := path.Base(req.URL.Path)
+	escapedToken := strings.Replace(token, "\n", "", -1)
+	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
 
-	regs, err := i.machineRegistrationCache.GetByIndex(registrationTokenIndex, token)
+	regs, err := i.machineRegistrationCache.GetByIndex(registrationTokenIndex, escapedToken)
 	if apierrors.IsNotFound(err) || len(regs) != 1 {
 		if len(regs) > 1 {
-			logrus.Errorf("Multiple MachineRegistrations have the same token %s: %v", token, regs)
+			logrus.Errorf("Multiple MachineRegistrations have the same token %s: %v", escapedToken, regs)
 		}
 		if err == nil && len(regs) == 0 {
 			err = fmt.Errorf("MachineRegistration does not exist")
