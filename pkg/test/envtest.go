@@ -22,10 +22,12 @@ import (
 	goruntime "runtime"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -33,11 +35,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
+var (
+	scheme = runtime.NewScheme()
+)
+
 func init() {
-	utilruntime.Must(elementalv1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(managementv3.AddToScheme(scheme.Scheme))
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme.Scheme))
-	utilruntime.Must(clusterv1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(elementalv1.AddToScheme(scheme))
+	utilruntime.Must(managementv3.AddToScheme(scheme))
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(upgradev1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1.AddToScheme(scheme))
 }
 
 func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, error) {
@@ -48,6 +56,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 	testEnv.CRDs = []*apiextensionsv1.CustomResourceDefinition{
 		fakeSettingCRD,
 		fakeMachineCRD,
+		fakeBundleCRD,
 	}
 	testEnv.CRDDirectoryPaths = []string{
 		path.Join(root, "config", "crd", "bases"),
@@ -63,7 +72,7 @@ func StartEnvTest(testEnv *envtest.Environment) (*rest.Config, client.Client, er
 		return nil, nil, errors.New("envtest.Environment.Start() returned nil config")
 	}
 
-	cl, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	cl, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, nil, err
 	}

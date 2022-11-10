@@ -10,7 +10,6 @@ CHART_VERSION?=$(subst v,,$(GIT_TAG))
 KUBE_VERSION?="v1.24.6"
 CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
-COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
 E2E_CONF_FILE ?= $(ROOT_DIR)/tests/e2e/config/config.yaml
 
@@ -175,6 +174,7 @@ generate: $(CONTROLLER_GEN) ## Generate code
 generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
+		paths=./controllers/... \
 		paths=./cmd/operator/operator-kubebuilder/... \
 		crd:crdVersions=v1 \
 		rbac:roleName=manager-role \

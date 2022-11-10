@@ -19,16 +19,30 @@ package operator
 import (
 	"context"
 
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/controllers/managedos"
-	"github.com/rancher/elemental-operator/pkg/controllers/managedosversionchannel"
 	"github.com/rancher/elemental-operator/pkg/server"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/steve/pkg/aggregation"
-	"github.com/rancher/wrangler/pkg/crd"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
+
+var (
+	scheme = runtime.NewScheme()
+)
+
+func init() {
+	utilruntime.Must(elementalv1.AddToScheme(scheme))
+	utilruntime.Must(managementv3.AddToScheme(scheme))
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+}
 
 func Run(ctx context.Context, settings ...Setting) error {
 	o := &options{}
@@ -47,38 +61,16 @@ func Run(ctx context.Context, settings ...Setting) error {
 		logrus.Fatalf("Error building controller: %s", err.Error())
 	}
 
-	factory, err := crd.NewFactoryFromClient(restConfig)
-	if err != nil {
-		logrus.Fatalf("Failed to create CRD factory: %v", err)
-	}
-
-	err = factory.BatchCreateCRDs(ctx,
-		crd.CRD{
-			SchemaObject: elm.ManagedOSImage{},
-			Status:       true,
-		},
-		crd.CRD{
-			SchemaObject: elm.ManagedOSVersion{},
-			Status:       true,
-		},
-		crd.CRD{
-			SchemaObject: elm.ManagedOSVersionChannel{},
-			Status:       true,
-		},
-	).BatchWait()
-	if err != nil {
-		logrus.Fatalf("Failed to create CRDs: %v", err)
-	}
-
-	managedos.Register(ctx, cl, o.DefaultRegistry)
-	managedosversionchannel.Register(ctx, o.requeuer, cl)
+	runtimeClient, err := client.New(restConfig, client.Options{
+		Scheme: scheme,
+	})
 
 	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(cl))
 
 	for _, s := range o.services {
 		s := s
 		go func() {
-			err = s(ctx, cl)
+			err = s(ctx, cl, runtimeClient)
 			if err != nil {
 				logrus.Errorf("Error running services: %s", err)
 			}

@@ -50,7 +50,7 @@ const (
 
 // Machine Selector conditions
 const (
-	// WaitingForInventory documents that the machine selector is waiting for a matching machine inventory.
+	// WaitingForInventoryReason documents that the machine selector is waiting for a matching machine inventory.
 	WaitingForInventoryReason = "WaitingForInventory"
 
 	// SuccefullyAdoptedInventoryReason documents that the machine selector succesfully adopted machine inventory.
@@ -70,4 +70,22 @@ const (
 
 	// FailedToSetAdressesReason documents that the machine selector controller failed to set adresses.
 	FailedToSetAdressesReason = "FailedToSetAdresses"
+)
+
+// Managed OS Version Channel conditions
+const (
+	// InvalidConfigurationReason documents that managed OS version channel has invalid configuration.
+	InvalidConfigurationReason = "InvalidConfiguration"
+)
+
+// Managed OS Image conditions
+const (
+	// FleetBundleCreation documents the state of the fleet bundle creation.
+	FleetBundleCreation = "FleetBundleCreation"
+
+	// FleetBundleCreatedSuccessReason documents that managed OS image controller fleet bundle was created successfully.
+	FleetBundleCreateSuccessReason = "FleetBundleCreateSuccess"
+
+	// FleetBundleCreateFailureReason documents that managed OS image controller failed to create fleet bundle.
+	FleetBundleCreateFailureReason = "FleetBundleCreateFailure"
 )

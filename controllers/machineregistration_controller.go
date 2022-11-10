@@ -48,10 +48,10 @@ type MachineRegistrationReconciler struct {
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings;roles,verbs=create;delete
-// +kubebuilder:rbac:groups="management.cattle.io",resources=setting,verbs=get
-// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;delete
+// +kubebuilder:rbac:groups="rbac.authorization.k8s.io",resources=rolebindings;roles,verbs=create;delete;list;watch
+// +kubebuilder:rbac:groups="management.cattle.io",resources=settings,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;delete;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;delete;list;watch;update
 
 func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -60,7 +60,7 @@ func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) { //nolint:dupl
 	logger := ctrl.LoggerFrom(ctx)
 
 	mRegistration := &elementalv1.MachineRegistration{}

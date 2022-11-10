@@ -18,11 +18,12 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
 	"github.com/sirupsen/logrus"
 )
@@ -32,7 +33,7 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm.ManagedOSVersion, error) {
+func (j *JSONSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s' (JSON)", s.Namespace, s.Name)
 
 	timeout := time.Second * 30
@@ -40,27 +41,28 @@ func (j *JSONSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm
 		var err error
 		timeout, err = time.ParseDuration(j.Timeout)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse timeout: %w", err)
 		}
 	}
 	client := &http.Client{
 		Timeout: timeout,
 	}
 
+	logrus.Debug("Fetching JSON from ", j.URI)
 	resp, err := client.Get(j.URI)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get %s: %w", j.URI, err)
 	}
 
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	res := []elm.ManagedOSVersion{}
+	res := []elementalv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf, &res)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
 	return res, nil
