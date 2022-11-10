@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
@@ -27,6 +28,7 @@ import (
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/yaml"
 )
 
 // bootstrapReadyHandler once the `InventoryReady` condition is true the bootstrap will set the bootstrap plan and record the checksum.  Once the bootstrap checksum is applied to the machine inventory bootstrap is considered complete.
@@ -145,6 +147,21 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 		return "", nil, err
 	}
 
+	type LabelsFromInventory struct {
+		NodeLabels []string `yaml:"node-label+"`
+	}
+
+	nodeLabelsFromInventory := LabelsFromInventory{NodeLabels: []string{}}
+	for label, value := range inventory.Labels {
+		nodeLabelsFromInventory.NodeLabels = append(nodeLabelsFromInventory.NodeLabels, fmt.Sprintf("%s=%s", label, value))
+	}
+
+	nodeLabelsFromInventoryInYaml, err := yaml.Marshal(nodeLabelsFromInventory)
+	if err != nil {
+		logrus.Warnf("Could not decode the inventory labels to add them to the node: %s", err)
+		nodeLabelsFromInventoryInYaml = []byte("")
+	}
+
 	p := applyinator.Plan{
 		Files: []applyinator.File{
 			{
@@ -158,8 +175,18 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 				Permissions: "0600",
 			},
 			{
+				Content:     base64.StdEncoding.EncodeToString(nodeLabelsFromInventoryInYaml),
+				Path:        "/etc/rancher/rke2/config.yaml.d/99-elemental-inventory-labels.yaml",
+				Permissions: "0600",
+			},
+			{
 				Content:     base64.StdEncoding.EncodeToString([]byte("node-name: " + inventory.Name)),
 				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-name.yaml",
+				Permissions: "0600",
+			},
+			{
+				Content:     base64.StdEncoding.EncodeToString(nodeLabelsFromInventoryInYaml),
+				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-inventory-labels.yaml",
 				Permissions: "0600",
 			},
 			{
