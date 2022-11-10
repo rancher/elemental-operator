@@ -66,7 +66,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 				return r
 			}, 1*time.Minute, 2*time.Second).Should(
-				ContainSubstring("No ManagedOSVersionChannel type defined"),
+				ContainSubstring("spec.Type can't be empty"),
 			)
 		})
 

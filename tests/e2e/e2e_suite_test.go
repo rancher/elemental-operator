@@ -349,8 +349,10 @@ func getElementalOperatorLogs() {
 	)).To(Succeed())
 
 	for _, pod := range podList.Items {
-		output, err := kubectl.Run("logs", pod.Name, "-n", pod.Namespace)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(os.WriteFile(filepath.Join(e2eCfg.ArtifactsDir, pod.Name+".log"), []byte(output), 0644)).To(Succeed())
+		for _, container := range pod.Spec.Containers {
+			output, err := kubectl.Run("logs", pod.Name, "-c", container.Name, "-n", pod.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(os.WriteFile(filepath.Join(e2eCfg.ArtifactsDir, pod.Name+"-"+container.Name+".log"), []byte(output), 0644)).To(Succeed())
+		}
 	}
 }

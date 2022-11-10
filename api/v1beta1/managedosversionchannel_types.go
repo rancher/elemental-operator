@@ -17,9 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
-	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
 // +kubebuilder:object:root=true
@@ -29,18 +29,25 @@ type ManagedOSVersionChannel struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ManagedOSVersionChannelSpec       `json:"spec"`
-	Status ManagedOSVersionChannelSpecStatus `json:"status"`
+	Spec   ManagedOSVersionChannelSpec   `json:"spec,omitempty"`
+	Status ManagedOSVersionChannelStatus `json:"status,omitempty"`
 }
 
 type ManagedOSVersionChannelSpec struct {
-	Type             string                   `json:"type,omitempty"`
-	Options          *fleet.GenericMap        `json:"options,omitempty"`
+	// +optional
+	Type string `json:"type,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +optional
+	Options map[string]runtime.RawExtension `json:"options,omitempty"`
+	// +optional
 	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
 }
 
-type ManagedOSVersionChannelSpecStatus struct {
-	Status string `json:"status,omitempty"`
+type ManagedOSVersionChannelStatus struct {
+	// Conditions describe the state of the managed OS version object.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true

@@ -68,38 +68,41 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		})
 	})
 	Context("Using ManagedOSVersion reference", func() {
-		osImage := "update-osversion"
-		osVersion := "osversion"
+		withUpgradePlan := "with-upgrade-plan"
+		withUpgradeImage := "with-upgrade-image"
+
 		AfterEach(func() {
 			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", testnamespace, osImage)
-			kube.Delete("managedosversion", "-n", testnamespace, osVersion)
+			kube.Delete("managedosimage", "-n", testnamespace, withUpgradePlan)
+			kube.Delete("managedosimage", "-n", testnamespace, withUpgradeImage)
+			kube.Delete("managedosversion", "-n", testnamespace, withUpgradePlan)
+			kube.Delete("managedosversion", "-n", testnamespace, withUpgradeImage)
 		})
 
-		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
+		createsCorrectPlan := func(name string, meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
 			ov := catalog.NewManagedOSVersion(
-				osVersion, "v1.0", "0.0.0",
+				name, "v1.0", "0.0.0",
 				meta,
 				c,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", osVersion, ov)
+				return k.ApplyYAML("fleet-default", name, ov)
 			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			ui := catalog.NewManagedOSImage(
-				osImage,
+				name,
 				[]map[string]interface{}{{"clusterName": "dummycluster"}},
 				"",
-				osVersion,
+				name,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML(testnamespace, osImage, ui)
+				return k.ApplyYAML(testnamespace, name, ui)
 			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
-				r, err := kubectl.GetData(testnamespace, "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
+				r, err := kubectl.GetData(testnamespace, "bundle", "mos-"+name, `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
 					fmt.Println(err)
 				}
@@ -112,12 +115,13 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan image", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "robin": "batman"}, nil,
+			createsCorrectPlan(withUpgradeImage, map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "robin": "batman"}, nil,
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"registry.com/repository/image"`),
 					ContainSubstring(`"command":["/usr/sbin/suc-upgrade"]`),
 					ContainSubstring(`"name":"METADATA_ROBIN","value":"batman"`),
+					ContainSubstring(`"name":"METADATA_UPGRADEIMAGE","value":"registry.com/repository/image:v1.0"`),
 				),
 			)
 		})
@@ -125,13 +129,14 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan container", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "baz": "batman", "jsondata": struct{ Foo string }{Foo: "foostruct"}},
+			createsCorrectPlan(withUpgradePlan, map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "baz": "batman", "jsondata": struct{ Foo string }{Foo: "foostruct"}},
 				&catalog.ContainerSpec{Image: "foo/bar:image"},
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"foo/bar:image"`),
 					ContainSubstring(`"name":"METADATA_BAZ","value":"batman"`),
 					ContainSubstring(`{"name":"METADATA_JSONDATA","value":"{\"foo\":\"foostruct\"}"}`),
+					ContainSubstring(`"name":"METADATA_UPGRADEIMAGE","value":"registry.com/repository/image:v1.0"`),
 				),
 			)
 		})
