@@ -53,9 +53,9 @@ type MachineInventorySelectorReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventoryselectors,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventoryselectors/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;patch
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventoryselectors/status,verbs=get;update;patch;list
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;patch;list;watch
 
 func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -70,7 +70,7 @@ func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) 
 		Complete(r)
 }
 
-func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) {
+func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req reconcile.Request) (ctrl.Result, error) { //nolint:dupl
 	logger := ctrl.LoggerFrom(ctx)
 
 	machineInventorySelector := &elementalv1.MachineInventorySelector{}
@@ -96,13 +96,13 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 	machineInventorySelectorStatusCopy := machineInventorySelector.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, machineInventorySelector, patchBase); err != nil {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory selector object: %w", err))
 	}
 
 	machineInventorySelector.Status = *machineInventorySelectorStatusCopy
 
 	if err := r.Status().Patch(ctx, machineInventorySelector, patchBase); err != nil {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory selector object: %w", err))
 	}
 
 	if len(errs) > 0 {

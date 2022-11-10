@@ -34,7 +34,7 @@ spec:
           spec:
             properties:
               metadata:
-                type: object
+                x-kubernetes-preserve-unknown-fields: true
               minVersion:
                 type: string
               type:
@@ -459,9 +459,6 @@ spec:
             - unavailable
             - unavailablePartitions
             type: object
-        required:
-        - spec
-        - status
         type: object
     served: true
     storage: true

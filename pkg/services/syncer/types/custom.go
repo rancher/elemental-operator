@@ -28,8 +28,9 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
 )
 
@@ -56,7 +57,7 @@ func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]elm.ManagedOSVersion, error) {
+func (j *CustomSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
 
 	mountDir := j.MountPath
@@ -71,6 +72,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 	serviceAccount := false
 	p, err := c.Clients.Core().Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
 	if err != nil {
+		logrus.Warnf("Failed to get pod for %s/%s: %v, creating a new one", s.Namespace, s.Name, err)
 		_, err = c.Clients.Core().Pod().Create(&corev1.Pod{
 			TypeMeta: v1.TypeMeta{
 				APIVersion: "v1",
@@ -80,7 +82,13 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 				Name:      s.Name,
 				Namespace: s.Namespace,
 				OwnerReferences: []v1.OwnerReference{
-					*v1.NewControllerRef(&s, elm.SchemeGroupVersion.WithKind("ManagedOSVersionChannel")),
+					{
+						APIVersion: elementalv1.GroupVersion.String(),
+						Kind:       "ManagedOSVersionChannel",
+						Name:       s.Name,
+						UID:        s.UID,
+						Controller: pointer.Bool(true),
+					},
 				},
 			},
 			Spec: corev1.PodSpec{
@@ -107,7 +115,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 
 		// Requeueing
 		c.Requeuer.Requeue()
-		return nil, err
+		return nil, fmt.Errorf("failed to create pod for %s/%s: %w", s.Namespace, s.Name, err)
 	}
 
 	terminated := len(p.Status.InitContainerStatuses) > 0 && p.Status.InitContainerStatuses[0].Name == "runner" &&
@@ -156,7 +164,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elm.ManagedOSVersionChannel) ([]e
 	}
 
 	logrus.Infof("Got '%s' from '%s/%s'", buf.String(), s.Namespace, s.Name)
-	res := []elm.ManagedOSVersion{}
+	res := []elementalv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf.Bytes(), &res)
 	if err != nil {

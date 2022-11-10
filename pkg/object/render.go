@@ -16,10 +16,23 @@ limitations under the License.
 
 package object
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"k8s.io/apimachinery/pkg/runtime"
+)
 
 // Renders a map[string]interface{} into a real object
 func Render(src map[string]interface{}, v interface{}) error {
+	d, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(d, v)
+}
+
+// Renders a map[string]runtime.RawExtension{} into a real object
+func RenderRawExtension(src map[string]runtime.RawExtension, v interface{}) error {
 	d, err := json.Marshal(src)
 	if err != nil {
 		return err

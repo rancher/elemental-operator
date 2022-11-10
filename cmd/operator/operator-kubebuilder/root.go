@@ -24,7 +24,9 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/controllers"
 	"github.com/rancher/elemental-operator/pkg/version"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -41,12 +43,11 @@ import (
 )
 
 // IMPORTANT: The RBAC permissions below should be reviewed after old code is deprecated.
-
 // +kubebuilder:rbac:groups="",resources=events,verbs=patch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;create;delete;list;watch
 // +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
-// +kubebuilder:rbac:groups="fleet.cattle.io",resources=bundles,verbs=*
-// +kubebuilder:rbac:groups="apiextensions.k8s.io",resources=customresourcedefinitions,verbs=*
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversions/status,verbs=get;update;patch
 
 var (
 	scheme   = runtime.NewScheme()
@@ -64,6 +65,7 @@ type rootConfig struct {
 	webhookPort                 int
 	webhookCertDir              string
 	healthAddr                  string
+	defaultRegistry             string
 }
 
 func init() {
@@ -71,6 +73,8 @@ func init() {
 	utilruntime.Must(managementv3.AddToScheme(scheme))
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(upgradev1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1.AddToScheme(scheme))
 }
 
 func NewOperatorCtrlRuntimeCommand() *cobra.Command {
@@ -127,6 +131,9 @@ func NewOperatorCtrlRuntimeCommand() *cobra.Command {
 		"The address the health endpoint binds to.")
 	_ = viper.BindPFlag("profiler-address", cmd.PersistentFlags().Lookup("profiler-address"))
 
+	cmd.PersistentFlags().StringVar(&config.defaultRegistry, "default-registry", "", "default registry to prepend to os images")
+	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
+
 	return cmd
 }
 
@@ -152,6 +159,7 @@ func operatorRun(config *rootConfig) {
 		ClientDisableCacheFor: []client.Object{
 			&corev1.ConfigMap{},
 			&corev1.Secret{},
+			&elementalv1.ManagedOSVersion{},
 		},
 		Port:                   config.webhookPort,
 		CertDir:                config.webhookCertDir,
@@ -166,7 +174,7 @@ func operatorRun(config *rootConfig) {
 	ctx := ctrl.SetupSignalHandler()
 
 	setupChecks(mgr)
-	setupReconcilers(mgr)
+	setupReconcilers(mgr, config)
 
 	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager")
@@ -188,7 +196,7 @@ func setupChecks(mgr ctrl.Manager) {
 	}
 }
 
-func setupReconcilers(mgr ctrl.Manager) {
+func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 	if err := (&controllers.MachineRegistrationReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
@@ -205,6 +213,20 @@ func setupReconcilers(mgr ctrl.Manager) {
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "MachineInventorySelector")
+		os.Exit(1)
+	}
+	if err := (&controllers.ManagedOSImageReconciler{
+		Client:          mgr.GetClient(),
+		DefaultRegistry: config.defaultRegistry,
+		Scheme:          scheme,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSImage")
+		os.Exit(1)
+	}
+	if err := (&controllers.ManagedOSVersionChannelReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersionChannel")
 		os.Exit(1)
 	}
 }

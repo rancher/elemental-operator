@@ -17,14 +17,20 @@ limitations under the License.
 package config
 
 import (
+	"context"
+
 	"github.com/rancher/elemental-operator/pkg/clients"
 	"github.com/rancher/elemental-operator/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Config struct {
+	context.Context
+
 	Requeuer      types.Requeuer
 	Clients       clients.ClientInterface
+	RuntimeClient client.Client
 	OperatorImage string
 	Recorder      record.EventRecorder
 }

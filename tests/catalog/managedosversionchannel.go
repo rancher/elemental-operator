@@ -28,7 +28,7 @@ type ManagedOSVersionChannel struct {
 	Metadata   struct {
 		Name string `json:"name" yaml:"name"`
 	} `json:"metadata" yaml:"metadata"`
-	Spec ManagedOSVersionChannelSpec
+	Spec ManagedOSVersionChannelSpec `json:"spec,omitempty"`
 }
 
 func NewManagedOSVersionChannel(name string, t string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
