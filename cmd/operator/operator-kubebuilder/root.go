@@ -58,6 +58,7 @@ type rootConfig struct {
 	enableLeaderElection        bool
 	profilerAddress             string
 	metricsBindAddr             string
+	syncNamespaces              []string
 	syncPeriod                  time.Duration
 	leaderElectionLeaseDuration time.Duration
 	leaderElectionRenewDeadline time.Duration
@@ -66,6 +67,7 @@ type rootConfig struct {
 	webhookCertDir              string
 	healthAddr                  string
 	defaultRegistry             string
+	operatorImage               string
 }
 
 func init() {
@@ -97,23 +99,19 @@ func NewOperatorCtrlRuntimeCommand() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&config.metricsBindAddr, "metrics-bind-addr", ":8080",
 		"The address the metric endpoint binds to.")
-	_ = viper.BindPFlag("profiler-address", cmd.PersistentFlags().Lookup("profiler-address"))
-
-	cmd.PersistentFlags().DurationVar(&config.syncPeriod, "sync-period", 10*time.Minute,
-		"The minimum interval at which watched resources are reconciled (e.g. 15m)")
-	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
+	_ = viper.BindPFlag("metrics-bind-addr", cmd.PersistentFlags().Lookup("metrics-bind-addr"))
 
 	cmd.PersistentFlags().DurationVar(&config.leaderElectionLeaseDuration, "leader-elect-lease-duration", 15*time.Second,
 		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)")
-	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
+	_ = viper.BindPFlag("leader-elect-lease-duration", cmd.PersistentFlags().Lookup("leader-elect-lease-duration"))
 
-	cmd.PersistentFlags().DurationVar(&config.leaderElectionRenewDeadline, "leader-elect-renew-deadlined", 10*time.Second,
+	cmd.PersistentFlags().DurationVar(&config.leaderElectionRenewDeadline, "leader-elect-retry-period", 10*time.Second,
 		"Duration that the leading controller manager will retry refreshing leadership before giving up (duration string)")
-	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
+	_ = viper.BindPFlag("leader-elect-retry-period", cmd.PersistentFlags().Lookup("leader-elect-retry-period"))
 
 	cmd.PersistentFlags().DurationVar(&config.leaderElectionRetryPeriod, "leader-elect-retry-period", 2*time.Second,
 		"Duration the LeaderElector clients should wait between tries of actions (duration string)")
-	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
+	_ = viper.BindPFlag("leader-elect-retry-period", cmd.PersistentFlags().Lookup("leader-elect-retry-period"))
 
 	cmd.PersistentFlags().BoolVar(&config.enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
@@ -121,18 +119,23 @@ func NewOperatorCtrlRuntimeCommand() *cobra.Command {
 
 	cmd.PersistentFlags().IntVar(&config.webhookPort, "webhook-port", 9443,
 		"Webhook Server port.")
-	_ = viper.BindPFlag("leader-elect", cmd.PersistentFlags().Lookup("leader-elect"))
+	_ = viper.BindPFlag("webhook-port", cmd.PersistentFlags().Lookup("webhook-port"))
 
 	cmd.PersistentFlags().StringVar(&config.webhookCertDir, "webhook-cert-dir", ":8080",
 		"Webhook cert dir, only used when webhook-port is specified.")
-	_ = viper.BindPFlag("profiler-address", cmd.PersistentFlags().Lookup("profiler-address"))
+	_ = viper.BindPFlag("webhook-cert-dir", cmd.PersistentFlags().Lookup("webhook-cert-dir"))
 
 	cmd.PersistentFlags().StringVar(&config.healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")
-	_ = viper.BindPFlag("profiler-address", cmd.PersistentFlags().Lookup("profiler-address"))
+	_ = viper.BindPFlag("health-addr", cmd.PersistentFlags().Lookup("health-addr"))
 
 	cmd.PersistentFlags().StringVar(&config.defaultRegistry, "default-registry", "", "default registry to prepend to os images")
 	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
+
+	cmd.PersistentFlags().StringVar(&config.operatorImage, "operator-image", "",
+		"Operator image. Used to gather the results from the syncer by running the 'display' command")
+	_ = viper.BindPFlag("operator-image", cmd.PersistentFlags().Lookup("operator-image"))
+	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "operator-image")
 
 	return cmd
 }
@@ -224,7 +227,9 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		os.Exit(1)
 	}
 	if err := (&controllers.ManagedOSVersionChannelReconciler{
-		Client: mgr.GetClient(),
+		Client:        mgr.GetClient(),
+		Config:        mgr.GetConfig(),
+		OperatorImage: config.operatorImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersionChannel")
 		os.Exit(1)

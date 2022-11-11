@@ -36,6 +36,8 @@ type ManagedOSVersionChannel struct {
 type ManagedOSVersionChannelSpec struct {
 	// +optional
 	Type string `json:"type,omitempty"`
+	// +optional
+	SyncInterval string `json:"syncInterval,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
@@ -47,7 +49,8 @@ type ManagedOSVersionChannelSpec struct {
 type ManagedOSVersionChannelStatus struct {
 	// Conditions describe the state of the managed OS version object.
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Conditions     []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	LastSyncedTime *metav1.Time       `json:"lastSyncedTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true

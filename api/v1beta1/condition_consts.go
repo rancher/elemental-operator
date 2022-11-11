@@ -76,6 +76,18 @@ const (
 const (
 	// InvalidConfigurationReason documents that managed OS version channel has invalid configuration.
 	InvalidConfigurationReason = "InvalidConfiguration"
+
+	// SyncingReason documents that managed OS version channel is synchronizing managed OS versions
+	SyncingReason = "Synchronizing"
+
+	// SyncedReason documents that managed OS version channel finalized synchroniziation
+	SyncedReason = "Synchronized"
+
+	// FailedToSyncReason documents that managed OS version channel failed synchronization
+	FailedToSyncReason = "FailedToSync"
+
+	// FailedToCreateVersionsReason documents that managed OS version channel failed to create managed OS versions
+	FailedToCreateVersionsReason = "FailedToCreateVersions"
 )
 
 // Managed OS Image conditions
