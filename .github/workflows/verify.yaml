@@ -1,0 +1,26 @@
+name: Verify
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.17.x
+    - uses: actions/cache@v3.0.11
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
+    - name: Run make verify
+      run: |
+        make verify

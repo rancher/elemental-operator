@@ -195,6 +195,25 @@ build-crds: $(KUSTOMIZE)
 build-rbac: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/rbac > chart/templates/cluster_role.yaml
 
-build-manifests: $(KUSTOMIZE)
+build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
 	$(MAKE) build-rbac
+
+ALL_VERIFY_CHECKS = manifests vendor
+
+.PHONY: verify
+verify: $(addprefix verify-,$(ALL_VERIFY_CHECKS))
+
+.PHONY: verify-manifests
+verify-gen: build-manifests
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi
+
+.PHONY: verify-vendor
+verify-vendor: vendor
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi
