@@ -235,6 +235,11 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 				elementalv1.ElementalManagedLabel: "",
 			},
 		},
+		Secrets: []corev1.ObjectReference{
+			{
+				Name: mRegistration.Name + "-token",
+			},
+		},
 	}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create service account: %w", err)
 	}
