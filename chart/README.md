@@ -67,8 +67,6 @@ helm show values oci://registry.opensuse.org/isv/rancher/elemental/charts/elemen
 | image.imagePullPolicy | string | `IfNotPresent` |  |
 | noProxy | string | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local" | Comma separated list of domains or ip addresses that will not use the proxy |
 | global.cattle.systemDefaultRegistry | string | `""` | Default container registry name  |
-| sync_interval | string | `"60m"` | Default sync interval for upgrade channel |
-| sync_namespaces | list | `[]` | Namespace the operator will watch for, leave empty for all |
 | debug | bool | `false` | Enable debug output for operator |
 | nodeSelector.kubernetes.io/os | string | `linux` |  |
 | tolerations | object | `{}` |  |
