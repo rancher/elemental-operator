@@ -205,7 +205,7 @@ ALL_VERIFY_CHECKS = manifests vendor
 verify: $(addprefix verify-,$(ALL_VERIFY_CHECKS))
 
 .PHONY: verify-manifests
-verify-gen: build-manifests
+verify-manifests: build-manifests
 	@if !(git diff --quiet HEAD); then \
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
