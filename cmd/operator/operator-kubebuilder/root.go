@@ -104,11 +104,7 @@ func NewOperatorCtrlRuntimeCommand() *cobra.Command {
 		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)")
 	_ = viper.BindPFlag("leader-elect-lease-duration", cmd.PersistentFlags().Lookup("leader-elect-lease-duration"))
 
-	cmd.PersistentFlags().DurationVar(&config.leaderElectionRenewDeadline, "leader-elect-retry-period", 10*time.Second,
-		"Duration that the leading controller manager will retry refreshing leadership before giving up (duration string)")
-	_ = viper.BindPFlag("leader-elect-retry-period", cmd.PersistentFlags().Lookup("leader-elect-retry-period"))
-
-	cmd.PersistentFlags().DurationVar(&config.leaderElectionRetryPeriod, "leader-elect-retry-period", 2*time.Second,
+	cmd.PersistentFlags().DurationVar(&config.leaderElectionRetryPeriod, "leader-elect-retry-period", 10*time.Second,
 		"Duration the LeaderElector clients should wait between tries of actions (duration string)")
 	_ = viper.BindPFlag("leader-elect-retry-period", cmd.PersistentFlags().Lookup("leader-elect-retry-period"))
 
