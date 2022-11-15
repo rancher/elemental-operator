@@ -37,13 +37,13 @@ type Syncer interface {
 	Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error)
 }
 
-type SyncerProvider interface {
+type Provider interface {
 	NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (Syncer, error)
 }
 
-type DefaultSyncerProvider struct{}
+type DefaultProvider struct{}
 
-func (sp DefaultSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (Syncer, error) {
+func (sp DefaultProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (Syncer, error) {
 	switch strings.ToLower(spec.Type) {
 	case jsonType:
 		j := &JSONSyncer{}

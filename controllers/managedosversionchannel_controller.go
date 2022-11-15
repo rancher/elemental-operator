@@ -39,9 +39,9 @@ const retry = 5 * time.Second
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
 type ManagedOSVersionChannelReconciler struct {
 	client.Client
-	Config         *rest.Config
+	config         *rest.Config
 	OperatorImage  string
-	syncerProvider syncer.SyncerProvider
+	syncerProvider syncer.Provider
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversionchannels,verbs=get;list;watch;create;update;patch;delete
@@ -50,6 +50,10 @@ type ManagedOSVersionChannelReconciler struct {
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=manangedosversions/status,verbs=get;update;patch
 
 func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.syncerProvider == nil {
+		r.syncerProvider = syncer.DefaultProvider{}
+	}
+	r.config = mgr.GetConfig()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.ManagedOSVersionChannel{}).
 		Complete(r)
@@ -118,7 +122,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		return ctrl.Result{}, nil
 	}
 
-	sync, err := r.syncerProvider.NewOSVersionsSyncer(managedOSVersionChannel.Spec, r.OperatorImage, r.Config)
+	sync, err := r.syncerProvider.NewOSVersionsSyncer(managedOSVersionChannel.Spec, r.OperatorImage, r.config)
 	if err != nil {
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
@@ -133,7 +137,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		lastSync := managedOSVersionChannel.Status.LastSyncedTime.Time
 		scheduledTime := lastSync.Add(interval)
 		if time.Now().Before(scheduledTime) {
-			return reconcile.Result{RequeueAfter: scheduledTime.Sub(time.Now())}, nil
+			return reconcile.Result{RequeueAfter: time.Until(scheduledTime)}, nil
 		}
 	}
 

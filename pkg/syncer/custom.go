@@ -45,8 +45,6 @@ type CustomSyncer struct {
 	operatorImage string
 }
 
-const requeue = 5 * time.Second
-
 func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	return []corev1.Container{
 		{

@@ -58,7 +58,6 @@ type rootConfig struct {
 	enableLeaderElection        bool
 	profilerAddress             string
 	metricsBindAddr             string
-	syncNamespaces              []string
 	syncPeriod                  time.Duration
 	leaderElectionLeaseDuration time.Duration
 	leaderElectionRenewDeadline time.Duration
@@ -228,7 +227,6 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 	}
 	if err := (&controllers.ManagedOSVersionChannelReconciler{
 		Client:        mgr.GetClient(),
-		Config:        mgr.GetConfig(),
 		OperatorImage: config.operatorImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersionChannel")
