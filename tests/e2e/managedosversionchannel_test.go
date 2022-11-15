@@ -52,6 +52,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"invalid",
 				"",
+				"",
 				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
 				nil,
 			)
@@ -112,6 +113,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",
 				"json",
+				"1m",
 				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
 				nil,
 			)
@@ -191,6 +193,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel2",
 				"custom",
+				"1m",
 				map[string]interface{}{
 					"image":      "opensuse/tumbleweed",
 					"command":    []string{"/bin/bash", "-c", "--"},

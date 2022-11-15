@@ -224,6 +224,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel3",
 				"custom",
+				"1m",
 				map[string]interface{}{
 					"image": discoveryPluginImage,
 					"envs": []map[string]string{
@@ -265,6 +266,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel4",
 				"custom",
+				"1m",
 				map[string]interface{}{
 					"image": discoveryPluginImage,
 					"envs": []map[string]string{
@@ -310,6 +312,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			mr := catalog.NewManagedOSVersionChannel(
 				"testchannel5",
 				"custom",
+				"1m",
 				map[string]interface{}{
 					"image": discoveryPluginImage,
 					"envs": []map[string]string{
