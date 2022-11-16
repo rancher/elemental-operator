@@ -20,6 +20,7 @@ type ManagedOSVersionChannelSpec struct {
 	Type             string                 `json:"type" yaml:"type"`
 	Options          map[string]interface{} `json:"options" yaml:"options"`
 	UpgradeContainer *ContainerSpec         `json:"upgradeContainer,omitempty" yaml:"upgradeContainer"`
+	SyncInterval     string                 `json:"syncInterval,omitempty" yaml:"syncInterval"`
 }
 
 type ManagedOSVersionChannel struct {
@@ -31,7 +32,7 @@ type ManagedOSVersionChannel struct {
 	Spec ManagedOSVersionChannelSpec `json:"spec,omitempty"`
 }
 
-func NewManagedOSVersionChannel(name string, t string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
+func NewManagedOSVersionChannel(name string, t string, interval string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
 	return &ManagedOSVersionChannel{
 		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
@@ -40,6 +41,7 @@ func NewManagedOSVersionChannel(name string, t string, options map[string]interf
 		Kind: "ManagedOSVersionChannel",
 		Spec: ManagedOSVersionChannelSpec{
 			Type:             t,
+			SyncInterval:     interval,
 			Options:          options,
 			UpgradeContainer: upgradeContainer,
 		},
