@@ -58,6 +58,12 @@ var _ = BeforeSuite(func() {
 
 	Expect(cl.Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
+			Name: "custom",
+		},
+	})).To(Succeed())
+
+	Expect(cl.Create(ctx, &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: "fleet-local",
 		},
 	})).To(Succeed())

@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package syncer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,8 +25,8 @@ import (
 	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
-	"github.com/sirupsen/logrus"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type JSONSyncer struct {
@@ -33,37 +34,39 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
-	logrus.Infof("Syncing '%s/%s' (JSON)", s.Namespace, s.Name)
+func (j *JSONSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Syncing (JSON)", "ManagedOSVersionChannel", ch.Name)
 
 	timeout := time.Second * 30
 	if j.Timeout != "" {
 		var err error
 		timeout, err = time.ParseDuration(j.Timeout)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse timeout: %w", err)
+			return nil, false, fmt.Errorf("failed to parse timeout: %w", err)
 		}
 	}
 	client := &http.Client{
 		Timeout: timeout,
 	}
 
-	logrus.Debug("Fetching JSON from ", j.URI)
+	logger.V(5).Info("Fetching JSON from ", j.URI)
 	resp, err := client.Get(j.URI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get %s: %w", j.URI, err)
+		return nil, false, fmt.Errorf("failed to get %s: %w", j.URI, err)
 	}
 
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, false, fmt.Errorf("failed to read response body: %w", err)
 	}
 	res := []elementalv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf, &res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		return nil, false, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	return res, nil
+	return res, false, nil
 }

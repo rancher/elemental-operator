@@ -35,6 +35,8 @@ spec:
             properties:
               options:
                 x-kubernetes-preserve-unknown-fields: true
+              syncInterval:
+                type: string
               type:
                 type: string
               upgradeContainer:
@@ -272,6 +274,9 @@ spec:
                   - type
                   type: object
                 type: array
+              lastSyncedTime:
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

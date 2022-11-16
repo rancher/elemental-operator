@@ -268,7 +268,6 @@ func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 			operatorNamespace,
 			"install",
 			"--create-namespace",
-			"--set", "sync_interval=30s",
 			"--set", "debug=true",
 			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
 			operatorName,
