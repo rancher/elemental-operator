@@ -32,12 +32,6 @@ spec:
         {{- end }}
         - --namespace
         - {{ .Release.Namespace }}
-        {{- if .Values.sync_namespaces}}
-        - --sync-namespaces
-        - {{ .Values.sync_namespaces }}
-        {{- end }}
-        - --sync-interval
-        - {{.Values.sync_interval }}
         - --operator-image
         - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         {{- if .Values.global.cattle.systemDefaultRegistry  }}
@@ -58,6 +52,8 @@ spec:
         image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         args:
         - operator-kubebuilder
+        - --operator-image
+        - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
       serviceAccountName: {{ .Release.Name }}
       {{- with .Values.tolerations }}
       tolerations:

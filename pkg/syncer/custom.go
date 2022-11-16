@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package types
+package syncer
 
 import (
 	"bytes"
@@ -25,20 +25,24 @@ import (
 	"time"
 
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	"github.com/sirupsen/logrus"
+
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/services/syncer/config"
 )
 
 type CustomSyncer struct {
 	upgradev1.ContainerSpec
-
 	MountPath  string `json:"mountPath"`
 	OutputFile string `json:"outputFile"`
+
+	kcl           *kubernetes.Clientset
+	operatorImage string
 }
 
 func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
@@ -57,8 +61,9 @@ func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
-	logrus.Infof("Syncing '%s/%s'", s.Namespace, s.Name)
+func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Syncing (Custom)", "ManagedOSVersionChannel", ch.Name)
 
 	mountDir := j.MountPath
 	outFile := j.OutputFile
@@ -70,23 +75,27 @@ func (j *CustomSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChann
 	}
 
 	serviceAccount := false
-	p, err := c.Clients.Core().Pod().Get(s.Namespace, s.Name, v1.GetOptions{})
+	pod := &corev1.Pod{}
+	err := cl.Get(ctx, client.ObjectKey{
+		Namespace: ch.Namespace,
+		Name:      ch.Name,
+	}, pod)
 	if err != nil {
-		logrus.Warnf("Failed to get pod for %s/%s: %v, creating a new one", s.Namespace, s.Name, err)
-		_, err = c.Clients.Core().Pod().Create(&corev1.Pod{
+		logger.V(5).Info("Failed to get", "pod", ch.Name, "error", err)
+		err = cl.Create(ctx, &corev1.Pod{
 			TypeMeta: v1.TypeMeta{
 				APIVersion: "v1",
 				Kind:       "Pod",
 			},
 			ObjectMeta: v1.ObjectMeta{
-				Name:      s.Name,
-				Namespace: s.Namespace,
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
 				OwnerReferences: []v1.OwnerReference{
 					{
 						APIVersion: elementalv1.GroupVersion.String(),
 						Kind:       "ManagedOSVersionChannel",
-						Name:       s.Name,
-						UID:        s.UID,
+						Name:       ch.Name,
+						UID:        ch.UID,
 						Controller: pointer.Bool(true),
 					},
 				},
@@ -105,7 +114,7 @@ func (j *CustomSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChann
 						MountPath: mountDir,
 					}},
 					Name:    "pause",
-					Image:   c.OperatorImage,
+					Image:   j.operatorImage,
 					Command: []string{},
 					Args:    []string{"display", "--file", outFile},
 				},
@@ -113,63 +122,53 @@ func (j *CustomSyncer) Sync(c config.Config, s elementalv1.ManagedOSVersionChann
 			},
 		})
 
-		// Requeueing
-		c.Requeuer.Requeue()
-		return nil, fmt.Errorf("failed to create pod for %s/%s: %w", s.Namespace, s.Name, err)
+		return nil, true, err
 	}
 
-	terminated := len(p.Status.InitContainerStatuses) > 0 && p.Status.InitContainerStatuses[0].Name == "runner" &&
-		p.Status.InitContainerStatuses[0].State.Terminated != nil
+	terminated := len(pod.Status.InitContainerStatuses) > 0 && pod.Status.InitContainerStatuses[0].Name == "runner" &&
+		pod.Status.InitContainerStatuses[0].State.Terminated != nil
 
-	failed := terminated && p.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
+	failed := terminated && pod.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
 
 	if !terminated {
-		logrus.Infof("Waiting for '%s/%s' to finish", p.Namespace, p.Name)
+		logger.Info("Waiting pod to finish", "pod", pod.Name)
 
-		c.Requeuer.Requeue()
-		return nil, err
+		return nil, true, nil
 	} else if failed {
-		// reattempt
-		logrus.Infof("'%s/%s' failed, retrying", p.Namespace, p.Name)
+		logger.Info("Synchronization pod failed", "pod", pod.Name)
 
-		err = c.Clients.Core().Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
-		if err != nil {
-			return nil, err
-		}
-		return nil, err
+		err := cl.Delete(ctx, pod)
+		return nil, true, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	logCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req := c.Clients.K8s().CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "pause"})
-	podLogs, err := req.Stream(ctx)
+	req := j.kcl.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "pause"})
+	podLogs, err := req.Stream(logCtx)
 	if err != nil {
-		c.Requeuer.Requeue()
-		return nil, fmt.Errorf("error in opening stream")
+		return nil, true, fmt.Errorf("error in opening stream")
 	}
 	defer podLogs.Close()
 
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
-		c.Requeuer.Requeue()
-		return nil, fmt.Errorf("error in copy information from podLogs to buf")
+		return nil, true, fmt.Errorf("error in copy information from podLogs to buf")
 	}
 
-	err = c.Clients.Core().Pod().Delete(p.Namespace, p.Name, &v1.DeleteOptions{})
+	err = cl.Delete(ctx, pod)
 	if err != nil {
-		c.Requeuer.Requeue()
-		return nil, err
+		return nil, true, err
 	}
 
-	logrus.Infof("Got '%s' from '%s/%s'", buf.String(), s.Namespace, s.Name)
+	logger.Info("Got raw versions", "json", buf.String())
 	res := []elementalv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf.Bytes(), &res)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 
-	return res, nil
+	return res, false, nil
 }

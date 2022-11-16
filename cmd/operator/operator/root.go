@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/rancher/elemental-operator/pkg/operator"
-	"github.com/rancher/elemental-operator/pkg/services/syncer"
 	"github.com/rancher/elemental-operator/pkg/types"
 	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -92,7 +91,6 @@ func operatorRun(config *rootConfig) {
 		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(config.Namespace),
 		operator.WithDefaultRegistry(config.DefaultRegistry),
-		operator.WithServices(syncer.UpgradeChannelSync(config.SyncInterval, requeuer, config.OperatorImage, false, config.SyncNamespaces...)),
 	); err != nil {
 		logrus.Fatal(err)
 	}

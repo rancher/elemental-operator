@@ -17,23 +17,70 @@ limitations under the License.
 package controllers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/test"
+	ctrlHelpers "github.com/rancher/elemental-operator/tests/controllerHelpers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const syncJSON = `[
+  {
+    "metadata": {
+      "name": "v0.1.0"
+    },
+    "spec": {
+      "version": "v0.1.0",
+      "type": "container",
+      "metadata": {
+        "upgradeImage": "foo/bar:v0.1.0"
+      }
+    }
+  },
+  {
+    "metadata": {
+      "name": "v0.2.0"
+    },
+    "spec": {
+      "version": "v0.2.0",
+      "type": "container",
+      "metadata": {
+        "upgradeImage": "foo/bar:v0.2.0"
+      }
+    }
+  }
+]`
+
+const invalidJSON = `[
+  {
+    "metadata": {
+      "name": "v0.1.0"
+    },
+    "spec": {
+      "version": "v0.1.0",
+      "type": "container",
+      "metadata": {
+        "upgradeImage": "foo/bar:v0.1.0"
+    }
+  }
+]`
+
 var _ = Describe("reconcile managed os version channel", func() {
 	var r *ManagedOSVersionChannelReconciler
 	var managedOSVersionChannel *elementalv1.ManagedOSVersionChannel
+	var syncerProvider *ctrlHelpers.FakeSyncerProvider
 
 	BeforeEach(func() {
+		syncerProvider = &ctrlHelpers.FakeSyncerProvider{JSON: syncJSON}
 		r = &ManagedOSVersionChannelReconciler{
-			Client: cl,
+			Client:         cl,
+			syncerProvider: syncerProvider,
 		}
 
 		managedOSVersionChannel = &elementalv1.ManagedOSVersionChannel{
@@ -48,17 +95,20 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(test.CleanupAndWait(ctx, cl, managedOSVersionChannel)).To(Succeed())
 	})
 
-	It("should reconcile managed os version channel object", func() {
-		managedOSVersionChannel.Spec.Type = "type"
+	It("should reconcile and sync managed os version channel object", func() {
+		managedOSVersion := &elementalv1.ManagedOSVersion{}
+		managedOSVersionChannel.Spec.Type = "custom"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
 
-		_, err := r.Reconcile(ctx, reconcile.Request{
+		res1, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: managedOSVersionChannel.Namespace,
 				Name:      managedOSVersionChannel.Name,
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
+		Expect(res1.RequeueAfter).Should(BeNumerically(">", 50*time.Second))
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -67,20 +117,37 @@ var _ = Describe("reconcile managed os version channel", func() {
 
 		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
 		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccefullyCreatedReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.SyncedReason))
 		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-	})
 
-	It("should reconcile managed os version channel object without a type", func() {
-		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersion)).To(Succeed())
 
-		_, err := r.Reconcile(ctx, reconcile.Request{
+		res2, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: managedOSVersionChannel.Namespace,
 				Name:      managedOSVersionChannel.Name,
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
+		Expect(res2.RequeueAfter).Should(BeNumerically("<", res1.RequeueAfter))
+		Expect(res2.RequeueAfter).Should(BeNumerically(">", 50*time.Second))
+	})
+
+	It("should reconcile managed os version channel object without a type", func() {
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		res, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: managedOSVersionChannel.Namespace,
+				Name:      managedOSVersionChannel.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -92,5 +159,110 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
 		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("spec.Type can't be empty"))
+	})
+
+	It("should reconcile managed os version channel object without a sync interval", func() {
+		managedOSVersionChannel.Spec.Type = "custom"
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		res, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: managedOSVersionChannel.Namespace,
+				Name:      managedOSVersionChannel.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersionChannel)).To(Succeed())
+
+		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("spec.SyncInterval is not parseable"))
+	})
+
+	It("should reconcile managed os version channel object with a not valid sync interval", func() {
+		managedOSVersionChannel.Spec.Type = "custom"
+		managedOSVersionChannel.Spec.SyncInterval = "notATimeDuration"
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		res, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: managedOSVersionChannel.Namespace,
+				Name:      managedOSVersionChannel.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersionChannel)).To(Succeed())
+
+		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("spec.SyncInterval is not parseable"))
+	})
+
+	It("should reconcile managed os version channel object with a not valid type", func() {
+		syncerProvider.UnknownType = "unknown"
+		managedOSVersionChannel.Spec.Type = "unknown"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		res, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: managedOSVersionChannel.Namespace,
+				Name:      managedOSVersionChannel.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersionChannel)).To(Succeed())
+
+		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("failed to create a syncer"))
+	})
+
+	It("it fails to reconcile a managed os version channel when channel provides invalid JSON", func() {
+		syncerProvider.JSON = invalidJSON
+		managedOSVersionChannel.Spec.Type = "json"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		res, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: managedOSVersionChannel.Namespace,
+				Name:      managedOSVersionChannel.Name,
+			},
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(5 * time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersionChannel)).To(Succeed())
+
+		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.FailedToSyncReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("Failed syncing channel"))
 	})
 })
