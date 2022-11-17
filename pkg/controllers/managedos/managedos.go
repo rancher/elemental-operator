@@ -93,12 +93,12 @@ func (h *handler) OnChange(mos *elm.ManagedOSImage, status elm.ManagedOSImageSta
 
 	bundle := &v1alpha1.Bundle{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name.SafeConcatName("mos", mos.Name),
+			Name:      name.SafeConcatName("mos", mos.Name, string(mos.UID)),
 			Namespace: mos.Namespace,
 		},
 		Spec: v1alpha1.BundleSpec{
 			Resources:               resources,
-			BundleDeploymentOptions: v1alpha1.BundleDeploymentOptions{},
+			BundleDeploymentOptions: v1alpha1.BundleDeploymentOptions{DefaultNamespace: mos.Namespace},
 			RolloutStrategy:         mos.Spec.ClusterRolloutStrategy,
 			Targets:                 mos.Spec.Targets,
 		},

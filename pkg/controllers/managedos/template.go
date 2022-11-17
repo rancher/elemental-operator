@@ -27,6 +27,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/clients"
 	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/name"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -165,10 +166,12 @@ func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 
 	upgradeContainerSpec.Env = metadataEnv
 
+	objectName := name.SafeConcatName("os-upgrader", mos.Name, string(mos.UID))
+
 	return []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "os-upgrader",
+				Name: objectName,
 			},
 			Rules: []rbacv1.PolicyRule{
 				{
@@ -185,28 +188,28 @@ func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 		},
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "os-upgrader",
+				Name: objectName,
 			},
 			Subjects: []rbacv1.Subject{{
 				Kind:      "ServiceAccount",
-				Name:      "os-upgrader",
+				Name:      objectName,
 				Namespace: clients.SystemNamespace,
 			}},
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "ClusterRole",
-				Name:     "os-upgrader",
+				Name:     objectName,
 			},
 		},
 		&corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader",
+				Name:      objectName,
 				Namespace: clients.SystemNamespace,
 			},
 		},
 		&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader-data",
+				Name:      objectName,
 				Namespace: clients.SystemNamespace,
 				Labels: map[string]string{
 					v1beta1.ManagedSecretLabel: "true",
@@ -222,7 +225,7 @@ func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 				APIVersion: "upgrade.cattle.io/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader",
+				Name:      objectName,
 				Namespace: clients.SystemNamespace,
 			},
 			Spec: upgradev1.PlanSpec{
@@ -231,13 +234,13 @@ func (h *handler) objects(mos *elm.ManagedOSImage) ([]runtime.Object, error) {
 				Tolerations: []corev1.Toleration{{
 					Operator: corev1.TolerationOpExists,
 				}},
-				ServiceAccountName: "os-upgrader",
+				ServiceAccountName: objectName,
 				NodeSelector:       selector,
 				Cordon:             cordon,
 				Drain:              mos.Spec.Drain,
 				Prepare:            mos.Spec.Prepare,
 				Secrets: []upgradev1.SecretSpec{{
-					Name: "os-upgrader-data",
+					Name: objectName,
 					Path: "/run/data",
 				}},
 				Upgrade: upgradeContainerSpec,
