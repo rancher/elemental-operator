@@ -49,8 +49,13 @@ type ManagedOSVersionChannelSpec struct {
 type ManagedOSVersionChannelStatus struct {
 	// Conditions describe the state of the managed OS version object.
 	// +optional
-	Conditions     []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
-	LastSyncedTime *metav1.Time       `json:"lastSyncedTime,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// LastSyncedTime is the timestamp of the last synchronization
+	// +optional
+	LastSyncedTime *metav1.Time `json:"lastSyncedTime,omitempty"`
+	// Failures field stores the number of consecutive failed attempts to synchronize. Invalid configurations are not counted
+	// +optional
+	Failures uint32 `json:"failures,omitempty"`
 }
 
 // +kubebuilder:object:root=true

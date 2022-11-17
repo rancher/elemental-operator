@@ -80,7 +80,10 @@ const (
 	// SyncingReason documents that managed OS version channel is synchronizing managed OS versions
 	SyncingReason = "Synchronizing"
 
-	// SyncedReason documents that managed OS version channel finalized synchroniziation
+	// GotChannelDataReason documents that managed OS version channel successfully fetched managed OS versions data
+	GotChannelDataReason = "GotChannelData"
+
+	// SyncedReason documents that managed OS version channel finalized synchroniziation and managed OS versions, if any, were created
 	SyncedReason = "Synchronized"
 
 	// FailedToSyncReason documents that managed OS version channel failed synchronization
