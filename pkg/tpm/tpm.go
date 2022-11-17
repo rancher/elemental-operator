@@ -17,36 +17,25 @@ limitations under the License.
 package tpm
 
 import (
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/clients"
-	elmcontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/elemental.cattle.io/v1beta1"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"context"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	machineByHash = "machineByHash"
-	tpmCACert     = "tpm-ca"
+	tpmCACert = "tpm-ca"
 )
 
 type AuthServer struct {
-	machineCache  elmcontrollers.MachineInventoryCache
-	machineClient elmcontrollers.MachineInventoryClient
-	secretCache   corecontrollers.SecretCache
+	context.Context
+	client.Client
 }
 
-func New(clients clients.ClientInterface) *AuthServer {
+func New(ctx context.Context, cl client.Client) *AuthServer {
 	a := &AuthServer{
-		machineCache:  clients.Elemental().MachineInventory().Cache(),
-		machineClient: clients.Elemental().MachineInventory(),
-		secretCache:   clients.Core().Secret().Cache(),
+		Context: ctx,
+		Client:  cl,
 	}
-
-	a.machineCache.AddIndexer(machineByHash, func(obj *elm.MachineInventory) ([]string, error) {
-		if obj.Spec.TPMHash == "" {
-			return nil, nil
-		}
-		return []string{obj.Spec.TPMHash}, nil
-	})
 
 	return a
 }
