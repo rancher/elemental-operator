@@ -25,6 +25,8 @@ import (
 	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,9 +36,9 @@ type JSONSyncer struct {
 	Timeout string `json:"timeout"`
 }
 
-func (j *JSONSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error) {
+// Sync attemps to get a list of managed os versions based on the managed os version channel configuration, on success it updates the ready condition
+func (j *JSONSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	logger := ctrl.LoggerFrom(ctx)
-
 	logger.Info("Syncing (JSON)", "ManagedOSVersionChannel", ch.Name)
 
 	timeout := time.Second * 30
@@ -44,7 +46,7 @@ func (j *JSONSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1
 		var err error
 		timeout, err = time.ParseDuration(j.Timeout)
 		if err != nil {
-			return nil, false, fmt.Errorf("failed to parse timeout: %w", err)
+			return nil, fmt.Errorf("failed to parse timeout: %w", err)
 		}
 	}
 	client := &http.Client{
@@ -54,19 +56,26 @@ func (j *JSONSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1
 	logger.V(5).Info("Fetching JSON from ", j.URI)
 	resp, err := client.Get(j.URI)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to get %s: %w", j.URI, err)
+		return nil, fmt.Errorf("failed to get %s: %w", j.URI, err)
 	}
 
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	res := []elementalv1.ManagedOSVersion{}
 
 	err = json.Unmarshal(buf, &res)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	return res, false, nil
+	meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.GotChannelDataReason,
+		Status:  metav1.ConditionFalse,
+		Message: "Got valid channel data",
+	})
+
+	return res, nil
 }

@@ -27,7 +27,9 @@ import (
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,6 +37,9 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 )
+
+const defaultMountDir = "/data"
+const defaultOutFile = defaultMountDir + "/output"
 
 type CustomSyncer struct {
 	upgradev1.ContainerSpec
@@ -61,68 +66,35 @@ func (j *CustomSyncer) toContainers(mount string) []corev1.Container {
 	}
 }
 
-func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error) {
+// Sync attemps to get a list of managed os versions based on the managed os version channel configuration, on success it updates the ready condition
+func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Syncing (Custom)", "ManagedOSVersionChannel", ch.Name)
 
-	mountDir := j.MountPath
-	outFile := j.OutputFile
-	if mountDir == "" {
-		mountDir = "/data"
-	}
-	if outFile == "" {
-		outFile = "/data/output"
-	}
+	readyCondition := meta.FindStatusCondition(ch.Status.Conditions, elementalv1.ReadyCondition)
 
-	serviceAccount := false
+	// Check if synchronization had started before
+	if readyCondition != nil && readyCondition.Reason == elementalv1.SyncingReason {
+		return j.fecthDataFromPod(ctx, cl, ch)
+	}
+	// Start syncing process
+	err := j.createSyncerPod(ctx, cl, ch)
+	return nil, err
+}
+
+func (j *CustomSyncer) fecthDataFromPod(
+	ctx context.Context, cl client.Client,
+	ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
 	pod := &corev1.Pod{}
 	err := cl.Get(ctx, client.ObjectKey{
 		Namespace: ch.Namespace,
 		Name:      ch.Name,
 	}, pod)
 	if err != nil {
-		logger.V(5).Info("Failed to get", "pod", ch.Name, "error", err)
-		err = cl.Create(ctx, &corev1.Pod{
-			TypeMeta: v1.TypeMeta{
-				APIVersion: "v1",
-				Kind:       "Pod",
-			},
-			ObjectMeta: v1.ObjectMeta{
-				Name:      ch.Name,
-				Namespace: ch.Namespace,
-				OwnerReferences: []v1.OwnerReference{
-					{
-						APIVersion: elementalv1.GroupVersion.String(),
-						Kind:       "ManagedOSVersionChannel",
-						Name:       ch.Name,
-						UID:        ch.UID,
-						Controller: pointer.Bool(true),
-					},
-				},
-			},
-			Spec: corev1.PodSpec{
-				RestartPolicy:                corev1.RestartPolicyOnFailure,
-				AutomountServiceAccountToken: &serviceAccount,
-				InitContainers:               j.toContainers(mountDir),
-				Volumes: []corev1.Volume{{
-					Name:         "output",
-					VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-				}},
-				Containers: []corev1.Container{{
-					VolumeMounts: []corev1.VolumeMount{{
-						Name:      "output",
-						MountPath: mountDir,
-					}},
-					Name:    "pause",
-					Image:   j.operatorImage,
-					Command: []string{},
-					Args:    []string{"display", "--file", outFile},
-				},
-				},
-			},
-		})
-
-		return nil, true, err
+		logger.Error(err, "failed getting pod resource", "pod", pod.Name)
+		return nil, err
 	}
 
 	terminated := len(pod.Status.InitContainerStatuses) > 0 && pod.Status.InitContainerStatuses[0].Name == "runner" &&
@@ -131,14 +103,16 @@ func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elemental
 	failed := terminated && pod.Status.InitContainerStatuses[0].State.Terminated.ExitCode != 0
 
 	if !terminated {
-		logger.Info("Waiting pod to finish", "pod", pod.Name)
-
-		return nil, true, nil
+		logger.Info("Waiting pod to finish, not terminated", "pod", pod.Name)
+		return nil, nil
 	} else if failed {
-		logger.Info("Synchronization pod failed", "pod", pod.Name)
+		errMsg := "Synchronization pod failed"
+		logger.Error(fmt.Errorf(errMsg), "pod", pod.Name)
 
-		err := cl.Delete(ctx, pod)
-		return nil, true, err
+		if err := cl.Delete(ctx, pod); err != nil {
+			logger.Error(err, "could not delete the failed pod", "pod", pod.Name)
+		}
+		return nil, fmt.Errorf(errMsg)
 	}
 
 	logCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -147,19 +121,20 @@ func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elemental
 	req := j.kcl.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "pause"})
 	podLogs, err := req.Stream(logCtx)
 	if err != nil {
-		return nil, true, fmt.Errorf("error in opening stream")
+		return nil, fmt.Errorf("error in opening stream")
 	}
 	defer podLogs.Close()
 
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
-		return nil, true, fmt.Errorf("error in copy information from podLogs to buf")
+		return nil, fmt.Errorf("error in copy information from podLogs to buf")
 	}
 
 	err = cl.Delete(ctx, pod)
 	if err != nil {
-		return nil, true, err
+		logger.Error(err, "could not delete the failed pod", "pod", pod.Name)
+		return nil, err
 	}
 
 	logger.Info("Got raw versions", "json", buf.String())
@@ -167,8 +142,82 @@ func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elemental
 
 	err = json.Unmarshal(buf.Bytes(), &res)
 	if err != nil {
-		return nil, true, err
+		logger.Error(err, "Failed unmarshalling managedOSVersions")
+		return nil, err
 	}
 
-	return res, false, nil
+	meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.GotChannelDataReason,
+		Status:  metav1.ConditionFalse,
+		Message: "Got valid channel data",
+	})
+
+	return res, nil
+}
+
+// createSyncerPod creates the pod according to the managed OS version channel configuration
+func (j *CustomSyncer) createSyncerPod(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Launching syncer pod", "pod", ch.Name)
+
+	mountDir := j.MountPath
+	outFile := j.OutputFile
+	if mountDir == "" {
+		mountDir = defaultMountDir
+	}
+	if outFile == "" {
+		outFile = defaultOutFile
+	}
+
+	serviceAccount := false
+	err := cl.Create(ctx, &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ch.Name,
+			Namespace: ch.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: elementalv1.GroupVersion.String(),
+					Kind:       "ManagedOSVersionChannel",
+					Name:       ch.Name,
+					UID:        ch.UID,
+					Controller: pointer.Bool(true),
+				},
+			},
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy:                corev1.RestartPolicyOnFailure,
+			AutomountServiceAccountToken: &serviceAccount,
+			InitContainers:               j.toContainers(mountDir),
+			Volumes: []corev1.Volume{{
+				Name:         "output",
+				VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+			}},
+			Containers: []corev1.Container{{
+				VolumeMounts: []corev1.VolumeMount{{
+					Name:      "output",
+					MountPath: mountDir,
+				}},
+				Name:    "pause",
+				Image:   j.operatorImage,
+				Command: []string{},
+				Args:    []string{"display", "--file", outFile},
+			}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.SyncingReason,
+		Status:  metav1.ConditionFalse,
+		Message: "On going channel synchronization",
+	})
+	return nil
 }
