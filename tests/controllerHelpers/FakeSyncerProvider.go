@@ -25,6 +25,9 @@ import (
 	"github.com/rancher/elemental-operator/pkg/syncer"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type FakeSyncer struct {
@@ -36,15 +39,22 @@ type FakeSyncerProvider struct {
 	UnknownType string
 }
 
-func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error) {
+func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	res := []elementalv1.ManagedOSVersion{}
 
 	err := json.Unmarshal([]byte(fs.json), &res)
 	if err != nil {
-		return nil, true, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
 
-	return res, false, nil
+	meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.GotChannelDataReason,
+		Status:  metav1.ConditionFalse,
+		Message: "Got valid channel data",
+	})
+
+	return res, nil
 }
 
 func (sp FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (syncer.Syncer, error) {

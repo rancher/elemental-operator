@@ -113,7 +113,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel",
 				"json",
-				"1m",
+				"10m",
 				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
 				nil,
 			)
@@ -193,7 +193,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			ui := catalog.NewManagedOSVersionChannel(
 				"testchannel2",
 				"custom",
-				"1m",
+				"10m",
 				map[string]interface{}{
 					"image":      "opensuse/tumbleweed",
 					"command":    []string{"/bin/bash", "-c", "--"},
@@ -221,10 +221,41 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			Eventually(func() string {
 				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
-
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("registry.com/repository/image:v2"),
+			)
+		})
+
+		It("on a broken a channel it stops on failed sync ready reason", func() {
+
+			By("Create a ManagedOSVersionChannel with wrong content")
+			ui := catalog.NewManagedOSVersionChannel(
+				"testchannel2",
+				"custom",
+				"10m",
+				map[string]interface{}{
+					"image":   "opensuse/tumbleweed",
+					"command": []string{"/bin/bash", "-c", "--"},
+					"args":    []string{fmt.Sprintf("echo '%s' > /output/data", string("wrong content"))},
+				},
+				nil,
+			)
+
+			err := k.ApplyYAML(fleetNamespace, "testchannel2", ui)
+			Expect(err).ShouldNot(HaveOccurred())
+			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel2")
+
+			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
+
+			Expect(string(r)).To(Equal("custom"))
+
+			Eventually(func() string {
+				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.status.conditions[0].status}`)
+				fmt.Println(string(r))
+				return string(r)
+			}, 2*time.Minute, 2*time.Second).Should(
+				Equal("True"),
 			)
 		})
 	})
