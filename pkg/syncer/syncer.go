@@ -34,7 +34,8 @@ const (
 )
 
 type Syncer interface {
-	Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, bool, error)
+	// Sync function returns a list of managed os versions and sets the ready condition of the channel status accordingly
+	Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error)
 }
 
 type Provider interface {
