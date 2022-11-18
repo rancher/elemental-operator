@@ -157,6 +157,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	vers, err := sync.Sync(ctx, r.Client, managedOSVersionChannel)
 	if err != nil {
 		failCount++
+		logger.Error(err, "Synchronization failed")
 		if failCount >= maxRetries {
 			// Failed syncing, forget about it until the next interval
 			meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
@@ -190,6 +191,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	err = r.syncVersions(ctx, vers, managedOSVersionChannel)
 	if err != nil {
 		failCount++
+		logger.Error(err, "Failed creating managed os version resources")
 		if failCount >= maxRetries {
 			// Failed syncing, forget about it until the next interval
 			meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
