@@ -121,19 +121,21 @@ func (j *CustomSyncer) fecthDataFromPod(
 	req := j.kcl.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "pause"})
 	podLogs, err := req.Stream(logCtx)
 	if err != nil {
-		return nil, fmt.Errorf("error in opening stream")
+		logger.Error(err, "failed opening stream")
+		return nil, err
 	}
 	defer podLogs.Close()
 
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, podLogs)
 	if err != nil {
-		return nil, fmt.Errorf("error in copy information from podLogs to buf")
+		logger.Error(err, "failed copying logs to buffer")
+		return nil, err
 	}
 
 	err = cl.Delete(ctx, pod)
 	if err != nil {
-		logger.Error(err, "could not delete the failed pod", "pod", pod.Name)
+		logger.Error(err, "failed deleting pod", "pod", pod.Name)
 		return nil, err
 	}
 
@@ -210,6 +212,7 @@ func (j *CustomSyncer) createSyncerPod(ctx context.Context, cl client.Client, ch
 		},
 	})
 	if err != nil {
+		logger.Error(err, "Failed creating pod", "pod", ch.Name)
 		return err
 	}
 

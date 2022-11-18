@@ -252,7 +252,6 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			Eventually(func() string {
 				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.status.conditions[0].status}`)
-				fmt.Println(string(r))
 				return string(r)
 			}, 2*time.Minute, 2*time.Second).Should(
 				Equal("True"),
