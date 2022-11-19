@@ -39,7 +39,9 @@ import (
 
 const (
 	k3sKubeConfig         = "/etc/rancher/k3s/k3s.yaml"
+	k3sKubectl            = "/usr/local/bin/kubectl"
 	rkeKubeConfig         = "/etc/rancher/rke2/rke2.yaml"
+	rkeKubeclt            = "/var/lib/rancher/rke2/bin/kubectl"
 	elementalAgentPlanDir = "/var/lib/elemental/agent/applied/"
 	rancherAgentPlanDir   = "/var/lib/rancher/agent/applied/"
 	rancherAgentConf      = "/etc/rancher/agent/config.yaml"
@@ -65,10 +67,13 @@ func getServices() []string {
 		"cos-setup-rootfs",
 		"cos-immutable-rootfs",
 		"elemental",
+		"NetworkManager",
 	}
 }
 
 var hostName = "unknown"
+var kubectlconfig = ""
+var kubectl = ""
 
 func main() {
 	cmd := &cobra.Command{
@@ -157,16 +162,21 @@ func run() (err error) {
 	_ = os.WriteFile(fmt.Sprintf("%s/elemental-register.version", tempDir), out, os.ModePerm)
 
 	// Check if we have a kubeconfig before starting
-	if k, err := getKubeConfig(); k != "" && err == nil {
+
+	kubectlconfig, _ = getKubeConfig()
+	kubectl, _ = getKubectl()
+
+	if kubectlconfig != "" && kubectl != "" {
 		// get k8s info
-		for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments"} {
+		for _, crd := range []string{"pods", "secrets", "nodes", "services", "deployments", "plans", "apps", "jobs"} {
 			logrus.Infof("Getting k8s info for %s", crd)
 			getK8sResource(crd, tempDir)
+			describeK8sResource(crd, tempDir)
 		}
 		// get k8s logs
-		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx"} {
+		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx", "calico-system"} {
 			logrus.Infof("Getting k8s logs for namespace %s", namespace)
-			getK8sPodsLogs("", namespace, tempDir)
+			getK8sPodsLogs(namespace, tempDir)
 		}
 	} else {
 		logrus.Warnf("No kubeconfig available, skipping getting k8s items")
@@ -179,6 +189,7 @@ func run() (err error) {
 	}
 
 	finalFileName := fmt.Sprintf("%s-%s.tar.gz", hostName, time.Now().Format(time.RFC3339))
+	finalFileName = strings.Replace(finalFileName, ":", "", -1)
 	file, err := os.Create(finalFileName)
 	defer func(file *os.File) {
 		_ = file.Close()
@@ -264,14 +275,15 @@ func compress(src string, buf io.Writer) error {
 }
 
 func getKubeConfig() (string, error) {
-	var kubectlconfig string
 	// First use it the env var if available
 	kubectlconfig = os.Getenv("KUBECONFIG")
 	if kubectlconfig == "" {
 		if existsNoWarn(k3sKubeConfig) {
+			logrus.Infof("Found k3s kubeconfig at %s", k3sKubeConfig)
 			kubectlconfig = k3sKubeConfig
 		}
 		if existsNoWarn(rkeKubeConfig) {
+			logrus.Infof("Found rke kubeconfig at %s", rkeKubeConfig)
 			kubectlconfig = rkeKubeConfig
 		}
 		// This should not happen as far as I understand
@@ -283,78 +295,90 @@ func getKubeConfig() (string, error) {
 }
 
 func getK8sResource(resource string, dest string) {
-	kubectlconfig, err := getKubeConfig()
+	var err error
+
+	cmd := exec.Command(
+		kubectl,
+		fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
+		"get",
+		resource,
+		"--all-namespaces",
+		"-o",
+		"wide",
+		"--show-labels",
+	)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
+		logrus.Warnf("Failed to get %s: %s", resource, err)
+	}
+	// We still want to write the output if the resource was not found or another issue occured as that can shed info on whats going on
+	_ = os.WriteFile(fmt.Sprintf("%s/%s-resource.log", dest, resource), out, os.ModePerm)
+
+}
+
+func describeK8sResource(resource string, dest string) {
+	var err error
+
+	cmd := exec.Command(
+		kubectl,
+		fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
+		"describe",
+		resource,
+		"--all-namespaces",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logrus.Warnf("Failed to get %s", resource)
+	}
+	// We still want to write the output if the resource was not found or another issue occured as that can shed info on whats going on
+	_ = os.WriteFile(fmt.Sprintf("%s/%s-describe.log", dest, resource), out, os.ModePerm)
+}
+
+// getK8sPodsLogs will get ALL the logs for ALL the pods in a given namespace
+func getK8sPodsLogs(namespace, dest string) {
+	var err error
+	var podNames []string
+
+	cmd := exec.Command(
+		kubectl,
+		fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
+		"get",
+		"pods",
+		"-n",
+		namespace,
+		"-o",
+		"jsonpath='{.items[*].metadata.name}'",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logrus.Warnf("Failed to get pod names in namespace %s: %s", namespace, err)
+	}
+	cleanedOut := strings.Replace(string(out), "'", "", -1)
+	if len(cleanedOut) == 0 {
+		logrus.Warnf("No pods in namespace %s", namespace)
 		return
 	}
+	podNames = strings.Split(cleanedOut, " ")
 
-	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
+	for _, pod := range podNames {
+		logrus.Debugf("Getting logs for pod %s", pod)
+		if pod == "" {
+			continue
+		}
 		cmd := exec.Command(
-			"kubectl",
+			kubectl,
 			fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
-			"get",
-			resource,
-			"--all-namespaces",
-			"-o",
-			"wide",
-			"--show-labels",
+			"logs",
+			pod,
+			"-n",
+			namespace,
 		)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			logrus.Warnf("Failed to get %s", resource)
+			logrus.Warnf("Failed to get %s on namespace %s: %s", pod, namespace, err)
 		}
-		// We still want to write the output if the resource was not found or another issue occured as that can shed info on whats going on
-		_ = os.WriteFile(fmt.Sprintf("%s/%s-resource.log", dest, resource), out, os.ModePerm)
-	}
-}
-
-// getK8sPodsLogs gets the logs of the given resource on the given namespace, unless the resource is empty, in which case it
-// will get ALL the logs for ALL the pods in a given namespace
-func getK8sPodsLogs(resource, namespace, dest string) {
-	var podNames []string
-	kubectlconfig, err := getKubeConfig()
-	if err != nil {
-		logrus.Warnf("Could not get kubeconfig, skipping k8s info gathering: %s", err)
-		return
-	}
-
-	if _, kubectlExists := exec.LookPath("kubectl"); kubectlExists != nil {
-		if resource == "" {
-			cmd := exec.Command(
-				"kubectl",
-				"get",
-				"pods",
-				"-n",
-				namespace,
-				"-o",
-				"jsonpath='{.items[*].metadata.name}'",
-			)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				logrus.Warnf("Failed to get pod names in namespace %s: %s", namespace, err)
-			}
-			podNames = strings.Split(string(out), " ")
-		} else {
-			podNames = []string{resource}
-		}
-
-		for _, pod := range podNames {
-			cmd := exec.Command(
-				"kubectl",
-				fmt.Sprintf("--kubeconfig=%s", kubectlconfig),
-				"logs",
-				pod,
-				"-n",
-				namespace,
-			)
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				logrus.Warnf("Failed to get %s on namespace %s: %s", resource, pod, err)
-			}
-			// We still want to write the output if the resource was not found or another issue occurred as that can shed info on what's going on
-			_ = os.WriteFile(fmt.Sprintf("%s/%s-%s-logs.log", dest, resource, pod), out, os.ModePerm)
-		}
+		// We still want to write the output if the resource was not found or another issue occurred as that can shed info on what's going on
+		_ = os.WriteFile(fmt.Sprintf("%s/%s-%s-logs.log", dest, namespace, pod), out, os.ModePerm)
 	}
 }
 
@@ -497,4 +521,17 @@ func copyDir(srcdir string, destdir string) {
 		cs, cd := filepath.Join(srcdir, content.Name()), filepath.Join(destdir, content.Name())
 		copyFilesInDir(cs, cd)
 	}
+}
+
+func getKubectl() (string, error) {
+	if existsNoWarn(k3sKubectl) {
+		logrus.Infof("Found k3s kubectl at %s", k3sKubectl)
+		return k3sKubectl, nil
+	}
+	if existsNoWarn(rkeKubeclt) {
+		logrus.Infof("Found rke kubectl at %s", rkeKubeclt)
+		return rkeKubeclt, nil
+	}
+
+	return "", errors.New("Cant find kubectl")
 }
