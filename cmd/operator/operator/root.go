@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/rancher/elemental-operator/pkg/operator"
-	"github.com/rancher/elemental-operator/pkg/types"
 	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
@@ -82,13 +81,7 @@ func operatorRun(config *rootConfig) {
 
 	logrus.Infof("Starting controller at namespace %s. Upgrade sync interval at: %s", config.Namespace, config.SyncInterval)
 
-	// We do want a stack for requeuer here, but we want the syncer to
-	// tick sequentially. We can turn the behavior the other way around
-	// by setting UpgradeChannelSync concurrent to true.
-	requeuer := types.ConcurrentRequeuer(100)
-
 	if err := operator.Run(ctx,
-		operator.WithRequeuer(requeuer),
 		operator.WithNamespace(config.Namespace),
 		operator.WithDefaultRegistry(config.DefaultRegistry),
 	); err != nil {
