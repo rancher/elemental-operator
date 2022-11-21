@@ -174,7 +174,7 @@ func run() (err error) {
 			describeK8sResource(crd, tempDir)
 		}
 		// get k8s logs
-		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx", "calico-system"} {
+		for _, namespace := range []string{"cattle-system", "kube-system", "ingress-nginx", "calico-system", "cattle-fleet-system"} {
 			logrus.Infof("Getting k8s logs for namespace %s", namespace)
 			getK8sPodsLogs(namespace, tempDir)
 		}
