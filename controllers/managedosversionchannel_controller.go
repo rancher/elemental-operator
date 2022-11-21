@@ -174,7 +174,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			})
 			managedOSVersionChannel.Status.LastSyncedTime = &now
 			managedOSVersionChannel.Status.Failures = 0
-			return reconcile.Result{RequeueAfter: interval}, err
+			return reconcile.Result{RequeueAfter: interval}, nil
 		}
 		// Requeue syncing and increment failures counter
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
@@ -190,6 +190,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	// Check if the synchronization is already running
 	readyCondition := meta.FindStatusCondition(managedOSVersionChannel.Status.Conditions, elementalv1.ReadyCondition)
 	if readyCondition != nil && readyCondition.Reason == elementalv1.SyncingReason {
+		managedOSVersionChannel.Status.Failures = 0
 		return reconcile.Result{Requeue: true}, nil
 	}
 
@@ -208,7 +209,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			})
 			managedOSVersionChannel.Status.LastSyncedTime = &now
 			managedOSVersionChannel.Status.Failures = 0
-			return reconcile.Result{RequeueAfter: interval}, err
+			return reconcile.Result{RequeueAfter: interval}, nil
 		}
 		// Requeue syncing and increment failures counter
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
@@ -227,6 +228,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		Status: metav1.ConditionTrue,
 	})
 	managedOSVersionChannel.Status.LastSyncedTime = &now
+	managedOSVersionChannel.Status.Failures = 0
 
 	return ctrl.Result{RequeueAfter: interval}, nil
 }

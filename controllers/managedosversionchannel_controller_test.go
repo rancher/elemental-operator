@@ -315,7 +315,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		}
 
 		res, err := r.Reconcile(ctx, req)
-		Expect(err).To(HaveOccurred())
+		Expect(err).ShouldNot(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(1 * time.Minute))
 		Expect(res.Requeue).To(BeFalse())
 

@@ -22,239 +22,251 @@ import (
 	"fmt"
 	"time"
 
-	provv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	fleet "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/tests/catalog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-
-	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
+const channelName = "testchannel"
+
 var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
-	var k *kubectl.Kubectl
+	var versions []elementalv1.ManagedOSVersion
 
 	AfterEach(func() {
-		err := k.Delete("managedosversionchannel", "--all", "--force", "--wait", "-n", fleetNamespace)
-		Expect(err).ShouldNot(HaveOccurred())
+		Expect(cl.DeleteAllOf(
+			ctx, &elementalv1.ManagedOSVersionChannel{}, client.InNamespace(fleetNamespace)),
+		).To(Succeed())
+		Eventually(func() int {
+			lst := &elementalv1.ManagedOSVersionChannelList{}
+			cl.List(ctx, lst, client.InNamespace(fleetNamespace))
+			return len(lst.Items)
+		}, 1*time.Minute, 2*time.Second).Should(
+			Equal(0),
+		)
 	})
 
 	Context("Create ManagedOSVersions", func() {
 		BeforeEach(func() {
-			k = kubectl.New()
+			versions = []elementalv1.ManagedOSVersion{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "v1"},
+					Spec: elementalv1.ManagedOSVersionSpec{
+						Version:    "v1",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: map[string]runtime.RawExtension{
+							"upgradeImage": {Raw: []byte(`"registry.com/repository/image:v1"`)},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "v2"},
+					Spec: elementalv1.ManagedOSVersionSpec{
+						Version:    "v2",
+						Type:       "container",
+						MinVersion: "0.0.0",
+						Metadata: map[string]runtime.RawExtension{
+							"upgradeImage": {Raw: []byte(`"registry.com/repository/image:v2"`)},
+						},
+					},
+				},
+			}
 		})
 		It("Reports failure events", func() {
 
 			By("Create an invalid ManagedOSVersionChannel")
-			ui := catalog.NewManagedOSVersionChannel(
-				"invalid",
-				"",
-				"",
-				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
-				nil,
+			ch := catalog.NewManagedOSVersionChannel(
+				fleetNamespace, channelName, "", "10m",
+				map[string]runtime.RawExtension{
+					"uri": {Raw: []byte(`"http://` + e2eCfg.BridgeIP + `:9999"`)},
+				}, nil,
 			)
 
-			err := k.ApplyYAML(fleetNamespace, "invalid", ui)
-			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "invalid")
+			// Not type is set
+			ch.Spec.Options = map[string]runtime.RawExtension{
+				"uri": {Raw: []byte(`"http://` + e2eCfg.BridgeIP + `:9999"`)},
+			}
+			ch.Spec.SyncInterval = "10m"
+
+			Expect(cl.Create(ctx, ch)).To(Succeed())
 
 			By("Check that reports event failure")
 			Eventually(func() string {
-				r, _ := kubectl.Run("describe", "-n", fleetNamespace, "managedosversionchannel", "invalid")
+				gCh := &elementalv1.ManagedOSVersionChannel{}
+				_ = cl.Get(ctx, client.ObjectKey{
+					Name:      "testchannel",
+					Namespace: fleetNamespace,
+				}, gCh)
 
-				return r
+				if len(gCh.Status.Conditions) > 0 {
+					return gCh.Status.Conditions[0].Message
+				}
+				return ""
 			}, 1*time.Minute, 2*time.Second).Should(
 				ContainSubstring("spec.Type can't be empty"),
 			)
 		})
 
 		It("creates a list of ManagedOSVersion from a JSON server", func() {
-			ctx, cancel := context.WithCancel(context.Background())
+			newCtx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-
-			versions := []provv1.ManagedOSVersion{
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "v1"},
-					Spec: provv1.ManagedOSVersionSpec{
-						Version:    "v1",
-						Type:       "container",
-						MinVersion: "0.0.0",
-						Metadata: &fleet.GenericMap{
-							Data: map[string]interface{}{
-								"upgradeImage": "registry.com/repository/image:v1",
-							},
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "v2"},
-					Spec: provv1.ManagedOSVersionSpec{
-						Version:    "v2",
-						Type:       "container",
-						MinVersion: "0.0.0",
-						Metadata: &fleet.GenericMap{
-							Data: map[string]interface{}{
-								"upgradeImage": "registry.com/repository/image:v2",
-							},
-						},
-					},
-				},
-			}
 
 			b, err := json.Marshal(versions)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			http.Server(ctx, e2eCfg.BridgeIP+":9999", string(b))
+			http.Server(newCtx, e2eCfg.BridgeIP+":9999", string(b))
 
 			By("Create a ManagedOSVersionChannel")
-			ui := catalog.NewManagedOSVersionChannel(
-				"testchannel",
-				"json",
-				"10m",
-				map[string]interface{}{"uri": "http://" + e2eCfg.BridgeIP + ":9999"},
-				nil,
+			ch := catalog.NewManagedOSVersionChannel(
+				fleetNamespace, channelName, "json", "10m",
+				map[string]runtime.RawExtension{
+					"uri": {Raw: []byte(`"http://` + e2eCfg.BridgeIP + `:9999"`)},
+				}, nil,
 			)
 
-			err = k.ApplyYAML(fleetNamespace, "testchannel", ui)
-			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel")
+			Expect(cl.Create(ctx, ch)).To(Succeed())
 
-			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel", `jsonpath={.spec.type}`)
-
-			Expect(string(r)).To(Equal("json"))
+			gCh := &elementalv1.ManagedOSVersionChannel{}
+			Expect(cl.Get(ctx, client.ObjectKey{
+				Name:      "testchannel",
+				Namespace: fleetNamespace,
+			}, gCh)).To(Succeed())
+			Expect(gCh.Spec.Type).To(Equal("json"))
 
 			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v1", `jsonpath={.spec.metadata.upgradeImage}`)
-				return string(r)
+				v := &elementalv1.ManagedOSVersion{}
+				cl.Get(ctx, client.ObjectKey{
+					Name:      "v1",
+					Namespace: fleetNamespace,
+				}, v)
+				if v.Spec.Metadata["upgradeImage"].Raw != nil {
+					return string(v.Spec.Metadata["upgradeImage"].Raw)
+				}
+				return ""
 			}, 5*time.Minute, 2*time.Second).Should(
-				Equal("registry.com/repository/image:v1"),
+				Equal(`"registry.com/repository/image:v1"`),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v2", `jsonpath={.spec.metadata.upgradeImage}`)
-
-				return string(r)
+				v := &elementalv1.ManagedOSVersion{}
+				cl.Get(ctx, client.ObjectKey{
+					Name:      "v2",
+					Namespace: fleetNamespace,
+				}, v)
+				if v.Spec.Metadata["upgradeImage"].Raw != nil {
+					return string(v.Spec.Metadata["upgradeImage"].Raw)
+				}
+				return ""
 			}, 1*time.Minute, 2*time.Second).Should(
-				Equal("registry.com/repository/image:v2"),
+				Equal(`"registry.com/repository/image:v2"`),
 			)
 
-			err = k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel")
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(cl.Delete(ctx, gCh)).To(Succeed())
 
 			By("Check ManagedOSVersions are deleted on channel clean up")
-			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "v2", `jsonpath={}`)
 
-				return string(r)
+			Eventually(func() int {
+				lst := &elementalv1.ManagedOSVersionList{}
+				cl.List(ctx, lst, client.InNamespace(fleetNamespace))
+				return len(lst.Items)
 			}, 1*time.Minute, 2*time.Second).Should(
-				Equal(""),
+				Equal(0),
 			)
 		})
 
 		It("creates a list of ManagedOSVersion from a custom hook", func() {
 
-			versions := []provv1.ManagedOSVersion{
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-					Spec: provv1.ManagedOSVersionSpec{
-						Version:    "v1",
-						Type:       "container",
-						MinVersion: "0.0.0",
-						Metadata: &fleet.GenericMap{
-							Data: map[string]interface{}{
-								"upgradeImage": "registry.com/repository/image:v1",
-							},
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{Name: "bar"},
-					Spec: provv1.ManagedOSVersionSpec{
-						Version:    "v2",
-						Type:       "container",
-						MinVersion: "0.0.0",
-						Metadata: &fleet.GenericMap{
-							Data: map[string]interface{}{
-								"upgradeImage": "registry.com/repository/image:v2",
-							},
-						},
-					},
-				},
-			}
-
-			b, err := json.Marshal(versions)
-			Expect(err).ShouldNot(HaveOccurred())
+			jVersions, _ := json.Marshal(versions)
+			command, _ := json.Marshal([]string{"/bin/bash", "-c", "--"})
+			args, _ := json.Marshal([]string{fmt.Sprintf("echo '%s' > /output/data", string(jVersions))})
 
 			By("Create a ManagedOSVersionChannel")
-			ui := catalog.NewManagedOSVersionChannel(
-				"testchannel2",
-				"custom",
-				"10m",
-				map[string]interface{}{
-					"image":      "opensuse/tumbleweed",
-					"command":    []string{"/bin/bash", "-c", "--"},
-					"mountPath":  "/output",      // This defaults to /data
-					"outputFile": "/output/data", // This defaults to /data/output
-					"args":       []string{fmt.Sprintf("echo '%s' > /output/data", string(b))},
-				},
-				nil,
+			ch := catalog.NewManagedOSVersionChannel(
+				fleetNamespace, channelName, "custom", "10m",
+				map[string]runtime.RawExtension{
+					"image":      {Raw: []byte(`"opensuse/tumbleweed"`)},
+					"command":    {Raw: command},
+					"mountPath":  {Raw: []byte(`"/output"`)},
+					"outputFile": {Raw: []byte(`"/output/data"`)},
+					"args":       {Raw: args},
+				}, nil,
 			)
 
-			err = k.ApplyYAML(fleetNamespace, "testchannel2", ui)
-			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel2")
+			Expect(cl.Create(ctx, ch)).To(Succeed())
 
-			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
+			gCh := &elementalv1.ManagedOSVersionChannel{}
+			Expect(cl.Get(ctx, client.ObjectKey{
+				Name:      "testchannel",
+				Namespace: fleetNamespace,
+			}, gCh)).To(Succeed())
+			Expect(gCh.Spec.Type).To(Equal("custom"))
 
-			Expect(string(r)).To(Equal("custom"))
-
+			By("Check new ManagedOSVersions are created")
 			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "foo", `jsonpath={.spec.metadata.upgradeImage}`)
-				return string(r)
-			}, 2*time.Minute, 2*time.Second).Should(
-				Equal("registry.com/repository/image:v1"),
+				v := &elementalv1.ManagedOSVersion{}
+				cl.Get(ctx, client.ObjectKey{
+					Name:      "v1",
+					Namespace: fleetNamespace,
+				}, v)
+				if v.Spec.Metadata["upgradeImage"].Raw != nil {
+					return string(v.Spec.Metadata["upgradeImage"].Raw)
+				}
+				return ""
+			}, 5*time.Minute, 2*time.Second).Should(
+				Equal(`"registry.com/repository/image:v1"`),
 			)
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersion", "bar", `jsonpath={.spec.metadata.upgradeImage}`)
-				return string(r)
-			}, 2*time.Minute, 2*time.Second).Should(
-				Equal("registry.com/repository/image:v2"),
+				v := &elementalv1.ManagedOSVersion{}
+				cl.Get(ctx, client.ObjectKey{
+					Name:      "v2",
+					Namespace: fleetNamespace,
+				}, v)
+				if v.Spec.Metadata["upgradeImage"].Raw != nil {
+					return string(v.Spec.Metadata["upgradeImage"].Raw)
+				}
+				return ""
+			}, 1*time.Minute, 2*time.Second).Should(
+				Equal(`"registry.com/repository/image:v2"`),
 			)
 		})
 
 		It("on a broken a channel it stops on failed sync ready reason", func() {
+			command, _ := json.Marshal([]string{"/bin/bash", "-c", "--"})
+			args, _ := json.Marshal([]string{fmt.Sprintf("echo '%s' > /output/data", string("wrong content"))})
 
 			By("Create a ManagedOSVersionChannel with wrong content")
-			ui := catalog.NewManagedOSVersionChannel(
-				"testchannel2",
-				"custom",
-				"10m",
-				map[string]interface{}{
-					"image":   "opensuse/tumbleweed",
-					"command": []string{"/bin/bash", "-c", "--"},
-					"args":    []string{fmt.Sprintf("echo '%s' > /output/data", string("wrong content"))},
-				},
-				nil,
+			ch := catalog.NewManagedOSVersionChannel(
+				fleetNamespace, channelName, "custom", "10m",
+				map[string]runtime.RawExtension{
+					"image":   {Raw: []byte(`"opensuse/tumbleweed"`)},
+					"command": {Raw: command},
+					"args":    {Raw: args},
+				}, nil,
 			)
 
-			err := k.ApplyYAML(fleetNamespace, "testchannel2", ui)
-			Expect(err).ShouldNot(HaveOccurred())
-			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel2")
-
-			r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.spec.type}`)
-
-			Expect(string(r)).To(Equal("custom"))
+			Expect(cl.Create(ctx, ch)).To(Succeed())
 
 			Eventually(func() string {
-				r, _ := kubectl.GetData(fleetNamespace, "ManagedOSVersionChannel", "testchannel2", `jsonpath={.status.conditions[0].status}`)
-				return string(r)
-			}, 2*time.Minute, 2*time.Second).Should(
-				Equal("True"),
+				gCh := &elementalv1.ManagedOSVersionChannel{}
+				_ = cl.Get(ctx, client.ObjectKey{
+					Name:      "testchannel",
+					Namespace: fleetNamespace,
+				}, gCh)
+
+				if len(gCh.Status.Conditions) > 0 && gCh.Status.Conditions[0].Status == metav1.ConditionTrue {
+					return gCh.Status.Conditions[0].Message
+				}
+				return ""
+			}, 1*time.Minute, 2*time.Second).Should(
+				ContainSubstring("Failed syncing channel"),
 			)
 		})
 	})
