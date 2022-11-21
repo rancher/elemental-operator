@@ -32,7 +32,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	elementalv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	e2eConfig "github.com/rancher/elemental-operator/tests/e2e/config"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	appsv1 "k8s.io/api/apps/v1"
