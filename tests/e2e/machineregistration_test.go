@@ -17,18 +17,20 @@ limitations under the License.
 package e2e_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	http "github.com/rancher-sandbox/ele-testhelpers/http"
-	elementalv1 "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/config"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/tests/catalog"
+
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -37,12 +39,10 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		var mRegistration *elementalv1.MachineRegistration
 
 		BeforeEach(func() {
-			mRegistration = &elementalv1.MachineRegistration{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "machine-registration",
-					Namespace: operatorNamespace,
-				},
-			}
+			mRegistration = catalog.NewMachineRegistration(
+				operatorNamespace,
+				"machine-registration",
+				&elementalv1.Config{})
 		})
 
 		AfterEach(func() {
@@ -69,21 +69,28 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 		})
 
 		It("creates a machine registration resource and a URL attaching CA certificate", func() {
-			mRegistration.Spec = elementalv1.MachineRegistrationSpec{
-				Config: &config.Config{
-					Elemental: config.Elemental{
-						Install: config.Install{
+			config := map[string]string{
+				"content":  "V2h5IGFyZSB5b3UgY2hlY2tpbmcgdGhpcz8K",
+				"encoding": "b64",
+			}
+			cconfig, _ := json.Marshal(config)
+			mRegistration = catalog.NewMachineRegistration(
+				operatorNamespace,
+				"machine-registration",
+				&elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{
 							Device: "/dev/vda",
 							ISO:    "https://something.example.com",
 						},
 					},
-					CloudConfig: map[string]interface{}{
-						"write_files": map[string]string{
-							"content":  "V2h5IGFyZSB5b3UgY2hlY2tpbmcgdGhpcz8K",
-							"encoding": "b64",
+					CloudConfig: map[string]runtime.RawExtension{
+						"write_files": runtime.RawExtension{
+							Raw: cconfig,
 						},
-					}},
-			}
+					},
+				},
+			)
 
 			Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 
