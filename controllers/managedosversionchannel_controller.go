@@ -28,14 +28,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const retry = 5 * time.Second
-const maxRetries = 4
+const baseRateTime = 1 * time.Second
+const maxDelayTime = 16 * time.Second
+const maxRetries = 5
 
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
 type ManagedOSVersionChannelReconciler struct {
@@ -57,6 +60,9 @@ func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) e
 	}
 	r.config = mgr.GetConfig()
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{
+			RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(baseRateTime, maxDelayTime),
+		}).
 		For(&elementalv1.ManagedOSVersionChannel{}).
 		Complete(r)
 }
@@ -178,13 +184,13 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "Failed syncing channel",
 		})
 		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{RequeueAfter: retry}, err
+		return reconcile.Result{}, err
 	}
 
 	// Check if the synchronization is already running
 	readyCondition := meta.FindStatusCondition(managedOSVersionChannel.Status.Conditions, elementalv1.ReadyCondition)
 	if readyCondition != nil && readyCondition.Reason == elementalv1.SyncingReason {
-		return reconcile.Result{RequeueAfter: retry}, err
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Create managed os versions according to the channel data
@@ -212,7 +218,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "Failed creating managed OS versions",
 		})
 		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{RequeueAfter: retry}, err
+		return reconcile.Result{}, err
 	}
 
 	meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
