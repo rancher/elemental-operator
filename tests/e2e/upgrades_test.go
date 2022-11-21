@@ -62,7 +62,7 @@ func upgradePod(k *kubectl.Kubectl) string {
 
 	podName := ""
 	for _, p := range pods {
-		if strings.Contains(p, "apply-os-upgrader") {
+		if strings.Contains(p, "apply-os-upgrader-update-osversion") {
 			podName = p
 		}
 	}
@@ -75,7 +75,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 		cattleSystemNamespace,
 		"upgrade.cattle.io/controller=system-upgrade-controller",
 		3*time.Minute, 2*time.Second,
-		ContainElement(ContainSubstring("apply-os-upgrader-on-operator-e2e-control-plane-with")),
+		ContainElement(ContainSubstring("apply-os-upgrader-update-osversion-on-operator-e2e")),
 	)
 
 	podName := upgradePod(k)
@@ -195,14 +195,14 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			)
 
 			Eventually(func() string {
-				up, err := getPlan("os-upgrader")
+				up, err := getPlan("os-upgrader-update-osversion")
 				if err == nil {
 					return up.Spec.Version
 				}
 				return ""
 			}, 1*time.Minute, 2*time.Second).Should(Equal("v1.0"))
 
-			plan, err := getPlan("os-upgrader")
+			plan, err := getPlan("os-upgrader-update-osversion")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(plan.Spec.Upgrade.Image).To(Equal("registry.com/repository/image"))
 
