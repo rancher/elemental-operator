@@ -41,7 +41,7 @@ const (
 	k3sKubeConfig         = "/etc/rancher/k3s/k3s.yaml"
 	k3sKubectl            = "/usr/local/bin/kubectl"
 	rkeKubeConfig         = "/etc/rancher/rke2/rke2.yaml"
-	rkeKubeclt            = "/var/lib/rancher/rke2/bin/kubectl"
+	rkeKubectl            = "/var/lib/rancher/rke2/bin/kubectl"
 	elementalAgentPlanDir = "/var/lib/elemental/agent/applied/"
 	rancherAgentPlanDir   = "/var/lib/rancher/agent/applied/"
 	rancherAgentConf      = "/etc/rancher/agent/config.yaml"
@@ -528,9 +528,9 @@ func getKubectl() (string, error) {
 		logrus.Infof("Found k3s kubectl at %s", k3sKubectl)
 		return k3sKubectl, nil
 	}
-	if existsNoWarn(rkeKubeclt) {
-		logrus.Infof("Found rke kubectl at %s", rkeKubeclt)
-		return rkeKubeclt, nil
+	if existsNoWarn(rkeKubectl) {
+		logrus.Infof("Found rke kubectl at %s", rkeKubectl)
+		return rkeKubectl, nil
 	}
 
 	return "", errors.New("Cant find kubectl")
