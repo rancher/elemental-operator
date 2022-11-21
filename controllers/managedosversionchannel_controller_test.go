@@ -266,7 +266,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		})
 		Expect(err).To(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-		Expect(res.Requeue).To(BeFalse())
+		Expect(res.Requeue).To(BeTrue())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -301,7 +301,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 			res, err := r.Reconcile(ctx, req)
 			Expect(err).To(HaveOccurred())
 			Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-			Expect(res.Requeue).To(BeFalse())
+			Expect(res.Requeue).To(BeTrue())
 
 			Expect(cl.Get(ctx, objKey, managedOSVersionChannel)).To(Succeed())
 

@@ -184,7 +184,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "Failed syncing channel",
 		})
 		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	// Check if the synchronization is already running
@@ -218,7 +218,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "Failed creating managed OS versions",
 		})
 		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
