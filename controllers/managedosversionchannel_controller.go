@@ -37,8 +37,9 @@ import (
 )
 
 const baseRateTime = 1 * time.Second
-const maxDelayTime = 16 * time.Second
-const maxRetries = 5
+const maxDelayTime = 256 * time.Second
+
+//const maxRetries = 5
 
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
 type ManagedOSVersionChannelReconciler struct {
@@ -117,10 +118,8 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Status:  metav1.ConditionTrue,
 			Message: "spec.Type can't be empty",
 		})
-		managedOSVersionChannel.Status.Failures = 0
 		return ctrl.Result{}, nil
 	}
-	failCount := managedOSVersionChannel.Status.Failures
 
 	interval, err := time.ParseDuration(managedOSVersionChannel.Spec.SyncInterval)
 	if err != nil { // TODO: This should be part of validation webhook and moved out of the controller
@@ -130,7 +129,6 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Status:  metav1.ConditionTrue,
 			Message: "spec.SyncInterval is not parseable by time.ParseDuration",
 		})
-		managedOSVersionChannel.Status.Failures = 0
 		return ctrl.Result{}, nil
 	}
 
@@ -143,7 +141,6 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Status:  metav1.ConditionTrue,
 			Message: "failed to create a syncer",
 		})
-		managedOSVersionChannel.Status.Failures = 0
 		return ctrl.Result{}, nil
 	}
 
@@ -152,6 +149,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		lastSync := managedOSVersionChannel.Status.LastSyncedTime.Time
 		scheduledTime := lastSync.Add(interval)
 		if time.Now().Before(scheduledTime) {
+			logger.V(5).Info("Requeuing to next interval")
 			return reconcile.Result{RequeueAfter: time.Until(scheduledTime)}, nil
 		}
 	}
@@ -162,64 +160,33 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	// the state is tracked in managed OS version channel status conditions
 	vers, err := sync.Sync(ctx, r.Client, managedOSVersionChannel)
 	if err != nil {
-		failCount++
-		logger.Error(err, "Synchronization failed", "failures", failCount)
-		if failCount >= maxRetries {
-			// Failed syncing, forget about it until the next interval
-			meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
-				Reason:  elementalv1.FailedToSyncReason,
-				Status:  metav1.ConditionTrue,
-				Message: "Failed syncing channel",
-			})
-			managedOSVersionChannel.Status.LastSyncedTime = &now
-			managedOSVersionChannel.Status.Failures = 0
-			return reconcile.Result{RequeueAfter: interval}, nil
-		}
-		// Requeue syncing and increment failures counter
+		logger.Error(err, "Synchronization failed")
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.FailedToSyncReason,
 			Status:  metav1.ConditionFalse,
 			Message: "Failed syncing channel",
 		})
-		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{Requeue: true}, err
+		return reconcile.Result{}, err
 	}
 
 	// Check if the synchronization is already running
 	readyCondition := meta.FindStatusCondition(managedOSVersionChannel.Status.Conditions, elementalv1.ReadyCondition)
 	if readyCondition != nil && readyCondition.Reason == elementalv1.SyncingReason {
-		managedOSVersionChannel.Status.Failures = 0
 		return reconcile.Result{Requeue: true}, nil
 	}
 
 	// Create managed os versions according to the channel data
 	err = r.syncVersions(ctx, vers, managedOSVersionChannel)
 	if err != nil {
-		failCount++
-		logger.Error(err, "Failed creating managed os version resources", "failures", failCount)
-		if failCount >= maxRetries {
-			// Failed syncing, forget about it until the next interval
-			meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
-				Reason:  elementalv1.FailedToCreateVersionsReason,
-				Status:  metav1.ConditionTrue,
-				Message: "Failed creating managed OS versions",
-			})
-			managedOSVersionChannel.Status.LastSyncedTime = &now
-			managedOSVersionChannel.Status.Failures = 0
-			return reconcile.Result{RequeueAfter: interval}, nil
-		}
-		// Requeue syncing and increment failures counter
+		logger.Error(err, "Failed creating managed os version resources")
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.FailedToCreateVersionsReason,
 			Status:  metav1.ConditionFalse,
 			Message: "Failed creating managed OS versions",
 		})
-		managedOSVersionChannel.Status.Failures = failCount
-		return reconcile.Result{Requeue: true}, err
+		return reconcile.Result{}, err
 	}
 
 	meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
@@ -228,9 +195,8 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		Status: metav1.ConditionTrue,
 	})
 	managedOSVersionChannel.Status.LastSyncedTime = &now
-	managedOSVersionChannel.Status.Failures = 0
 
-	return ctrl.Result{RequeueAfter: interval}, nil
+	return ctrl.Result{}, nil
 }
 
 // syncVersions creates managed os versions resources from the given list, all versions are owned by the channel

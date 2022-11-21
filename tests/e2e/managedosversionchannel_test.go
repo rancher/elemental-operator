@@ -219,7 +219,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 					return string(v.Spec.Metadata["upgradeImage"].Raw)
 				}
 				return ""
-			}, 5*time.Minute, 2*time.Second).Should(
+			}, 4*time.Minute, 2*time.Second).Should(
 				Equal(`"registry.com/repository/image:v1"`),
 			)
 
@@ -233,40 +233,8 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 					return string(v.Spec.Metadata["upgradeImage"].Raw)
 				}
 				return ""
-			}, 1*time.Minute, 2*time.Second).Should(
+			}, 10*time.Second, 2*time.Second).Should(
 				Equal(`"registry.com/repository/image:v2"`),
-			)
-		})
-
-		It("on a broken a channel it stops on failed sync ready reason", func() {
-			command, _ := json.Marshal([]string{"/bin/bash", "-c", "--"})
-			args, _ := json.Marshal([]string{fmt.Sprintf("echo '%s' > /output/data", string("wrong content"))})
-
-			By("Create a ManagedOSVersionChannel with wrong content")
-			ch := catalog.NewManagedOSVersionChannel(
-				fleetNamespace, channelName, "custom", "10m",
-				map[string]runtime.RawExtension{
-					"image":   {Raw: []byte(`"opensuse/tumbleweed"`)},
-					"command": {Raw: command},
-					"args":    {Raw: args},
-				}, nil,
-			)
-
-			Expect(cl.Create(ctx, ch)).To(Succeed())
-
-			Eventually(func() string {
-				gCh := &elementalv1.ManagedOSVersionChannel{}
-				_ = cl.Get(ctx, client.ObjectKey{
-					Name:      "testchannel",
-					Namespace: fleetNamespace,
-				}, gCh)
-
-				if len(gCh.Status.Conditions) > 0 && gCh.Status.Conditions[0].Status == metav1.ConditionTrue {
-					return gCh.Status.Conditions[0].Message
-				}
-				return ""
-			}, 1*time.Minute, 2*time.Second).Should(
-				ContainSubstring("Failed syncing channel"),
 			)
 		})
 	})
