@@ -39,8 +39,6 @@ import (
 const baseRateTime = 1 * time.Second
 const maxDelayTime = 256 * time.Second
 
-//const maxRetries = 5
-
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
 type ManagedOSVersionChannelReconciler struct {
 	client.Client
