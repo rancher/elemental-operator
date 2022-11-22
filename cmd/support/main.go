@@ -84,13 +84,19 @@ func main() {
 			if viper.GetBool("debug") {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
+			if viper.GetBool("version") {
+				logrus.Infof("Support version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+				return nil
+			}
 			logrus.Infof("Support version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			return run()
 		},
 	}
 
-	cmd.PersistentFlags().Bool("debug", false, "Enable debug logging")
+	cmd.PersistentFlags().BoolP("debug", "d", false, "Enable debug logging")
+	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("debug", cmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 
 	if err := cmd.Execute(); err != nil {
 		logrus.Fatalln(err)

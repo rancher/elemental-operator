@@ -19,6 +19,7 @@ package main
 import (
 	displayCmd "github.com/rancher/elemental-operator/cmd/operator/display"
 	operatorCmd "github.com/rancher/elemental-operator/cmd/operator/operator"
+	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -31,9 +32,22 @@ func main() {
 
 	cmd.AddCommand(
 		operatorCmd.NewOperatorCommand(),
-		displayCmd.NewDisplayCommand())
+		displayCmd.NewDisplayCommand(),
+		NewVersionCommand(),
+	)
 
 	if err := cmd.Execute(); err != nil {
 		logrus.Fatalln(err)
 	}
+}
+
+func NewVersionCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print operator version",
+		Run: func(_ *cobra.Command, _ []string) {
+			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+		},
+	}
+	return cmd
 }

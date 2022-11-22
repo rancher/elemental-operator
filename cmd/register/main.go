@@ -62,7 +62,13 @@ func main() {
 			if debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
+			if viper.GetBool("version") {
+				logrus.Infof("Support version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+				return
+			}
+
 			logrus.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+
 			if len(args) == 0 {
 				args = append(args, regConfDir)
 			}
@@ -110,7 +116,9 @@ func main() {
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
 	cmd.Flags().Int64Var(&cfg.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
-	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug logging")
+	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
+	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
+	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 
 	if err := cmd.Execute(); err != nil {
 		logrus.Fatalln(err)
