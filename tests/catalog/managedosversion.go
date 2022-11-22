@@ -16,6 +16,13 @@ limitations under the License.
 
 package catalog
 
+import (
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
 type ManagedOSVersionSpec struct {
 	Type             string                 `json:"type" yaml:"type"`
 	Version          string                 `json:"version" yaml:"version"`
@@ -39,7 +46,7 @@ type ContainerSpec struct {
 	Args    []string `json:"args,omitempty" yaml:"args,omitempty"`
 }
 
-func NewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC *ContainerSpec) *ManagedOSVersion {
+func LegacyNewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC *ContainerSpec) *ManagedOSVersion {
 	return &ManagedOSVersion{
 		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {
@@ -47,6 +54,26 @@ func NewManagedOSVersion(name string, version string, minVersion string, metadat
 		}{Name: name},
 		Kind: "ManagedOSVersion",
 		Spec: ManagedOSVersionSpec{
+			Type:             "container",
+			Version:          version,
+			MinVersion:       minVersion,
+			Metadata:         metadata,
+			UpgradeContainer: upgradeC,
+		},
+	}
+}
+
+func NewManagedOSVersion(namespace string, name string, version string, minVersion string, metadata map[string]runtime.RawExtension, upgradeC *upgradev1.ContainerSpec) *elementalv1.ManagedOSVersion {
+	return &elementalv1.ManagedOSVersion{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "elemental.cattle.io/v1beta1",
+			Kind:       "ManagedOSVersion",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: elementalv1.ManagedOSVersionSpec{
 			Type:             "container",
 			Version:          version,
 			MinVersion:       minVersion,
