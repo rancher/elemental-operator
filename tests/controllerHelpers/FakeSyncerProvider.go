@@ -23,6 +23,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/syncer"
+	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,21 +31,41 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// On asynchronous sync this is the number of reconcile loops required to get some data
+const syncLoops = 3
+
 type FakeSyncer struct {
-	json string
+	json         string
+	asynchronous bool
+	loopsCount   int
 }
 
 type FakeSyncerProvider struct {
-	JSON        string
-	UnknownType string
+	JSON         string
+	UnknownType  string
+	Asynchronous bool
+	loopsCount   int
 }
 
 func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
+	var errs []error
 	res := []elementalv1.ManagedOSVersion{}
 
 	err := json.Unmarshal([]byte(fs.json), &res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		errs = append(errs, err)
+	}
+
+	if fs.asynchronous {
+		if fs.loopsCount < syncLoops {
+			meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.ReadyCondition,
+				Reason:  elementalv1.SyncingReason,
+				Status:  metav1.ConditionFalse,
+				Message: "On going channel synchronization",
+			})
+			return nil, nil
+		}
 	}
 
 	meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
@@ -54,12 +75,13 @@ func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.
 		Message: "Got valid channel data",
 	})
 
-	return res, nil
+	return res, errorutils.NewAggregate(errs)
 }
 
-func (sp FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (syncer.Syncer, error) {
+func (sp *FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (syncer.Syncer, error) {
+	sp.loopsCount++
 	if spec.Type == sp.UnknownType {
 		return FakeSyncer{}, fmt.Errorf("Unknown type of channel")
 	}
-	return FakeSyncer{json: sp.JSON}, nil
+	return FakeSyncer{json: sp.JSON, asynchronous: sp.Asynchronous, loopsCount: sp.loopsCount}, nil
 }

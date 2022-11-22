@@ -274,11 +274,6 @@ spec:
                   - type
                   type: object
                 type: array
-              failures:
-                description: Failures field stores the number of consecutive failed
-                  attempts to synchronize. Invalid configurations are not counted
-                format: int32
-                type: integer
               lastSyncedTime:
                 description: LastSyncedTime is the timestamp of the last synchronization
                 format: date-time

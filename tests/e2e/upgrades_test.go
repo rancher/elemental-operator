@@ -221,7 +221,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("applies an os-upgrade from a channel", func() {
-			mr := catalog.NewManagedOSVersionChannel(
+			mr := catalog.LegacyNewManagedOSVersionChannel(
 				"testchannel3",
 				"custom",
 				"1m",
@@ -263,7 +263,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("overwrites default container spec from a channel", func() {
-			mr := catalog.NewManagedOSVersionChannel(
+			mr := catalog.LegacyNewManagedOSVersionChannel(
 				"testchannel4",
 				"custom",
 				"1m",
@@ -309,7 +309,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("tries to apply an upgrade", func() {
-			mr := catalog.NewManagedOSVersionChannel(
+			mr := catalog.LegacyNewManagedOSVersionChannel(
 				"testchannel5",
 				"custom",
 				"1m",
