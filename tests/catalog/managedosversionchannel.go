@@ -16,6 +16,13 @@ limitations under the License.
 
 package catalog
 
+import (
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
 type ManagedOSVersionChannelSpec struct {
 	Type             string                 `json:"type" yaml:"type"`
 	Options          map[string]interface{} `json:"options" yaml:"options"`
@@ -32,7 +39,26 @@ type ManagedOSVersionChannel struct {
 	Spec ManagedOSVersionChannelSpec `json:"spec,omitempty"`
 }
 
-func NewManagedOSVersionChannel(name string, t string, interval string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
+func NewManagedOSVersionChannel(namespace, name, sType, interval string, options map[string]runtime.RawExtension, upgradeContainer *upgradev1.ContainerSpec) *elementalv1.ManagedOSVersionChannel {
+	return &elementalv1.ManagedOSVersionChannel{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "elemental.cattle.io/v1beta1",
+			Kind:       "ManagedOSVersionChannel",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: elementalv1.ManagedOSVersionChannelSpec{
+			Type:             sType,
+			SyncInterval:     interval,
+			Options:          options,
+			UpgradeContainer: upgradeContainer,
+		},
+	}
+}
+
+func LegacyNewManagedOSVersionChannel(name string, t string, interval string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
 	return &ManagedOSVersionChannel{
 		APIVersion: "elemental.cattle.io/v1beta1",
 		Metadata: struct {

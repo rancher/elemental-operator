@@ -84,11 +84,11 @@ func (j *CustomSyncer) Sync(ctx context.Context, cl client.Client, ch *elemental
 
 func (j *CustomSyncer) fecthDataFromPod(
 	ctx context.Context, cl client.Client,
-	ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
+	ch *elementalv1.ManagedOSVersionChannel) (vers []elementalv1.ManagedOSVersion, err error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	pod := &corev1.Pod{}
-	err := cl.Get(ctx, client.ObjectKey{
+	err = cl.Get(ctx, client.ObjectKey{
 		Namespace: ch.Namespace,
 		Name:      ch.Name,
 	}, pod)
@@ -96,6 +96,7 @@ func (j *CustomSyncer) fecthDataFromPod(
 		logger.Error(err, "failed getting pod resource", "pod", pod.Name)
 		return nil, err
 	}
+	defer j.deletePodOnError(ctx, pod, cl, err)
 
 	terminated := len(pod.Status.InitContainerStatuses) > 0 && pod.Status.InitContainerStatuses[0].Name == "runner" &&
 		pod.Status.InitContainerStatuses[0].State.Terminated != nil
@@ -106,20 +107,18 @@ func (j *CustomSyncer) fecthDataFromPod(
 		logger.Info("Waiting pod to finish, not terminated", "pod", pod.Name)
 		return nil, nil
 	} else if failed {
-		errMsg := "Synchronization pod failed"
-		logger.Error(fmt.Errorf(errMsg), "pod", pod.Name)
-
-		if err := cl.Delete(ctx, pod); err != nil {
-			logger.Error(err, "could not delete the failed pod", "pod", pod.Name)
-		}
-		return nil, fmt.Errorf(errMsg)
+		err = fmt.Errorf("Synchronization pod failed")
+		logger.Error(err, "pod", pod.Name)
+		return nil, err
 	}
 
 	logCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	var podLogs io.ReadCloser
+
 	req := j.kcl.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: "pause"})
-	podLogs, err := req.Stream(logCtx)
+	podLogs, err = req.Stream(logCtx)
 	if err != nil {
 		logger.Error(err, "failed opening stream")
 		return nil, err
@@ -140,9 +139,8 @@ func (j *CustomSyncer) fecthDataFromPod(
 	}
 
 	logger.Info("Got raw versions", "json", buf.String())
-	res := []elementalv1.ManagedOSVersion{}
 
-	err = json.Unmarshal(buf.Bytes(), &res)
+	err = json.Unmarshal(buf.Bytes(), &vers)
 	if err != nil {
 		logger.Error(err, "Failed unmarshalling managedOSVersions")
 		return nil, err
@@ -155,7 +153,22 @@ func (j *CustomSyncer) fecthDataFromPod(
 		Message: "Got valid channel data",
 	})
 
-	return res, nil
+	if err = cl.Delete(ctx, pod); err != nil {
+		logger.Error(err, "could not delete the pod", "pod", pod.Name)
+	}
+
+	return vers, nil
+}
+
+// deletePodOnError deletes the pod if err is not nil
+func (j *CustomSyncer) deletePodOnError(ctx context.Context, pod *corev1.Pod, cl client.Client, err error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	if err != nil {
+		if dErr := cl.Delete(ctx, pod); dErr != nil {
+			logger.Error(dErr, "could not delete the pod", "pod", pod.Name)
+		}
+	}
 }
 
 // createSyncerPod creates the pod according to the managed OS version channel configuration
@@ -173,7 +186,7 @@ func (j *CustomSyncer) createSyncerPod(ctx context.Context, cl client.Client, ch
 	}
 
 	serviceAccount := false
-	err := cl.Create(ctx, &corev1.Pod{
+	pod := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Pod",
@@ -210,9 +223,12 @@ func (j *CustomSyncer) createSyncerPod(ctx context.Context, cl client.Client, ch
 				Args:    []string{"display", "--file", outFile},
 			}},
 		},
-	})
+	}
+	err := cl.Create(ctx, pod)
 	if err != nil {
 		logger.Error(err, "Failed creating pod", "pod", ch.Name)
+		// Could fail due to previous leftovers
+		_ = cl.Delete(ctx, pod)
 		return err
 	}
 
