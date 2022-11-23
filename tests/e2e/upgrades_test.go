@@ -150,7 +150,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
-			ov := catalog.NewManagedOSVersion(
+			ov := catalog.LegacyNewManagedOSVersion(
 				osVersion, "v1.0", "0.0.0",
 				meta,
 				c,
@@ -160,7 +160,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				return k.ApplyYAML(fleetNamespace, osVersion, ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
-			ui := catalog.NewManagedOSImage(
+			ui := catalog.LegacyNewManagedOSImage(
 				osImage,
 				[]map[string]interface{}{},
 				"",
@@ -241,7 +241,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel3", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML(fleetNamespace, osImage, catalog.NewManagedOSImage(
+			err := k.ApplyYAML(fleetNamespace, osImage, catalog.LegacyNewManagedOSImage(
 				osImage,
 				[]map[string]interface{}{},
 				"",
@@ -287,7 +287,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel4", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML(fleetNamespace, osImage, catalog.NewManagedOSImage(
+			err := k.ApplyYAML(fleetNamespace, osImage, catalog.LegacyNewManagedOSImage(
 				osImage,
 				[]map[string]interface{}{},
 				"",
@@ -342,7 +342,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			waitTestChannelPopulate(k, mr, "testchannel5", "quay.io/costoolkit/elemental:v0.1.0-amd64", "v0.1.0-amd64")
 
 			err := k.ApplyYAML(fleetNamespace, osImage,
-				catalog.NewManagedOSImage(osImage, []map[string]interface{}{}, "", "v0.1.0-amd64"))
+				catalog.LegacyNewManagedOSImage(osImage, []map[string]interface{}{}, "", "v0.1.0-amd64"))
 			Expect(err).ToNot(HaveOccurred())
 
 			checkUpgradePod(k,
