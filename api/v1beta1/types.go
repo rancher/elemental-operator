@@ -45,15 +45,15 @@ type Install struct {
 
 type Registration struct {
 	// +optional
-	URL string `json:"url,omitempty" yaml:"url,omitempty"`
+	URL string `json:"url,omitempty" yaml:"url,omitempty" mapstructure:"url"`
 	// +optional
-	CACert string `json:"ca-cert,omitempty" yaml:"ca-cert,omitempty"`
+	CACert string `json:"ca-cert,omitempty" yaml:"ca-cert,omitempty" mapstructure:"ca-cert"`
 	// +optional
-	EmulateTPM bool `json:"emulate-tpm,omitempty" yaml:"emulate-tpm,omitempty"`
+	EmulateTPM bool `json:"emulate-tpm,omitempty" yaml:"emulate-tpm,omitempty" mapstructure:"emulate-tpm"`
 	// +optional
-	EmulatedTPMSeed int64 `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty"`
+	EmulatedTPMSeed int64 `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty" mapstructure:"emulated-tpm-seed"`
 	// +optional
-	NoSMBIOS bool `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty"`
+	NoSMBIOS bool `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty" mapstructure:"no-smbios"`
 }
 
 type SystemAgent struct {
