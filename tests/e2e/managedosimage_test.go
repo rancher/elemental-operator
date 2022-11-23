@@ -17,48 +17,70 @@ limitations under the License.
 package e2e_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/tests/catalog"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const testnamespace = "fleet-default"
 
 var _ = Describe("ManagedOSImage e2e tests", func() {
-	k := kubectl.New()
 	Context("Using OSImage reference", func() {
+		var ui *elementalv1.ManagedOSImage
 
 		BeforeEach(func() {
 			By("Creating a new ManagedOSImage CRD")
-			ui := catalog.NewManagedOSImage(
+			ui = catalog.NewManagedOSImage(
+				testnamespace,
 				"update-image",
-				[]map[string]interface{}{{"clusterName": "dummycluster"}},
+				[]elementalv1.BundleTarget{{
+					ClusterName: "dummycluster",
+				}},
 				"my.registry.com/image/repository:v1.0",
 				"",
 			)
 
-			Eventually(func() error {
-				return k.ApplyYAML(testnamespace, "update-image", ui)
-			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			Expect(cl.Create(ctx, ui)).To(Succeed())
 		})
 
 		AfterEach(func() {
-			kubectl.New().Delete("managedosimage", "-n", testnamespace, "update-image")
+			ui = catalog.NewManagedOSImage(
+				testnamespace,
+				"update-image",
+				[]elementalv1.BundleTarget{{
+					ClusterName: "dummycluster",
+				}},
+				"my.registry.com/image/repository:v1.0",
+				"",
+			)
+
+			Expect(cl.Delete(ctx, ui)).To(Succeed())
 		})
 
 		It("creates a new fleet bundle with the upgrade plan", func() {
+
 			Eventually(func() string {
-				r, err := kubectl.GetData(testnamespace, "bundle", "mos-update-image", `jsonpath={.spec.resources[*].content}`)
-				if err != nil {
-					fmt.Println(err)
+				bundle := &fleetv1.Bundle{}
+
+				if err := cl.Get(ctx, client.ObjectKey{
+					Name:      "mos-update-image",
+					Namespace: testnamespace,
+				}, bundle); err != nil {
+					return err.Error()
 				}
-				return string(r)
+
+				return fmt.Sprint(bundle.Spec.Resources)
 			}, 1*time.Minute, 2*time.Second).Should(
 				And(
 					ContainSubstring(`"version":"v1.0"`),
@@ -72,41 +94,44 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		withUpgradeImage := "with-upgrade-image"
 
 		AfterEach(func() {
-			kube := kubectl.New()
-			kube.Delete("managedosimage", "-n", testnamespace, withUpgradePlan)
-			kube.Delete("managedosimage", "-n", testnamespace, withUpgradeImage)
-			kube.Delete("managedosversion", "-n", testnamespace, withUpgradePlan)
-			kube.Delete("managedosversion", "-n", testnamespace, withUpgradeImage)
+
+			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSImage{}, client.InNamespace(testnamespace)))
+			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSVersion{}, client.InNamespace(testnamespace)))
 		})
 
-		createsCorrectPlan := func(name string, meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
+		createsCorrectPlan := func(name string, meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
 			ov := catalog.NewManagedOSVersion(
+				testnamespace,
 				name, "v1.0", "0.0.0",
 				meta,
 				c,
 			)
 
-			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML("fleet-default", name, ov)
-			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			Expect(cl.Create(ctx, ov)).To(Succeed())
 
 			ui := catalog.NewManagedOSImage(
+				testnamespace,
 				name,
-				[]map[string]interface{}{{"clusterName": "dummycluster"}},
+				[]elementalv1.BundleTarget{{
+					ClusterName: "dummycluster",
+				}},
 				"",
 				name,
 			)
 
-			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML(testnamespace, name, ui)
-			}, 1*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
+			Expect(cl.Create(ctx, ui)).To(Succeed())
 
-			EventuallyWithOffset(1, func() string {
-				r, err := kubectl.GetData(testnamespace, "bundle", "mos-"+name, `jsonpath={.spec.resources[*].content}`)
-				if err != nil {
-					fmt.Println(err)
+			Eventually(func() string {
+				bundle := &fleetv1.Bundle{}
+
+				if err := cl.Get(ctx, client.ObjectKey{
+					Name:      "mos-" + name,
+					Namespace: testnamespace,
+				}, bundle); err != nil {
+					return err.Error()
 				}
-				return string(r)
+
+				return fmt.Sprint(bundle.Spec.Resources)
 			}, 1*time.Minute, 2*time.Second).Should(
 				m,
 			)
@@ -115,7 +140,17 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan image", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(withUpgradeImage, map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "robin": "batman"}, nil,
+			metaConfig := map[string]runtime.RawExtension{}
+			registry, _ := json.Marshal("registry.com/repository/image:v1.0")
+			metaConfig["upgradeImage"] = runtime.RawExtension{
+				Raw: registry,
+			}
+			batman, _ := json.Marshal("batman")
+			metaConfig["robin"] = runtime.RawExtension{
+				Raw: batman,
+			}
+
+			createsCorrectPlan(withUpgradeImage, metaConfig, nil,
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"registry.com/repository/image"`),
@@ -129,13 +164,28 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		It("creates a new fleet bundle with the upgrade plan container", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(withUpgradePlan, map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "baz": "batman", "jsondata": struct{ Foo string }{Foo: "foostruct"}},
-				&catalog.ContainerSpec{Image: "foo/bar:image"},
+			metaConfig := map[string]runtime.RawExtension{}
+			registry, _ := json.Marshal("registry.com/repository/image:v1.0")
+			metaConfig["upgradeImage"] = runtime.RawExtension{
+				Raw: registry,
+			}
+			batman, _ := json.Marshal("batman")
+			metaConfig["baz"] = runtime.RawExtension{
+				Raw: batman,
+			}
+			nested := struct{ Foo string }{Foo: "foostruct"}
+			nestedJSON, _ := json.Marshal(nested)
+			metaConfig["jsondata"] = runtime.RawExtension{
+				Raw: nestedJSON,
+			}
+
+			createsCorrectPlan(withUpgradePlan, metaConfig,
+				&upgradev1.ContainerSpec{Image: "foo/bar:image"},
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"foo/bar:image"`),
 					ContainSubstring(`"name":"METADATA_BAZ","value":"batman"`),
-					ContainSubstring(`{"name":"METADATA_JSONDATA","value":"{\"foo\":\"foostruct\"}"}`),
+					ContainSubstring(`{"name":"METADATA_JSONDATA","value":"{\"Foo\":\"foostruct\"}"}`),
 					ContainSubstring(`"name":"METADATA_UPGRADEIMAGE","value":"registry.com/repository/image:v1.0"`),
 				),
 			)

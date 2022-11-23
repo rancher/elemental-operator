@@ -18,6 +18,10 @@ package catalog
 
 import (
 	"time"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type DrainSpec struct {
@@ -46,7 +50,7 @@ type ManagedOSImage struct {
 	}
 }
 
-func NewManagedOSImage(name string, targets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
+func LegacyNewManagedOSImage(name string, targets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
 	cordon := false
 
 	return &ManagedOSImage{
@@ -70,7 +74,7 @@ func NewManagedOSImage(name string, targets []map[string]interface{}, mosImage s
 	}
 }
 
-func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
+func LegacyDrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
 	cordon := false
 	return &ManagedOSImage{
 		APIVersion: "elemental.cattle.io/v1beta1",
@@ -85,6 +89,46 @@ func DrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *M
 			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
 			Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
 		}{
+			Cordon:               &cordon,
+			ManagedOSVersionName: managedOSVersion,
+			Drain:                drainSpec,
+		},
+	}
+}
+
+func NewManagedOSImage(namespace string, name string, targets []elementalv1.BundleTarget, mosImage string, mosVersionName string) *elementalv1.ManagedOSImage {
+	cordon := false
+
+	return &elementalv1.ManagedOSImage{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "elemental.cattle.io/v1beta1",
+			Kind:       "ManagedOSImage",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: elementalv1.ManagedOSImageSpec{
+			OSImage:              mosImage,
+			ManagedOSVersionName: mosVersionName,
+			Cordon:               &cordon,
+			Targets:              targets,
+		},
+	}
+}
+
+func DrainOSImage(namespace string, name string, managedOSVersion string, drainSpec *upgradev1.DrainSpec) *elementalv1.ManagedOSImage {
+	cordon := false
+	return &elementalv1.ManagedOSImage{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "elemental.cattle.io/v1beta1",
+			Kind:       "ManagedOSImage",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: elementalv1.ManagedOSImageSpec{
 			Cordon:               &cordon,
 			ManagedOSVersionName: managedOSVersion,
 			Drain:                drainSpec,

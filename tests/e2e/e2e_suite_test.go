@@ -34,6 +34,7 @@ import (
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	e2eConfig "github.com/rancher/elemental-operator/tests/e2e/config"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -48,6 +49,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(clientgoscheme.Scheme))
 	utilruntime.Must(managementv3.AddToScheme(clientgoscheme.Scheme))
 	utilruntime.Must(elementalv1.AddToScheme(clientgoscheme.Scheme))
+	utilruntime.Must(fleetv1.AddToScheme(clientgoscheme.Scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(clientgoscheme.Scheme))
 }
 
