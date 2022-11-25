@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,7 +77,7 @@ func main() {
 					logrus.Debugf("scanning config path %s", arg)
 				}
 
-				files, err := ioutil.ReadDir(arg)
+				files, err := os.ReadDir(arg)
 				if err != nil {
 					logrus.Warnf("cannot read config path contents %s: %s", arg, err.Error())
 					continue
