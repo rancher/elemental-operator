@@ -164,43 +164,50 @@ func run(config elementalv1.Config) {
 	}
 
 	if !isSystemInstalled() {
-		cloudInitURLs := config.Elemental.Install.ConfigURLs
-		if cloudInitURLs == nil {
-			cloudInitURLs = []string{}
+		if err := installElemental(config); err != nil {
+			logrus.Fatal("elemental installation failed: ", err)
 		}
 
-		agentConfPath, err := writeSystemAgentConfig(config.Elemental)
-		if err != nil {
-			logrus.Fatal("failed to write system agent configuration: ", err)
-		}
-		cloudInitURLs = append(cloudInitURLs, agentConfPath)
-
-		if len(config.CloudConfig) > 0 {
-			cloudInitPath, err := writeCloudInit(config.CloudConfig)
-			if err != nil {
-				logrus.Fatal("failed to write custom cloud-init file: ", err)
-			}
-			cloudInitURLs = append(cloudInitURLs, cloudInitPath)
-		}
-
-		config.Elemental.Install.ConfigURLs = cloudInitURLs
-
-		err = installRegistrationYAML(config.Elemental.Registration)
-		if err != nil {
-			logrus.Fatal("failed to prepare after-install hook")
-		}
-
-		installDataMap, err := structToMap(config.Elemental.Install)
-		if err != nil {
-			logrus.Fatal("failed to decode elemental-cli install data: %w", err)
-		}
-
-		err = elementalcli.Run(installDataMap)
-		if err != nil {
-			logrus.Fatal("failed to install elemental: ", err)
-		}
 		logrus.Info("elemental installation completed, please reboot")
 	}
+}
+
+func installElemental(config elementalv1.Config) error {
+	cloudInitURLs := config.Elemental.Install.ConfigURLs
+	if cloudInitURLs == nil {
+		cloudInitURLs = []string{}
+	}
+
+	agentConfPath, err := writeSystemAgentConfig(config.Elemental)
+	if err != nil {
+		return fmt.Errorf("failed to write system agent configuration: %w", err)
+	}
+	cloudInitURLs = append(cloudInitURLs, agentConfPath)
+
+	if len(config.CloudConfig) > 0 {
+		cloudInitPath, err := writeCloudInit(config.CloudConfig)
+		if err != nil {
+			return fmt.Errorf("failed to write custom cloud-init file: %w", err)
+		}
+		cloudInitURLs = append(cloudInitURLs, cloudInitPath)
+	}
+
+	config.Elemental.Install.ConfigURLs = cloudInitURLs
+
+	if err := installRegistrationYAML(config.Elemental.Registration); err != nil {
+		return fmt.Errorf("failed to prepare after-install hook: %w", err)
+	}
+
+	installDataMap, err := structToMap(config.Elemental.Install)
+	if err != nil {
+		return fmt.Errorf("failed to decode elemental-cli install data: %w", err)
+	}
+
+	if err := elementalcli.Run(installDataMap); err != nil {
+		return fmt.Errorf("failed to install elemental: %w", err)
+	}
+
+	return nil
 }
 
 func structToMap(str interface{}) (map[string]interface{}, error) {
