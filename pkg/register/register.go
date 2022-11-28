@@ -119,9 +119,10 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	protoVersion := MessageType(data[0])
 	logrus.Infof("elemental-operator protocol: %d", protoVersion)
 
-	err = sendData(conn, smbios)
-	if err != nil {
-		return nil, err
+	if smbios {
+		if err := sendSMBIOSData(conn); err != nil {
+			return nil, err
+		}
 	}
 
 	logrus.Debug("get elemental configuration")
@@ -135,18 +136,16 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	return io.ReadAll(r)
 }
 
-func sendData(conn *websocket.Conn, smbios bool) error {
-	if smbios {
-		logrus.Debug("send SMBIOS data")
-		data, err := dmidecode.Decode()
-		if err != nil {
-			return errors.Wrap(err, "failed to read dmidecode data")
-		}
-		err = SendJSONData(conn, MsgSmbios, data)
-		if err != nil {
-			logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
-			return fmt.Errorf("sending SMBIOS data: %w", err)
-		}
+func sendSMBIOSData(conn *websocket.Conn) error {
+	logrus.Debug("send SMBIOS data")
+	data, err := dmidecode.Decode()
+	if err != nil {
+		return errors.Wrap(err, "failed to read dmidecode data")
+	}
+	err = SendJSONData(conn, MsgSmbios, data)
+	if err != nil {
+		logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
+		return fmt.Errorf("sending SMBIOS data: %w", err)
 	}
 	return nil
 }
