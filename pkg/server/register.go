@@ -330,7 +330,6 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 }
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) (msgType register.MessageType, err error) {
-	updated := false
 	protoVersion := register.MsgUndefined
 
 	for {
@@ -384,7 +383,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return msgType, err
 			}
 		case register.MsgGet:
-			inventory, err = i.commitMachineInventory(inventory, updated)
+			inventory, err = i.commitMachineInventory(inventory)
 			if err != nil {
 				return msgType, err
 			}
@@ -420,13 +419,13 @@ func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) 
 	return nil
 }
 
-func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory, updated bool) (*elementalv1.MachineInventory, error) {
+func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
 	var err error
 	if inventory.CreationTimestamp.IsZero() {
 		if inventory, err = i.createMachineInventory(inventory); err != nil {
 			return nil, fmt.Errorf("MachineInventory creation failed: %w", err)
 		}
-	} else if updated {
+	} else {
 		if inventory, err = i.updateMachineInventory(inventory); err != nil {
 			return nil, fmt.Errorf("MachineInventory update failed: %w", err)
 		}
