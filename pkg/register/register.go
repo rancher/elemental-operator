@@ -95,6 +95,30 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 	}
 	logrus.Info("TPM attestation successful")
 
+	// Send the version of the communication protocol we support. Old operator (before kubebuilder rework)
+	// will not even reply and will tear down the connection.
+	logrus.Infof("elemental-register protocol: %d", MsgLast)
+	data := []byte{byte(MsgLast)}
+	if err = WriteMessage(conn, MsgVersion, data); err != nil {
+		return nil, err
+	}
+
+	// Retrieve the version of the communication protocol supported by the operator. This could be of help
+	// to decide what we can 'ask' to the operator in future releases (we don't really do nothing with this
+	// right now).
+	msgType, data, err = ReadMessage(conn)
+	if err == nil && msgType != MsgVersion {
+		err = fmt.Errorf("expected msg %s, got %s", MsgVersion, msgType)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to negotiate the protocol version: %w", err)
+	}
+	if len(data) != 1 {
+		return nil, fmt.Errorf("failed to decode protocol version, got %v (%s)", data, data)
+	}
+	protoVersion := MessageType(data[0])
+	logrus.Infof("elemental-operator protocol: %d", protoVersion)
+
 	err = sendData(conn, smbios)
 	if err != nil {
 		return nil, err

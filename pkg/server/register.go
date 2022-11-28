@@ -331,6 +331,8 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) (msgType register.MessageType, err error) {
 	updated := false
+	protoVersion := register.MsgUndefined
+
 	for {
 		var data []byte
 
@@ -338,8 +340,26 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		if err != nil {
 			return msgType, fmt.Errorf("websocket communication interrupted: %w", err)
 		}
+		replyMsgType := register.MsgReady
+		replyData := []byte{}
 
 		switch msgType {
+		case register.MsgVersion:
+			if len(data) != 1 {
+				return msgType, fmt.Errorf("failed to negotiate the protocol version, got: %v (%s)", data, data)
+			}
+			clientVersion := register.MessageType(data[0])
+			protoVersion = clientVersion
+			if clientVersion != register.MsgLast {
+				logrus.Infof("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
+				if clientVersion > register.MsgLast {
+					protoVersion = register.MsgLast
+				}
+			}
+
+			logrus.Infof("Negotiated protocol version: %d", protoVersion)
+			replyMsgType = register.MsgVersion
+			replyData = []byte{byte(protoVersion)}
 		case register.MsgSmbios:
 			smbiosData := map[string]interface{}{}
 			if err = json.Unmarshal(data, &smbiosData); err != nil {
@@ -373,12 +393,15 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return msgType, fmt.Errorf("failed sending elemental cloud config: %w", err)
 			}
 			logrus.Debug("elemental cloud config sent")
+			if protoVersion == register.MsgUndefined {
+				logrus.Warn("Detected old register client: cloud-config data may not be applied correctly")
+			}
 			return msgType, nil
 
 		default:
 			return msgType, fmt.Errorf("got unexpected message: %s", msgType)
 		}
-		if err := register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
+		if err := register.WriteMessage(conn, replyMsgType, replyData); err != nil {
 			return msgType, fmt.Errorf("cannot complete %s exchange", msgType)
 		}
 	}
