@@ -18,37 +18,22 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"regexp"
 	"strings"
 	"testing"
 
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/config"
-	ranchercontrollers "github.com/rancher/elemental-operator/pkg/generated/controllers/management.cattle.io/v3"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"gopkg.in/yaml.v2"
 	"gotest.tools/assert"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-type fakeSettingCache struct {
-}
-
-func (f fakeSettingCache) Get(name string) (*v3.Setting, error) {
-	return &v3.Setting{Value: "cacert"}, nil
-}
-func (f fakeSettingCache) List(selector labels.Selector) ([]*v3.Setting, error) {
-	return nil, nil
-}
-func (f fakeSettingCache) AddIndexer(indexName string, indexer ranchercontrollers.SettingIndexer) {
-}
-func (f fakeSettingCache) GetByIndex(indexName, key string) ([]*v3.Setting, error) {
-	return nil, nil
-}
 
 func TestUnauthenticatedResponse(t *testing.T) {
 	testCase := []struct {
-		config *config.Config
+		config *elementalv1.Config
 		regUrl string
 	}{
 		{
@@ -56,9 +41,9 @@ func TestUnauthenticatedResponse(t *testing.T) {
 			regUrl: "https://rancher/url1",
 		},
 		{
-			config: &config.Config{
-				Elemental: config.Elemental{
-					Registration: config.Registration{
+			config: &elementalv1.Config{
+				Elemental: elementalv1.Elemental{
+					Registration: elementalv1.Registration{
 						EmulateTPM:      true,
 						EmulatedTPMSeed: 127,
 						NoSMBIOS:        true,
@@ -70,9 +55,16 @@ func TestUnauthenticatedResponse(t *testing.T) {
 	}
 
 	for _, test := range testCase {
-		i := &InventoryServer{}
-		i.settingCache = fakeSettingCache{}
-		registration := elm.MachineRegistration{}
+		scheme := runtime.NewScheme()
+		elementalv1.AddToScheme(scheme)
+		managementv3.AddToScheme(scheme)
+
+		i := &InventoryServer{
+			Context: context.Background(),
+			Client:  fake.NewClientBuilder().Build(),
+		}
+
+		registration := elementalv1.MachineRegistration{}
 		registration.Spec.Config = test.config
 		registration.Status.RegistrationURL = test.regUrl
 
@@ -81,13 +73,13 @@ func TestUnauthenticatedResponse(t *testing.T) {
 		err := i.unauthenticatedResponse(&registration, buffer)
 		assert.NilError(t, err, err)
 
-		conf := config.Config{}
+		conf := elementalv1.Config{}
 		err = yaml.NewDecoder(buffer).Decode(&conf)
 		assert.NilError(t, err, strings.TrimSpace(buffer.String()))
 		assert.Equal(t, conf.Elemental.Registration.URL, test.regUrl)
 
 		confReg := conf.Elemental.Registration
-		testReg := config.Registration{}
+		testReg := elementalv1.Registration{}
 		if test.config != nil {
 			testReg = test.config.Elemental.Registration
 		}
@@ -104,14 +96,14 @@ func TestInitNewInventory(t *testing.T) {
 	// e.g., m-66588488-3eb6-4a6d-b642-c994f128c6f1
 
 	testCase := []struct {
-		config       *config.Config
+		config       *elementalv1.Config
 		initName     string
 		expectedName string
 	}{
 		{
-			config: &config.Config{
-				Elemental: config.Elemental{
-					Registration: config.Registration{
+			config: &elementalv1.Config{
+				Elemental: elementalv1.Elemental{
+					Registration: elementalv1.Registration{
 						NoSMBIOS: false,
 					},
 				},
@@ -121,9 +113,9 @@ func TestInitNewInventory(t *testing.T) {
 		},
 
 		{
-			config: &config.Config{
-				Elemental: config.Elemental{
-					Registration: config.Registration{
+			config: &elementalv1.Config{
+				Elemental: elementalv1.Elemental{
+					Registration: elementalv1.Registration{
 						NoSMBIOS: false,
 					},
 				},
@@ -131,9 +123,9 @@ func TestInitNewInventory(t *testing.T) {
 			expectedName: "m-${System Information/UUID}",
 		},
 		{
-			config: &config.Config{
-				Elemental: config.Elemental{
-					Registration: config.Registration{
+			config: &elementalv1.Config{
+				Elemental: elementalv1.Elemental{
+					Registration: elementalv1.Registration{
 						NoSMBIOS: true,
 					},
 				},
@@ -146,14 +138,14 @@ func TestInitNewInventory(t *testing.T) {
 	}
 
 	for _, test := range testCase {
-		registration := &elm.MachineRegistration{
-			Spec: elm.MachineRegistrationSpec{
+		registration := &elementalv1.MachineRegistration{
+			Spec: elementalv1.MachineRegistrationSpec{
 				MachineName: test.initName,
 				Config:      test.config,
 			},
 		}
 
-		inventory := &elm.MachineInventory{}
+		inventory := &elementalv1.MachineInventory{}
 		initInventory(inventory, registration)
 
 		if test.config != nil && test.config.Elemental.Registration.NoSMBIOS {
@@ -278,7 +270,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 	}
 
 	for _, test := range testCase {
-		inventory := &elm.MachineInventory{}
+		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
 		err := mergeInventoryLabels(inventory, test.data)
