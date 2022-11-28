@@ -18,14 +18,14 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
-	"github.com/rancher/elemental-operator/pkg/config"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -51,7 +52,7 @@ const (
 )
 
 func main() {
-	var cfg config.Config
+	var cfg elementalv1.Config
 	var debug bool
 
 	cmd := &cobra.Command{
@@ -82,7 +83,7 @@ func main() {
 					logrus.Debugf("scanning config path %s", arg)
 				}
 
-				files, err := ioutil.ReadDir(arg)
+				files, err := os.ReadDir(arg)
 				if err != nil {
 					logrus.Warnf("cannot read config path contents %s: %s", arg, err.Error())
 					continue
@@ -125,7 +126,7 @@ func main() {
 	}
 }
 
-func run(config config.Config) {
+func run(config elementalv1.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
@@ -170,38 +171,63 @@ func run(config config.Config) {
 	}
 
 	if !isSystemInstalled() {
-		cloudInitURLs := config.Elemental.Install.ConfigURLs
-		if cloudInitURLs == nil {
-			cloudInitURLs = []string{}
+		if err := installElemental(config); err != nil {
+			logrus.Fatal("elemental installation failed: ", err)
 		}
 
-		agentConfPath, err := writeSystemAgentConfig(config.Elemental)
-		if err != nil {
-			logrus.Fatal("failed to write system agent configuration: ", err)
-		}
-		cloudInitURLs = append(cloudInitURLs, agentConfPath)
-
-		if len(config.CloudConfig) > 0 {
-			cloudInitPath, err := writeCloudInit(config.CloudConfig)
-			if err != nil {
-				logrus.Fatal("failed to write custom cloud-init file: ", err)
-			}
-			cloudInitURLs = append(cloudInitURLs, cloudInitPath)
-		}
-
-		config.Elemental.Install.ConfigURLs = cloudInitURLs
-
-		err = installRegistrationYAML(config.Elemental.Registration)
-		if err != nil {
-			logrus.Fatal("failed preparing after-install hook")
-		}
-
-		err = callElementalClient(config.Elemental)
-		if err != nil {
-			logrus.Fatal("failed calling elemental client: ", err)
-		}
 		logrus.Info("elemental installation completed, please reboot")
 	}
+}
+
+func installElemental(config elementalv1.Config) error {
+	cloudInitURLs := config.Elemental.Install.ConfigURLs
+	if cloudInitURLs == nil {
+		cloudInitURLs = []string{}
+	}
+
+	agentConfPath, err := writeSystemAgentConfig(config.Elemental)
+	if err != nil {
+		return fmt.Errorf("failed to write system agent configuration: %w", err)
+	}
+	cloudInitURLs = append(cloudInitURLs, agentConfPath)
+
+	if len(config.CloudConfig) > 0 {
+		cloudInitPath, err := writeCloudInit(config.CloudConfig)
+		if err != nil {
+			return fmt.Errorf("failed to write custom cloud-init file: %w", err)
+		}
+		cloudInitURLs = append(cloudInitURLs, cloudInitPath)
+	}
+
+	config.Elemental.Install.ConfigURLs = cloudInitURLs
+
+	if err := installRegistrationYAML(config.Elemental.Registration); err != nil {
+		return fmt.Errorf("failed to prepare after-install hook: %w", err)
+	}
+
+	installDataMap, err := structToMap(config.Elemental.Install)
+	if err != nil {
+		return fmt.Errorf("failed to decode elemental-cli install data: %w", err)
+	}
+
+	if err := elementalcli.Run(installDataMap); err != nil {
+		return fmt.Errorf("failed to install elemental: %w", err)
+	}
+
+	return nil
+}
+
+func structToMap(str interface{}) (map[string]interface{}, error) {
+	var mapStruct map[string]interface{}
+
+	data, err := json.Marshal(str)
+	if err == nil {
+		if err := json.Unmarshal(data, &mapStruct); err == nil {
+			return mapStruct, nil
+		}
+	}
+
+	return nil, err
 }
 
 // isSystemInstalled checks if the host is currently installed
@@ -211,9 +237,9 @@ func isSystemInstalled() bool {
 	return err == nil
 }
 
-func installRegistrationYAML(reg config.Registration) error {
-	registrationInBytes, err := yaml.Marshal(config.Config{
-		Elemental: config.Elemental{
+func installRegistrationYAML(reg elementalv1.Registration) error {
+	registrationInBytes, err := yaml.Marshal(elementalv1.Config{
+		Elemental: elementalv1.Elemental{
 			Registration: reg,
 		},
 	})
@@ -251,24 +277,41 @@ func installRegistrationYAML(reg config.Registration) error {
 	return err
 }
 
-func writeCloudInit(data map[string]interface{}) (string, error) {
+func writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error) {
 	f, err := os.CreateTemp(os.TempDir(), "*.yaml")
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	bytes, err := yaml.Marshal(data)
-	if err != nil {
-		return "", err
-	}
-	bytes = append([]byte("#cloud-config\n"), bytes...)
+	bytes := []byte("#cloud-config\n")
 
+	for k, v := range cloudConfig {
+		var jsonData []byte
+		if jsonData, err = v.MarshalJSON(); err != nil {
+			return "", fmt.Errorf("%s: %w", k, err)
+		}
+
+		var structData interface{}
+		if err := json.Unmarshal(jsonData, &structData); err != nil {
+			logrus.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
+			return "", fmt.Errorf("%s: %w", k, err)
+		}
+
+		var yamlData []byte
+		if yamlData, err = yaml.Marshal(structData); err != nil {
+			return "", err
+		}
+
+		bytes = append(bytes, append([]byte(fmt.Sprintf("%s:\n", k)), yamlData...)...)
+	}
+
+	logrus.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
 	_, err = f.Write(bytes)
 	return f.Name(), err
 }
 
-func writeSystemAgentConfig(config config.Elemental) (string, error) {
+func writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -341,28 +384,4 @@ func writeSystemAgentConfig(config config.Elemental) (string, error) {
 	})
 
 	return f.Name(), err
-}
-
-func callElementalClient(conf config.Elemental) error {
-	ev, err := config.ToEnv(conf.Install)
-	if err != nil {
-		return err
-	}
-
-	installerOpts := []string{"elemental"}
-	if conf.Install.Debug {
-		installerOpts = append(installerOpts, "--debug")
-	}
-	if conf.Install.ConfigDir != "" {
-		installerOpts = append(installerOpts, "--config-dir", conf.Install.ConfigDir)
-	}
-	installerOpts = append(installerOpts, "install")
-
-	cmd := exec.Command("elemental")
-	cmd.Env = append(os.Environ(), ev...)
-	cmd.Stdout = os.Stdout
-	cmd.Args = installerOpts
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
