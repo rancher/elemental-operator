@@ -65,7 +65,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 		Scheme: scheme,
 	})
 
-	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(cl))
+	aggregation.Watch(ctx, cl.Core().Secret(), o.namespace, "elemental-operator", server.New(ctx, runtimeClient))
 
 	for _, s := range o.services {
 		s := s

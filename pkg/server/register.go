@@ -18,7 +18,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,14 +28,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	elm "github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/config"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/register"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
-	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -121,66 +119,93 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	return conn, err
 }
 
-func (i *InventoryServer) unauthenticatedResponse(registration *elm.MachineRegistration, writer io.Writer) error {
+func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.MachineRegistration, writer io.Writer) error {
 	if registration.Spec.Config == nil {
-		registration.Spec.Config = &config.Config{}
+		registration.Spec.Config = &elementalv1.Config{}
 	}
 
-	mRRegistration := registration.Spec.Config.Elemental.Registration
+	mRegistration := registration.Spec.Config.Elemental.Registration
 
-	return yaml.NewEncoder(writer).Encode(config.Config{
-		Elemental: config.Elemental{
-			Registration: config.Registration{
+	return yaml.NewEncoder(writer).Encode(elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: elementalv1.Registration{
 				URL:             registration.Status.RegistrationURL,
 				CACert:          i.getRancherCACert(),
-				EmulateTPM:      mRRegistration.EmulateTPM,
-				EmulatedTPMSeed: mRRegistration.EmulatedTPMSeed,
-				NoSMBIOS:        mRRegistration.NoSMBIOS,
+				EmulateTPM:      mRegistration.EmulateTPM,
+				EmulatedTPMSeed: mRegistration.EmulatedTPMSeed,
+				NoSMBIOS:        mRegistration.NoSMBIOS,
 			},
 		},
 	})
 }
 
-func (i *InventoryServer) createMachineInventory(inventory *elm.MachineInventory) (*elm.MachineInventory, error) {
-	machines, err := i.machineCache.GetByIndex(tpmHashIndex, inventory.Spec.TPMHash)
-	if err != nil || len(machines) > 0 {
-		return nil, err
-	}
-	if len(machines) > 0 {
-		return nil, fmt.Errorf("machine with TPM hash %s is already registered", machines[0].Spec.TPMHash)
+func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+
+	if inventory.Spec.TPMHash == "" {
+		return nil, fmt.Errorf("machine inventory TPMHash is empty")
 	}
 
-	inventory, err = i.machineClient.Create(inventory)
-	if err == nil {
-		logrus.Infof("new machine inventory created: %s", inventory.Name)
+	mInventoryList := &elementalv1.MachineInventoryList{}
+
+	if err := i.List(i, mInventoryList); err != nil {
+		return nil, fmt.Errorf("cannot retrieve machine inventory list: %w", err)
 	}
-	return inventory, err
+
+	// TODO: add a cache map for machine inventories indexed by TPMHash
+	for _, m := range mInventoryList.Items {
+		if m.Spec.TPMHash == inventory.Spec.TPMHash {
+			return nil, fmt.Errorf("machine inventory with TPM hash %s already present: %s/%s",
+				m.Spec.TPMHash, m.Namespace, m.Name)
+		}
+	}
+
+	if err := i.Create(i, inventory); err != nil {
+		return nil, fmt.Errorf("failed to create machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
+	}
+
+	logrus.Infof("new machine inventory created: %s", inventory.Name)
+
+	return inventory, nil
 }
 
-func (i *InventoryServer) updateMachineInventory(inventory *elm.MachineInventory) (*elm.MachineInventory, error) {
-	inventory, err := i.machineClient.Update(inventory)
-	if err == nil {
-		logrus.Infof("machine inventory updated: %s", inventory.Name)
+func (i *InventoryServer) updateMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+	if err := i.Update(i, inventory); err != nil {
+		return nil, fmt.Errorf("failed to update machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
 	}
-	return inventory, err
+
+	logrus.Infof("machine inventory updated: %s", inventory.Name)
+
+	return inventory, nil
 }
 
-func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.MachineRegistration, error) {
+func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elementalv1.MachineRegistration, error) {
 	token := path.Base(req.URL.Path)
 
-	regs, err := i.machineRegistrationCache.GetByIndex(registrationTokenIndex, token)
-	if apierrors.IsNotFound(err) || len(regs) != 1 {
-		if len(regs) > 1 {
-			logrus.Errorf("Multiple MachineRegistrations have the same token %s: %v", token, regs)
+	mRegistrationList := &elementalv1.MachineRegistrationList{}
+	if err := i.List(i, mRegistrationList); err != nil {
+		return nil, fmt.Errorf("failed to list machine registrations")
+	}
+
+	var mRegistration *elementalv1.MachineRegistration
+
+	// TODO: build machine registrations cache indexed by token
+	for _, m := range mRegistrationList.Items {
+		if m.Status.RegistrationToken == token {
+			// Found two registrations with the same registration token
+			if mRegistration != nil {
+				return nil, fmt.Errorf("machine registrations %s/%s and %s/%s have the same registration token %s",
+					mRegistration.Namespace, mRegistration.Name, m.Namespace, m.Name, token)
+			}
+			mRegistration = &m
 		}
-		if err == nil && len(regs) == 0 {
-			err = fmt.Errorf("MachineRegistration does not exist")
-		}
-		return nil, err
+	}
+
+	if mRegistration == nil {
+		return nil, fmt.Errorf("failed to find machine registration with registration token %s", token)
 	}
 
 	var ready bool
-	for _, condition := range regs[0].Status.Conditions {
+	for _, condition := range mRegistration.Status.Conditions {
 		if condition.Type == "Ready" && condition.Status == "True" {
 			ready = true
 			break
@@ -188,34 +213,39 @@ func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elm.Machin
 	}
 
 	if !ready {
-		return nil, errors.New("MachineRegistration is not ready")
+		return nil, fmt.Errorf("MachineRegistration %s/%s is not ready", mRegistration.Namespace, mRegistration.Name)
 	}
 
-	return regs[0], nil
-
+	return mRegistration, nil
 }
 
-func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, inventory *elm.MachineInventory, registration *elm.MachineRegistration) error {
-	var err error
+func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
+	sa := &corev1.ServiceAccount{}
 
-	sa, err := i.serviceAccountCache.Get(registration.Status.ServiceAccountRef.Namespace,
-		registration.Status.ServiceAccountRef.Name)
-	if err != nil {
-		return err
+	if err := i.Get(i, types.NamespacedName{
+		Name:      registration.Status.ServiceAccountRef.Name,
+		Namespace: registration.Status.ServiceAccountRef.Namespace,
+	}, sa); err != nil {
+		return fmt.Errorf("failed to get service account: %w", err)
 	}
 
-	if len(sa.Secrets) < 1 {
-		return fmt.Errorf("no secrets associated to the %s service account", sa.Name)
+	if len(sa.Secrets) == 0 {
+		return fmt.Errorf("no secrets associated to the %s/%s service account", sa.Namespace, sa.Name)
 	}
 
-	tokenSecret, err := i.secretCache.Get(sa.Namespace, sa.Secrets[0].Name)
-	if err != nil || tokenSecret.Type != v1.SecretTypeServiceAccountToken {
-		return err
+	secret := &corev1.Secret{}
+	err := i.Get(i, types.NamespacedName{
+		Name:      sa.Secrets[0].Name,
+		Namespace: sa.Namespace,
+	}, secret)
+
+	if err != nil || secret.Type != corev1.SecretTypeServiceAccountToken {
+		return fmt.Errorf("failed to get secret: %w", err)
 	}
 
 	serverURL, err := i.getRancherServerURL()
 	if err != nil {
-		return fmt.Errorf("failed to get server-url: %s", err.Error())
+		return fmt.Errorf("failed to get server-url: %w", err)
 	}
 
 	writer, err := conn.NextWriter(websocket.BinaryMessage)
@@ -225,18 +255,18 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	defer writer.Close()
 
 	if registration.Spec.Config == nil {
-		registration.Spec.Config = &config.Config{}
+		registration.Spec.Config = &elementalv1.Config{}
 	}
 
-	return yaml.NewEncoder(writer).Encode(config.Config{
-		Elemental: config.Elemental{
-			Registration: config.Registration{
+	return yaml.NewEncoder(writer).Encode(elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: elementalv1.Registration{
 				URL:    registration.Status.RegistrationURL,
 				CACert: i.getRancherCACert(),
 			},
-			SystemAgent: config.SystemAgent{
+			SystemAgent: elementalv1.SystemAgent{
 				URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
-				Token:           string(tokenSecret.Data["token"]),
+				Token:           string(secret.Data["token"]),
 				SecretName:      inventory.Name,
 				SecretNamespace: inventory.Namespace,
 			},
@@ -280,11 +310,11 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 	return resultStr
 }
 
-func initInventory(inventory *elm.MachineInventory, registration *elm.MachineRegistration) {
+func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
 	const namePrefix = "m-"
 
 	if registration.Spec.Config == nil {
-		registration.Spec.Config = &config.Config{}
+		registration.Spec.Config = &elementalv1.Config{}
 	}
 	inventory.Name = registration.Spec.MachineName
 	if inventory.Name == "" {
@@ -299,7 +329,7 @@ func initInventory(inventory *elm.MachineInventory, registration *elm.MachineReg
 	inventory.Labels = registration.Spec.MachineInventoryLabels
 }
 
-func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.MachineInventory, reg *elm.MachineRegistration) (msgType register.MessageType, err error) {
+func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) (msgType register.MessageType, err error) {
 	updated := false
 	for {
 		var data []byte
@@ -323,7 +353,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 			if inventory.Labels == nil {
 				inventory.Labels = map[string]string{}
 			}
-			for k, v := range reg.Spec.MachineInventoryLabels {
+			for k, v := range registration.Spec.MachineInventoryLabels {
 				parsedData := buildStringFromSmbiosData(smbiosData, v)
 				logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
 				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
@@ -338,7 +368,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 			if err != nil {
 				return msgType, err
 			}
-			err = i.writeMachineInventoryCloudConfig(conn, inventory, reg)
+			err = i.writeMachineInventoryCloudConfig(conn, inventory, registration)
 			if err != nil {
 				return msgType, fmt.Errorf("failed sending elemental cloud config: %w", err)
 			}
@@ -354,7 +384,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elm.Machine
 	}
 }
 
-func mergeInventoryLabels(inventory *elm.MachineInventory, data []byte) error {
+func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
 	labels := map[string]string{}
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
@@ -367,7 +397,7 @@ func mergeInventoryLabels(inventory *elm.MachineInventory, data []byte) error {
 	return nil
 }
 
-func (i *InventoryServer) commitMachineInventory(inventory *elm.MachineInventory, updated bool) (*elm.MachineInventory, error) {
+func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory, updated bool) (*elementalv1.MachineInventory, error) {
 	var err error
 	if inventory.CreationTimestamp.IsZero() {
 		if inventory, err = i.createMachineInventory(inventory); err != nil {
