@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-#!BuildTag: elemental/elemental-operator:latest
-#!BuildTag: elemental/elemental-operator:0.0.0-noversion
-#!BuildTag: elemental/elemental-operator:0.0.0-noversion-build%RELEASE%
+#!BuildTag: rancher/elemental-operator-chart:latest
+#!BuildTag: rancher/elemental-operator-chart:0.0.0-noversion
+#!BuildTag: rancher/elemental-operator-chart:0.0.0-noversion-%RELEASE%
 apiVersion: v2
 name: elemental-operator
 description: Rancher Elemental Operator
