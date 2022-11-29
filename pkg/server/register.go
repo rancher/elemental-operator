@@ -96,7 +96,7 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		initInventory(inventory, registration)
 	}
 
-	_, err = i.serveLoop(conn, inventory, registration)
+	err = i.serveLoop(conn, inventory, registration)
 	if err != nil {
 		logrus.Error(err)
 		return
@@ -329,15 +329,15 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	inventory.Labels = registration.Spec.MachineInventoryLabels
 }
 
-func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) (msgType register.MessageType, err error) {
+func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
 	protoVersion := register.MsgUndefined
 
 	for {
 		var data []byte
 
-		msgType, data, err = register.ReadMessage(conn)
+		msgType, data, err := register.ReadMessage(conn)
 		if err != nil {
-			return msgType, fmt.Errorf("websocket communication interrupted: %w", err)
+			return fmt.Errorf("websocket communication interrupted: %w", err)
 		}
 		replyMsgType := register.MsgReady
 		replyData := []byte{}
@@ -346,7 +346,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgVersion:
 			protoVersion, err = decodeProtocolVersion(data)
 			if err != nil {
-				return msgType, fmt.Errorf("failed to negotiate protol version: %w", err)
+				return fmt.Errorf("failed to negotiate protol version: %w", err)
 			}
 			logrus.Infof("Negotiated protocol version: %d", protoVersion)
 			replyMsgType = register.MsgVersion
@@ -354,32 +354,32 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgSmbios:
 			err = updateInventoryFromSMBIOSData(data, inventory, registration)
 			if err != nil {
-				return msgType, fmt.Errorf("failed to extract labels from SMBIOS data: %w", err)
+				return fmt.Errorf("failed to extract labels from SMBIOS data: %w", err)
 			}
 			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
 		case register.MsgLabels:
 			if err := mergeInventoryLabels(inventory, data); err != nil {
-				return msgType, err
+				return err
 			}
 		case register.MsgGet:
 			inventory, err = i.commitMachineInventory(inventory)
 			if err != nil {
-				return msgType, err
+				return err
 			}
 			if err := i.writeMachineInventoryCloudConfig(conn, inventory, registration); err != nil {
-				return msgType, fmt.Errorf("failed sending elemental cloud config: %w", err)
+				return fmt.Errorf("failed sending elemental cloud config: %w", err)
 			}
 			logrus.Debug("Elemental cloud config sent")
 			if protoVersion == register.MsgUndefined {
 				logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
 			}
-			return msgType, nil
+			return nil
 
 		default:
-			return msgType, fmt.Errorf("got unexpected message: %s", msgType)
+			return fmt.Errorf("got unexpected message: %s", msgType)
 		}
 		if err := register.WriteMessage(conn, replyMsgType, replyData); err != nil {
-			return msgType, fmt.Errorf("cannot complete %s exchange", msgType)
+			return fmt.Errorf("cannot complete %s exchange", msgType)
 		}
 	}
 }
