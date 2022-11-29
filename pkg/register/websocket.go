@@ -34,7 +34,8 @@ const (
 	MsgSmbios
 	MsgLabels
 	MsgGet
-	MsgLast = MsgGet // MsgLast must point to the last message
+	MsgVersion
+	MsgLast = MsgVersion // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -49,6 +50,8 @@ func (mt MessageType) String() string {
 		return "Labels"
 	case MsgGet:
 		return "Get"
+	case MsgVersion:
+		return "Version"
 	default:
 		return "Unknown"
 	}

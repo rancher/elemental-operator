@@ -33,8 +33,53 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulatedSeed int64) ([]byte, error) {
+func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedSeed int64) ([]byte, error) {
 
+	tpmAuth := &tpm.AuthClient{}
+	if emulateTPM {
+		logrus.Info("Enable TPM emulation")
+		tpmAuth.EmulateTPM(emulatedSeed)
+	}
+
+	logrus.Infof("Connect to %s", url)
+	conn, err := initWebsocketConn(url, caCert, tpmAuth)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	logrus.Debug("Start TPM attestation")
+	if err := doTPMAttestation(tpmAuth, conn); err != nil {
+		return nil, fmt.Errorf("failed TPM based auth: %w", err)
+	}
+	logrus.Info("TPM attestation successful")
+
+	logrus.Debugf("elemental-register protocol version: %d", MsgLast)
+	protoVersion, err := negotiateProtoVersion(conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
+	}
+	logrus.Infof("Negotiated protocol version: %d", protoVersion)
+
+	if smbios {
+		logrus.Info("Send SMBIOS data")
+		if err := sendSMBIOSData(conn); err != nil {
+			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
+		}
+	}
+
+	logrus.Info("Get elemental configuration")
+	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
+		return nil, fmt.Errorf("request elemental configuration: %w", err)
+	}
+	_, r, err := conn.NextReader()
+	if err != nil {
+		return nil, fmt.Errorf("read elemental configuration: %w", err)
+	}
+	return io.ReadAll(r)
+}
+
+func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*websocket.Conn, error) {
 	dialer := websocket.DefaultDialer
 
 	if len(caCert) > 0 {
@@ -46,11 +91,6 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 		dialer.TLSClientConfig = &tls.Config{RootCAs: pool}
 	}
 
-	tpmAuth := &tpm.AuthClient{}
-	if emulatedTPM {
-		logrus.Info("Starting TPM emulation")
-		tpmAuth.EmulateTPM(emulatedSeed)
-	}
 	authToken, tpmHash, err := tpmAuth.GetAuthToken()
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate authentication token from TPM: %w", err)
@@ -76,53 +116,60 @@ func Register(url string, caCert []byte, smbios bool, emulatedTPM bool, emulated
 		}
 		return nil, err
 	}
-	defer conn.Close()
 	_ = conn.SetWriteDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 	_ = conn.SetReadDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 
-	logrus.Debug("start TPM attestation")
-	err = tpmAuth.Init(conn)
-	if err != nil {
-		return nil, fmt.Errorf("failed TPM based authentication: %w", err)
+	return conn, nil
+}
+
+func doTPMAttestation(tpmAuth *tpm.AuthClient, conn *websocket.Conn) error {
+	if err := tpmAuth.Init(conn); err != nil {
+		return err
 	}
 
 	msgType, _, err := ReadMessage(conn)
 	if err != nil {
-		return nil, fmt.Errorf("expecting auth reply: %w", err)
+		return fmt.Errorf("expecting auth reply: %w", err)
 	}
 	if msgType != MsgReady {
-		return nil, fmt.Errorf("expecting '%v' but got '%v'", MsgReady, msgType)
+		return fmt.Errorf("expecting '%v' but got '%v'", MsgReady, msgType)
 	}
-	logrus.Info("TPM attestation successful")
-
-	err = sendData(conn, smbios)
-	if err != nil {
-		return nil, err
-	}
-
-	logrus.Debug("get elemental configuration")
-	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
-		return nil, fmt.Errorf("request elemental configuration: %w", err)
-	}
-	_, r, err := conn.NextReader()
-	if err != nil {
-		return nil, fmt.Errorf("read elemental configuration: %w", err)
-	}
-	return io.ReadAll(r)
+	return nil
 }
 
-func sendData(conn *websocket.Conn, smbios bool) error {
-	if smbios {
-		logrus.Debug("send SMBIOS data")
-		data, err := dmidecode.Decode()
-		if err != nil {
-			return errors.Wrap(err, "failed to read dmidecode data")
-		}
-		err = SendJSONData(conn, MsgSmbios, data)
-		if err != nil {
-			logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
-			return fmt.Errorf("sending SMBIOS data: %w", err)
-		}
+func negotiateProtoVersion(conn *websocket.Conn) (MessageType, error) {
+	// Send the version of the communication protocol we support. Old operator (before kubebuilder rework)
+	// will not even reply and will tear down the connection.
+	data := []byte{byte(MsgLast)}
+	if err := WriteMessage(conn, MsgVersion, data); err != nil {
+		return MsgUndefined, err
+	}
+
+	// Retrieve the version of the communication protocol supported by the operator. This could be of help
+	// to decide what we can 'ask' to the operator in future releases (we don't really do nothing with this
+	// right now).
+	msgType, data, err := ReadMessage(conn)
+	if err != nil {
+		return MsgUndefined, fmt.Errorf("communication error: %w", err)
+	}
+	if msgType != MsgVersion {
+		return MsgUndefined, fmt.Errorf("expected msg %s, got %s", MsgVersion, msgType)
+	}
+	if len(data) != 1 {
+		return MsgUndefined, fmt.Errorf("failed to decode protocol version, got %v (%s)", data, data)
+	}
+	return MessageType(data[0]), err
+}
+
+func sendSMBIOSData(conn *websocket.Conn) error {
+	data, err := dmidecode.Decode()
+	if err != nil {
+		return errors.Wrap(err, "failed to read dmidecode data")
+	}
+	err = SendJSONData(conn, MsgSmbios, data)
+	if err != nil {
+		logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
+		return err
 	}
 	return nil
 }
