@@ -160,6 +160,7 @@ reload-operator: build-docker-operator chart
 
 .PHONY: vendor
 vendor:
+	go mod tidy
 	go mod vendor
 	curl -L 'https://github.com/google/go-tpm-tools/archive/refs/tags/$(GO_TPM_TAG).tar.gz' --output go-tpm-tools.tar.gz
 	tar xaf go-tpm-tools.tar.gz --strip-components=1 -C vendor/github.com/google/go-tpm-tools
