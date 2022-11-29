@@ -344,38 +344,17 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 
 		switch msgType {
 		case register.MsgVersion:
-			if len(data) != 1 {
-				return msgType, fmt.Errorf("failed to negotiate the protocol version, got: %v (%s)", data, data)
+			protoVersion, err = decodeProtocolVersion(data)
+			if err != nil {
+				return msgType, fmt.Errorf("failed to negotiate protol version: %w", err)
 			}
-			clientVersion := register.MessageType(data[0])
-			protoVersion = clientVersion
-			if clientVersion != register.MsgLast {
-				logrus.Infof("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
-				if clientVersion > register.MsgLast {
-					protoVersion = register.MsgLast
-				}
-			}
-
 			logrus.Infof("Negotiated protocol version: %d", protoVersion)
 			replyMsgType = register.MsgVersion
 			replyData = []byte{byte(protoVersion)}
 		case register.MsgSmbios:
-			smbiosData := map[string]interface{}{}
-			if err = json.Unmarshal(data, &smbiosData); err != nil {
-				return msgType, fmt.Errorf("cannot extract SMBios data: %w", err)
-			}
-			// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
-			// to set the machine hostname. Also set it to lowercase
-			inventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(buildStringFromSmbiosData(smbiosData, inventory.Name), "-"))
-			logrus.Debug("Adding labels from registration")
-			// Add extra label info from data coming from smbios and based on the registration data
-			if inventory.Labels == nil {
-				inventory.Labels = map[string]string{}
-			}
-			for k, v := range registration.Spec.MachineInventoryLabels {
-				parsedData := buildStringFromSmbiosData(smbiosData, v)
-				logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
-				inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
+			err = updateInventoryFromSMBIOSData(data, inventory, registration)
+			if err != nil {
+				return msgType, fmt.Errorf("failed to extract labels from SMBIOS data: %w", err)
 			}
 			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
 		case register.MsgLabels:
@@ -387,13 +366,12 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err != nil {
 				return msgType, err
 			}
-			err = i.writeMachineInventoryCloudConfig(conn, inventory, registration)
-			if err != nil {
+			if err := i.writeMachineInventoryCloudConfig(conn, inventory, registration); err != nil {
 				return msgType, fmt.Errorf("failed sending elemental cloud config: %w", err)
 			}
-			logrus.Debug("elemental cloud config sent")
+			logrus.Debug("Elemental cloud config sent")
 			if protoVersion == register.MsgUndefined {
-				logrus.Warn("Detected old register client: cloud-config data may not be applied correctly")
+				logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
 			}
 			return msgType, nil
 
@@ -404,6 +382,46 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			return msgType, fmt.Errorf("cannot complete %s exchange", msgType)
 		}
 	}
+}
+
+func decodeProtocolVersion(data []byte) (register.MessageType, error) {
+	protoVersion := register.MsgUndefined
+
+	if len(data) != 1 {
+		return protoVersion, fmt.Errorf("unknown format: %v (%s)", data, data)
+	}
+	clientVersion := register.MessageType(data[0])
+	protoVersion = clientVersion
+	if clientVersion != register.MsgLast {
+		logrus.Debugf("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
+		if clientVersion > register.MsgLast {
+			protoVersion = register.MsgLast
+		}
+	}
+
+	return protoVersion, nil
+}
+
+// updateInventoryFromSMBIOSData() updates mInventory Name and Labels from the MachineRegistration and the SMBIOS data
+func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineInventory, mRegistration *elementalv1.MachineRegistration) error {
+	smbiosData := map[string]interface{}{}
+	if err := json.Unmarshal(data, &smbiosData); err != nil {
+		return err
+	}
+	// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
+	// to set the machine hostname. Also set it to lowercase
+	mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(buildStringFromSmbiosData(smbiosData, mInventory.Name), "-"))
+	logrus.Debug("Adding labels from registration")
+	// Add extra label info from data coming from smbios and based on the registration data
+	if mInventory.Labels == nil {
+		mInventory.Labels = map[string]string{}
+	}
+	for k, v := range mRegistration.Spec.MachineInventoryLabels {
+		parsedData := buildStringFromSmbiosData(smbiosData, v)
+		logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
+		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
+	}
+	return nil
 }
 
 func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
