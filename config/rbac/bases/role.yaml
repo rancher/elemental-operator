@@ -182,14 +182,6 @@ rules:
   - patch
   - update
 - apiGroups:
-  - elemental.cattle.io
-  resources:
-  - manangedosversions/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - fleet.cattle.io
   resources:
   - bundles

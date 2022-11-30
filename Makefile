@@ -77,7 +77,6 @@ register:
 support:
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-support $(ROOT_DIR)/cmd/support
 
-
 .PHONY: build-docker-operator
 build-docker-operator:
 	DOCKER_BUILDKIT=1 docker build \
@@ -176,7 +175,7 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		paths=./controllers/... \
-		paths=./cmd/operator/operator-kubebuilder/... \
+		paths=./cmd/operator/operator/... \
 		crd:crdVersions=v1 \
 		rbac:roleName=manager-role \
 		output:crd:dir=./config/crd/bases \
