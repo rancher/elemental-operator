@@ -10,7 +10,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v1.0.0-rc2
-    created: "2022-11-29T16:25:00.990394661Z"
+    created: "2022-11-30T13:29:44.184500615Z"
     description: Rancher Elemental Operator
     digest: c644e2fa8497282d9b0f91731837185b3bac87c8f360c4e8808fee16a80e5c8b
     name: elemental-operator
@@ -26,7 +26,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v1.0.0-rc1
-    created: "2022-11-29T16:25:00.989804052Z"
+    created: "2022-11-30T13:29:44.184096606Z"
     description: Rancher Elemental Operator
     digest: 10a0533caf12940bd63b3604cb74804f7263655d001774928a62f3fd07d93f69
     name: elemental-operator
@@ -42,7 +42,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.6.3
-    created: "2022-11-29T16:25:00.989214443Z"
+    created: "2022-11-30T13:29:44.183728398Z"
     description: Rancher Elemental Operator
     digest: b52b4ef71f06d72c54d223ca77cc4e667509e5d2bbfa7e057085d38b334e97fd
     name: elemental-operator
@@ -58,7 +58,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.6.2
-    created: "2022-11-29T16:25:00.988495832Z"
+    created: "2022-11-30T13:29:44.183348989Z"
     description: Rancher Elemental Operator
     digest: 3a01e972b97739109b6cdfbc370c66a508f32ff5bf2880a7c76e64e6cc1e1951
     name: elemental-operator
@@ -74,7 +74,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.6.1
-    created: "2022-11-29T16:25:00.985181382Z"
+    created: "2022-11-30T13:29:44.18291598Z"
     description: Rancher Elemental Operator
     digest: 34e1c397cddad2285a08c06d6c1e63ae89006479e19be960317f6a62c83a49c0
     name: elemental-operator
@@ -90,7 +90,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.6.0
-    created: "2022-11-29T16:25:00.984826876Z"
+    created: "2022-11-30T13:29:44.182423869Z"
     description: Rancher Elemental Operator
     digest: fe4aab90b5af482a6182c044b8c45a6e875ad3e51fffcef6a1d57df568937338
     name: elemental-operator
@@ -106,7 +106,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.5.0
-    created: "2022-11-29T16:25:00.98443767Z"
+    created: "2022-11-30T13:29:44.181955059Z"
     description: Rancher Elemental Operator
     digest: bdde38905125ced3e08e189b2e87b4121f3b72922cd7c6cbb2a33828f739957a
     name: elemental-operator
@@ -122,7 +122,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.4.4
-    created: "2022-11-29T16:25:00.984065765Z"
+    created: "2022-11-30T13:29:44.181471548Z"
     description: Rancher Elemental Operator
     digest: 0d216d8836f717d0eb1816e0a216a025ffad720ff845ff9c1dbc7e21ddc865ce
     name: elemental-operator
@@ -138,7 +138,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.4.3
-    created: "2022-11-29T16:25:00.98373616Z"
+    created: "2022-11-30T13:29:44.180975537Z"
     description: Rancher Elemental Operator
     digest: 1156a41eb9789c70f950c3e6abb01a7201bdf252ee639bb87c0fb70e9477f826
     name: elemental-operator
@@ -154,7 +154,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.4.2
-    created: "2022-11-29T16:25:00.983375354Z"
+    created: "2022-11-30T13:29:44.180496027Z"
     description: Rancher Elemental Operator
     digest: cfc0e623a42cc7c0c1bd44050ce80052dffbfef46f8e15c5b938b4398ca7cd0a
     name: elemental-operator
@@ -170,7 +170,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.4.1
-    created: "2022-11-29T16:25:00.982972348Z"
+    created: "2022-11-30T13:29:44.179686209Z"
     description: Rancher Elemental Operator
     digest: ec23973fb168ab731007b58ef20e76e8ff9431d6af8505b3fd95bc2ad2e83b78
     name: elemental-operator
@@ -186,7 +186,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.4.0
-    created: "2022-11-29T16:25:00.982585942Z"
+    created: "2022-11-30T13:29:44.179167097Z"
     description: Rancher Elemental Operator
     digest: 91965eb28aa4b4133ad316aa6fdeef3ad521be93e0ce893373411dc39d40cf18
     name: elemental-operator
@@ -202,7 +202,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.3.0
-    created: "2022-11-29T16:25:00.982187436Z"
+    created: "2022-11-30T13:29:44.178536384Z"
     description: Rancher Elemental Operator
     digest: 9e2cd3e569f01b9e4de818388ec51972f9f6c8ac6204b5a0df9e1ac287a4317e
     name: elemental-operator
@@ -218,7 +218,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.2.1
-    created: "2022-11-29T16:25:00.981860931Z"
+    created: "2022-11-30T13:29:44.177945171Z"
     description: Rancher Elemental Operator
     digest: de2031b6e7bc3cd1f90439a889fd7ea6b777e50838d91a81e08a2946ba4ced16
     name: elemental-operator
@@ -234,11 +234,11 @@ entries:
       catalog.cattle.io/release-name: elemental-operator
     apiVersion: v2
     appVersion: v0.1.1
-    created: "2022-11-29T16:25:00.981509026Z"
+    created: "2022-11-30T13:29:44.177563162Z"
     description: Rancher Elemental Operator
     digest: d0c751fa8cb762a998ec75fee0afa3a3e06b1188650a28b4f509dabb736ffee4
     name: elemental-operator
     urls:
     - https://rancher.github.io/elemental-operator/build/elemental-operator-0.1.1.tgz
     version: 0.1.1
-generated: "2022-11-29T16:25:00.980973818Z"
+generated: "2022-11-30T13:29:44.17699785Z"
