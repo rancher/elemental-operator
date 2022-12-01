@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"sigs.k8s.io/yaml"
 )
 
 // MachineInventorySelectorReconciler reconciles a MachineInventorySelector object.
@@ -327,6 +328,20 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		return "", nil, fmt.Errorf("failed to create new stop elemental agent plan: %w", err)
 	}
 
+	type LabelsFromInventory struct {
+		NodeLabels []string `yaml:"node-label+"`
+	}
+
+	nodeLabelsFromInventory := LabelsFromInventory{NodeLabels: []string{}}
+	for label, value := range mInventory.Labels {
+		nodeLabelsFromInventory.NodeLabels = append(nodeLabelsFromInventory.NodeLabels, fmt.Sprintf("%s=%s", label, value))
+	}
+
+	nodeLabelsFromInventoryInYaml, err := yaml.Marshal(nodeLabelsFromInventory)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to marshal node labels from inventory: %w", err)
+	}
+
 	p := applyinator.Plan{
 		Files: []applyinator.File{
 			{
@@ -340,8 +355,18 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				Permissions: "0600",
 			},
 			{
+				Content:     base64.StdEncoding.EncodeToString(nodeLabelsFromInventoryInYaml),
+				Path:        "/etc/rancher/rke2/config.yaml.d/99-elemental-inventory-labels.yaml",
+				Permissions: "0600",
+			},
+			{
 				Content:     base64.StdEncoding.EncodeToString([]byte("node-name: " + mInventory.Name)),
 				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-name.yaml",
+				Permissions: "0600",
+			},
+			{
+				Content:     base64.StdEncoding.EncodeToString(nodeLabelsFromInventoryInYaml),
+				Path:        "/etc/rancher/k3s/config.yaml.d/99-elemental-inventory-labels.yaml",
 				Permissions: "0600",
 			},
 			{
