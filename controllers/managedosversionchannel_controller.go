@@ -51,7 +51,7 @@ type ManagedOSVersionChannelReconciler struct {
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversionchannels,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversionchannels/status,verbs=get;update;patch;list
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversions,verbs=get;list;create;update;patch;delete
-// +kubebuilder:rbac:groups=elemental.cattle.io,resources=manangedosversions/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversions/status,verbs=get;update;patch
 
 func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.syncerProvider == nil {
