@@ -14,26 +14,75 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package operatorCmd
+package operator
 
 import (
+	"context"
+	"flag"
+	"net/http"
+	"os"
 	"time"
 
-	"github.com/rancher/elemental-operator/pkg/operator"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/controllers"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/server"
 	"github.com/rancher/elemental-operator/pkg/version"
-	"github.com/rancher/wrangler/pkg/signals"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/steve/pkg/aggregation"
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+)
+
+// IMPORTANT: The RBAC permissions below should be reviewed after old code is deprecated.
+// +kubebuilder:rbac:groups="",resources=events,verbs=patch;create
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;create;delete;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+
+var (
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 type rootConfig struct {
-	Debug           bool
-	SyncInterval    time.Duration
-	Namespace       string
-	DefaultRegistry string
-	OperatorImage   string
-	SyncNamespaces  []string
+	enableLeaderElection        bool
+	profilerAddress             string
+	metricsBindAddr             string
+	syncPeriod                  time.Duration
+	leaderElectionLeaseDuration time.Duration
+	leaderElectionRenewDeadline time.Duration
+	leaderElectionRetryPeriod   time.Duration
+	webhookPort                 int
+	webhookCertDir              string
+	healthAddr                  string
+	defaultRegistry             string
+	operatorImage               string
+	watchNamespace              string
+}
+
+func init() {
+	klog.InitFlags(nil)
+
+	utilruntime.Must(elementalv1.AddToScheme(scheme))
+	utilruntime.Must(managementv3.AddToScheme(scheme))
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+	utilruntime.Must(upgradev1.AddToScheme(scheme))
+	utilruntime.Must(fleetv1.AddToScheme(scheme))
 }
 
 func NewOperatorCommand() *cobra.Command {
@@ -41,11 +90,8 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "operator",
-		Short: "Run the Kubernetes operator.",
+		Short: "Run the Kubernetes operator using kubebuilder.",
 		Run: func(_ *cobra.Command, _ []string) {
-			if config.Debug {
-				logrus.SetLevel(logrus.DebugLevel)
-			}
 			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			operatorRun(&config)
 		},
@@ -53,40 +99,172 @@ func NewOperatorCommand() *cobra.Command {
 
 	viper.AutomaticEnv()
 
-	cmd.PersistentFlags().StringVar(&config.Namespace, "namespace", "", "namespace to run the operator on")
-	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
-	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "namespace")
+	cmd.PersistentFlags().StringVar(&config.profilerAddress, "profiler-address", "",
+		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
+	_ = viper.BindPFlag("profiler-address", cmd.PersistentFlags().Lookup("profiler-address"))
 
-	cmd.PersistentFlags().StringArrayVar(&config.SyncNamespaces, "sync-namespaces", []string{}, "namespace to watch for machine registrations")
-	_ = viper.BindPFlag("sync-namespaces", cmd.PersistentFlags().Lookup("sync-namespaces"))
+	cmd.PersistentFlags().StringVar(&config.metricsBindAddr, "metrics-bind-addr", ":8080",
+		"The address the metric endpoint binds to.")
+	_ = viper.BindPFlag("metrics-bind-addr", cmd.PersistentFlags().Lookup("metrics-bind-addr"))
 
-	cmd.PersistentFlags().StringVar(&config.OperatorImage, "operator-image", "", "Operator image. Used to gather the results from the syncer by running the 'display' command")
+	cmd.PersistentFlags().DurationVar(&config.leaderElectionLeaseDuration, "leader-elect-lease-duration", 15*time.Second,
+		"Interval at which non-leader candidates will wait to force acquire leadership (duration string)")
+	_ = viper.BindPFlag("leader-elect-lease-duration", cmd.PersistentFlags().Lookup("leader-elect-lease-duration"))
+
+	cmd.PersistentFlags().DurationVar(&config.leaderElectionRetryPeriod, "leader-elect-retry-period", 10*time.Second,
+		"Duration the LeaderElector clients should wait between tries of actions (duration string)")
+	_ = viper.BindPFlag("leader-elect-retry-period", cmd.PersistentFlags().Lookup("leader-elect-retry-period"))
+
+	cmd.PersistentFlags().BoolVar(&config.enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	_ = viper.BindPFlag("leader-elect", cmd.PersistentFlags().Lookup("leader-elect"))
+
+	cmd.PersistentFlags().IntVar(&config.webhookPort, "webhook-port", 9443,
+		"Webhook Server port.")
+	_ = viper.BindPFlag("webhook-port", cmd.PersistentFlags().Lookup("webhook-port"))
+
+	cmd.PersistentFlags().StringVar(&config.webhookCertDir, "webhook-cert-dir", ":8080",
+		"Webhook cert dir, only used when webhook-port is specified.")
+	_ = viper.BindPFlag("webhook-cert-dir", cmd.PersistentFlags().Lookup("webhook-cert-dir"))
+
+	cmd.PersistentFlags().StringVar(&config.healthAddr, "health-addr", ":9440",
+		"The address the health endpoint binds to.")
+	_ = viper.BindPFlag("health-addr", cmd.PersistentFlags().Lookup("health-addr"))
+
+	cmd.PersistentFlags().StringVar(&config.defaultRegistry, "default-registry", "", "default registry to prepend to os images")
+	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
+
+	cmd.PersistentFlags().StringVar(&config.operatorImage, "operator-image", "",
+		"Operator image. Used to gather the results from the syncer by running the 'display' command")
 	_ = viper.BindPFlag("operator-image", cmd.PersistentFlags().Lookup("operator-image"))
 	_ = cobra.MarkFlagRequired(cmd.PersistentFlags(), "operator-image")
 
-	cmd.PersistentFlags().StringVar(&config.DefaultRegistry, "default-registry", "", "default registry to prepend to os images")
-	_ = viper.BindPFlag("default-registry", cmd.PersistentFlags().Lookup("default-registry"))
+	cmd.PersistentFlags().StringVar(&config.watchNamespace, "namespace", "", "Namespace that the controller watches to reconcile objects.")
+	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
 
-	cmd.PersistentFlags().DurationVar(&config.SyncInterval, "sync-interval", 60*time.Minute, "how often to check for new os versions")
-	_ = viper.BindPFlag("sync-interval", cmd.PersistentFlags().Lookup("sync-interval"))
-
-	cmd.PersistentFlags().BoolVar(&config.Debug, "debug", false, "enable debug logging")
-	_ = viper.BindPFlag("debug", cmd.PersistentFlags().Lookup("debug"))
+	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 
 	return cmd
 }
 
 func operatorRun(config *rootConfig) {
-	ctx := signals.SetupSignalContext()
+	ctrl.SetLogger(klogr.New())
 
-	logrus.Infof("Starting controller at namespace %s. Upgrade sync interval at: %s", config.Namespace, config.SyncInterval)
-
-	if err := operator.Run(ctx,
-		operator.WithNamespace(config.Namespace),
-		operator.WithDefaultRegistry(config.DefaultRegistry),
-	); err != nil {
-		logrus.Fatal(err)
+	if config.profilerAddress != "" {
+		klog.Infof("Profiler listening for requests at %s", config.profilerAddress)
+		go func() {
+			klog.Info(http.ListenAndServe(config.profilerAddress, nil))
+		}()
 	}
 
-	<-ctx.Done()
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:             scheme,
+		MetricsBindAddress: config.metricsBindAddr,
+		LeaderElection:     config.enableLeaderElection,
+		LeaderElectionID:   "controller-leader-election-elemental-operator",
+		LeaseDuration:      &config.leaderElectionLeaseDuration,
+		RenewDeadline:      &config.leaderElectionRenewDeadline,
+		RetryPeriod:        &config.leaderElectionRetryPeriod,
+		SyncPeriod:         &config.syncPeriod,
+		ClientDisableCacheFor: []client.Object{
+			&corev1.ConfigMap{},
+			&corev1.Secret{},
+			&elementalv1.ManagedOSVersion{},
+		},
+		Port:                   config.webhookPort,
+		CertDir:                config.webhookCertDir,
+		HealthProbeBindAddress: config.healthAddr,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	// Setup the context that's going to be used in controllers and for the manager.
+	ctx := ctrl.SetupSignalHandler()
+
+	setupChecks(mgr)
+	setupReconcilers(mgr, config)
+
+	// +kubebuilder:scaffold:builder
+	runRegistration(ctx, mgr, config.watchNamespace)
+	runManager(ctx, mgr)
+}
+
+func runManager(ctx context.Context, mgr ctrl.Manager) {
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctx); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
+	}
+}
+
+func runRegistration(ctx context.Context, mgr ctrl.Manager, namespace string) {
+	setupLog.Info("starting registration")
+	restConfig, err := runtimeconfig.GetConfig()
+	if err != nil {
+		setupLog.Error(err, "Failed to find kubeconfig")
+		os.Exit(1)
+	}
+
+	cl, err := clients.NewFromConfig(restConfig)
+	if err != nil {
+		setupLog.Error(err, "Error building restconfig")
+		os.Exit(1)
+	}
+
+	aggregation.Watch(ctx, cl.Core().Secret(), namespace, "elemental-operator", server.New(ctx, mgr.GetClient()))
+
+	if err := cl.Start(ctx); err != nil {
+		setupLog.Error(err, "problem running registration")
+		os.Exit(1)
+	}
+}
+
+func setupChecks(mgr ctrl.Manager) {
+	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create ready check")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create health check")
+		os.Exit(1)
+	}
+}
+
+func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
+	if err := (&controllers.MachineRegistrationReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineRegistration")
+		os.Exit(1)
+	}
+	if err := (&controllers.MachineInventoryReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineInventory")
+		os.Exit(1)
+	}
+	if err := (&controllers.MachineInventorySelectorReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "MachineInventorySelector")
+		os.Exit(1)
+	}
+	if err := (&controllers.ManagedOSImageReconciler{
+		Client:          mgr.GetClient(),
+		DefaultRegistry: config.defaultRegistry,
+		Scheme:          scheme,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSImage")
+		os.Exit(1)
+	}
+	if err := (&controllers.ManagedOSVersionChannelReconciler{
+		Client:        mgr.GetClient(),
+		OperatorImage: config.operatorImage,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersionChannel")
+		os.Exit(1)
+	}
 }

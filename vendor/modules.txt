@@ -393,7 +393,6 @@ github.com/rancher/wrangler/pkg/patch
 github.com/rancher/wrangler/pkg/randomtoken
 github.com/rancher/wrangler/pkg/ratelimit
 github.com/rancher/wrangler/pkg/schemes
-github.com/rancher/wrangler/pkg/signals
 github.com/rancher/wrangler/pkg/stringset
 github.com/rancher/wrangler/pkg/summary
 github.com/rancher/wrangler/pkg/unstructured
