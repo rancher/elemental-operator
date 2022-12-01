@@ -242,10 +242,12 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 
 	upgradeContainerSpec.Env = metadataEnv
 
+	uniqueName := name.SafeConcatName("os-upgrader", managedOSImage.Name)
+
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "os-upgrader",
+				Name: uniqueName,
 			},
 			Rules: []rbacv1.PolicyRule{
 				{
@@ -262,28 +264,28 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 		},
 		&rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "os-upgrader",
+				Name: uniqueName,
 			},
 			Subjects: []rbacv1.Subject{{
 				Kind:      "ServiceAccount",
-				Name:      "os-upgrader",
+				Name:      uniqueName,
 				Namespace: rancherSystemNamespace,
 			}},
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: rbacv1.GroupName,
 				Kind:     "ClusterRole",
-				Name:     "os-upgrader",
+				Name:     uniqueName,
 			},
 		},
 		&corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader",
+				Name:      uniqueName,
 				Namespace: rancherSystemNamespace,
 			},
 		},
 		&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader-data",
+				Name:      uniqueName,
 				Namespace: rancherSystemNamespace,
 			},
 			Data: map[string][]byte{
@@ -296,7 +298,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 				APIVersion: "upgrade.cattle.io/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "os-upgrader",
+				Name:      uniqueName,
 				Namespace: rancherSystemNamespace,
 			},
 			Spec: upgradev1.PlanSpec{
@@ -305,13 +307,13 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 				Tolerations: []corev1.Toleration{{
 					Operator: corev1.TolerationOpExists,
 				}},
-				ServiceAccountName: "os-upgrader",
+				ServiceAccountName: uniqueName,
 				NodeSelector:       selector,
 				Cordon:             cordon,
 				Drain:              managedOSImage.Spec.Drain,
 				Prepare:            managedOSImage.Spec.Prepare,
 				Secrets: []upgradev1.SecretSpec{{
-					Name: "os-upgrader-data",
+					Name: uniqueName,
 					Path: "/run/data",
 				}},
 				Upgrade: upgradeContainerSpec,
