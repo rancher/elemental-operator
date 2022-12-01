@@ -175,7 +175,19 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		return err
 	}
 
-	if len(machineInventories.Items) == 0 {
+	var mInventory *elementalv1.MachineInventory
+
+	if len(machineInventories.Items) > 0 {
+		for i := range machineInventories.Items {
+			if isAlreadyOwned(machineInventories.Items[i]) {
+				continue
+			}
+			mInventory = &machineInventories.Items[i]
+			break
+		}
+	}
+
+	if mInventory == nil {
 		logger.Info("No matching machine inventories found")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.ReadyCondition,
@@ -184,15 +196,6 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		})
 
 		return nil
-	}
-
-	mInventory := &elementalv1.MachineInventory{}
-	for i := range machineInventories.Items {
-		if isAlreadyOwned(machineInventories.Items[i]) {
-			continue
-		}
-		mInventory = &machineInventories.Items[i]
-		break
 	}
 
 	patchBase := client.MergeFrom(mInventory.DeepCopy())
