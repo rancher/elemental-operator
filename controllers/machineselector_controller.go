@@ -594,12 +594,12 @@ func hasMatchingLabels(ctx context.Context, miSelector *elementalv1.MachineInven
 	}
 
 	if selector.Empty() {
-		log.V(5).Info("machine selector has empty selector", "mInventory.Name", miSelector.Name)
+		log.V(5).Info("machine selector has empty selector", "mSelector.Name", miSelector.Name)
 		return false
 	}
 
 	if !selector.Matches(labels.Set(mInventory.Labels)) {
-		log.V(5).Info("machine inventory has mismatch labels", "mInventory.Name", mInventory.Name)
+		log.V(5).Info("machine inventory has mismatch labels", "mInventory.Name", mInventory.Name, "mSelector.Name", miSelector.Name)
 		return false
 	}
 
