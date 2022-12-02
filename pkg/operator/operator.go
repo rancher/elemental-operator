@@ -55,39 +55,60 @@ func Run(ctx context.Context, settings ...Setting) error {
 		logrus.Fatalf("Failed to create CRD factory: %v", err)
 	}
 
+	helmLabels := map[string]string{
+		"app.kubernetes.io/managed-by": "Helm",
+		"release-name":                 "elemental-operator",
+	}
+
+	helmCAPILabels := map[string]string{
+		"cluster.x-k8s.io/v1beta1":     "v1beta1",
+		"app.kubernetes.io/managed-by": "Helm",
+	}
+
+	helmAnnotations := map[string]string{
+		"meta.helm.sh/release-name":      "elemental-operator",
+		"meta.helm.sh/release-namespace": "cattle-elemental-system",
+	}
+
 	err = factory.BatchCreateCRDs(ctx,
 		crd.CRD{
 			SchemaObject: elm.ManagedOSImage{},
 			Status:       true,
+			Annotations:  helmAnnotations,
+			Labels:       helmLabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.MachineInventory{},
 			Status:       true,
+			Annotations:  helmAnnotations,
+			Labels:       helmLabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.MachineRegistration{},
 			Status:       true,
+			Annotations:  helmAnnotations,
+			Labels:       helmLabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.ManagedOSVersion{},
 			Status:       true,
+			Annotations:  helmAnnotations,
+			Labels:       helmLabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.ManagedOSVersionChannel{},
 			Status:       true,
+			Annotations:  helmAnnotations,
+			Labels:       helmLabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.MachineInventorySelector{},
 			Status:       true,
-			Labels: map[string]string{
-				"cluster.x-k8s.io/v1beta1": "v1beta1",
-			},
+			Labels:       helmCAPILabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.MachineInventorySelectorTemplate{},
-			Labels: map[string]string{
-				"cluster.x-k8s.io/v1beta1": "v1beta1",
-			},
+			Labels:       helmCAPILabels,
 		},
 	).BatchWait()
 	if err != nil {
