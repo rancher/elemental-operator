@@ -196,7 +196,7 @@ func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elementalv
 				return nil, fmt.Errorf("machine registrations %s/%s and %s/%s have the same registration token %s",
 					mRegistration.Namespace, mRegistration.Name, m.Namespace, m.Name, token)
 			}
-			mRegistration = &m
+			mRegistration = (&m).DeepCopy()
 		}
 	}
 
