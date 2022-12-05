@@ -63,6 +63,7 @@ func Run(ctx context.Context, settings ...Setting) error {
 	helmCAPILabels := map[string]string{
 		"cluster.x-k8s.io/v1beta1":     "v1beta1",
 		"app.kubernetes.io/managed-by": "Helm",
+		"release-name":                 "elemental-operator",
 	}
 
 	helmAnnotations := map[string]string{
@@ -104,10 +105,12 @@ func Run(ctx context.Context, settings ...Setting) error {
 		crd.CRD{
 			SchemaObject: elm.MachineInventorySelector{},
 			Status:       true,
+			Annotations:  helmAnnotations,
 			Labels:       helmCAPILabels,
 		},
 		crd.CRD{
 			SchemaObject: elm.MachineInventorySelectorTemplate{},
+			Annotations:  helmAnnotations,
 			Labels:       helmCAPILabels,
 		},
 	).BatchWait()
