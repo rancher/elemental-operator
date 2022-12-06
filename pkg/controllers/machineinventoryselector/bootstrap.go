@@ -148,7 +148,7 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 	}
 
 	type LabelsFromInventory struct {
-		NodeLabels []string `yaml:"node-label+"`
+		NodeLabels []string `yaml:"node-label"`
 	}
 
 	nodeLabelsFromInventory := LabelsFromInventory{NodeLabels: []string{}}
