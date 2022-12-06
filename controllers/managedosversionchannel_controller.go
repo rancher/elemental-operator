@@ -23,6 +23,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/syncer"
+	"github.com/rancher/elemental-operator/pkg/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +81,9 @@ func (r *ManagedOSVersionChannelReconciler) Reconcile(ctx context.Context, req r
 	}
 
 	patchBase := client.MergeFrom(managedOSVersionChannel.DeepCopy())
+
+	// We have to sanitize the conditions because old API definitions didn't have proper validation.
+	managedOSVersionChannel.Status.Conditions = util.RemoveInvalidConditions(managedOSVersionChannel.Status.Conditions)
 
 	// Collect errors as an aggregate to return together after all patches have been performed.
 	var errs []error
