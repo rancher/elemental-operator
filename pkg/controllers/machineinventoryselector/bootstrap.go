@@ -23,12 +23,13 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/sirupsen/logrus"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v2"
+
+	"github.com/rancher/elemental-operator/pkg/apis/elemental.cattle.io/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/controllers/machineinventory"
 )
 
 // bootstrapReadyHandler once the `InventoryReady` condition is true the bootstrap will set the bootstrap plan and record the checksum.  Once the bootstrap checksum is applied to the machine inventory bootstrap is considered complete.
@@ -148,7 +149,9 @@ func (h *handler) getBootstrapPlan(selector *v1beta1.MachineInventorySelector, i
 	}
 
 	type LabelsFromInventory struct {
-		NodeLabels []string `yaml:"node-label"`
+		// NOTE: The '+' is not a typo and is needed when adding labels to k3s/rke
+		// instead of replacing them.
+		NodeLabels []string `yaml:"node-label+"`
 	}
 
 	nodeLabelsFromInventory := LabelsFromInventory{NodeLabels: []string{}}
