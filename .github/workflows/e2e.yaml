@@ -68,7 +68,7 @@ jobs:
       matrix:
         kubernetes: [ "v1.24.6", "v1.23.12"]
         replicas: ["1"]
-        rancherVersion : ["2.6.9"]
+        rancherVersion : ["2.7.0"]
     runs-on: ubuntu-latest
     needs: push-docker
     name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
