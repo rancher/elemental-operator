@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 	"github.com/rancher/system-agent/pkg/applyinator"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -85,6 +86,9 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 	}
 
 	patchBase := client.MergeFrom(machineInventorySelector.DeepCopy())
+
+	// We have to sanitize the conditions because old API definitions didn't have proper validation.
+	machineInventorySelector.Status.Conditions = util.RemoveInvalidConditions(machineInventorySelector.Status.Conditions)
 
 	// Collect errors as an aggregate to return together after all patches have been performed.
 	var errs []error

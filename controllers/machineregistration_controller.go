@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
 	corev1 "k8s.io/api/core/v1"
@@ -74,6 +75,9 @@ func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req recon
 	}
 
 	patchBase := client.MergeFrom(mRegistration.DeepCopy())
+
+	// We have to sanitize the conditions because old API definitions didn't have proper validation.
+	mRegistration.Status.Conditions = util.RemoveInvalidConditions(mRegistration.Status.Conditions)
 
 	// Collect errors as an aggregate to return together after all patches have been performed.
 	var errs []error

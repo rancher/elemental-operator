@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/name"
@@ -90,6 +91,9 @@ func (r *ManagedOSImageReconciler) Reconcile(ctx context.Context, req reconcile.
 	}
 
 	patchBase := client.MergeFrom(managedOSImage.DeepCopy())
+
+	// We have to sanitize the conditions because old API definitions didn't have proper validation.
+	managedOSImage.Status.Conditions = util.RemoveInvalidConditions(managedOSImage.Status.Conditions)
 
 	// Collect errors as an aggregate to return together after all patches have been performed.
 	var errs []error
