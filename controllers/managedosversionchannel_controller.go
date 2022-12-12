@@ -39,6 +39,7 @@ import (
 
 const baseRateTime = 1 * time.Second
 const maxDelayTime = 256 * time.Second
+const defaultSyncTime = "1h"
 
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
 type ManagedOSVersionChannelReconciler struct {
@@ -121,6 +122,10 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "spec.Type can't be empty",
 		})
 		return ctrl.Result{}, nil
+	}
+
+	if managedOSVersionChannel.Spec.SyncInterval == "" {
+		managedOSVersionChannel.Spec.SyncInterval = defaultSyncTime
 	}
 
 	interval, err := time.ParseDuration(managedOSVersionChannel.Spec.SyncInterval)
