@@ -197,6 +197,48 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(res1.RequeueAfter).Should(BeNumerically(">", 50*time.Second))
 	})
 
+	It("should reconcile and sync managed os version channel object with default sync time", func() {
+		managedOSVersion := &elementalv1.ManagedOSVersion{}
+		managedOSVersionChannel.Spec.Type = "custom"
+
+		name := types.NamespacedName{
+			Namespace: managedOSVersionChannel.Namespace,
+			Name:      managedOSVersionChannel.Name,
+		}
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		// No error and status updated (triggers requeue)
+		res1, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res1.RequeueAfter).To(Equal(0 * time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersionChannel)).To(Succeed())
+
+		Expect(managedOSVersionChannel.Status.Conditions).To(HaveLen(1))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.SyncedReason))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+
+		// No status update, hence the requeue is delayed until next interval
+		res1, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res1.RequeueAfter).Should(BeNumerically(">", 3550*time.Second))
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: managedOSVersionChannel.Namespace,
+		}, managedOSVersion)).To(Succeed())
+
+		// No status update, hence the requeue is delayed again until next interval
+		res2, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(res2.RequeueAfter).Should(BeNumerically("<", res1.RequeueAfter))
+		Expect(res2.RequeueAfter).Should(BeNumerically(">", 3550*time.Second))
+	})
+
 	It("should reconcile managed os version channel object without a type", func() {
 		managedOSVersionChannel.Spec.SyncInterval = "1m"
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
