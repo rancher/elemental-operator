@@ -265,8 +265,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(managedOSVersionChannel.Status.Conditions[0].Message).To(ContainSubstring("spec.Type can't be empty"))
 	})
 
-	It("should reconcile managed os version channel object without a sync interval", func() {
+	It("should reconcile managed os version channel object with a bad a sync interval", func() {
 		managedOSVersionChannel.Spec.Type = "custom"
+		managedOSVersionChannel.Spec.SyncInterval = "badtime"
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
 
 		res, err := r.Reconcile(ctx, reconcile.Request{
