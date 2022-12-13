@@ -17,84 +17,10 @@ limitations under the License.
 package catalog
 
 import (
-	"time"
-
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-type DrainSpec struct {
-	Timeout                  *time.Duration `json:"timeout,omitempty" yaml:"timeout"`
-	GracePeriod              *int32         `json:"gracePeriod,omitempty" yaml:"gracePeriod"`
-	DeleteLocalData          *bool          `json:"deleteLocalData,omitempty" yaml:"deleteLocalData"`
-	IgnoreDaemonSets         *bool          `json:"ignoreDaemonSets,omitempty" yaml:"ignoreDaemonSets"`
-	Force                    bool           `json:"force,omitempty" yaml:"force"`
-	DisableEviction          bool           `json:"disableEviction,omitempty" yaml:"disableEviction"`
-	SkipWaitForDeleteTimeout int            `json:"skipWaitForDeleteTimeout,omitempty" yaml:"skipWaitForDeleteTimeout"`
-}
-
-type ManagedOSImage struct {
-	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
-	Kind       string `json:"kind" yaml:"kind"`
-	Metadata   struct {
-		Name string `json:"name" yaml:"name"`
-	} `json:"metadata" yaml:"metadata"`
-
-	Spec struct {
-		Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
-		Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
-		OSImage              string                   `json:"osImage" yaml:"osImage"`
-		ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-		Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
-	}
-}
-
-func LegacyNewManagedOSImage(name string, targets []map[string]interface{}, mosImage string, mosVersionName string) *ManagedOSImage {
-	cordon := false
-
-	return &ManagedOSImage{
-		APIVersion: "elemental.cattle.io/v1beta1",
-		Metadata: struct {
-			Name string "json:\"name\" yaml:\"name\""
-		}{Name: name},
-		Kind: "ManagedOSImage",
-		Spec: struct {
-			Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
-			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
-			OSImage              string                   `json:"osImage" yaml:"osImage"`
-			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-			Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
-		}{
-			OSImage:              mosImage,
-			ManagedOSVersionName: mosVersionName,
-			Cordon:               &cordon,
-			Targets:              targets,
-		},
-	}
-}
-
-func LegacyDrainOSImage(name string, managedOSVersion string, drainSpec *DrainSpec) *ManagedOSImage {
-	cordon := false
-	return &ManagedOSImage{
-		APIVersion: "elemental.cattle.io/v1beta1",
-		Metadata: struct {
-			Name string "json:\"name\" yaml:\"name\""
-		}{Name: name},
-		Kind: "ManagedOSImage",
-		Spec: struct {
-			Cordon               *bool                    `json:"cordon,omitempty" yaml:"cordon"`
-			Drain                *DrainSpec               `json:"drain,omitempty" yaml:"drain"`
-			OSImage              string                   `json:"osImage" yaml:"osImage"`
-			ManagedOSVersionName string                   `json:"managedOSVersionName" yaml:"managedOSVersionName"`
-			Targets              []map[string]interface{} `json:"clusterTargets" yaml:"clusterTargets"`
-		}{
-			Cordon:               &cordon,
-			ManagedOSVersionName: managedOSVersion,
-			Drain:                drainSpec,
-		},
-	}
-}
 
 func NewManagedOSImage(namespace string, name string, targets []elementalv1.BundleTarget, mosImage string, mosVersionName string) *elementalv1.ManagedOSImage {
 	cordon := false

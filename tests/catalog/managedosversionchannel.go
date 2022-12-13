@@ -23,22 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-type ManagedOSVersionChannelSpec struct {
-	Type             string                 `json:"type" yaml:"type"`
-	Options          map[string]interface{} `json:"options" yaml:"options"`
-	UpgradeContainer *ContainerSpec         `json:"upgradeContainer,omitempty" yaml:"upgradeContainer"`
-	SyncInterval     string                 `json:"syncInterval,omitempty" yaml:"syncInterval"`
-}
-
-type ManagedOSVersionChannel struct {
-	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
-	Kind       string `json:"kind" yaml:"kind"`
-	Metadata   struct {
-		Name string `json:"name" yaml:"name"`
-	} `json:"metadata" yaml:"metadata"`
-	Spec ManagedOSVersionChannelSpec `json:"spec,omitempty"`
-}
-
 func NewManagedOSVersionChannel(namespace, name, sType, interval string, options map[string]runtime.RawExtension, upgradeContainer *upgradev1.ContainerSpec) *elementalv1.ManagedOSVersionChannel {
 	return &elementalv1.ManagedOSVersionChannel{
 		TypeMeta: metav1.TypeMeta{
@@ -51,22 +35,6 @@ func NewManagedOSVersionChannel(namespace, name, sType, interval string, options
 		},
 		Spec: elementalv1.ManagedOSVersionChannelSpec{
 			Type:             sType,
-			SyncInterval:     interval,
-			Options:          options,
-			UpgradeContainer: upgradeContainer,
-		},
-	}
-}
-
-func LegacyNewManagedOSVersionChannel(name string, t string, interval string, options map[string]interface{}, upgradeContainer *ContainerSpec) *ManagedOSVersionChannel {
-	return &ManagedOSVersionChannel{
-		APIVersion: "elemental.cattle.io/v1beta1",
-		Metadata: struct {
-			Name string "json:\"name\" yaml:\"name\""
-		}{Name: name},
-		Kind: "ManagedOSVersionChannel",
-		Spec: ManagedOSVersionChannelSpec{
-			Type:             t,
 			SyncInterval:     interval,
 			Options:          options,
 			UpgradeContainer: upgradeContainer,
