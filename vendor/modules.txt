@@ -1,3 +1,6 @@
+# github.com/StackExchange/wmi v1.2.1
+## explicit; go 1.13
+github.com/StackExchange/wmi
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -56,6 +59,10 @@ github.com/go-logr/logr
 # github.com/go-logr/zapr v1.2.0
 ## explicit; go 1.16
 github.com/go-logr/zapr
+# github.com/go-ole/go-ole v1.2.6
+## explicit; go 1.12
+github.com/go-ole/go-ole
+github.com/go-ole/go-ole/oleutil
 # github.com/gobuffalo/flect v0.2.4
 ## explicit; go 1.13
 github.com/gobuffalo/flect
@@ -190,6 +197,32 @@ github.com/itchyny/gojq
 # github.com/itchyny/timefmt-go v0.1.3
 ## explicit; go 1.14
 github.com/itchyny/timefmt-go
+# github.com/jaypipes/ghw v0.9.0
+## explicit; go 1.15
+github.com/jaypipes/ghw
+github.com/jaypipes/ghw/pkg/baseboard
+github.com/jaypipes/ghw/pkg/bios
+github.com/jaypipes/ghw/pkg/block
+github.com/jaypipes/ghw/pkg/chassis
+github.com/jaypipes/ghw/pkg/context
+github.com/jaypipes/ghw/pkg/cpu
+github.com/jaypipes/ghw/pkg/gpu
+github.com/jaypipes/ghw/pkg/linuxdmi
+github.com/jaypipes/ghw/pkg/linuxpath
+github.com/jaypipes/ghw/pkg/marshal
+github.com/jaypipes/ghw/pkg/memory
+github.com/jaypipes/ghw/pkg/net
+github.com/jaypipes/ghw/pkg/option
+github.com/jaypipes/ghw/pkg/pci
+github.com/jaypipes/ghw/pkg/pci/address
+github.com/jaypipes/ghw/pkg/product
+github.com/jaypipes/ghw/pkg/snapshot
+github.com/jaypipes/ghw/pkg/topology
+github.com/jaypipes/ghw/pkg/unitutil
+github.com/jaypipes/ghw/pkg/util
+# github.com/jaypipes/pcidb v1.0.0
+## explicit; go 1.17
+github.com/jaypipes/pcidb
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
@@ -205,6 +238,9 @@ github.com/magiconair/properties
 # github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 ## explicit; go 1.9
 github.com/matttproud/golang_protobuf_extensions/pbutil
+# github.com/mitchellh/go-homedir v1.1.0
+## explicit
+github.com/mitchellh/go-homedir
 # github.com/mitchellh/mapstructure v1.4.2
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
@@ -704,6 +740,9 @@ gotest.tools/assert/cmp
 gotest.tools/internal/difflib
 gotest.tools/internal/format
 gotest.tools/internal/source
+# howett.net/plist v1.0.0
+## explicit; go 1.12
+howett.net/plist
 # k8s.io/api v0.23.0 => k8s.io/api v0.22.2
 ## explicit; go 1.16
 k8s.io/api/admission/v1
