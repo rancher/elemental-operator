@@ -78,12 +78,12 @@ func (cf ConditionFunc) WithContext() ConditionWithContextFunc {
 	}
 }
 
-// Poll by interval and a timeout for a given condiction
+// PollImmediate Poll by interval and a timeout for a given condiction
 func PollImmediate(interval, timeout time.Duration, condition ConditionFunc) error {
 	return PollImmediateWithContext(context.Background(), interval, timeout, condition.WithContext())
 }
 
-// Poll by interval and a timeout for a given condiction with a context
+// PollImmediateWithContext Poll by interval and a timeout for a given condiction with a context
 func PollImmediateWithContext(ctx context.Context, interval, timeout time.Duration, condition ConditionWithContextFunc) error {
 	return poll(ctx, true, poller(interval, timeout), condition)
 }
@@ -190,7 +190,7 @@ func poller(interval, timeout time.Duration) WaitWithContextFunc {
 
 // WaitForWithContext continually checks 'fn' as driven by 'wait'.
 //
-// WaitForWithContext gets a channel from 'wait()'', and then invokes 'fn'
+// WaitForWithContext gets a channel from 'wait()”, and then invokes 'fn'
 // once for every value placed on the channel and once more when the
 // channel is closed. If the channel is closed and 'fn'
 // returns false without error, WaitForWithContext returns ErrWaitTimeout.

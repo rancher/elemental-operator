@@ -567,6 +567,26 @@ func writeTemporaryYAML(v interface{}) (string, error) {
 	return tmpfile.Name(), nil
 }
 
+func writeTemporaryJSON(v interface{}) (string, error) {
+	tmpfile, err := ioutil.TempFile(os.TempDir(), "json-")
+	if err != nil {
+		return "", err
+	}
+
+	content, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	if _, err := tmpfile.Write(content); err != nil {
+		return "", err
+	}
+	if err := tmpfile.Close(); err != nil {
+		return "", err
+	}
+
+	return tmpfile.Name(), nil
+}
+
 func GetObject(name, namespace, resourceType string, obj interface{}) (err error) {
 	r, err := GetData(namespace, resourceType, name, `jsonpath={}`)
 	if err != nil {
@@ -590,6 +610,27 @@ func (k *Kubectl) EventuallyPodMatch(namespace, label string, timeout, poll time
 // ApplyYAML applies arbitrary interfaces with kubectl.
 func (k *Kubectl) ApplyYAML(namespace string, name string, v interface{}) error {
 	path, err := writeTemporaryYAML(v)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+
+	ops := []string{"apply", "-f", path}
+	if namespace != "" {
+		ops = append([]string{"--namespace", namespace}, ops...)
+	}
+
+	_, err = runBinary(kubeCtlCmd, ops...)
+	if err != nil {
+		return errors.Wrapf(err, "Applying resource %s. %s", name, v)
+	}
+
+	return nil
+}
+
+// ApplyJSON applies arbitrary interfaces with kubectl.
+func (k *Kubectl) ApplyJSON(namespace string, name string, v interface{}) error {
+	path, err := writeTemporaryJSON(v)
 	if err != nil {
 		return err
 	}

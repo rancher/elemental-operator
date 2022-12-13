@@ -314,7 +314,7 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
-# github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95
+# github.com/rancher-sandbox/ele-testhelpers v0.0.0-20221213084338-a8ffdd2b87e3
 ## explicit; go 1.17
 github.com/rancher-sandbox/ele-testhelpers/helpers
 github.com/rancher-sandbox/ele-testhelpers/http

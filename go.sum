@@ -1236,8 +1236,8 @@ github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3
 github.com/qri-io/starlib v0.4.2-0.20200213133954-ff2e8cd5ef8d/go.mod h1:7DPO4domFU579Ga6E61sB9VFNaniPVwJP5C4bBCu3wA=
 github.com/quobyte/api v0.1.8/go.mod h1:jL7lIHrmqQ7yh05OJ+eEEdHr0u/kmT1Ff9iHd+4H6VI=
 github.com/rackspace/gophercloud v0.0.0-20150408191457-ce0f487f6747/go.mod h1:4bJ1FwuaBZ6dt1VcDX5/O662mwR8GWqS4l68H6hkoYQ=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95 h1:cZD7FniYy3X2NUES9SG0JG2ooKFBDn+yt5QgbxjJxFk=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20220624082733-2dbd4e2d2b95/go.mod h1:rZj2a+V44LvtFVH/vsFXtHYIWMP1Q9aSrl6RGLbk49A=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20221213084338-a8ffdd2b87e3 h1:rzJkQVjg5FFf9rMR92USGhFIuPGk4slXN+nkPQANxx0=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20221213084338-a8ffdd2b87e3/go.mod h1:rZj2a+V44LvtFVH/vsFXtHYIWMP1Q9aSrl6RGLbk49A=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda h1:TMkKDQTmjYpxl8/3XDh0oAJDvjM0C0vtQYdGs2I9MoE=
 github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda/go.mod h1:cUw+h4wm01VdavMOjUMVQ5m/b2oiOjZ7gweI8AlybO4=
 github.com/rancher/aks-operator v1.0.2 h1:R6niUq/IlhzKpzRFmRR9YMiMePJh1flEqFO86us7OMY=
