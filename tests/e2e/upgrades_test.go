@@ -244,7 +244,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel3", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML("", osImage, catalog.NewManagedOSImage(
+			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
 				[]elementalv1.BundleTarget{},
@@ -289,7 +289,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel4", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML("", osImage, catalog.NewManagedOSImage(
+			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
 				[]elementalv1.BundleTarget{},
