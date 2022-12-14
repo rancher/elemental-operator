@@ -3,6 +3,12 @@ push_workflow:
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: elemental-operator
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev
+        package: elemental-operator-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev:Teal53
+        package: operator-image
   filters:
     branches:
       only:
@@ -17,8 +23,40 @@ tag_workflow:
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: elemental-operator
+    - trigger_services:
+        project: isv:Rancher:Elemental:Staging
+        package: elemental-operator-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev
+        package: elemental-operator-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Staging:Teal53
+        package: operator-image
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev:Teal53
+        package: operator-image
   filters:
     branches:
       only:
         - main
     event: tag_push
+
+pr_workflow:
+  steps:
+    - branch_package:
+        source_project: isv:Rancher:Elemental:Dev
+        source_package: elemental-operator
+        target_project: isv:Rancher:Elemental:PR
+    - branch_package:
+        source_project: isv:Rancher:Elemental:Dev
+        source_package: elemental-operator-helm
+        target_project: isv:Rancher:Elemental:PR
+    - branch_package:
+        source_project: isv:Rancher:Elemental:Dev:Teal53
+        source_package: operator-image
+        target_project: isv:Rancher:Elemental:PR:Teal53
+  filters:
+    event: pull_request
+    branches:
+      only:
+        - main
