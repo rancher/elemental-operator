@@ -22,17 +22,19 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
-const discoveryPluginImage = "quay.io/costoolkit/upgradechannel-discovery:v0.4.0"
+const discoveryPluginImage = `"quay.io/costoolkit/upgradechannel-discovery:v0.4.0"`
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
@@ -40,9 +42,9 @@ func getPlan(s string) (up *upgradev1.Plan, err error) {
 	return
 }
 
-func waitTestChannelPopulate(k *kubectl.Kubectl, mr *catalog.ManagedOSVersionChannel, name string, image, version string) {
+func waitTestChannelPopulate(k *kubectl.Kubectl, mr *elementalv1.ManagedOSVersionChannel, name string, image, version string) {
 	EventuallyWithOffset(1, func() error {
-		return k.ApplyYAML(fleetNamespace, name, mr)
+		return k.ApplyJSON("", name, mr)
 	}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 	EventuallyWithOffset(1, func() string {
@@ -149,26 +151,27 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			}, 3*time.Minute, 2*time.Second).Should(Equal([]string{}))
 		})
 
-		createsCorrectPlan := func(meta map[string]interface{}, c *catalog.ContainerSpec, m types.GomegaMatcher) {
-			ov := catalog.LegacyNewManagedOSVersion(
-				osVersion, "v1.0", "0.0.0",
+		createsCorrectPlan := func(meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
+			ov := catalog.NewManagedOSVersion(
+				fleetNamespace, osVersion, "v1.0", "0.0.0",
 				meta,
 				c,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML(fleetNamespace, osVersion, ov)
+				return k.ApplyJSON("", osVersion, ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
-			ui := catalog.LegacyNewManagedOSImage(
+			ui := catalog.NewManagedOSImage(
+				fleetNamespace,
 				osImage,
-				[]map[string]interface{}{},
+				[]elementalv1.BundleTarget{},
 				"",
 				osVersion,
 			)
 
 			EventuallyWithOffset(1, func() error {
-				return k.ApplyYAML(fleetNamespace, osImage, ui)
+				return k.ApplyJSON("", osImage, ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
 			EventuallyWithOffset(1, func() string {
@@ -185,7 +188,9 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		It("tries to apply a plan", func() {
 			By("creating a new ManagedOSImage referencing a ManagedOSVersion")
 
-			createsCorrectPlan(map[string]interface{}{"upgradeImage": "registry.com/repository/image:v1.0", "robin": "batman"}, nil,
+			createsCorrectPlan(map[string]runtime.RawExtension{
+				"upgradeImage": {Raw: []byte(`"registry.com/repository/image:v1.0"`)}, "robin": {Raw: []byte(`"batman"`)},
+			}, nil,
 				And(
 					ContainSubstring(`"version":"v1.0"`),
 					ContainSubstring(`"image":"registry.com/repository/image"`),
@@ -221,19 +226,17 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("applies an os-upgrade from a channel", func() {
-			mr := catalog.LegacyNewManagedOSVersionChannel(
+			mr := catalog.NewManagedOSVersionChannel(
+				fleetNamespace,
 				"testchannel3",
 				"custom",
 				"1m",
-				map[string]interface{}{
-					"image": discoveryPluginImage,
-					"envs": []map[string]string{
-						{
-							"name":  "REPOSITORY",
-							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
-						},
-					},
-					"args": []string{"git"},
+				map[string]runtime.RawExtension{
+					"image": {Raw: []byte(discoveryPluginImage)},
+					"envs": {Raw: []byte(
+						`[{"name": "REPOSITORY","value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo"}]`,
+					)},
+					"args": {Raw: []byte(`["git"]`)},
 				},
 				nil,
 			)
@@ -241,9 +244,10 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel3", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML(fleetNamespace, osImage, catalog.LegacyNewManagedOSImage(
+			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
+				fleetNamespace,
 				osImage,
-				[]map[string]interface{}{},
+				[]elementalv1.BundleTarget{},
 				"",
 				"v0.1.0-beta1",
 			))
@@ -263,21 +267,19 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("overwrites default container spec from a channel", func() {
-			mr := catalog.LegacyNewManagedOSVersionChannel(
+			mr := catalog.NewManagedOSVersionChannel(
+				fleetNamespace,
 				"testchannel4",
 				"custom",
 				"1m",
-				map[string]interface{}{
-					"image": discoveryPluginImage,
-					"envs": []map[string]string{
-						{
-							"name":  "REPOSITORY",
-							"value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo",
-						},
-					},
-					"args": []string{"git"},
+				map[string]runtime.RawExtension{
+					"image": {Raw: []byte(discoveryPluginImage)},
+					"envs": {Raw: []byte(
+						`[{"name": "REPOSITORY","value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo"}]`,
+					)},
+					"args": {Raw: []byte(`["git"]`)},
 				},
-				&catalog.ContainerSpec{
+				&upgradev1.ContainerSpec{
 					Image:   "Foobarz",
 					Command: []string{"foo"},
 					Args:    []string{"baz"},
@@ -287,9 +289,10 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel4", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
 
-			err := k.ApplyYAML(fleetNamespace, osImage, catalog.LegacyNewManagedOSImage(
+			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
+				fleetNamespace,
 				osImage,
-				[]map[string]interface{}{},
+				[]elementalv1.BundleTarget{},
 				"",
 				"v0.1.0-beta1",
 			))
@@ -309,31 +312,22 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		})
 
 		It("tries to apply an upgrade", func() {
-			mr := catalog.LegacyNewManagedOSVersionChannel(
+			mr := catalog.NewManagedOSVersionChannel(
+				fleetNamespace,
 				"testchannel5",
 				"custom",
 				"1m",
-				map[string]interface{}{
-					"image": discoveryPluginImage,
-					"envs": []map[string]string{
-						{
-							"name":  "REPOSITORY",
-							"value": "rancher/elemental",
-						},
-						{
-							"name":  "IMAGE_PREFIX",
-							"value": "quay.io/costoolkit/elemental",
-						},
-						{
-							"name":  "VERSION_SUFFIX",
-							"value": "-amd64",
-						},
-						{
-							"name":  "PRE_RELEASES",
-							"value": "true",
-						},
-					},
-					"args": []string{"github"},
+				map[string]runtime.RawExtension{
+					"image": {Raw: []byte(discoveryPluginImage)},
+					"envs": {Raw: []byte(
+						`[
+							{"name": "REPOSITORY","value": "rancher/elemental"},
+							{"name": "IMAGE_PREFIX","value": "quay.io/costoolkit/elemental"},
+							{"name": "VERSION_SUFFIX","value": "-amd64"},
+							{"name": "PRE_RELEASES","value": "true"}
+						]`,
+					)},
+					"args": {Raw: []byte(`["github"]`)},
 				},
 				nil,
 			)
@@ -341,8 +335,8 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			waitTestChannelPopulate(k, mr, "testchannel5", "quay.io/costoolkit/elemental:v0.1.0-amd64", "v0.1.0-amd64")
 
-			err := k.ApplyYAML(fleetNamespace, osImage,
-				catalog.LegacyNewManagedOSImage(osImage, []map[string]interface{}{}, "", "v0.1.0-amd64"))
+			err := k.ApplyJSON("", osImage,
+				catalog.NewManagedOSImage(fleetNamespace, osImage, []elementalv1.BundleTarget{}, "", "v0.1.0-amd64"))
 			Expect(err).ToNot(HaveOccurred())
 
 			checkUpgradePod(k,

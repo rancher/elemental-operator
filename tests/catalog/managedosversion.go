@@ -23,46 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-type ManagedOSVersionSpec struct {
-	Type             string                 `json:"type" yaml:"type"`
-	Version          string                 `json:"version" yaml:"version"`
-	MinVersion       string                 `json:"minVersion" yaml:"minVersion"`
-	Metadata         map[string]interface{} `json:"metadata" yaml:"metadata"`
-	UpgradeContainer *ContainerSpec         `json:"upgradeContainer" yaml:"upgradeContainer"`
-}
-
-type ManagedOSVersion struct {
-	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
-	Kind       string `json:"kind" yaml:"kind"`
-	Metadata   struct {
-		Name string `json:"name" yaml:"name"`
-	} `json:"metadata" yaml:"metadata"`
-	Spec ManagedOSVersionSpec
-}
-
-type ContainerSpec struct {
-	Image   string   `json:"image,omitempty" yaml:"image,omitempty"`
-	Command []string `json:"command,omitempty" yaml:"command,omitempty"`
-	Args    []string `json:"args,omitempty" yaml:"args,omitempty"`
-}
-
-func LegacyNewManagedOSVersion(name string, version string, minVersion string, metadata map[string]interface{}, upgradeC *ContainerSpec) *ManagedOSVersion {
-	return &ManagedOSVersion{
-		APIVersion: "elemental.cattle.io/v1beta1",
-		Metadata: struct {
-			Name string "json:\"name\" yaml:\"name\""
-		}{Name: name},
-		Kind: "ManagedOSVersion",
-		Spec: ManagedOSVersionSpec{
-			Type:             "container",
-			Version:          version,
-			MinVersion:       minVersion,
-			Metadata:         metadata,
-			UpgradeContainer: upgradeC,
-		},
-	}
-}
-
 func NewManagedOSVersion(namespace string, name string, version string, minVersion string, metadata map[string]runtime.RawExtension, upgradeC *upgradev1.ContainerSpec) *elementalv1.ManagedOSVersion {
 	return &elementalv1.ManagedOSVersion{
 		TypeMeta: metav1.TypeMeta{
