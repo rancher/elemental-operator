@@ -26,8 +26,10 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jaypipes/ghw"
 	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
+	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 	"github.com/sanity-io/litter"
 	"github.com/sirupsen/logrus"
@@ -65,6 +67,13 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 		logrus.Info("Send SMBIOS data")
 		if err := sendSMBIOSData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
+		}
+	}
+
+	if smbios {
+		logrus.Info("Send system data")
+		if err := sendSystemData(conn); err != nil {
+			return nil, fmt.Errorf("failed to send system data: %w", err)
 		}
 	}
 
@@ -169,6 +178,19 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 	err = SendJSONData(conn, MsgSmbios, data)
 	if err != nil {
 		logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
+		return err
+	}
+	return nil
+}
+
+func sendSystemData(conn *websocket.Conn) error {
+	data, err := hostinfo.Host(ghw.WithDisableWarnings())
+	if err != nil {
+		return errors.Wrap(err, "failed to read system data")
+	}
+	err = SendJSONData(conn, MsgSystemData, data)
+	if err != nil {
+		logrus.Debugf("system data:\n%s", litter.Sdump(data))
 		return err
 	}
 	return nil

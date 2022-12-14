@@ -16,7 +16,7 @@ linters:
     - gocyclo # check complexity
 linters-settings:
   gocyclo:
-    min-complexity: 15 # default is 30 which is too high
+    min-complexity: 20 # default is 30 which is too high
   goheader:
     template: |-
       Copyright © {{year}} SUSE LLC

@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/register"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
@@ -378,6 +380,11 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
 			}
 			return nil
+		case register.MsgSystemData:
+			err = updateInventoryFromSystemData(data, inventory)
+			if err != nil {
+				return fmt.Errorf("failed to extract labels from system data: %w", err)
+			}
 
 		default:
 			return fmt.Errorf("got unexpected message: %s", msgType)
@@ -425,6 +432,63 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 		logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
 		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
 	}
+	return nil
+}
+
+// updateInventoryFromSystemData creates labels in the inventory based on the hardware information
+func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory) error {
+	systemData := &hostinfo.HostInfo{}
+	if err := json.Unmarshal(data, &systemData); err != nil {
+		return err
+	}
+	logrus.Info("Adding labels from system data")
+	if inv.Labels == nil {
+		inv.Labels = map[string]string{}
+	}
+	inv.Labels["elemental.cattle.io/TotalMemory"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
+	inv.Labels["elemental.cattle.io/CpuTotalCores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+	inv.Labels["elemental.cattle.io/CpuTotalThreads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+
+	// This should never happen but just in case
+	if len(systemData.CPU.Processors) > 0 {
+		// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
+		// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
+		// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
+		inv.Labels["elemental.cattle.io/CpuModel"] = doubleDash.ReplaceAllString(sanitize.ReplaceAllString(systemData.CPU.Processors[0].Model, "-"), "-")
+		inv.Labels["elemental.cattle.io/CpuVendor"] = doubleDash.ReplaceAllString(sanitize.ReplaceAllString(systemData.CPU.Processors[0].Vendor, "-"), "-")
+		// Capabilities available here at systemData.CPU.Processors[X].Capabilities
+	}
+	// This could happen so always check.
+	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
+		inv.Labels["elemental.cattle.io/GpuModel"] = sanitize.ReplaceAllString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name, "-")
+		inv.Labels["elemental.cattle.io/GpuVendor"] = sanitize.ReplaceAllString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name, "-")
+	}
+	inv.Labels["elemental.cattle.io/NetNumberInterfaces"] = strconv.Itoa(len(systemData.Network.NICs))
+
+	for index, iface := range systemData.Network.NICs {
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/NetIface%d-Name", index)] = iface.Name
+		// inv.Labels[fmt.Sprintf("NetIface%d-MAC", index)] = base64.StdEncoding.EncodeToString([]byte(iface.MacAddress)) // Could work encoded but...kind of crappy
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/NetIface%d-Virtual", index)] = strconv.FormatBool(iface.IsVirtual)
+		// Capabilities available here at iface.Capabilities
+		// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
+	}
+	inv.Labels["BlockTotal"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
+	for index, block := range systemData.Block.Disks {
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Size", index)] = strconv.Itoa(int(block.SizeBytes))
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Name", index)] = block.Name
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-DriveType", index)] = block.DriveType.String()
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-ControllerType", index)] = block.StorageController.String()
+		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Removable", index)] = strconv.FormatBool(block.IsRemovable)
+		// Vendor and model also available here, useful?
+	}
+
+	// Also available but not used:
+	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
+	// systemData.BIOS -> info about the bios. Useless IMO
+	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
+	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
+	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
 	return nil
 }
 

@@ -176,7 +176,15 @@ require (
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/gobuffalo/flect v0.2.4
+	github.com/jaypipes/ghw v0.9.0
 	github.com/sanity-io/litter v1.5.5
 )
 
-require github.com/go-logr/zapr v1.2.0 // indirect
+require (
+	github.com/StackExchange/wmi v1.2.1 // indirect
+	github.com/go-logr/zapr v1.2.0 // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/jaypipes/pcidb v1.0.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	howett.net/plist v1.0.0 // indirect
+)
