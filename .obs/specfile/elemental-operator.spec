@@ -23,14 +23,15 @@ Summary:        Kubernetes operator to support OS management
 License:        Apache-2.0
 Group:          System/Management
 URL:            https://github.com/rancher/%{name}
-Source:         %{name}-%{version}.tar.gz
+Source:         %{name}-%{version}.tar
+Source1:        %{name}.obsinfo
 
 BuildRequires:  gcc-c++
 BuildRequires:  glibc-devel
 BuildRequires:  openssl-devel
 BuildRequires:  golang-packaging
 BuildRequires:  make
-BuildRequires:  sed
+BuildRequires:  grep
 BuildRequires:  golang(API) >= 1.16
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -57,6 +58,7 @@ resolution.
 
 %prep
 %setup -q -n %{name}-%{version}
+cp %{S:1} .
 
 %build
 
@@ -68,11 +70,10 @@ if [ "$(uname)" = "Linux" ]; then
 fi
 
 export GIT_TAG=`echo "%{version}" | cut -d "+" -f 1`
-export GIT_COMMIT=`echo "%{version}" | cut -d "." -f 4`
-export COMMITDATE=`echo %{version} | cut -d "+" -f 2 | cut -d "." -f 1`
-
-# build helm chart - disabled in favor of elemental-operator-helm package
-#REPO=registry.opensuse.org/isv/Rancher/Elemental/images/15.3/rancher/%{name} TAG=latest make chart
+GIT_COMMIT=$(cat %{name}.obsinfo | grep commit: | cut -d" " -f 2)
+export GIT_COMMIT=${GIT_COMMIT:0:8}
+MTIME=$(cat %{name}.obsinfo | grep mtime: | cut -d" " -f 2)
+export COMMITDATE=$(date -d @${MTIME} +%Y%m%d)
 
 # build binaries
 CGO_ENABLED=0 make operator
