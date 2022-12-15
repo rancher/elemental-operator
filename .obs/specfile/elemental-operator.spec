@@ -23,7 +23,7 @@ Summary:        Kubernetes operator to support OS management
 License:        Apache-2.0
 Group:          System/Management
 URL:            https://github.com/rancher/%{name}
-Source:         %{name}-%{version}.tar.gz
+Source:         %{name}-%{version}.tar
 Source1:        %{name}.obsinfo
 
 BuildRequires:  gcc-c++
