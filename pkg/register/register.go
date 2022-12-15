@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -40,6 +41,10 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 	tpmAuth := &tpm.AuthClient{}
 	if emulateTPM {
 		logrus.Info("Enable TPM emulation")
+		if emulatedSeed == -1 {
+			emulatedSeed = rand.Int63()
+			logrus.Debugf("TPM emulation set to -1, setting random seed: %d", emulatedSeed)
+		}
 		tpmAuth.EmulateTPM(emulatedSeed)
 	}
 
