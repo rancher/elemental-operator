@@ -49,9 +49,14 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 			} else {
 				uuid := strings.Replace(data.UUID, "-", "", -1)
 				var i big.Int
-				i.SetString(uuid, 16)
-				emulatedSeed = i.Int64()
-				logrus.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
+				_, converted := i.SetString(uuid, 16)
+				if !converted {
+					emulatedSeed = rand.Int63()
+					logrus.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+				} else {
+					emulatedSeed = i.Int64()
+					logrus.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
+				}
 			}
 		}
 		tpmAuth.EmulateTPM(emulatedSeed)
