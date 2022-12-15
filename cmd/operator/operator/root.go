@@ -59,6 +59,7 @@ var (
 )
 
 type rootConfig struct {
+	debug                       bool
 	enableLeaderElection        bool
 	profilerAddress             string
 	metricsBindAddr             string
@@ -92,6 +93,9 @@ func NewOperatorCommand() *cobra.Command {
 		Use:   "operator",
 		Short: "Run the Kubernetes operator using kubebuilder.",
 		Run: func(_ *cobra.Command, _ []string) {
+			if config.debug {
+				logrus.SetLevel(logrus.DebugLevel)
+			}
 			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			operatorRun(&config)
 		},
@@ -141,6 +145,9 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&config.watchNamespace, "namespace", "", "Namespace that the controller watches to reconcile objects.")
 	_ = viper.BindPFlag("namespace", cmd.PersistentFlags().Lookup("namespace"))
+
+	cmd.PersistentFlags().BoolVar(&config.debug, "debug", false, "registration debug logging")
+	_ = viper.BindPFlag("debug", cmd.PersistentFlags().Lookup("debug"))
 
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 

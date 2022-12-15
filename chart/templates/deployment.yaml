@@ -29,6 +29,7 @@ spec:
         - operator
         {{- if .Values.debug }}
         - --v=5
+        - --debug
         {{- end }}
         - --namespace
         - {{ .Release.Namespace }}
