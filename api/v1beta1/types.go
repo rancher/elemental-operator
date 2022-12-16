@@ -86,3 +86,7 @@ type Config struct {
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
 }
+
+type ErrorMessage struct {
+	Message string `json:"message,omitempty" yaml:"message"`
+}

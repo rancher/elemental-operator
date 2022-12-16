@@ -36,7 +36,9 @@ const (
 	MsgGet
 	MsgVersion
 	MsgSystemData
-	MsgLast = MsgSystemData // MsgLast must point to the last message
+	MsgConfig
+	MsgError
+	MsgLast = MsgError // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -55,6 +57,10 @@ func (mt MessageType) String() string {
 		return "Version"
 	case MsgSystemData:
 		return "System"
+	case MsgConfig:
+		return "Config"
+	case MsgError:
+		return "Error"
 	default:
 		return "Unknown"
 	}
