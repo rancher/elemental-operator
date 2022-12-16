@@ -51,11 +51,43 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	escapedPath := strings.Replace(req.URL.Path, "\n", "", -1)
 	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
 	logrus.Infof("Incoming HTTP request for %s", escapedPath)
-	// get the machine registration relevant to this request
-	registration, err := i.getMachineRegistration(req)
-	if err != nil {
-		http.Error(resp, err.Error(), http.StatusNotFound)
+
+	splittedPath := strings.Split(escapedPath, "/")
+	// drop 'elemental'
+	splittedPath = splittedPath[2:]
+	api := splittedPath[0]
+
+	switch api {
+	case "build-image":
+		if err := i.apiBuildImage(resp, req); err != nil {
+			logrus.Errorf("build-image: %s", err.Error())
+			return
+		}
+	case "registration":
+		if err := i.apiRegistration(resp, req); err != nil {
+			logrus.Errorf("registration: %s", err.Error())
+			return
+		}
+	default:
+		logrus.Errorf("Unknown API: %s", api)
+		http.Error(resp, fmt.Sprintf("unknwon api: %s", api), http.StatusBadRequest)
 		return
+	}
+}
+
+func (i *InventoryServer) apiBuildImage(resp http.ResponseWriter, req *http.Request) error {
+	logrus.Debug("apiBuildImage")
+	return nil
+}
+
+func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
+	var err error
+	var registration *elementalv1.MachineRegistration
+
+	// get the machine registration relevant to this request
+	if registration, err = i.getMachineRegistration(req); err != nil {
+		http.Error(resp, err.Error(), http.StatusNotFound)
+		return err
 	}
 
 	if !websocket.IsWebSocketUpgrade(req) {
@@ -63,14 +95,14 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			logrus.Error("error sending unauthenticated response: ", err)
 		}
-		return
+		return err
 	}
 
 	// upgrade to websocket
 	conn, err := upgrade(resp, req)
 	if err != nil {
 		logrus.Error("failed to upgrade connection to websocket: %w", err)
-		return
+		return err
 	}
 	defer conn.Close()
 	logrus.Debug("connection upgraded to websocket")
@@ -79,7 +111,7 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
 		logrus.Error("authentication failed: ", err)
-		return
+		return err
 	}
 	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
@@ -87,13 +119,13 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			logrus.Error("error sending unauthenticated response: ", err)
 		}
-		return
+		return err
 	}
 	logrus.Debug("attestation completed")
 
-	if err := register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
+	if err = register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
 		logrus.Error("cannot finalize the authentication process: %w", err)
-		return
+		return err
 	}
 
 	isNewInventory := inventory.CreationTimestamp.IsZero()
@@ -101,11 +133,12 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		initInventory(inventory, registration)
 	}
 
-	err = i.serveLoop(conn, inventory, registration)
-	if err != nil {
+	if err = i.serveLoop(conn, inventory, registration); err != nil {
 		logrus.Error(err)
-		return
+		return err
 	}
+
+	return nil
 }
 
 func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
