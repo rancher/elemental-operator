@@ -41,6 +41,8 @@ type Install struct {
 	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty"`
 	// +optional
 	EjectCD bool `json:"eject-cd,omitempty" yaml:"eject-cd,omitempty"`
+	// +optional
+	DisableBootEntry bool `json:"disable-boot-entry,omitempty" yaml:"disable-boot-entry,omitempty"`
 }
 
 type Registration struct {
