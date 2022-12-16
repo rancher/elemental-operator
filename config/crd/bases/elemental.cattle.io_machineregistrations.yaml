@@ -51,6 +51,8 @@ spec:
                             type: boolean
                           device:
                             type: string
+                          disable-boot-entry:
+                            type: boolean
                           eject-cd:
                             type: boolean
                           firmware:
