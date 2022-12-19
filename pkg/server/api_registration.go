@@ -45,11 +45,6 @@ var (
 	start            = regexp.MustCompile("^[a-zA-Z0-9]")
 )
 
-func (i *InventoryServer) apiBuildImage(resp http.ResponseWriter, req *http.Request) error {
-	logrus.Debug("apiBuildImage")
-	return nil
-}
-
 func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
 	var err error
 	var registration *elementalv1.MachineRegistration
