@@ -34,7 +34,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v1"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/tpm"
@@ -113,7 +112,7 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 
 	switch msgType {
 	case MsgError:
-		msg := &elementalv1.ErrorMessage{}
+		msg := &ErrorMessage{}
 		if err = yaml.Unmarshal(data, &msg); err != nil {
 			return nil, errors.Wrap(err, "unable to unmarshal error-message")
 		}

@@ -66,6 +66,16 @@ func (mt MessageType) String() string {
 	}
 }
 
+type ErrorMessage struct {
+	Message string `json:"message,omitempty" yaml:"message"`
+}
+
+func NewErrorMessage(err error) ErrorMessage {
+	return ErrorMessage{
+		Message: err.Error(),
+	}
+}
+
 // ReadMessage reads from the websocket connection returning the MessageType
 // and the actual data
 func ReadMessage(conn *websocket.Conn) (MessageType, []byte, error) {
@@ -95,10 +105,8 @@ func WriteMessage(conn *websocket.Conn, msgType MessageType, data []byte) error 
 	defer w.Close()
 
 	buf := insertMessageType(msgType, data)
-	if _, err := w.Write(buf); err != nil {
-		return err
-	}
-	return nil
+	_, err = w.Write(buf)
+	return err
 }
 
 // SendJSONData transmits json encoded data to the websocket connection, attaching to

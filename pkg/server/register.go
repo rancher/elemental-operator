@@ -145,7 +145,6 @@ func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.Mach
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
-
 	if inventory.Spec.TPMHash == "" {
 		return nil, fmt.Errorf("machine inventory TPMHash is empty")
 	}
@@ -409,7 +408,7 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 
 	inventory, err = i.commitMachineInventory(inventory)
 	if err != nil {
-		if writeErr := i.writeError(conn, protoVersion, elementalv1.ErrorMessage{Message: err.Error()}); writeErr != nil {
+		if writeErr := i.writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
 			logrus.Errorf("Error reporting back error to client: %v", writeErr)
 		}
 
@@ -417,7 +416,7 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 	}
 
 	if err := i.writeMachineInventoryCloudConfig(conn, protoVersion, inventory, registration); err != nil {
-		if writeErr := i.writeError(conn, protoVersion, elementalv1.ErrorMessage{Message: err.Error()}); writeErr != nil {
+		if writeErr := i.writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
 			logrus.Errorf("Error reporting back error to client: %v", writeErr)
 		}
 
@@ -435,7 +434,7 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 
 // writeError reports back an error to the client if the negotiated protocol
 // version supports it.
-func (i *InventoryServer) writeError(conn *websocket.Conn, protoVersion register.MessageType, errorMessage elementalv1.ErrorMessage) error {
+func (i *InventoryServer) writeError(conn *websocket.Conn, protoVersion register.MessageType, errorMessage register.ErrorMessage) error {
 	if protoVersion < register.MsgError {
 		logrus.Debugf("client does not support reporting errors, skipping")
 		return nil
