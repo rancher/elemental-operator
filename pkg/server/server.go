@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,7 +43,8 @@ type authenticator interface {
 type InventoryServer struct {
 	client.Client
 	context.Context
-	authenticators []authenticator
+	authenticators    []authenticator
+	registrationCache *registrationCache
 }
 
 func New(ctx context.Context, cl client.Client) *InventoryServer {
@@ -51,6 +53,10 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 		Context: ctx,
 		authenticators: []authenticator{
 			tpm.New(ctx, cl),
+		},
+		registrationCache: &registrationCache{
+			Mutex:         &sync.Mutex{},
+			registrations: make(map[string]registrationData),
 		},
 	}
 
