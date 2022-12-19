@@ -20,7 +20,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/sirupsen/logrus"
@@ -28,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
@@ -51,6 +55,50 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 	}
 
 	return server
+}
+
+func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	escapedPath := strings.Replace(req.URL.Path, "\n", "", -1)
+	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
+	logrus.Infof("Incoming HTTP request for %s", escapedPath)
+
+	splittedPath := strings.Split(escapedPath, "/")
+	// drop 'elemental'
+	splittedPath = splittedPath[2:]
+	api := splittedPath[0]
+
+	switch api {
+	case "build-image":
+		if err := i.apiBuildImage(resp, req); err != nil {
+			logrus.Errorf("build-image: %s", err.Error())
+			return
+		}
+	case "registration":
+		if err := i.apiRegistration(resp, req); err != nil {
+			logrus.Errorf("registration: %s", err.Error())
+			return
+		}
+	default:
+		logrus.Errorf("Unknown API: %s", api)
+		http.Error(resp, fmt.Sprintf("unknwon api: %s", api), http.StatusBadRequest)
+		return
+	}
+}
+
+func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
+	upgrader := websocket.Upgrader{
+		HandshakeTimeout: 5 * time.Second,
+		CheckOrigin:      func(r *http.Request) bool { return true },
+	}
+
+	conn, err := upgrader.Upgrade(resp, req, nil)
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetWriteDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
+
+	return conn, err
 }
 
 func (i *InventoryServer) getRancherCACert() string {
@@ -93,4 +141,76 @@ func (i *InventoryServer) authMachine(conn *websocket.Conn, req *http.Request, r
 		}
 	}
 	return nil, nil
+}
+
+func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
+	const namePrefix = "m-"
+
+	if registration.Spec.Config == nil {
+		registration.Spec.Config = &elementalv1.Config{}
+	}
+	inventory.Name = registration.Spec.MachineName
+	if inventory.Name == "" {
+		if registration.Spec.Config.Elemental.Registration.NoSMBIOS {
+			inventory.Name = namePrefix + uuid.NewString()
+		} else {
+			inventory.Name = namePrefix + "${System Information/UUID}"
+		}
+	}
+	inventory.Namespace = registration.Namespace
+	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
+	inventory.Labels = registration.Spec.MachineInventoryLabels
+}
+
+func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+
+	if inventory.Spec.TPMHash == "" {
+		return nil, fmt.Errorf("machine inventory TPMHash is empty")
+	}
+
+	mInventoryList := &elementalv1.MachineInventoryList{}
+
+	if err := i.List(i, mInventoryList); err != nil {
+		return nil, fmt.Errorf("cannot retrieve machine inventory list: %w", err)
+	}
+
+	// TODO: add a cache map for machine inventories indexed by TPMHash
+	for _, m := range mInventoryList.Items {
+		if m.Spec.TPMHash == inventory.Spec.TPMHash {
+			return nil, fmt.Errorf("machine inventory with TPM hash %s already present: %s/%s",
+				m.Spec.TPMHash, m.Namespace, m.Name)
+		}
+	}
+
+	if err := i.Create(i, inventory); err != nil {
+		return nil, fmt.Errorf("failed to create machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
+	}
+
+	logrus.Infof("new machine inventory created: %s", inventory.Name)
+
+	return inventory, nil
+}
+
+func (i *InventoryServer) updateMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+	if err := i.Update(i, inventory); err != nil {
+		return nil, fmt.Errorf("failed to update machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
+	}
+
+	logrus.Infof("machine inventory updated: %s", inventory.Name)
+
+	return inventory, nil
+}
+
+func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+	var err error
+	if inventory.CreationTimestamp.IsZero() {
+		if inventory, err = i.createMachineInventory(inventory); err != nil {
+			return nil, fmt.Errorf("MachineInventory creation failed: %w", err)
+		}
+	} else {
+		if inventory, err = i.updateMachineInventory(inventory); err != nil {
+			return nil, fmt.Errorf("MachineInventory update failed: %w", err)
+		}
+	}
+	return inventory, nil
 }
