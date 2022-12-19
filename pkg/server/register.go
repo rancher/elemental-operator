@@ -155,9 +155,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return fmt.Errorf("failed to get secret: %w", err)
 	}
 
-	serverURL, err := i.getRancherServerURL()
+	serverURL, err := i.getValue("server-url")
 	if err != nil {
 		return fmt.Errorf("failed to get server-url: %w", err)
+	}
+	if serverURL == "" {
+		return fmt.Errorf("server-url is not set")
 	}
 
 	if registration.Spec.Config == nil {
@@ -205,6 +208,21 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	}
 
 	return register.WriteMessage(conn, register.MsgConfig, data)
+}
+
+func (i *InventoryServer) getRancherCACert() string {
+	cacert, err := i.getValue("cacerts")
+	if err != nil {
+		logrus.Errorf("Error getting cacerts: %s", err.Error())
+	}
+
+	if cacert == "" {
+		if cacert, err = i.getValue("internal-cacerts"); err != nil {
+			logrus.Errorf("Error getting internal-cacerts: %s", err.Error())
+			return ""
+		}
+	}
+	return cacert
 }
 
 func buildStringFromSmbiosData(data map[string]interface{}, name string) string {

@@ -106,32 +106,12 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	return conn, err
 }
 
-func (i *InventoryServer) getRancherCACert() string {
+func (i *InventoryServer) getValue(name string) (string, error) {
 	setting := &managementv3.Setting{}
-	if err := i.Get(i, types.NamespacedName{Name: "cacerts"}, setting); err != nil {
-		logrus.Errorf("Error getting cacerts setting: %s", err.Error())
-		return ""
+	if err := i.Get(i, types.NamespacedName{Name: name}, setting); err != nil {
+		logrus.Errorf("Error getting %s setting: %s", name, err.Error())
+		return "", err
 	}
-
-	if setting.Value == "" {
-		if err := i.Get(i, types.NamespacedName{Name: "internal-cacerts"}, setting); err != nil {
-			logrus.Errorf("Error getting internal-cacerts setting: %s", err.Error())
-			return ""
-		}
-	}
-	return setting.Value
-}
-
-func (i *InventoryServer) getRancherServerURL() (string, error) {
-	setting := &managementv3.Setting{}
-	if err := i.Get(i, types.NamespacedName{Name: "server-url"}, setting); err != nil {
-		return "", fmt.Errorf("failed to get server url setting: %w", err)
-	}
-
-	if setting.Value == "" {
-		return "", fmt.Errorf("server-url is not set")
-	}
-
 	return setting.Value, nil
 }
 
