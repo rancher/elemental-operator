@@ -38,9 +38,9 @@ CONTROLLER_GEN_VER := v0.9.2
 CONTROLLER_GEN := $(ABS_TOOLS_DIR)/controller-gen-$(CONTROLLER_GEN_VER)
 CONTROLLER_GEN_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
 
-GINKGO_VER := v1.16.5
+GINKGO_VER := v2.3.1
 GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
-GINKGO_PKG := github.com/onsi/ginkgo/ginkgo
+GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 
 SETUP_ENVTEST_VER := v0.0.0-20211110210527-619e6b92dab9
 SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
@@ -119,7 +119,7 @@ validate:
 
 .PHONY: unit-tests
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -p -r --trace ./pkg/... ./controllers/...
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -p -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/...
 
 e2e-tests: $(GINKGO) setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
