@@ -454,14 +454,14 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 		// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
 		// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
 		// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
-		inv.Labels["elemental.cattle.io/CpuModel"] = doubleDash.ReplaceAllString(sanitize.ReplaceAllString(systemData.CPU.Processors[0].Model, "-"), "-")
-		inv.Labels["elemental.cattle.io/CpuVendor"] = doubleDash.ReplaceAllString(sanitize.ReplaceAllString(systemData.CPU.Processors[0].Vendor, "-"), "-")
+		inv.Labels["elemental.cattle.io/CpuModel"] = sanitizeString(systemData.CPU.Processors[0].Model)
+		inv.Labels["elemental.cattle.io/CpuVendor"] = sanitizeString(systemData.CPU.Processors[0].Vendor)
 		// Capabilities available here at systemData.CPU.Processors[X].Capabilities
 	}
 	// This could happen so always check.
 	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
-		inv.Labels["elemental.cattle.io/GpuModel"] = sanitize.ReplaceAllString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name, "-")
-		inv.Labels["elemental.cattle.io/GpuVendor"] = sanitize.ReplaceAllString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name, "-")
+		inv.Labels["elemental.cattle.io/GpuModel"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
+		inv.Labels["elemental.cattle.io/GpuVendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
 	}
 	inv.Labels["elemental.cattle.io/NetNumberInterfaces"] = strconv.Itoa(len(systemData.Network.NICs))
 
@@ -490,6 +490,16 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
 	return nil
+}
+
+// sanitizeString will sanitize a given string by:
+// replacing all invalid chars as set on the sanitize regex by dashes
+// removing any double dashes resulted from the above method
+// removing prefix+suffix if they are a dash
+func sanitizeString(s string) string {
+	s1 := sanitize.ReplaceAllString(s, "-")
+	s2 := doubleDash.ReplaceAllString(s1, "-")
+	return strings.TrimSuffix(strings.TrimPrefix(s2, "-"), "-")
 }
 
 func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
