@@ -25,6 +25,7 @@ import (
 	"github.com/jaypipes/ghw/pkg/memory"
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"regexp"
 	"strings"
 	"testing"
@@ -294,24 +295,23 @@ func TestMergeInventoryLabels(t *testing.T) {
 	}
 }
 
-
 func TestUpdateInventoryFromSystemData(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
 	data := hostinfo.HostInfo{
 		Block: &block.Info{
-			Disks:              []*block.Disk{
+			Disks: []*block.Disk{
 				{
-					Name:                   "testdisk1",
-					SizeBytes:              300,
-					IsRemovable:            true,
+					Name:        "testdisk1",
+					SizeBytes:   300,
+					IsRemovable: true,
 				},
 				{
-					Name:                   "testdisk2",
-					SizeBytes:              600,
-					IsRemovable:            false,
+					Name:        "testdisk2",
+					SizeBytes:   600,
+					IsRemovable: false,
 				},
 			},
-			Partitions:         nil,
+			Partitions: nil,
 		},
 		Memory: &memory.Info{
 			Area: memory.Area{
@@ -320,7 +320,7 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 		},
 		CPU: &cpu.Info{
 			TotalCores:   300,
-			TotalThreads:   300,
+			TotalThreads: 300,
 		},
 		Network: &net.Info{
 			NICs: []*net.NIC{
@@ -338,16 +338,82 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 	err = updateInventoryFromSystemData(encodedData, inventory)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/TotalMemory"], "100" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/NetNumberInterfaces"], "2" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/NetIface0-Name"], "myNic1" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/NetIface1-Name"], "myNic2" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice0-Name"], "testdisk1" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice1-Name"], "testdisk2" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice0-Size"], "300" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice1-Size"], "600" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice0-Removable"], "true" )
-	assert.Equal(t,inventory.Labels["elemental.cattle.io/BlockDevice1-Removable"], "false" )
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetNumberInterfaces"], "2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-Name"], "myNic1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface1-Name"], "myNic2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Name"], "testdisk1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Name"], "testdisk2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Size"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Size"], "600")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Removable"], "true")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Removable"], "false")
+}
+
+func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
+	inventory := &elementalv1.MachineInventory{}
+	data := hostinfo.HostInfo{
+		Block: &block.Info{
+			Disks: []*block.Disk{
+				{
+					Name:        "testdisk1",
+					SizeBytes:   300,
+					IsRemovable: true,
+				},
+				{
+					Name:        "testdisk2",
+					SizeBytes:   600,
+					IsRemovable: false,
+				},
+			},
+			Partitions: nil,
+		},
+		Memory: &memory.Info{
+			Area: memory.Area{
+				TotalPhysicalBytes: 100,
+			},
+		},
+		CPU: &cpu.Info{
+			TotalCores:   300,
+			TotalThreads: 300,
+			Processors: []*cpu.Processor{
+				{
+					Vendor: "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
+					Model:  "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
+				},
+			},
+		},
+		Network: &net.Info{
+			NICs: []*net.NIC{
+				{
+					Name: "myNic1",
+				},
+				{
+					Name: "myNic2",
+				},
+			},
+		},
+	}
+	encodedData, err := json.Marshal(data)
+	assert.NilError(t, err)
+	err = updateInventoryFromSystemData(encodedData, inventory)
+	assert.NilError(t, err)
+	// Check that the labels we properly added to the inventory
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetNumberInterfaces"], "2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-Name"], "myNic1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface1-Name"], "myNic2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Name"], "testdisk1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Name"], "testdisk2")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Size"], "300")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Size"], "600")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Removable"], "true")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Removable"], "false")
+	// Check values were sanitized
+	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuModel"])), 0)
+	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuVendor"])), 0)
 }
