@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -429,13 +429,11 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuVendor"])), 0)
 }
 
-func TestHandleGet(t *testing.T) {
+func TestRegistrationMsgGet(t *testing.T) {
 	testCases := []struct {
 		name                string
 		machineName         string
 		protoVersion        register.MessageType
-		inventory           *elementalv1.MachineInventory
-		registration        *elementalv1.MachineRegistration
 		wantConnectionError bool
 		wantRawResponse     bool
 		wantMessageType     register.MessageType
@@ -548,6 +546,7 @@ func TestHandleGet(t *testing.T) {
 	})
 
 	wsServer := httptest.NewServer(server)
+	defer wsServer.Close()
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -589,7 +588,7 @@ func TestHandleGet(t *testing.T) {
 				msgType, r, err := ws.NextReader()
 				assert.NilError(t, err)
 				assert.Equal(t, msgType, websocket.BinaryMessage)
-				data, err := ioutil.ReadAll(r)
+				data, err := io.ReadAll(r)
 				assert.Assert(t, strings.HasPrefix(string(data), "elemental:"))
 				return
 			}
