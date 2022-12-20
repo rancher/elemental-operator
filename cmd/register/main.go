@@ -24,10 +24,6 @@ import (
 	"time"
 
 	"github.com/mudler/yip/pkg/schema"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/elementalcli"
-	"github.com/rancher/elemental-operator/pkg/register"
-	"github.com/rancher/elemental-operator/pkg/version"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sanity-io/litter"
 	"github.com/sirupsen/logrus"
@@ -37,6 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/elementalcli"
+	"github.com/rancher/elemental-operator/pkg/register"
+	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 const (
@@ -133,8 +134,10 @@ func run(config elementalv1.Config) {
 		logrus.Fatal("Registration URL is empty")
 	}
 
-	var err error
-	var data, caCert []byte
+	var (
+		err          error
+		data, caCert []byte
+	)
 
 	/* Here we can have a file path or the cert data itself */
 	_, err = os.Stat(registration.CACert)

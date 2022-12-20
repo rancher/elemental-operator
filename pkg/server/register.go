@@ -29,14 +29,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/hostinfo"
-	"github.com/rancher/elemental-operator/pkg/register"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/hostinfo"
+	"github.com/rancher/elemental-operator/pkg/register"
 )
 
 var (
@@ -144,7 +145,6 @@ func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.Mach
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
-
 	if inventory.Spec.TPMHash == "" {
 		return nil, fmt.Errorf("machine inventory TPMHash is empty")
 	}
@@ -225,7 +225,7 @@ func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elementalv
 	return mRegistration, nil
 }
 
-func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
+func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
 	sa := &corev1.ServiceAccount{}
 
 	if err := i.Get(i, types.NamespacedName{
@@ -254,17 +254,11 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return fmt.Errorf("failed to get server-url: %w", err)
 	}
 
-	writer, err := conn.NextWriter(websocket.BinaryMessage)
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-
 	if registration.Spec.Config == nil {
 		registration.Spec.Config = &elementalv1.Config{}
 	}
 
-	return yaml.NewEncoder(writer).Encode(elementalv1.Config{
+	config := elementalv1.Config{
 		Elemental: elementalv1.Elemental{
 			Registration: elementalv1.Registration{
 				URL:    registration.Status.RegistrationURL,
@@ -279,7 +273,32 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 			Install: registration.Spec.Config.Elemental.Install,
 		},
 		CloudConfig: registration.Spec.Config.CloudConfig,
-	})
+	}
+
+	// If client does not support MsgConfig we send back the config as a
+	// byte-stream without a message-type to keep backwards-compatibility.
+	if protoVersion < register.MsgConfig {
+		logrus.Debug("Client does not support MsgConfig, sending back raw config.")
+
+		writer, err := conn.NextWriter(websocket.BinaryMessage)
+		if err != nil {
+			return err
+		}
+		defer writer.Close()
+
+		return yaml.NewEncoder(writer).Encode(config)
+	}
+
+	logrus.Debug("Client supports MsgConfig, sending back config.")
+
+	// If the client supports the MsgConfig-message we use that.
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		logrus.Errorf("error marshalling config: %v", err)
+		return err
+	}
+
+	return register.WriteMessage(conn, register.MsgConfig, data)
 }
 
 func buildStringFromSmbiosData(data map[string]interface{}, name string) string {
@@ -368,18 +387,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return err
 			}
 		case register.MsgGet:
-			inventory, err = i.commitMachineInventory(inventory)
-			if err != nil {
-				return err
-			}
-			if err := i.writeMachineInventoryCloudConfig(conn, inventory, registration); err != nil {
-				return fmt.Errorf("failed sending elemental cloud config: %w", err)
-			}
-			logrus.Debug("Elemental cloud config sent")
-			if protoVersion == register.MsgUndefined {
-				logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
-			}
-			return nil
+			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgSystemData:
 			err = updateInventoryFromSystemData(data, inventory)
 			if err != nil {
@@ -393,6 +401,51 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			return fmt.Errorf("cannot complete %s exchange", msgType)
 		}
 	}
+}
+
+func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
+	var err error
+
+	inventory, err = i.commitMachineInventory(inventory)
+	if err != nil {
+		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
+			logrus.Errorf("Error reporting back error to client: %v", writeErr)
+		}
+
+		return err
+	}
+
+	if err := i.writeMachineInventoryCloudConfig(conn, protoVersion, inventory, registration); err != nil {
+		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
+			logrus.Errorf("Error reporting back error to client: %v", writeErr)
+		}
+
+		return fmt.Errorf("failed sending elemental cloud config: %w", err)
+	}
+
+	logrus.Debug("Elemental cloud config sent")
+
+	if protoVersion == register.MsgUndefined {
+		logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
+	}
+
+	return nil
+}
+
+// writeError reports back an error to the client if the negotiated protocol
+// version supports it.
+func writeError(conn *websocket.Conn, protoVersion register.MessageType, errorMessage register.ErrorMessage) error {
+	if protoVersion < register.MsgError {
+		logrus.Debugf("client does not support reporting errors, skipping")
+		return nil
+	}
+
+	data, err := yaml.Marshal(errorMessage)
+	if err != nil {
+		return fmt.Errorf("error marshalling error-message: %w", err)
+	}
+
+	return register.WriteMessage(conn, register.MsgError, data)
 }
 
 func decodeProtocolVersion(data []byte) (register.MessageType, error) {

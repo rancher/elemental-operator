@@ -30,11 +30,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jaypipes/ghw"
 	"github.com/pkg/errors"
+	"github.com/sanity-io/litter"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v1"
+
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/tpm"
-	"github.com/sanity-io/litter"
-	"github.com/sirupsen/logrus"
 )
 
 func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedSeed int64) ([]byte, error) {
@@ -100,11 +102,29 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
 	}
-	_, r, err := conn.NextReader()
+
+	msgType, data, err := ReadMessage(conn)
 	if err != nil {
-		return nil, fmt.Errorf("read elemental configuration: %w", err)
+		return nil, fmt.Errorf("read configuration response: %w", err)
 	}
-	return io.ReadAll(r)
+
+	logrus.Debugf("Got configuration response: %s", msgType.String())
+
+	switch msgType {
+	case MsgError:
+		msg := &ErrorMessage{}
+		if err = yaml.Unmarshal(data, &msg); err != nil {
+			return nil, errors.Wrap(err, "unable to unmarshal error-message")
+		}
+
+		return nil, errors.New(msg.Message)
+
+	case MsgConfig:
+		return data, nil
+
+	default:
+		return nil, fmt.Errorf("unexpected response message: %s", msgType)
+	}
 }
 
 func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*websocket.Conn, error) {

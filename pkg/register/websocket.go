@@ -36,7 +36,9 @@ const (
 	MsgGet
 	MsgVersion
 	MsgSystemData
-	MsgLast = MsgSystemData // MsgLast must point to the last message
+	MsgConfig
+	MsgError
+	MsgLast = MsgError // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -55,8 +57,22 @@ func (mt MessageType) String() string {
 		return "Version"
 	case MsgSystemData:
 		return "System"
+	case MsgConfig:
+		return "Config"
+	case MsgError:
+		return "Error"
 	default:
 		return "Unknown"
+	}
+}
+
+type ErrorMessage struct {
+	Message string `json:"message,omitempty" yaml:"message"`
+}
+
+func NewErrorMessage(err error) ErrorMessage {
+	return ErrorMessage{
+		Message: err.Error(),
 	}
 }
 
@@ -89,10 +105,8 @@ func WriteMessage(conn *websocket.Conn, msgType MessageType, data []byte) error 
 	defer w.Close()
 
 	buf := insertMessageType(msgType, data)
-	if _, err := w.Write(buf); err != nil {
-		return err
-	}
-	return nil
+	_, err = w.Write(buf)
+	return err
 }
 
 // SendJSONData transmits json encoded data to the websocket connection, attaching to
