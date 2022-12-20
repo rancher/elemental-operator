@@ -123,7 +123,7 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 		return data, nil
 
 	default:
-		return nil, fmt.Errorf("Unknown response message-type: %s", msgType)
+		return nil, fmt.Errorf("unexpected response message: %s", msgType)
 	}
 }
 
