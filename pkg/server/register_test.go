@@ -20,22 +20,34 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/jaypipes/ghw/pkg/block"
-	"github.com/jaypipes/ghw/pkg/cpu"
-	"github.com/jaypipes/ghw/pkg/memory"
-	"github.com/jaypipes/ghw/pkg/net"
-	"github.com/rancher/elemental-operator/pkg/hostinfo"
-	"k8s.io/apimachinery/pkg/util/validation"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"path"
 	"regexp"
 	"strings"
 	"testing"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/gorilla/websocket"
+	"github.com/jaypipes/ghw/pkg/block"
+	"github.com/jaypipes/ghw/pkg/cpu"
+	"github.com/jaypipes/ghw/pkg/memory"
+	"github.com/jaypipes/ghw/pkg/net"
+	"k8s.io/apimachinery/pkg/util/validation"
+
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"gopkg.in/yaml.v2"
 	"gotest.tools/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/hostinfo"
+	"github.com/rancher/elemental-operator/pkg/register"
 )
 
 func TestUnauthenticatedResponse(t *testing.T) {
@@ -70,7 +82,6 @@ func TestUnauthenticatedResponse(t *testing.T) {
 			Context: context.Background(),
 			Client:  fake.NewClientBuilder().Build(),
 		}
-
 		registration := elementalv1.MachineRegistration{}
 		registration.Spec.Config = test.config
 		registration.Status.RegistrationURL = test.regUrl
@@ -416,4 +427,212 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	// Check values were sanitized
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuModel"])), 0)
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuVendor"])), 0)
+}
+
+func TestHandleGet(t *testing.T) {
+	testCases := []struct {
+		name                string
+		machineName         string
+		protoVersion        register.MessageType
+		inventory           *elementalv1.MachineInventory
+		registration        *elementalv1.MachineRegistration
+		wantConnectionError bool
+		wantRawResponse     bool
+		wantMessageType     register.MessageType
+	}{
+		{
+			name:                "returns not-found error for unknown machine",
+			machineName:         "unknown",
+			wantConnectionError: true,
+		},
+		{
+			name:            "returns raw config for older protoVersion",
+			machineName:     "machine-1",
+			protoVersion:    register.MsgUndefined,
+			wantRawResponse: true,
+		},
+		{
+			name:            "returns MsgConfig for newer protoVersion",
+			machineName:     "machine-2",
+			protoVersion:    register.MsgError,
+			wantRawResponse: false,
+			wantMessageType: register.MsgConfig,
+		},
+		{
+			name:            "returns MsgError for newer protoVersion and error",
+			machineName:     "machine-2",
+			protoVersion:    register.MsgError,
+			wantRawResponse: false,
+			wantMessageType: register.MsgError,
+		},
+	}
+
+	server := NewInventoryServer()
+
+	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "machine-1",
+		},
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineName: "machine-1",
+		},
+		Status: elementalv1.MachineRegistrationStatus{
+			ServiceAccountRef: &v1.ObjectReference{
+				Name: "test-account",
+			},
+			RegistrationToken: "machine-1",
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "machine-2",
+		},
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineName: "machine-2",
+		},
+		Status: elementalv1.MachineRegistrationStatus{
+			ServiceAccountRef: &v1.ObjectReference{
+				Name: "test-account",
+			},
+			RegistrationToken: "machine-2",
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-secret",
+		},
+
+		Type: v1.SecretTypeServiceAccountToken,
+	})
+
+	server.Client.Create(context.Background(), &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-account",
+		},
+
+		Secrets: []v1.ObjectReference{
+			{
+				Name: "test-secret",
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "server-url",
+		},
+
+		Value: "https://test-server.example.com",
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cacerts",
+		},
+
+		Value: "cacerts",
+	})
+
+	wsServer := httptest.NewServer(server)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), tc.machineName)
+
+			header := http.Header{}
+			header.Add("Authorization", tc.machineName)
+
+			ws, _, err := websocket.DefaultDialer.Dial(url, header)
+			if tc.wantConnectionError {
+				assert.Error(t, err, "websocket: bad handshake")
+				return
+			} else {
+				assert.NilError(t, err)
+			}
+
+			defer ws.Close()
+
+			// Read MsgReady
+			msgType, data, err := register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Equal(t, register.MsgReady, msgType)
+
+			// Negotiate version
+			if tc.protoVersion != register.MsgUndefined {
+				err = register.WriteMessage(ws, register.MsgVersion, []byte{byte(tc.protoVersion)})
+				assert.NilError(t, err)
+
+				msgType, _, err = register.ReadMessage(ws)
+				assert.NilError(t, err)
+				assert.Equal(t, register.MsgVersion, msgType)
+			}
+
+			// Actual send MsgGet
+			err = register.WriteMessage(ws, register.MsgGet, []byte{})
+			assert.NilError(t, err)
+
+			if tc.wantRawResponse {
+				msgType, r, err := ws.NextReader()
+				assert.NilError(t, err)
+				assert.Equal(t, msgType, websocket.BinaryMessage)
+				data, err := ioutil.ReadAll(r)
+				assert.Assert(t, strings.HasPrefix(string(data), "elemental:"))
+				return
+			}
+
+			msgType, data, err = register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Assert(t, data != nil)
+			assert.Equal(t, tc.wantMessageType, msgType)
+
+			config := &elementalv1.Config{}
+			err = yaml.Unmarshal(data, &config)
+			assert.NilError(t, err)
+		})
+	}
+}
+
+func NewInventoryServer() *InventoryServer {
+	scheme := runtime.NewScheme()
+	elementalv1.AddToScheme(scheme)
+	clientgoscheme.AddToScheme(scheme)
+	managementv3.AddToScheme(scheme)
+
+	return &InventoryServer{
+		Context: context.Background(),
+		Client:  fake.NewClientBuilder().WithScheme(scheme).Build(),
+		authenticators: []authenticator{
+			&FakeAuthServer{},
+		},
+	}
+}
+
+type FakeAuthServer struct{}
+
+// Authenticate always returns true and a MachineInventory with the TPM-Hash
+// set to the machine-name from the URL.
+func (a *FakeAuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error) {
+	token := path.Base(req.URL.Path)
+	escapedToken := strings.Replace(token, "\n", "", -1)
+	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
+
+	return &elementalv1.MachineInventory{
+		Spec: elementalv1.MachineInventorySpec{
+			TPMHash: token,
+		},
+	}, true, nil
 }
