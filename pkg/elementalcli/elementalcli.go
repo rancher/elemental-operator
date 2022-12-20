@@ -30,9 +30,15 @@ func Run(conf map[string]interface{}) error {
 	ev := mapToEnv("ELEMENTAL_INSTALL_", conf)
 
 	installerOpts := []string{"elemental"}
-	// Do we really need this? We already would set ELEMENTAL_DEBUG env var
-	if conf["debug"] == true {
+	// There are no env var bindings in elemental-cli for elemental root options
+	// so root flags should be passed within the command line
+	debug, ok := conf["debug"].(bool)
+	if ok && debug {
 		installerOpts = append(installerOpts, "--debug")
+	}
+	configDir, ok := conf["config-dir"].(string)
+	if ok && configDir != "" {
+		installerOpts = append(installerOpts, "--config-dir", configDir)
 	}
 	installerOpts = append(installerOpts, "install")
 

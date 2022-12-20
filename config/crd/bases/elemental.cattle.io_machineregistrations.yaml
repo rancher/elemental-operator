@@ -43,6 +43,8 @@ spec:
                     properties:
                       install:
                         properties:
+                          config-dir:
+                            type: string
                           config-urls:
                             items:
                               type: string

@@ -372,10 +372,15 @@ var _ = Describe("metadataEnv", func() {
 		}
 		env := metadataEnv(envMap)
 		Expect(env).To(HaveLen(2))
-		Expect(env[0].Name).To(Equal("METADATA_UPGRADEIMAGE"))
-		Expect(env[0].Value).To(Equal("registry.com/repository/image:v1.0"))
-		Expect(env[1].Name).To(Equal("METADATA_ROBIN"))
-		Expect(env[1].Value).To(Equal("batman"))
+		for _, e := range env {
+			if e.Name == "METADATA_UPGRADEIMAGE" {
+				Expect(e.Value).To(Equal("registry.com/repository/image:v1.0"))
+			} else {
+				Expect(e.Name).To(Equal("METADATA_ROBIN"))
+				Expect(e.Value).To(Equal("batman"))
+			}
+		}
+
 	})
 
 	It("should container env variables when passed as jsondata", func() {
