@@ -31,10 +31,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/rancher/elemental-operator/pkg/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 const (
@@ -232,6 +233,7 @@ func compress(src string, buf io.Writer) error {
 		if err != nil {
 			return err
 		}
+
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
@@ -246,12 +248,13 @@ func compress(src string, buf io.Writer) error {
 		_ = filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
 			// generate tar header
 			var header, _ = tar.FileInfoHeader(fi, file)
-			header.Name = filepath.ToSlash(file)
+			header.Name = strings.Replace(filepath.ToSlash(file), "/tmp/", "elemental-support-", 1)
 
 			// write header
 			if err := tw.WriteHeader(header); err != nil {
 				return err
 			}
+
 			// if not a dir, write file content
 			if !fi.IsDir() {
 				data, err := os.Open(file)
