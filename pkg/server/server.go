@@ -62,7 +62,12 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
 	logrus.Infof("Incoming HTTP request for %s", escapedPath)
 
+	// expect /elemental/{api}...
 	splittedPath := strings.Split(escapedPath, "/")
+	if len(splittedPath) < 3 {
+		http.Error(resp, "", http.StatusNotFound)
+		return
+	}
 	// drop 'elemental'
 	splittedPath = splittedPath[2:]
 	api := splittedPath[0]

@@ -550,7 +550,7 @@ func TestRegistrationMsgGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), tc.machineName)
+			url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), "elemental/registration/"+tc.machineName)
 
 			header := http.Header{}
 			header.Add("Authorization", tc.machineName)
@@ -566,7 +566,7 @@ func TestRegistrationMsgGet(t *testing.T) {
 			defer ws.Close()
 
 			// Read MsgReady
-			msgType, data, err := register.ReadMessage(ws)
+			msgType, _, err := register.ReadMessage(ws)
 			assert.NilError(t, err)
 			assert.Equal(t, register.MsgReady, msgType)
 
@@ -588,12 +588,12 @@ func TestRegistrationMsgGet(t *testing.T) {
 				msgType, r, err := ws.NextReader()
 				assert.NilError(t, err)
 				assert.Equal(t, msgType, websocket.BinaryMessage)
-				data, err := io.ReadAll(r)
+				data, _ := io.ReadAll(r)
 				assert.Assert(t, strings.HasPrefix(string(data), "elemental:"))
 				return
 			}
 
-			msgType, data, err = register.ReadMessage(ws)
+			msgType, data, err := register.ReadMessage(ws)
 			assert.NilError(t, err)
 			assert.Assert(t, data != nil)
 			assert.Equal(t, tc.wantMessageType, msgType)
