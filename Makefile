@@ -119,7 +119,7 @@ validate:
 
 .PHONY: unit-tests
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -p -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/...
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/...
 
 e2e-tests: $(GINKGO) setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
