@@ -214,3 +214,45 @@ func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineI
 	}
 	return inventory, nil
 }
+
+func (i *InventoryServer) getMachineRegistration(token string) (*elementalv1.MachineRegistration, error) {
+	escapedToken := strings.Replace(token, "\n", "", -1)
+	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
+
+	mRegistrationList := &elementalv1.MachineRegistrationList{}
+	if err := i.List(i, mRegistrationList); err != nil {
+		return nil, fmt.Errorf("failed to list machine registrations")
+	}
+
+	var mRegistration *elementalv1.MachineRegistration
+
+	// TODO: build machine registrations cache indexed by token
+	for _, m := range mRegistrationList.Items {
+		if m.Status.RegistrationToken == escapedToken {
+			// Found two registrations with the same registration token
+			if mRegistration != nil {
+				return nil, fmt.Errorf("machine registrations %s/%s and %s/%s have the same registration token %s",
+					mRegistration.Namespace, mRegistration.Name, m.Namespace, m.Name, escapedToken)
+			}
+			mRegistration = (&m).DeepCopy()
+		}
+	}
+
+	if mRegistration == nil {
+		return nil, fmt.Errorf("failed to find machine registration with registration token %s", escapedToken)
+	}
+
+	var ready bool
+	for _, condition := range mRegistration.Status.Conditions {
+		if condition.Type == "Ready" && condition.Status == "True" {
+			ready = true
+			break
+		}
+	}
+
+	if !ready {
+		return nil, fmt.Errorf("MachineRegistration %s/%s is not ready", mRegistration.Namespace, mRegistration.Name)
+	}
+
+	return mRegistration, nil
+}
