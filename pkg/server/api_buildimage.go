@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -57,9 +56,7 @@ func (i *InventoryServer) apiBuildImage(resp http.ResponseWriter, req *http.Requ
 }
 
 func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *http.Request) error {
-	token := path.Base(req.URL.Path)
-	escapedToken := strings.Replace(token, "\n", "", -1)
-	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
+	escapedToken := sanitizeUserInput(path.Base(req.URL.Path))
 
 	logrus.Debugf("Get build-image job status for %s", escapedToken)
 
@@ -99,6 +96,9 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 		http.Error(resp, errMsg.Error(), http.StatusBadRequest)
 		return errMsg
 	}
+
+	job.Token = sanitizeUserInput(job.Token)
+	job.URL = sanitizeUserInput(job.URL)
 
 	if _, err := i.getMachineRegistration(job.Token); err != nil {
 		http.Error(resp, err.Error(), http.StatusBadRequest)

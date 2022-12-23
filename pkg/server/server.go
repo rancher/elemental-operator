@@ -19,6 +19,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"sync"
@@ -64,8 +65,8 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 }
 
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	escapedPath := strings.Replace(req.URL.Path, "\n", "", -1)
-	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
+	escapedPath := sanitizeUserInput(req.URL.Path)
+
 	logrus.Infof("Incoming HTTP request for %s", escapedPath)
 
 	// expect /elemental/{api}...
@@ -94,6 +95,13 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		http.Error(resp, fmt.Sprintf("unknwon api: %s", api), http.StatusBadRequest)
 		return
 	}
+}
+
+func sanitizeUserInput(data string) string {
+	escapedData := strings.Replace(data, "\n", "", -1)
+	escapedData = strings.Replace(escapedData, "\r", "", -1)
+	escapedData = html.EscapeString(escapedData)
+	return escapedData
 }
 
 func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
