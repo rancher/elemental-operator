@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 SUSE LLC
+Copyright © 2023 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -499,8 +499,17 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 		inv.Labels = map[string]string{}
 	}
 	inv.Labels["elemental.cattle.io/TotalMemory"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
-	inv.Labels["elemental.cattle.io/CpuTotalCores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
-	inv.Labels["elemental.cattle.io/CpuTotalThreads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+
+	// Both checks below is due to ghw not detecting aarch64 cores/threads properly, so it ends up in a label
+	// with 0 valuie, which is not useful at all
+	// tracking bug: https://github.com/jaypipes/ghw/issues/199
+	if systemData.CPU.TotalCores > 0 {
+		inv.Labels["elemental.cattle.io/CpuTotalCores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+	}
+
+	if systemData.CPU.TotalThreads > 0 {
+		inv.Labels["elemental.cattle.io/CpuTotalThreads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+	}
 
 	// This should never happen but just in case
 	if len(systemData.CPU.Processors) > 0 {
