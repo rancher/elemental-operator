@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 SUSE LLC
+Copyright © 2023 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,9 +26,8 @@ import (
 	"encoding/json"
 
 	"github.com/google/go-cmp/cmp"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/util"
 	"github.com/rancher/system-agent/pkg/applyinator"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -46,7 +45,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sigs.k8s.io/yaml"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 // MachineInventorySelectorReconciler reconciles a MachineInventorySelector object.
@@ -336,6 +337,8 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 	}
 
 	type LabelsFromInventory struct {
+		// NOTE: The '+' is not a typo and is needed when adding labels to k3s/rke
+		// instead of replacing them.
 		NodeLabels []string `yaml:"node-label+"`
 	}
 
