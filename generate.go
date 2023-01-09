@@ -2,7 +2,7 @@
 //go:generate /bin/rm -rf pkg/generated
 //go:generate go run pkg/codegen/main.go
 /*
-Copyright © 2022 SUSE LLC
+Copyright © SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
