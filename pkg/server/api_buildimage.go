@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -149,6 +150,10 @@ func (i *InventoryServer) draftDoBuildImage(job buildImageJob) {
 	// Here we should just update the status then.
 	// For now, it will always fail.
 	logrus.Infof("build-image for token %s failed (build job not supported yet).", job.Token)
+	// let's add a small waiting time before reporting the job failure. We need this till we don't implement
+	// the actual build job to let the tests check that the build job is marked as started (otherwise this empty
+	// job may update the status to Failed before the test is able to check for the Started state).
+	time.Sleep(5 * time.Millisecond)
 	if err := i.registrationCache.setBuildImageStatus(job.Token, jobStatusFailed); err != nil {
 		logrus.Errorf("Cannot update build-image status for job with token %s: %s", job.Token, err.Error())
 	}
