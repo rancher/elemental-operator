@@ -78,15 +78,15 @@ func generateCRD(gvk schema.GroupVersionKind, scope apiextensionsv1.ResourceScop
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"spec": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: pointer.Bool(true),
 								},
 								"value": {
 									Type:                   "string",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: pointer.Bool(true),
 								},
 								"status": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: pointer.Bool(true),
 								},
 							},
 						},
