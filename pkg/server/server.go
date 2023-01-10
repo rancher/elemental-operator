@@ -115,7 +115,9 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 		return nil, err
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
-	_ = conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second)); err != nil {
+		logrus.Warnf("Cannot set read deadline on the websocket: %s", err.Error())
+	}
 
 	return conn, err
 }
