@@ -84,19 +84,19 @@ func FindImage(imagesDir string, imageRef name.Reference) (v1.Image, error) {
 // findImage returns a handle to an image in a tarfile on disk.
 // If the image is not found in the file, an error is returned.
 func findImage(fileName string, imageTag name.Tag) (v1.Image, error) {
-	opener, err := getOpener(fileName)
+	opener, err := GetOpener(fileName)
 	if err != nil {
 		return nil, err
 	}
 	return tarball.Image(opener, &imageTag)
 }
 
-// getOpener returns a function implementing the tarball.Opener interface.
+// GetOpener returns a function implementing the tarball.Opener interface.
 // This is required because compressed tarballs are not seekable, and the image
 // reader may need to seek backwards in the file to find a required layer.
 // Instead of seeking backwards, it just closes and reopens the file.
-// If the file format is not supoprted, an error is returned.
-func getOpener(fileName string) (tarball.Opener, error) {
+// If the file format is not supported, an error is returned.
+func GetOpener(fileName string) (tarball.Opener, error) {
 	var opener tarball.Opener
 	switch {
 	case util.HasSuffixI(fileName, ".tar"):
