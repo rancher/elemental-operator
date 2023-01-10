@@ -90,12 +90,9 @@ func (u *Utility) Stage(destDir string, imgString string) error {
 
 	if img == nil {
 		registry, err := registries.GetPrivateRegistries(u.findRegistriesYaml())
-
 		if err != nil {
 			return err
 		}
-
-		kcs := []authn.Keychain{registry}
 
 		if _, err := os.Stat(u.imageCredentialProviderConfig); os.IsExist(err) {
 			logrus.Debugf("Image Credential Provider Configuration file %s existed, using plugins from directory %s", u.imageCredentialProviderConfig, u.imageCredentialProviderBinDir)
@@ -103,16 +100,18 @@ func (u *Utility) Stage(destDir string, imgString string) error {
 			if err != nil {
 				return err
 			}
-			kcs = append(kcs, plugins)
+			registry.DefaultKeychain = plugins
 		} else {
-			kcs = append(kcs, authn.DefaultKeychain)
+			// The kubelet image credential provider plugin also falls back to checking legacy Docker credentials, so only
+			// explicitly set up the go-containerregistry DefaultKeychain if plugins are not configured.
+			// DefaultKeychain tries to read config from the home dir, and will error if HOME isn't set, so also gate on that.
+			if os.Getenv("HOME") != "" {
+				registry.DefaultKeychain = authn.DefaultKeychain
+			}
 		}
 
-		multiKeychain := authn.NewMultiKeychain(kcs...)
 		logrus.Infof("Pulling image %s", image.Name())
-		img, err = remote.Image(registry.Rewrite(image),
-			remote.WithAuthFromKeychain(multiKeychain),
-			remote.WithTransport(registry),
+		img, err = registry.Image(image,
 			remote.WithPlatform(v1.Platform{
 				Architecture: runtime.GOARCH,
 				OS:           runtime.GOOS,

@@ -17,7 +17,6 @@ package mutate
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/logs"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
@@ -51,6 +50,9 @@ func computeDescriptor(ia IndexAddendum) (*v1.Descriptor, error) {
 	if len(ia.Descriptor.Annotations) != 0 {
 		desc.Annotations = ia.Descriptor.Annotations
 	}
+	if ia.Descriptor.Data != nil {
+		desc.Data = ia.Descriptor.Data
+	}
 
 	return desc, nil
 }
@@ -61,12 +63,13 @@ type index struct {
 	// remove is removed before adds
 	remove match.Matcher
 
-	computed  bool
-	manifest  *v1.IndexManifest
-	mediaType *types.MediaType
-	imageMap  map[v1.Hash]v1.Image
-	indexMap  map[v1.Hash]v1.ImageIndex
-	layerMap  map[v1.Hash]v1.Layer
+	computed    bool
+	manifest    *v1.IndexManifest
+	annotations map[string]string
+	mediaType   *types.MediaType
+	imageMap    map[v1.Hash]v1.Image
+	indexMap    map[v1.Hash]v1.ImageIndex
+	layerMap    map[v1.Hash]v1.Layer
 }
 
 var _ v1.ImageIndex = (*index)(nil)
@@ -127,13 +130,16 @@ func (i *index) compute() error {
 
 	manifest.Manifests = manifests
 
-	// With OCI media types, this should not be set, see discussion:
-	// https://github.com/opencontainers/image-spec/pull/795
 	if i.mediaType != nil {
-		if strings.Contains(string(*i.mediaType), types.OCIVendorPrefix) {
-			manifest.MediaType = ""
-		} else if strings.Contains(string(*i.mediaType), types.DockerVendorPrefix) {
-			manifest.MediaType = *i.mediaType
+		manifest.MediaType = *i.mediaType
+	}
+
+	if i.annotations != nil {
+		if manifest.Annotations == nil {
+			manifest.Annotations = map[string]string{}
+		}
+		for k, v := range i.annotations {
+			manifest.Annotations[k] = v
 		}
 	}
 
@@ -184,7 +190,7 @@ func (i *index) IndexManifest() (*v1.IndexManifest, error) {
 	if err := i.compute(); err != nil {
 		return nil, err
 	}
-	return i.manifest, nil
+	return i.manifest.DeepCopy(), nil
 }
 
 // RawManifest returns the serialized bytes of Manifest()
