@@ -84,6 +84,12 @@ func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *
 	return nil
 }
 
+func sanitizeBuildImageJob(job buildImageJob) buildImageJob {
+	job.Token = sanitizeUserInput(job.Token)
+	job.URL = sanitizeUserInput(job.URL)
+	return job
+}
+
 func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *http.Request) error {
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -98,20 +104,19 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 		return errMsg
 	}
 
-	job.Token = sanitizeUserInput(job.Token)
-	job.URL = sanitizeUserInput(job.URL)
+	sanitizedJob := sanitizeBuildImageJob(job)
 
-	if _, err := i.getMachineRegistration(job.Token); err != nil {
+	if _, err := i.getMachineRegistration(sanitizedJob.Token); err != nil {
 		http.Error(resp, err.Error(), http.StatusBadRequest)
 		return err
 	}
 
-	if reg, err := i.registrationCache.getRegistrationData(job.Token); err != nil {
+	if reg, err := i.registrationCache.getRegistrationData(sanitizedJob.Token); err != nil {
 		if reg.buildImageStatus == jobStatusStarted {
-			if reg.buildImageURL == job.URL {
+			if reg.buildImageURL == sanitizedJob.URL {
 				logrus.Debugf("Same job already started, nothing to do")
 
-				if err := json.NewEncoder(resp).Encode(job); err != nil {
+				if err := json.NewEncoder(resp).Encode(sanitizedJob); err != nil {
 					errMsg := fmt.Errorf("cannot marshal build-image data: %w", err)
 					http.Error(resp, errMsg.Error(), http.StatusInternalServerError)
 					return errMsg
@@ -124,16 +129,16 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 		}
 	}
 
-	i.registrationCache.setRegistrationData(job.Token, registrationData{
-		buildImageURL:    job.URL,
+	i.registrationCache.setRegistrationData(sanitizedJob.Token, registrationData{
+		buildImageURL:    sanitizedJob.URL,
 		buildImageStatus: jobStatusStarted,
 	})
 
-	logrus.Infof("New build-image job queued: seed image:'%s', reg token:'%s'", job.URL, job.Token)
+	logrus.Infof("New build-image job queued: seed image:'%s', reg token:'%s'", sanitizedJob.URL, sanitizedJob.Token)
 	// start the actual build job here
-	go i.draftDoBuildImage(job)
+	go i.draftDoBuildImage(sanitizedJob)
 
-	if err := json.NewEncoder(resp).Encode(job); err != nil {
+	if err := json.NewEncoder(resp).Encode(sanitizedJob); err != nil {
 		errMsg := fmt.Errorf("cannot marshal build-image data: %w", err)
 		http.Error(resp, errMsg.Error(), http.StatusInternalServerError)
 		return errMsg
