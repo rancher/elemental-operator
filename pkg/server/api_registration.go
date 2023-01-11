@@ -25,9 +25,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	values "github.com/rancher/wrangler/pkg/data"
 	"github.com/sirupsen/logrus"
@@ -47,15 +45,14 @@ var (
 	start            = regexp.MustCompile("^[a-zA-Z0-9]")
 )
 
-func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	escapedPath := strings.Replace(req.URL.Path, "\n", "", -1)
-	escapedPath = strings.Replace(escapedPath, "\r", "", -1)
-	logrus.Infof("Incoming HTTP request for %s", escapedPath)
+func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
+	var err error
+	var registration *elementalv1.MachineRegistration
+
 	// get the machine registration relevant to this request
-	registration, err := i.getMachineRegistration(req)
-	if err != nil {
+	if registration, err = i.getMachineRegistration(path.Base(req.URL.Path)); err != nil {
 		http.Error(resp, err.Error(), http.StatusNotFound)
-		return
+		return err
 	}
 
 	if !websocket.IsWebSocketUpgrade(req) {
@@ -63,14 +60,14 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			logrus.Error("error sending unauthenticated response: ", err)
 		}
-		return
+		return err
 	}
 
 	// upgrade to websocket
 	conn, err := upgrade(resp, req)
 	if err != nil {
 		logrus.Error("failed to upgrade connection to websocket: %w", err)
-		return
+		return err
 	}
 	defer conn.Close()
 	logrus.Debug("connection upgraded to websocket")
@@ -79,7 +76,7 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
 		logrus.Error("authentication failed: ", err)
-		return
+		return err
 	}
 	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
@@ -87,13 +84,13 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			logrus.Error("error sending unauthenticated response: ", err)
 		}
-		return
+		return err
 	}
 	logrus.Debug("attestation completed")
 
-	if err := register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
+	if err = register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
 		logrus.Error("cannot finalize the authentication process: %w", err)
-		return
+		return err
 	}
 
 	isNewInventory := inventory.CreationTimestamp.IsZero()
@@ -101,27 +98,12 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 		initInventory(inventory, registration)
 	}
 
-	err = i.serveLoop(conn, inventory, registration)
-	if err != nil {
+	if err = i.serveLoop(conn, inventory, registration); err != nil {
 		logrus.Error(err)
-		return
-	}
-}
-
-func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
-	upgrader := websocket.Upgrader{
-		HandshakeTimeout: 5 * time.Second,
-		CheckOrigin:      func(r *http.Request) bool { return true },
+		return err
 	}
 
-	conn, err := upgrader.Upgrade(resp, req, nil)
-	if err != nil {
-		return nil, err
-	}
-	_ = conn.SetWriteDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
-	_ = conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
-
-	return conn, err
+	return nil
 }
 
 func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.MachineRegistration, writer io.Writer) error {
@@ -142,87 +124,6 @@ func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.Mach
 			},
 		},
 	})
-}
-
-func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
-	if inventory.Spec.TPMHash == "" {
-		return nil, fmt.Errorf("machine inventory TPMHash is empty")
-	}
-
-	mInventoryList := &elementalv1.MachineInventoryList{}
-
-	if err := i.List(i, mInventoryList); err != nil {
-		return nil, fmt.Errorf("cannot retrieve machine inventory list: %w", err)
-	}
-
-	// TODO: add a cache map for machine inventories indexed by TPMHash
-	for _, m := range mInventoryList.Items {
-		if m.Spec.TPMHash == inventory.Spec.TPMHash {
-			return nil, fmt.Errorf("machine inventory with TPM hash %s already present: %s/%s",
-				m.Spec.TPMHash, m.Namespace, m.Name)
-		}
-	}
-
-	if err := i.Create(i, inventory); err != nil {
-		return nil, fmt.Errorf("failed to create machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
-	}
-
-	logrus.Infof("new machine inventory created: %s", inventory.Name)
-
-	return inventory, nil
-}
-
-func (i *InventoryServer) updateMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
-	if err := i.Update(i, inventory); err != nil {
-		return nil, fmt.Errorf("failed to update machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
-	}
-
-	logrus.Infof("machine inventory updated: %s", inventory.Name)
-
-	return inventory, nil
-}
-
-func (i *InventoryServer) getMachineRegistration(req *http.Request) (*elementalv1.MachineRegistration, error) {
-	token := path.Base(req.URL.Path)
-	escapedToken := strings.Replace(token, "\n", "", -1)
-	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
-
-	mRegistrationList := &elementalv1.MachineRegistrationList{}
-	if err := i.List(i, mRegistrationList); err != nil {
-		return nil, fmt.Errorf("failed to list machine registrations")
-	}
-
-	var mRegistration *elementalv1.MachineRegistration
-
-	// TODO: build machine registrations cache indexed by token
-	for _, m := range mRegistrationList.Items {
-		if m.Status.RegistrationToken == escapedToken {
-			// Found two registrations with the same registration token
-			if mRegistration != nil {
-				return nil, fmt.Errorf("machine registrations %s/%s and %s/%s have the same registration token %s",
-					mRegistration.Namespace, mRegistration.Name, m.Namespace, m.Name, escapedToken)
-			}
-			mRegistration = (&m).DeepCopy()
-		}
-	}
-
-	if mRegistration == nil {
-		return nil, fmt.Errorf("failed to find machine registration with registration token %s", escapedToken)
-	}
-
-	var ready bool
-	for _, condition := range mRegistration.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status == "True" {
-			ready = true
-			break
-		}
-	}
-
-	if !ready {
-		return nil, fmt.Errorf("MachineRegistration %s/%s is not ready", mRegistration.Namespace, mRegistration.Name)
-	}
-
-	return mRegistration, nil
 }
 
 func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -249,9 +150,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return fmt.Errorf("failed to get secret: %w", err)
 	}
 
-	serverURL, err := i.getRancherServerURL()
+	serverURL, err := i.getValue("server-url")
 	if err != nil {
 		return fmt.Errorf("failed to get server-url: %w", err)
+	}
+	if serverURL == "" {
+		return fmt.Errorf("server-url is not set")
 	}
 
 	if registration.Spec.Config == nil {
@@ -301,6 +205,21 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	return register.WriteMessage(conn, register.MsgConfig, data)
 }
 
+func (i *InventoryServer) getRancherCACert() string {
+	cacert, err := i.getValue("cacerts")
+	if err != nil {
+		logrus.Errorf("Error getting cacerts: %s", err.Error())
+	}
+
+	if cacert == "" {
+		if cacert, err = i.getValue("internal-cacerts"); err != nil {
+			logrus.Errorf("Error getting internal-cacerts: %s", err.Error())
+			return ""
+		}
+	}
+	return cacert
+}
+
 func buildStringFromSmbiosData(data map[string]interface{}, name string) string {
 	str := name
 	result := &strings.Builder{}
@@ -333,25 +252,6 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 		resultStr = resultStr[:58]
 	}
 	return resultStr
-}
-
-func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
-	const namePrefix = "m-"
-
-	if registration.Spec.Config == nil {
-		registration.Spec.Config = &elementalv1.Config{}
-	}
-	inventory.Name = registration.Spec.MachineName
-	if inventory.Name == "" {
-		if registration.Spec.Config.Elemental.Registration.NoSMBIOS {
-			inventory.Name = namePrefix + uuid.NewString()
-		} else {
-			inventory.Name = namePrefix + "${System Information/UUID}"
-		}
-	}
-	inventory.Namespace = registration.Namespace
-	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
-	inventory.Labels = registration.Spec.MachineInventoryLabels
 }
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -575,18 +475,4 @@ func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) 
 		inventory.Labels = map[string]string{}
 	}
 	return nil
-}
-
-func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
-	var err error
-	if inventory.CreationTimestamp.IsZero() {
-		if inventory, err = i.createMachineInventory(inventory); err != nil {
-			return nil, fmt.Errorf("MachineInventory creation failed: %w", err)
-		}
-	} else {
-		if inventory, err = i.updateMachineInventory(inventory); err != nil {
-			return nil, fmt.Errorf("MachineInventory update failed: %w", err)
-		}
-	}
-	return inventory, nil
 }
