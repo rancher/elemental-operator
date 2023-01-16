@@ -89,12 +89,12 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 		if err := sendSMBIOSData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
 		}
-	}
 
-	if smbios {
-		logrus.Info("Send system data")
-		if err := sendSystemData(conn); err != nil {
-			return nil, fmt.Errorf("failed to send system data: %w", err)
+		if protoVersion >= MsgSystemData {
+			logrus.Info("Send system data")
+			if err := sendSystemData(conn); err != nil {
+				return nil, fmt.Errorf("failed to send system data: %w", err)
+			}
 		}
 	}
 
@@ -103,28 +103,36 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
 	}
 
-	msgType, data, err := ReadMessage(conn)
-	if err != nil {
-		return nil, fmt.Errorf("read configuration response: %w", err)
-	}
-
-	logrus.Debugf("Got configuration response: %s", msgType.String())
-
-	switch msgType {
-	case MsgError:
-		msg := &ErrorMessage{}
-		if err = yaml.Unmarshal(data, &msg); err != nil {
-			return nil, errors.Wrap(err, "unable to unmarshal error-message")
+	if protoVersion >= MsgConfig {
+		msgType, data, err := ReadMessage(conn)
+		if err != nil {
+			return nil, fmt.Errorf("read configuration response: %w", err)
 		}
 
-		return nil, errors.New(msg.Message)
+		logrus.Debugf("Got configuration response: %s", msgType.String())
 
-	case MsgConfig:
-		return data, nil
+		switch msgType {
+		case MsgError:
+			msg := &ErrorMessage{}
+			if err = yaml.Unmarshal(data, &msg); err != nil {
+				return nil, errors.Wrap(err, "unable to unmarshal error-message")
+			}
 
-	default:
-		return nil, fmt.Errorf("unexpected response message: %s", msgType)
+			return nil, errors.New(msg.Message)
+
+		case MsgConfig:
+			return data, nil
+
+		default:
+			return nil, fmt.Errorf("unexpected response message: %s", msgType)
+		}
 	}
+
+	_, r, err := conn.NextReader()
+	if err != nil {
+		return nil, fmt.Errorf("read elemental configuration: %w", err)
+	}
+	return io.ReadAll(r)
 }
 
 func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*websocket.Conn, error) {
