@@ -341,10 +341,6 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 
 	logrus.Debug("Elemental cloud config sent")
 
-	if protoVersion == register.MsgUndefined {
-		logrus.Warn("Detected old elemental-register client: cloud-config data may not be applied correctly")
-	}
-
 	return nil
 }
 
