@@ -47,6 +47,7 @@ RUN go build  \
 FROM scratch AS elemental-operator
 COPY --from=build /var/lib/ca-certificates/ca-bundle.pem /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-operator /usr/sbin/elemental-operator /usr/sbin/elemental-operator
+USER 10010:10010
 ENTRYPOINT ["/usr/sbin/elemental-operator"]
 
 FROM scratch AS elemental-register
