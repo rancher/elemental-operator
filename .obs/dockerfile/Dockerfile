@@ -28,4 +28,6 @@ RUN zypper clean --all && \
     >/var/log/lastlog && \
     rm -rf /boot/vmlinux*
 
+USER 10010:10010
+
 ENTRYPOINT ["elemental-operator"]
