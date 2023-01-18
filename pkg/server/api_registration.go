@@ -31,12 +31,18 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/register"
 )
+
+type LegacyConfig struct {
+	Elemental   elementalv1.Elemental  `yaml:"elemental"`
+	CloudConfig map[string]interface{} `yaml:"cloud-config,omitempty"`
+}
 
 var (
 	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
@@ -162,21 +168,31 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		registration.Spec.Config = &elementalv1.Config{}
 	}
 
-	config := elementalv1.Config{
-		Elemental: elementalv1.Elemental{
-			Registration: elementalv1.Registration{
-				URL:    registration.Status.RegistrationURL,
-				CACert: i.getRancherCACert(),
-			},
-			SystemAgent: elementalv1.SystemAgent{
-				URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
-				Token:           string(secret.Data["token"]),
-				SecretName:      inventory.Name,
-				SecretNamespace: inventory.Namespace,
-			},
-			Install: registration.Spec.Config.Elemental.Install,
+	elementalConf := elementalv1.Elemental{
+		Registration: elementalv1.Registration{
+			URL:    registration.Status.RegistrationURL,
+			CACert: i.getRancherCACert(),
 		},
-		CloudConfig: registration.Spec.Config.CloudConfig,
+		SystemAgent: elementalv1.SystemAgent{
+			URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
+			Token:           string(secret.Data["token"]),
+			SecretName:      inventory.Name,
+			SecretNamespace: inventory.Namespace,
+		},
+		Install: registration.Spec.Config.Elemental.Install,
+	}
+
+	cloudConf := registration.Spec.Config.CloudConfig
+
+	// legacy register client (old ISO): we should send serialization of legacy (pre-kubebuilder) config.
+	if protoVersion == register.MsgUndefined {
+		logrus.Debug("Detected old register client: sending legacy CloudConfig serialization.")
+		return sendLegacyConfig(conn, elementalConf, cloudConf)
+	}
+
+	config := elementalv1.Config{
+		Elemental:   elementalConf,
+		CloudConfig: cloudConf,
 	}
 
 	// If client does not support MsgConfig we send back the config as a
@@ -330,6 +346,32 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 	}
 
 	return nil
+}
+
+func sendLegacyConfig(conn *websocket.Conn, elementalConf elementalv1.Elemental, cloudConf map[string]runtime.RawExtension) (err error) {
+	legacyCloudConf := make(map[string]interface{})
+	for cloudKey, cloudData := range cloudConf {
+		var data interface{}
+		if err := json.Unmarshal(cloudData.Raw, &data); err != nil {
+			logrus.Warnf("Error unmarshalling key %s: %s", cloudKey, err.Error())
+			logrus.Debugf("Unmarshalling of '%s' failed", &cloudData.Raw)
+			continue
+		}
+		legacyCloudConf[cloudKey] = data
+	}
+
+	config := LegacyConfig{
+		Elemental:   elementalConf,
+		CloudConfig: legacyCloudConf,
+	}
+
+	writer, err := conn.NextWriter(websocket.BinaryMessage)
+	if err != nil {
+		return err
+	}
+	defer writer.Close()
+
+	return yaml.NewEncoder(writer).Encode(config)
 }
 
 // writeError reports back an error to the client if the negotiated protocol
