@@ -138,7 +138,6 @@ func TestInitNewInventory(t *testing.T) {
 					},
 				},
 			},
-			expectedName: "m-${System Information/UUID}",
 		},
 		{
 			config: &elementalv1.Config{
@@ -150,8 +149,7 @@ func TestInitNewInventory(t *testing.T) {
 			},
 		},
 		{
-			config:       nil,
-			expectedName: "m-${System Information/UUID}",
+			config: nil,
 		},
 	}
 
@@ -166,7 +164,7 @@ func TestInitNewInventory(t *testing.T) {
 		inventory := &elementalv1.MachineInventory{}
 		initInventory(inventory, registration)
 
-		if test.config != nil && test.config.Elemental.Registration.NoSMBIOS {
+		if test.initName == "" {
 			assert.Check(t, mUUID.Match([]byte(inventory.Name)), inventory.Name+" is not UUID based")
 		} else {
 			assert.Equal(t, inventory.Name, test.expectedName)
