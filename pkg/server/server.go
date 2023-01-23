@@ -152,11 +152,7 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	}
 	inventory.Name = registration.Spec.MachineName
 	if inventory.Name == "" {
-		if registration.Spec.Config.Elemental.Registration.NoSMBIOS {
-			inventory.Name = namePrefix + uuid.NewString()
-		} else {
-			inventory.Name = namePrefix + "${System Information/UUID}"
-		}
+		inventory.Name = namePrefix + uuid.NewString()
 	}
 	inventory.Namespace = registration.Namespace
 	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
