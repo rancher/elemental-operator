@@ -84,7 +84,7 @@ func (a *AuthServer) validHash(ek *attest.EK, registerNamespace string) (*elemen
 				return nil, fmt.Errorf("failed to find inventory machine: TPM hash %s is present in both %s/%s and %s/%s",
 					hashEncoded, mInventory.Namespace, mInventory.Name, m.Namespace, m.Name)
 			}
-			mInventory = &m
+			mInventory = (&m).DeepCopy()
 		}
 	}
 
