@@ -58,6 +58,10 @@ type Registration struct {
 	EmulatedTPMSeed int64 `json:"emulated-tpm-seed,omitempty" yaml:"emulated-tpm-seed,omitempty" mapstructure:"emulated-tpm-seed"`
 	// +optional
 	NoSMBIOS bool `json:"no-smbios,omitempty" yaml:"no-smbios,omitempty" mapstructure:"no-smbios"`
+	// +optional
+	// +kubebuilder:validation:Enum=tpm;mac
+	// +kubebuilder:default:=tpm
+	Auth string `json:"auth,omitempty" yaml:"auth,omitempty" mapstructure:"auth"`
 }
 
 type SystemAgent struct {

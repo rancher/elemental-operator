@@ -74,6 +74,12 @@ spec:
                         type: object
                       registration:
                         properties:
+                          auth:
+                            default: tpm
+                            enum:
+                            - tpm
+                            - mac
+                            type: string
                           ca-cert:
                             type: string
                           emulate-tpm:
