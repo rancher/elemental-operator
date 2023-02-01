@@ -128,7 +128,7 @@ func writeRead(conn *websocket.Conn, input []byte) ([]byte, error) {
 func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error) {
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
-		log.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)
+		log.Debugf("websocket connection missing TPM Authorization header from %s", req.RemoteAddr)
 		return nil, true, nil
 	}
 
