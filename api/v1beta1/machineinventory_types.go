@@ -33,6 +33,12 @@ type MachineInventorySpec struct {
 	// report their TPM hash by using the MachineRegister.
 	// +optional
 	TPMHash string `json:"tpmHash,omitempty"`
+	// MachineHash the hash of the identifier used by the host to identify
+	// to the operator. This is used when the host authenticates without TPM.
+	// Both the authentication method and the identifier used to derive the hash
+	// depend upon the MachineRegistration spec.config.elemental.registration.auth value.
+	// +optional
+	MachineHash string `json:"machineHash,omitempty"`
 }
 
 type MachineInventoryStatus struct {

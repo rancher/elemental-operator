@@ -33,6 +33,13 @@ spec:
             type: object
           spec:
             properties:
+              machineHash:
+                description: MachineHash the hash of the identifier used by the host
+                  to identify to the operator. This is used when the host authenticates
+                  without TPM. Both the authentication method and the identifier used
+                  to derive the hash depend upon the MachineRegistration spec.config.elemental.registration.auth
+                  value.
+                type: string
               tpmHash:
                 description: TPMHash the hash of the TPM EK public key. This is used
                   if you are using TPM2 to identifiy nodes.  You can obtain the TPM
