@@ -162,9 +162,13 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
+	hashType := "TPM"
 
 	if inventory.Spec.TPMHash == "" {
-		return nil, fmt.Errorf("machine inventory TPMHash is empty")
+		if inventory.Spec.MachineHash == "" {
+			return nil, fmt.Errorf("machine inventory TPMHash and MachineHash are both empty")
+		}
+		hashType = "Machine"
 	}
 
 	mInventoryList := &elementalv1.MachineInventoryList{}
@@ -175,9 +179,19 @@ func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineI
 
 	// TODO: add a cache map for machine inventories indexed by TPMHash
 	for _, m := range mInventoryList.Items {
-		if m.Spec.TPMHash == inventory.Spec.TPMHash {
-			return nil, fmt.Errorf("machine inventory with TPM hash %s already present: %s/%s",
-				m.Spec.TPMHash, m.Namespace, m.Name)
+		hash := ""
+		if hashType == "TPM" {
+			if m.Spec.TPMHash == inventory.Spec.TPMHash {
+				hash = m.Spec.TPMHash
+			}
+		} else {
+			if m.Spec.MachineHash == inventory.Spec.MachineHash {
+				hash = m.Spec.MachineHash
+			}
+		}
+		if hash != "" {
+			return nil, fmt.Errorf("machine inventory with %s hash %s already present: %s/%s",
+				hashType, hash, m.Namespace, m.Name)
 		}
 	}
 
