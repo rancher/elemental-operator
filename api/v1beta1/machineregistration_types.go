@@ -93,6 +93,7 @@ func (m MachineRegistration) GetClientRegistrationConfig(cacert string) *Config 
 				EmulateTPM:      mRegistration.EmulateTPM,
 				EmulatedTPMSeed: mRegistration.EmulatedTPMSeed,
 				NoSMBIOS:        mRegistration.NoSMBIOS,
+				Auth:            mRegistration.Auth,
 			},
 		},
 	}
