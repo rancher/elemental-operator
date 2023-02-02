@@ -102,7 +102,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 		}
 		return nil
 	}
-	log.Debugf("attestation completed")
+	log.Debugf("authentication completed")
 
 	if err = register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
 		log.Errorf("cannot finalize the authentication process: %w", err)
