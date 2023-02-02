@@ -32,6 +32,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/plainauth"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
@@ -52,6 +53,7 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 		Context: ctx,
 		authenticators: []authenticator{
 			tpm.New(ctx, cl),
+			plainauth.New(ctx, cl),
 		},
 	}
 
