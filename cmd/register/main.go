@@ -155,7 +155,7 @@ func run(config elementalv1.Config) {
 	}
 
 	for {
-		data, err = register.Register(registration.URL, caCert, !registration.NoSMBIOS, registration.EmulateTPM, registration.EmulatedTPMSeed)
+		data, err = register.Register(registration, caCert)
 		if err != nil {
 			logrus.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)

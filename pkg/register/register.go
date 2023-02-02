@@ -34,14 +34,16 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v1"
 
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
-func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedSeed int64) ([]byte, error) {
+func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	tpmAuth := &tpm.AuthClient{}
-	if emulateTPM {
+	if reg.EmulateTPM {
+		emulatedSeed := reg.EmulatedTPMSeed
 		logrus.Info("Enable TPM emulation")
 		if emulatedSeed == -1 {
 			data, err := ghw.Product(ghw.WithDisableWarnings())
@@ -64,8 +66,8 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 		tpmAuth.EmulateTPM(emulatedSeed)
 	}
 
-	logrus.Infof("Connect to %s", url)
-	conn, err := initWebsocketConn(url, caCert, tpmAuth)
+	logrus.Infof("Connect to %s", reg.URL)
+	conn, err := initWebsocketConn(reg.URL, caCert, tpmAuth)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +86,7 @@ func Register(url string, caCert []byte, smbios bool, emulateTPM bool, emulatedS
 	}
 	logrus.Infof("Negotiated protocol version: %d", protoVersion)
 
-	if smbios {
+	if !reg.NoSMBIOS {
 		logrus.Info("Send SMBIOS data")
 		if err := sendSMBIOSData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
