@@ -21,8 +21,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"math/big"
-	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -40,44 +38,36 @@ import (
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
+type authClient interface {
+	Init(reg elementalv1.Registration) error
+	GetName() string
+	GetToken() (string, error)
+	GetPubHash() (string, error)
+	Authenticate(conn *websocket.Conn) error
+}
+
 func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
-	tpmAuth := &tpm.AuthClient{}
-	if reg.EmulateTPM {
-		emulatedSeed := reg.EmulatedTPMSeed
-		logrus.Info("Enable TPM emulation")
-		if emulatedSeed == -1 {
-			data, err := ghw.Product(ghw.WithDisableWarnings())
-			if err != nil {
-				emulatedSeed = rand.Int63()
-				logrus.Debugf("TPM emulation using random seed: %d", emulatedSeed)
-			} else {
-				uuid := strings.Replace(data.UUID, "-", "", -1)
-				var i big.Int
-				_, converted := i.SetString(uuid, 16)
-				if !converted {
-					emulatedSeed = rand.Int63()
-					logrus.Debugf("TPM emulation using random seed: %d", emulatedSeed)
-				} else {
-					emulatedSeed = i.Int64()
-					logrus.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
-				}
-			}
-		}
-		tpmAuth.EmulateTPM(emulatedSeed)
+	var auth authClient
+
+	// add here alternate auth methods that implement the authClient interface
+	auth = &tpm.AuthClient{}
+
+	if err := auth.Init(reg); err != nil {
+		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
 	}
 
 	logrus.Infof("Connect to %s", reg.URL)
-	conn, err := initWebsocketConn(reg.URL, caCert, tpmAuth)
+
+	conn, err := initWebsocketConn(reg.URL, caCert, auth)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	logrus.Debug("Start TPM attestation")
-	if err := doTPMAttestation(tpmAuth, conn); err != nil {
-		return nil, fmt.Errorf("failed TPM based auth: %w", err)
+	if err := authenticate(conn, auth); err != nil {
+		return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
 	}
-	logrus.Info("TPM attestation successful")
+	logrus.Infof("%s authentication completed", auth.GetName())
 
 	logrus.Debugf("elemental-register protocol version: %d", MsgLast)
 	protoVersion, err := negotiateProtoVersion(conn)
@@ -137,7 +127,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	return io.ReadAll(r)
 }
 
-func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*websocket.Conn, error) {
+func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.Conn, error) {
 	dialer := websocket.DefaultDialer
 
 	if len(caCert) > 0 {
@@ -149,13 +139,17 @@ func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*web
 		dialer.TLSClientConfig = &tls.Config{RootCAs: pool}
 	}
 
-	authToken, tpmHash, err := tpmAuth.GetAuthToken()
+	authToken, err := auth.GetToken()
 	if err != nil {
-		return nil, fmt.Errorf("cannot generate authentication token from TPM: %w", err)
+		return nil, fmt.Errorf("cannot generate authentication token: %w", err)
+	}
+	authHash, err := auth.GetPubHash()
+	if err != nil {
+		return nil, fmt.Errorf("cannot retrieve authentication hash: %w", err)
 	}
 
 	wsURL := strings.Replace(url, "http", "ws", 1)
-	logrus.Infof("Using TPMHash %s to dial %s", tpmHash, wsURL)
+	logrus.Infof("Using %s Auth with Hash %s to dial %s", auth.GetName(), authHash, wsURL)
 
 	header := http.Header{}
 	header.Add("Authorization", authToken)
@@ -180,11 +174,12 @@ func initWebsocketConn(url string, caCert []byte, tpmAuth *tpm.AuthClient) (*web
 	return conn, nil
 }
 
-func doTPMAttestation(tpmAuth *tpm.AuthClient, conn *websocket.Conn) error {
-	if err := tpmAuth.Init(conn); err != nil {
+func authenticate(conn *websocket.Conn, auth authClient) error {
+	logrus.Debugf("Start %s authentication", auth.GetName())
+
+	if err := auth.Authenticate(conn); err != nil {
 		return err
 	}
-
 	msgType, _, err := ReadMessage(conn)
 	if err != nil {
 		return fmt.Errorf("expecting auth reply: %w", err)
