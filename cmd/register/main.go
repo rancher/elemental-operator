@@ -119,6 +119,7 @@ func main() {
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
 	cmd.Flags().Int64Var(&cfg.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
+	cmd.Flags().StringVar(&cfg.Elemental.Registration.Auth, "auth", "tpm", "Registration authentication method")
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
