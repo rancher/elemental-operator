@@ -34,6 +34,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/plainauth"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
@@ -51,6 +52,8 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	switch reg.Auth {
 	case "tpm":
 		auth = &tpm.AuthClient{}
+	case "mac":
+		auth = &plainauth.AuthClient{}
 	default:
 		return nil, fmt.Errorf("unsupported authentication: %s", reg.Auth)
 	}
