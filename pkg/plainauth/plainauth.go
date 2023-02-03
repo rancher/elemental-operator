@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 
@@ -55,6 +54,7 @@ func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, regNa
 	}
 
 	logrus.Info("Authentication: PLAIN")
+
 	mac, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(header, "Bearer PLAIN"))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed Base64 decode: %w", err)
@@ -90,32 +90,4 @@ func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, regNa
 	}
 
 	return mInventory, false, nil
-}
-
-func GetHostMacAddr() ([]byte, error) {
-	ifList, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-	hwAddr := []byte{}
-	for _, iface := range ifList {
-		if len(iface.HardwareAddr) == 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			logrus.Errorf("Cannot get IP address for interface %s, skip it", iface.Name)
-			continue
-		}
-		if len(addrs) == 0 {
-			continue
-		}
-		hwAddr = iface.HardwareAddr
-	}
-
-	if len(hwAddr) == 0 {
-		return nil, fmt.Errorf("cannot retrieve MAC address from an active interface")
-	}
-
-	return hwAddr, nil
 }

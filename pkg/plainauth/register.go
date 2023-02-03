@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"net"
 
 	"github.com/gorilla/websocket"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -36,7 +37,7 @@ func (auth *AuthClient) Init(reg elementalv1.Registration) error {
 		return nil
 	}
 
-	mac, err := GetHostMacAddr()
+	mac, err := getHostMacAddr()
 	if err != nil {
 		return err
 	}
@@ -67,4 +68,34 @@ func (auth *AuthClient) GetPubHash() (string, error) {
 
 func (auth *AuthClient) Authenticate(conn *websocket.Conn) error {
 	return nil
+}
+
+func getHostMacAddr() ([]byte, error) {
+	hwAddr := []byte{}
+	for i := 1; i < 5; i++ {
+		iface, err := net.InterfaceByIndex(i)
+		if err != nil {
+			continue
+		}
+		if len(iface.HardwareAddr) == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			logrus.Errorf("Cannot get IP address for interface %s, skip it", iface.Name)
+			continue
+		}
+		if len(addrs) == 0 {
+			continue
+		}
+
+		hwAddr = iface.HardwareAddr
+		break
+	}
+
+	if len(hwAddr) == 0 {
+		return nil, fmt.Errorf("cannot retrieve MAC address from an active interface")
+	}
+
+	return hwAddr, nil
 }
