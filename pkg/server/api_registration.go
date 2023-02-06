@@ -463,8 +463,8 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 		inv.Labels["elemental.cattle.io/GpuModel"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
 		inv.Labels["elemental.cattle.io/GpuVendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
 	}
-	inv.Labels["elemental.cattle.io/NetNumberInterfaces"] = strconv.Itoa(len(systemData.Network.NICs))
 
+	inv.Labels["elemental.cattle.io/NetIfacesNumber"] = strconv.Itoa(len(systemData.Network.NICs))
 	for index, iface := range systemData.Network.NICs {
 		inv.Labels[fmt.Sprintf("elemental.cattle.io/NetIface%d-Name", index)] = iface.Name
 		// inv.Labels[fmt.Sprintf("NetIface%d-MAC", index)] = base64.StdEncoding.EncodeToString([]byte(iface.MacAddress)) // Could work encoded but...kind of crappy
@@ -472,7 +472,7 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 		// Capabilities available here at iface.Capabilities
 		// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
 	}
-	inv.Labels["BlockTotal"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
+	inv.Labels["elemental.cattle.io/BlockDevicesNumber"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
 	for index, block := range systemData.Block.Disks {
 		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Size", index)] = strconv.Itoa(int(block.SizeBytes))
 		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Name", index)] = block.Name
