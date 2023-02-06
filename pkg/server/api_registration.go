@@ -304,6 +304,11 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err := mergeInventoryLabels(inventory, data); err != nil {
 				return err
 			}
+		case register.MsgAnnotations:
+			err = updateInventoryWithAnnotations(data, inventory)
+			if err != nil {
+				return fmt.Errorf("failed to decode dynamic data: %w", err)
+			}
 		case register.MsgGet:
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgSystemData:
@@ -404,6 +409,21 @@ func decodeProtocolVersion(data []byte) (register.MessageType, error) {
 	}
 
 	return protoVersion, nil
+}
+
+func updateInventoryWithAnnotations(data []byte, mInventory *elementalv1.MachineInventory) error {
+	annotations := map[string]string{}
+	if err := json.Unmarshal(data, &annotations); err != nil {
+		return err
+	}
+	log.Debug("Adding annotations from client data")
+	if mInventory.Annotations == nil {
+		mInventory.Annotations = map[string]string{}
+	}
+	for key, val := range annotations {
+		mInventory.Annotations[fmt.Sprintf("elemental.cattle.io/%s", sanitizeUserInput(key))] = sanitizeUserInput(val)
+	}
+	return nil
 }
 
 // updateInventoryFromSMBIOSData() updates mInventory Name and Labels from the MachineRegistration and the SMBIOS data

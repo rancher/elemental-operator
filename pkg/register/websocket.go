@@ -38,7 +38,8 @@ const (
 	MsgSystemData
 	MsgConfig
 	MsgError
-	MsgLast = MsgError // MsgLast must point to the last message
+	MsgAnnotations
+	MsgLast = MsgAnnotations // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -61,6 +62,8 @@ func (mt MessageType) String() string {
 		return "Config"
 	case MsgError:
 		return "Error"
+	case MsgAnnotations:
+		return "Annotations"
 	default:
 		return "Unknown"
 	}
