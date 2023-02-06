@@ -47,10 +47,8 @@ type authClient interface {
 }
 
 func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
-	var auth authClient
-
 	// add here alternate auth methods that implement the authClient interface
-	auth = &tpm.AuthClient{}
+	var auth authClient = &tpm.AuthClient{}
 
 	if err := auth.Init(reg); err != nil {
 		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
