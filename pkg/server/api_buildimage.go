@@ -36,6 +36,7 @@ const (
 
 type buildImageJobStatus struct {
 	Status string `json:"status"`
+	URL    string `json:"url"`
 }
 
 type buildImageJob struct {
@@ -62,6 +63,7 @@ func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *
 	logrus.Debugf("Get build-image job status for %s", escapedToken)
 
 	jobStatus := jobStatusNotStarted
+	jobDownloadURL := ""
 	if reg, err := i.registrationCache.getRegistrationData(escapedToken); err != nil {
 		if _, err := i.getMachineRegistration(escapedToken); err != nil {
 			logrus.Warnf("Requested build-image status for unexistent MachineRegistration token: %s", escapedToken)
@@ -71,9 +73,10 @@ func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *
 		logrus.Debug("build-image job was ever started")
 	} else {
 		jobStatus = reg.buildImageStatus
+		jobDownloadURL = reg.downloadURL
 	}
 
-	data := buildImageJobStatus{Status: jobStatus}
+	data := buildImageJobStatus{Status: jobStatus, URL: jobDownloadURL}
 
 	if err := json.NewEncoder(resp).Encode(data); err != nil {
 		errMsg := fmt.Errorf("cannot marshal build-image data: %w", err)
@@ -132,6 +135,7 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 	i.registrationCache.setRegistrationData(sanitizedJob.Token, registrationData{
 		buildImageURL:    sanitizedJob.URL,
 		buildImageStatus: jobStatusStarted,
+		downloadURL:      "",
 	})
 
 	logrus.Infof("New build-image job queued: seed image:'%s', reg token:'%s'", sanitizedJob.URL, sanitizedJob.Token)
@@ -159,6 +163,9 @@ func (i *InventoryServer) draftDoBuildImage(job buildImageJob) {
 	// the actual build job to let the tests check that the build job is marked as started (otherwise this empty
 	// job may update the status to Failed before the test is able to check for the Started state).
 	time.Sleep(5 * time.Millisecond)
+	if err := i.registrationCache.setDownloadURL(job.Token, ""); err != nil {
+		logrus.Errorf("Cannot update build-image download URL for job with token %s: %s", job.Token, err.Error())
+	}
 	if err := i.registrationCache.setBuildImageStatus(job.Token, jobStatusFailed); err != nil {
 		logrus.Errorf("Cannot update build-image status for job with token %s: %s", job.Token, err.Error())
 	}

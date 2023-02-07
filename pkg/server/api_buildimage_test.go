@@ -61,7 +61,7 @@ func TestApiBuildImage(t *testing.T) {
 			token:  "abcdef",
 			method: http.MethodGet,
 			url:    "/elemental/build-iso/abcdef",
-			body:   `{"status":"Not Started"}`,
+			body:   `{"status":"Not Started","url":""}`,
 			valid:  true,
 		},
 		{

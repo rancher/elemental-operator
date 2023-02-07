@@ -24,6 +24,7 @@ import (
 type registrationData struct {
 	buildImageURL    string
 	buildImageStatus string
+	downloadURL      string
 }
 type registrationCache struct {
 	*sync.Mutex
@@ -57,6 +58,20 @@ func (rc *registrationCache) setBuildImageStatus(token, status string) error {
 	}
 
 	reg.buildImageStatus = status
+	rc.registrations[token] = reg
+	return nil
+}
+
+func (rc *registrationCache) setDownloadURL(token, url string) error {
+	rc.Lock()
+	defer rc.Unlock()
+
+	reg, ok := rc.registrations[token]
+	if !ok {
+		return fmt.Errorf("item not found")
+	}
+
+	reg.downloadURL = url
 	rc.registrations[token] = reg
 	return nil
 }
