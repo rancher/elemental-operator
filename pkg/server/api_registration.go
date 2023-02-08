@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,6 +50,7 @@ var (
 	sanitizeHostname = regexp.MustCompile("[^0-9a-zA-Z]")
 	doubleDash       = regexp.MustCompile("--+")
 	start            = regexp.MustCompile("^[a-zA-Z0-9]")
+	errValueNotFound = errors.New("value not found")
 )
 
 func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
@@ -236,7 +238,7 @@ func (i *InventoryServer) getRancherCACert() string {
 	return cacert
 }
 
-func buildStringFromSmbiosData(data map[string]interface{}, name string) string {
+func replaceStringData(data map[string]interface{}, name string) (string, error) {
 	str := name
 	result := &strings.Builder{}
 	for {
@@ -255,6 +257,8 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 		obj := values.GetValueN(data, strings.Split(str[i+2:j+i], "/")...)
 		if str, ok := obj.(string); ok {
 			result.WriteString(str)
+		} else {
+			return "", errValueNotFound
 		}
 		str = str[j+i+1:]
 	}
@@ -267,7 +271,7 @@ func buildStringFromSmbiosData(data map[string]interface{}, name string) string 
 	if len(resultStr) > 58 {
 		resultStr = resultStr[:58]
 	}
-	return resultStr
+	return resultStr, nil
 }
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -305,7 +309,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgGet:
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgSystemData:
-			err = updateInventoryFromSystemData(data, inventory)
+			err = updateInventoryFromSystemData(data, inventory, registration)
 			if err != nil {
 				return fmt.Errorf("failed to extract labels from system data: %w", err)
 			}
@@ -412,14 +416,33 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	}
 	// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
 	// to set the machine hostname. Also set it to lowercase
-	mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(buildStringFromSmbiosData(smbiosData, mInventory.Name), "-"))
+	name, err := replaceStringData(smbiosData, mInventory.Name)
+	if err != nil {
+		if errors.Is(err, errValueNotFound) {
+			logrus.Warningf("Value not found: %v", mInventory.Name)
+			name = "m"
+		} else {
+			return err
+		}
+	}
+
+	mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 	logrus.Debug("Adding labels from registration")
 	// Add extra label info from data coming from smbios and based on the registration data
 	if mInventory.Labels == nil {
 		mInventory.Labels = map[string]string{}
 	}
 	for k, v := range mRegistration.Spec.MachineInventoryLabels {
-		parsedData := buildStringFromSmbiosData(smbiosData, v)
+		parsedData, err := replaceStringData(smbiosData, v)
+		if err != nil {
+			if errors.Is(err, errValueNotFound) {
+				logrus.Debugf("Value not found: %v", v)
+				continue
+			}
+			logrus.Errorf("Failed parsing smbios data: %v", err.Error())
+			return err
+		}
+
 		logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
 		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
 	}
@@ -427,59 +450,84 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 }
 
 // updateInventoryFromSystemData creates labels in the inventory based on the hardware information
-func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory) error {
+func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
 	systemData := &hostinfo.HostInfo{}
 	if err := json.Unmarshal(data, &systemData); err != nil {
 		return err
 	}
 	logrus.Info("Adding labels from system data")
-	if inv.Labels == nil {
-		inv.Labels = map[string]string{}
+
+	memory := map[string]interface{}{}
+	if systemData.Memory != nil {
+		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
 	}
-	inv.Labels["elemental.cattle.io/TotalMemory"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
 
 	// Both checks below is due to ghw not detecting aarch64 cores/threads properly, so it ends up in a label
 	// with 0 valuie, which is not useful at all
 	// tracking bug: https://github.com/jaypipes/ghw/issues/199
-	if systemData.CPU.TotalCores > 0 {
-		inv.Labels["elemental.cattle.io/CpuTotalCores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+	cpu := map[string]interface{}{}
+	if systemData.CPU != nil {
+		if systemData.CPU.TotalCores > 0 {
+			cpu["Total Cores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+		}
+
+		if systemData.CPU.TotalThreads > 0 {
+			cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+		}
+
+		// This should never happen but just in case
+		if len(systemData.CPU.Processors) > 0 {
+			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
+			// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
+			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
+			cpu["Model"] = sanitizeString(systemData.CPU.Processors[0].Model)
+			cpu["Vendor"] = sanitizeString(systemData.CPU.Processors[0].Vendor)
+			// Capabilities available here at systemData.CPU.Processors[X].Capabilities
+		}
 	}
 
-	if systemData.CPU.TotalThreads > 0 {
-		inv.Labels["elemental.cattle.io/CpuTotalThreads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
-	}
-
-	// This should never happen but just in case
-	if len(systemData.CPU.Processors) > 0 {
-		// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
-		// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
-		// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
-		inv.Labels["elemental.cattle.io/CpuModel"] = sanitizeString(systemData.CPU.Processors[0].Model)
-		inv.Labels["elemental.cattle.io/CpuVendor"] = sanitizeString(systemData.CPU.Processors[0].Vendor)
-		// Capabilities available here at systemData.CPU.Processors[X].Capabilities
-	}
+	gpu := map[string]interface{}{}
 	// This could happen so always check.
 	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
-		inv.Labels["elemental.cattle.io/GpuModel"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
-		inv.Labels["elemental.cattle.io/GpuVendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
+		gpu["Model"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
+		gpu["Vendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
 	}
 
-	inv.Labels["elemental.cattle.io/NetIfacesNumber"] = strconv.Itoa(len(systemData.Network.NICs))
-	for index, iface := range systemData.Network.NICs {
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/NetIface%d-Name", index)] = iface.Name
-		// inv.Labels[fmt.Sprintf("NetIface%d-MAC", index)] = base64.StdEncoding.EncodeToString([]byte(iface.MacAddress)) // Could work encoded but...kind of crappy
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/NetIface%d-Virtual", index)] = strconv.FormatBool(iface.IsVirtual)
-		// Capabilities available here at iface.Capabilities
-		// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
+	network := map[string]interface{}{}
+	if systemData.Network != nil {
+		network["Number Interfaces"] = strconv.Itoa(len(systemData.Network.NICs))
+		for _, iface := range systemData.Network.NICs {
+			network[iface.Name] = map[string]interface{}{
+				"Name":      iface.Name,
+				"IsVirtual": strconv.FormatBool(iface.IsVirtual),
+				// Capabilities available here at iface.Capabilities
+				// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
+			}
+		}
 	}
-	inv.Labels["elemental.cattle.io/BlockDevicesNumber"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
-	for index, block := range systemData.Block.Disks {
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Size", index)] = strconv.Itoa(int(block.SizeBytes))
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Name", index)] = block.Name
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-DriveType", index)] = block.DriveType.String()
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-ControllerType", index)] = block.StorageController.String()
-		inv.Labels[fmt.Sprintf("elemental.cattle.io/BlockDevice%d-Removable", index)] = strconv.FormatBool(block.IsRemovable)
-		// Vendor and model also available here, useful?
+
+	block := map[string]interface{}{}
+	if systemData.Block != nil {
+		block["Number Devices"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
+		for _, disk := range systemData.Block.Disks {
+			block[disk.Name] = map[string]interface{}{
+				"Size":               strconv.Itoa(int(disk.SizeBytes)),
+				"Name":               disk.Name,
+				"Drive Type":         disk.DriveType.String(),
+				"Storage Controller": disk.StorageController.String(),
+				"Removable":          strconv.FormatBool(disk.IsRemovable),
+			}
+			// Vendor and model also available here, useful?
+		}
+	}
+
+	labels := map[string]interface{}{}
+	labels["System Data"] = map[string]interface{}{
+		"Memory":        memory,
+		"CPU":           cpu,
+		"GPU":           gpu,
+		"Network":       network,
+		"Block Devices": block,
 	}
 
 	// Also available but not used:
@@ -488,6 +536,29 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
 	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
+	logrus.Debugf("Parsing labels from System Data")
+
+	if inv.Labels == nil {
+		inv.Labels = map[string]string{}
+	}
+
+	for k, v := range reg.Spec.MachineInventoryLabels {
+		logrus.Debugf("Parsing: %v : %v", k, v)
+
+		parsedData, err := replaceStringData(labels, v)
+		if err != nil {
+			if errors.Is(err, errValueNotFound) {
+				logrus.Debugf("Value not found: %v", v)
+				continue
+			}
+			logrus.Errorf("Failed parsing system data: %v", err.Error())
+			return err
+		}
+
+		logrus.Debugf("Parsed %s into %s with system data, setting it to label %s", v, parsedData, k)
+		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
+	}
 
 	return nil
 }

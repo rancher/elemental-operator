@@ -1,5 +1,5 @@
 /*
-Copyright © 2023 SUSE LLC
+Copyright © 2022 - 2023 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -186,6 +186,7 @@ func TestBuildName(t *testing.T) {
 	testCase := []struct {
 		Format string
 		Output string
+		Error  string
 	}{
 		{
 			Format: "${level1B}",
@@ -201,7 +202,7 @@ func TestBuildName(t *testing.T) {
 		},
 		{
 			Format: "${}",
-			Output: "m",
+			Error:  "value not found",
 		},
 		{
 			Format: "${",
@@ -213,19 +214,19 @@ func TestBuildName(t *testing.T) {
 		},
 		{
 			Format: "${level1A}",
-			Output: "m",
+			Error:  "value not found",
 		},
 		{
 			Format: "a${level1A}c",
-			Output: "ac",
+			Error:  "value not found",
 		},
 		{
 			Format: "a${level1A}",
-			Output: "a",
+			Error:  "value not found",
 		},
 		{
 			Format: "${level1A}c",
-			Output: "c",
+			Error:  "value not found",
 		},
 		{
 			Format: "a${level1A/level2A}c",
@@ -239,10 +240,22 @@ func TestBuildName(t *testing.T) {
 			Format: "a${level1A/level2B/level3A}c${level1B}",
 			Output: "alevel3AValueclevel1BValue",
 		},
+		{
+			Format: "a${unknown}",
+			Error:  "value not found",
+		},
 	}
 
 	for _, testCase := range testCase {
-		assert.Equal(t, testCase.Output, buildStringFromSmbiosData(data, testCase.Format))
+		t.Run(testCase.Format, func(t *testing.T) {
+			str, err := replaceStringData(data, testCase.Format)
+			if testCase.Error == "" {
+				assert.NilError(t, err)
+				assert.Equal(t, testCase.Output, str, "'%s' not equal to '%s'", testCase.Output, str)
+			} else {
+				assert.Equal(t, testCase.Error, err.Error())
+			}
+		})
 	}
 }
 
@@ -306,6 +319,26 @@ func TestMergeInventoryLabels(t *testing.T) {
 
 func TestUpdateInventoryFromSystemData(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
+	registration := &elementalv1.MachineRegistration{
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineInventoryLabels: map[string]string{
+				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
+				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
+				"elemental.cattle.io/CpuTotalThreads":        "${System Data/CPU/Total Threads}",
+				"elemental.cattle.io/NetIfacesNumber":        "${System Data/Network/Number Interfaces}",
+				"elemental.cattle.io/NetIface0-Name":         "${System Data/Network/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-IsVirtual":    "${System Data/Network/myNic1/IsVirtual}",
+				"elemental.cattle.io/NetIface1-Name":         "${System Data/Network/myNic2/Name}",
+				"elemental.cattle.io/BlockDevicesNumber":     "${System Data/Block Devices/Number Devices}",
+				"elemental.cattle.io/BlockDevice0-Name":      "${System Data/Block Devices/testdisk1/Name}",
+				"elemental.cattle.io/BlockDevice1-Name":      "${System Data/Block Devices/testdisk2/Name}",
+				"elemental.cattle.io/BlockDevice0-Size":      "${System Data/Block Devices/testdisk1/Size}",
+				"elemental.cattle.io/BlockDevice1-Size":      "${System Data/Block Devices/testdisk2/Size}",
+				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
+				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
+			},
+		},
+	}
 	data := hostinfo.HostInfo{
 		Block: &block.Info{
 			Disks: []*block.Disk{
@@ -334,7 +367,8 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 		Network: &net.Info{
 			NICs: []*net.NIC{
 				{
-					Name: "myNic1",
+					Name:      "myNic1",
+					IsVirtual: true,
 				},
 				{
 					Name: "myNic2",
@@ -344,7 +378,7 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 	}
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemData(encodedData, inventory)
+	err = updateInventoryFromSystemData(encodedData, inventory, registration)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
@@ -352,6 +386,7 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIfacesNumber"], "2")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-Name"], "myNic1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-IsVirtual"], "true")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface1-Name"], "myNic2")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevicesNumber"], "2")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice0-Name"], "testdisk1")
@@ -364,6 +399,26 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 
 func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
+	registration := &elementalv1.MachineRegistration{
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineInventoryLabels: map[string]string{
+				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
+				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
+				"elemental.cattle.io/CpuTotalThreads":        "${System Data/CPU/Total Threads}",
+				"elemental.cattle.io/NetIfacesNumber":        "${System Data/Network/Number Interfaces}",
+				"elemental.cattle.io/NetIface0-Name":         "${System Data/Network/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-IsVirtual":    "${System Data/Network/myNic1/IsVirtual}",
+				"elemental.cattle.io/NetIface1-Name":         "${System Data/Network/myNic2/Name}",
+				"elemental.cattle.io/BlockDevicesNumber":     "${System Data/Block Devices/Number Devices}",
+				"elemental.cattle.io/BlockDevice0-Name":      "${System Data/Block Devices/testdisk1/Name}",
+				"elemental.cattle.io/BlockDevice1-Name":      "${System Data/Block Devices/testdisk2/Name}",
+				"elemental.cattle.io/BlockDevice0-Size":      "${System Data/Block Devices/testdisk1/Size}",
+				"elemental.cattle.io/BlockDevice1-Size":      "${System Data/Block Devices/testdisk2/Size}",
+				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
+				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
+			},
+		},
+	}
 	data := hostinfo.HostInfo{
 		Block: &block.Info{
 			Disks: []*block.Disk{
@@ -408,7 +463,7 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	}
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemData(encodedData, inventory)
+	err = updateInventoryFromSystemData(encodedData, inventory, registration)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
@@ -603,6 +658,130 @@ func TestRegistrationMsgGet(t *testing.T) {
 			assert.NilError(t, err)
 		})
 	}
+}
+
+func TestRegistrationDynamicLabels(t *testing.T) {
+	server := NewInventoryServer()
+
+	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "machine-1",
+		},
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineName: "machine-1",
+			MachineInventoryLabels: map[string]string{
+				"uuid":            "${System Information/UUID}",
+				"physical_memory": "${System Data/Memory/Total Physical Bytes}",
+			},
+		},
+		Status: elementalv1.MachineRegistrationStatus{
+			ServiceAccountRef: &v1.ObjectReference{
+				Name: "test-account",
+			},
+			RegistrationToken: "machine-1",
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-secret",
+		},
+
+		Type: v1.SecretTypeServiceAccountToken,
+	})
+
+	server.Client.Create(context.Background(), &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-account",
+		},
+
+		Secrets: []v1.ObjectReference{
+			{
+				Name: "test-secret",
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "server-url",
+		},
+
+		Value: "https://test-server.example.com",
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cacerts",
+		},
+
+		Value: "cacerts",
+	})
+
+	wsServer := httptest.NewServer(server)
+	defer wsServer.Close()
+
+	t.Run("generates registration labels from SMBIOS and System data", func(t *testing.T) {
+		machineName := "machine-1"
+		url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), "elemental/registration/"+machineName)
+
+		header := http.Header{}
+		header.Add("Authorization", machineName)
+
+		ws, _, err := websocket.DefaultDialer.Dial(url, header)
+		assert.NilError(t, err)
+
+		defer ws.Close()
+
+		// Read MsgReady
+		msgType, _, err := register.ReadMessage(ws)
+		assert.NilError(t, err)
+		assert.Equal(t, register.MsgReady, msgType)
+
+		// Negotiate version
+		err = register.WriteMessage(ws, register.MsgVersion, []byte{byte(register.MsgLast)})
+		assert.NilError(t, err)
+
+		msgType, _, err = register.ReadMessage(ws)
+		assert.NilError(t, err)
+		assert.Equal(t, register.MsgVersion, msgType)
+
+		// Send SMBIOS
+		smbios, err := json.Marshal(map[string]interface{}{
+			"System Information": map[string]interface{}{
+				"UUID": "uuid-123",
+			},
+		})
+		assert.NilError(t, err)
+		err = register.WriteMessage(ws, register.MsgSmbios, smbios)
+		assert.NilError(t, err)
+
+		msgType, _, err = register.ReadMessage(ws)
+		assert.NilError(t, err)
+		assert.Equal(t, register.MsgReady, msgType)
+
+		// Send System Data
+		systemData := &hostinfo.HostInfo{}
+		systemData.Memory = &memory.Info{
+			Area: memory.Area{
+				TotalPhysicalBytes: 100,
+			},
+		}
+		systemDataJson, err := json.Marshal(systemData)
+		assert.NilError(t, err)
+		err = register.WriteMessage(ws, register.MsgSystemData, systemDataJson)
+		assert.NilError(t, err)
+
+		msgType, _, err = register.ReadMessage(ws)
+		assert.NilError(t, err)
+		assert.Equal(t, register.MsgReady, msgType)
+	})
 }
 
 func NewInventoryServer() *InventoryServer {

@@ -156,7 +156,14 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	}
 	inventory.Namespace = registration.Namespace
 	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
-	inventory.Labels = registration.Spec.MachineInventoryLabels
+
+	// Set labels using replaceStringData to remove forbidden characters and
+	// default values for SMBIOS/System Data values until they are updated.
+	inventory.Labels = map[string]string{}
+	for k, v := range registration.Spec.MachineInventoryLabels {
+		value, _ := replaceStringData(map[string]interface{}{}, v)
+		inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(value, "-"), "-")
+	}
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
