@@ -220,9 +220,8 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		return fmt.Errorf("failed to patch machine inventory: %w", err)
 	}
 
-	miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-		Name:      mInventory.Name,
-		Namespace: mInventory.Namespace,
+	miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+		Name: mInventory.Name,
 	}
 
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
@@ -249,7 +248,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	mInventory := &elementalv1.MachineInventory{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: miSelector.Status.MachineInventoryRef.Namespace,
+		Namespace: miSelector.Namespace,
 		Name:      miSelector.Status.MachineInventoryRef.Name,
 	},
 		mInventory,
@@ -463,7 +462,7 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 
 	mInventory := &elementalv1.MachineInventory{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: miSelector.Status.MachineInventoryRef.Namespace,
+		Namespace: miSelector.Namespace,
 		Name:      miSelector.Status.MachineInventoryRef.Name,
 	},
 		mInventory,

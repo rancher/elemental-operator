@@ -19,13 +19,14 @@ package controllers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/test"
 )
 
 var _ = Describe("reconcile machine inventory selector", func() {
@@ -140,7 +141,6 @@ var _ = Describe("reconcile machine inventory selector", func() {
 
 		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
 		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
-		Expect(miSelector.Status.MachineInventoryRef.Namespace).To(Equal(mInventory.Namespace))
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
@@ -219,7 +219,6 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
 		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
-		Expect(miSelector.Status.MachineInventoryRef.Namespace).To(Equal(mInventory.Namespace))
 
 		Expect(r.Get(ctx, types.NamespacedName{Name: mInventory.Name, Namespace: mInventory.Namespace}, mInventory)).To(Succeed())
 		Expect(mInventory.OwnerReferences).To(HaveLen(1))
@@ -246,9 +245,8 @@ var _ = Describe("findAndAdoptInventory", func() {
 	})
 
 	It("should do nothing is machine inventory refernce is already set", func() {
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Namespace: "test",
-			Name:      "test",
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: "test",
 		}
 
 		Expect(r.findAndAdoptInventory(ctx, miSelector)).To(Succeed())
@@ -347,9 +345,8 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 	It("do nothing if machine inventory plan not ready yet", func() {
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 
 		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
@@ -367,9 +364,8 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 		}
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 
 		err := r.updatePlanSecretWithBootstrap(ctx, miSelector)
@@ -390,9 +386,8 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 		}
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 		err := r.updatePlanSecretWithBootstrap(ctx, miSelector)
 		Expect(err).To(HaveOccurred())
@@ -414,9 +409,8 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 		}
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
 
@@ -573,9 +567,8 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 	})
 
 	It("should return error if machine inventory is missing", func() {
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 
 		err := r.setInvetorySelectorAddresses(ctx, miSelector)
@@ -584,9 +577,8 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 	})
 
 	It("should succesfully set adresses", func() {
-		miSelector.Status.MachineInventoryRef = &corev1.ObjectReference{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
 		}
 
 		mInventory.Labels = map[string]string{

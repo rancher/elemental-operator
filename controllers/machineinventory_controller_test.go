@@ -22,8 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +29,9 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/test"
 )
 
 var _ = Describe("reconcile machine inventory", func() {
