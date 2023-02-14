@@ -171,13 +171,13 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	logger.Info("Trying to find matching machine inventory")
 
-	labelSelectorMap, err := metav1.LabelSelectorAsMap(&miSelector.Spec.Selector)
+	labelSelector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
 	if err != nil {
 		return fmt.Errorf("failed to convert label selector to map: %w", err)
 	}
 
 	machineInventories := &elementalv1.MachineInventoryList{}
-	if err := r.List(ctx, machineInventories, client.MatchingLabels(labelSelectorMap)); err != nil {
+	if err := r.List(ctx, machineInventories, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 		return err
 	}
 
