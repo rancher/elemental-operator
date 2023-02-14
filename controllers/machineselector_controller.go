@@ -173,7 +173,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	labelSelector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
 	if err != nil {
-		return fmt.Errorf("failed to convert label selector to map: %w", err)
+		return fmt.Errorf("failed to convert spec to a label selector: %w", err)
 	}
 
 	machineInventories := &elementalv1.MachineInventoryList{}
