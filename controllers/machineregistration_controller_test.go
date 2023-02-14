@@ -92,7 +92,7 @@ var _ = Describe("reconcile machine registration", func() {
 		Expect(mRegistration.Status.ServiceAccountRef.Namespace).To(Equal(mRegistration.Namespace))
 		Expect(mRegistration.Status.Conditions).To(HaveLen(1))
 		Expect(mRegistration.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mRegistration.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccefullyCreatedReason))
+		Expect(mRegistration.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyCreatedReason))
 		Expect(mRegistration.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 
 		objKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name}

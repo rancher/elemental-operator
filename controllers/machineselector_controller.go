@@ -226,7 +226,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.SuccefullyAdoptedInventoryReason,
+		Reason: elementalv1.SuccessfullyAdoptedInventoryReason,
 		Status: metav1.ConditionFalse,
 	})
 
@@ -286,7 +286,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.SuccefullyUpdatedPlanReason,
+		Reason: elementalv1.SuccessfullyUpdatedPlanReason,
 		Status: metav1.ConditionFalse,
 	})
 

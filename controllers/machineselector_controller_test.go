@@ -204,7 +204,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 		Expect(test.CleanupAndWait(ctx, cl, miSelector, mInventory)).To(Succeed())
 	})
 
-	It("succefully adopt matching machine inventory", func() {
+	It("successfully adopt matching machine inventory", func() {
 		mInventory.Labels = map[string]string{
 			"location": "testregion",
 		}
@@ -214,7 +214,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccefullyAdoptedInventoryReason))
+		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyAdoptedInventoryReason))
 		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 
 		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
@@ -419,7 +419,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccefullyUpdatedPlanReason))
+		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyUpdatedPlanReason))
 		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 	})
 

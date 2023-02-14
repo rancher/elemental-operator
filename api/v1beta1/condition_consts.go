@@ -23,8 +23,8 @@ const (
 
 // Machine Registration conditions
 const (
-	// SuccefullyCreatedReason documents a machine registration object that was succefully created.
-	SuccefullyCreatedReason = "SuccefullyCreated"
+	// SuccessfullyCreatedReason documents a machine registration object that was successfully created.
+	SuccessfullyCreatedReason = "SuccessfullyCreated"
 
 	// MissingTokenOrServerURLReason documents a machine registration object missing rancher server url or failed token generation.
 	MissingTokenOrServerURLReason = "MissingTokenOrServerURL"
@@ -35,8 +35,8 @@ const (
 
 // Machine Inventory conditions
 const (
-	// SuccefullyCreatedPlanReason documents that the secret owned by the machine inventory was succesfully created.
-	SuccefullyCreatedPlanReason = "SuccefullyCreatedPlan"
+	// SuccessfullyCreatedPlanReason documents that the secret owned by the machine inventory was successfully created.
+	SuccessfullyCreatedPlanReason = "SuccessfullyCreatedPlan"
 
 	// WaitingForPlanReason documents a machine inventory waiting for plan to applied.
 	WaitingForPlanReason = "WaitingForPlan"
@@ -44,8 +44,8 @@ const (
 	// PlanFailure documents failure of plan owned by the machine inventory object.
 	PlanFailureReason = "PlanFailure"
 
-	// PlanSuccefullyAppliedReason documents that plan owned by the machine inventory object was succefully applied.
-	PlanSuccefullyAppliedReason = "PlanSuccefullyApplied"
+	// PlanSuccessfullyAppliedReason documents that plan owned by the machine inventory object was successfully applied.
+	PlanSuccessfullyAppliedReason = "PlanSuccessfullyApplied"
 )
 
 // Machine Selector conditions
@@ -53,14 +53,14 @@ const (
 	// WaitingForInventoryReason documents that the machine selector is waiting for a matching machine inventory.
 	WaitingForInventoryReason = "WaitingForInventory"
 
-	// SuccefullyAdoptedInventoryReason documents that the machine selector succesfully adopted machine inventory.
-	SuccefullyAdoptedInventoryReason = "SuccefullyAdoptedInventory"
+	// SuccessfullyAdoptedInventoryReason documents that the machine selector successfully adopted machine inventory.
+	SuccessfullyAdoptedInventoryReason = "SuccessfullyAdoptedInventory"
 
 	// FailedToAdoptInventoryReason documents that the machine selector failed to adopt machine inventory.
 	FailedToAdoptInventoryReason = "FailedToAdoptInventory"
 
-	// SuccefullyUpdatedPlanReason documents that the machine selector succesfully updated secret plan with bootstrap.
-	SuccefullyUpdatedPlanReason = "SuccefullyUpdatedPlan"
+	// SuccessfullyUpdatedPlanReason documents that the machine selector successfully updated secret plan with bootstrap.
+	SuccessfullyUpdatedPlanReason = "SuccessfullyUpdatedPlan"
 
 	// FailedToUpdatePlanReason documents that the machine selector failed to update secret plan with bootstrap.
 	FailedToUpdatePlanReason = "FailedToUpdatePlan"

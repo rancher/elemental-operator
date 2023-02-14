@@ -118,9 +118,9 @@ var _ = Describe("reconcile machine inventory", func() {
 		Expect(mInventory.Status.Conditions).To(HaveLen(1))
 
 		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.PlanSuccefullyAppliedReason))
+		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.PlanSuccessfullyAppliedReason))
 		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(mInventory.Status.Conditions[0].Message).To(Equal("plan succefully applied"))
+		Expect(mInventory.Status.Conditions[0].Message).To(Equal("plan successfully applied"))
 	})
 })
 
@@ -196,9 +196,9 @@ var _ = Describe("createPlanSecret", func() {
 	It("should do nothing if ready condition is present", func() {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
-			Reason:  elementalv1.PlanSuccefullyAppliedReason,
+			Reason:  elementalv1.PlanSuccessfullyAppliedReason,
 			Status:  metav1.ConditionTrue,
-			Message: "plan succefully applied",
+			Message: "plan successfully applied",
 		})
 		Expect(r.createPlanSecret(ctx, mInventory)).To(Succeed())
 	})
@@ -248,9 +248,9 @@ var _ = Describe("updateInventoryWithPlanStatus", func() {
 
 		Expect(mInventory.Status.Conditions).To(HaveLen(1))
 		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.PlanSuccefullyAppliedReason))
+		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.PlanSuccessfullyAppliedReason))
 		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(mInventory.Status.Conditions[0].Message).To(Equal("plan succefully applied"))
+		Expect(mInventory.Status.Conditions[0].Message).To(Equal("plan successfully applied"))
 	})
 
 	It("should return error when plan failed to be applied", func() {

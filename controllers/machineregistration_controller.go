@@ -145,7 +145,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 	meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.SuccefullyCreatedReason,
+		Reason: elementalv1.SuccessfullyCreatedReason,
 		Status: metav1.ConditionTrue,
 	})
 
