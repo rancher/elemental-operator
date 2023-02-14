@@ -60,7 +60,7 @@ var _ = Describe("reconcile machine inventory selector", func() {
 						{
 							Key:      "location",
 							Operator: "In",
-							Values:   []string{"testregion"},
+							Values:   []string{"testregion", "bajoran"},
 						},
 					},
 				},
