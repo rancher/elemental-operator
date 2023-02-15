@@ -53,6 +53,7 @@ type buildImageJob struct {
 
 func (i *InventoryServer) apiBuildImage(resp http.ResponseWriter, req *http.Request) error {
 
+	logrus.Infof("build-image: received HTTP %s request.", req.Method)
 	if req.Method == http.MethodPost {
 		return i.apiBuildImagePostStart(resp, req)
 	} else if req.Method == http.MethodGet {
@@ -67,17 +68,16 @@ func (i *InventoryServer) apiBuildImage(resp http.ResponseWriter, req *http.Requ
 func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *http.Request) error {
 	escapedToken := sanitizeUserInput(path.Base(req.URL.Path))
 
-	logrus.Debugf("Get build-image job status for %s", escapedToken)
+	logrus.Debugf("build-image: job status request for %s.", escapedToken)
 
 	jobStatus := jobStatusNotStarted
 	jobDownloadURL := ""
 	if reg, err := i.registrationCache.getRegistrationData(escapedToken); err != nil {
 		if _, err := i.getMachineRegistration(escapedToken); err != nil {
-			logrus.Warnf("Requested build-image status for unexistent MachineRegistration token: %s", escapedToken)
 			http.Error(resp, err.Error(), http.StatusBadRequest)
 			return err
 		}
-		logrus.Debug("build-image job was ever started")
+		logrus.Debug("build-image: job was never started.")
 	} else {
 		jobStatus = reg.buildImageStatus
 		jobDownloadURL = reg.downloadURL
@@ -86,7 +86,7 @@ func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *
 	data := buildImageJobStatus{Status: jobStatus, URL: jobDownloadURL}
 
 	if err := json.NewEncoder(resp).Encode(data); err != nil {
-		errMsg := fmt.Errorf("cannot marshal build-image data: %w", err)
+		errMsg := fmt.Errorf("cannot marshal status data: %w", err)
 		http.Error(resp, errMsg.Error(), http.StatusInternalServerError)
 		return errMsg
 	}
@@ -109,12 +109,13 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 
 	var job buildImageJob
 	if err := json.Unmarshal(body, &job); err != nil {
-		errMsg := fmt.Errorf("cannot unmarshal build-image POST data: %w", err)
+		errMsg := fmt.Errorf("cannot unmarshal POST data: %w", err)
 		http.Error(resp, errMsg.Error(), http.StatusBadRequest)
 		return errMsg
 	}
 
 	sanitizedJob := sanitizeBuildImageJob(job)
+	logrus.Debugf("build-image: build request for %s (seed image: %s).", sanitizedJob.Token, sanitizedJob.URL)
 
 	if _, err := i.getMachineRegistration(sanitizedJob.Token); err != nil {
 		http.Error(resp, err.Error(), http.StatusBadRequest)
@@ -124,7 +125,7 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 	if reg, err := i.registrationCache.getRegistrationData(sanitizedJob.Token); err != nil {
 		if reg.buildImageStatus == jobStatusInit || reg.buildImageStatus == jobStatusStarted {
 			if reg.buildImageURL == sanitizedJob.URL {
-				logrus.Debugf("The build-image job has already started for token %s.", sanitizedJob.Token)
+				logrus.Infof("build-image: job already started for token %s, skip.", sanitizedJob.Token)
 
 				if err := json.NewEncoder(resp).Encode(sanitizedJob); err != nil {
 					errMsg := fmt.Errorf("cannot marshal build-image data: %w", err)
@@ -133,7 +134,7 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 				}
 				return nil
 			}
-			logrus.Debugf("Another build-image job is already running with token %s.", sanitizedJob.Token)
+			logrus.Debugf("build-image: build job already running with token %s and seed image %s.", sanitizedJob.Token, reg.buildImageURL)
 			errMsg := fmt.Errorf("a build image task is already running for the MachineRegistration")
 			http.Error(resp, errMsg.Error(), http.StatusBadRequest)
 			return errMsg
@@ -146,7 +147,7 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 		downloadURL:      "",
 	})
 
-	logrus.Infof("New build-image job queued: seed image:'%s', reg token:'%s'", sanitizedJob.URL, sanitizedJob.Token)
+	logrus.Infof("build-image: new job queued (seed image:'%s', reg token:'%s')", sanitizedJob.URL, sanitizedJob.Token)
 	// start the actual build job here
 	go i.doBuildImage(sanitizedJob)
 
@@ -174,18 +175,18 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		return
 	}
 
-	pod := buildImagePod(podName, podNamespace, job.URL, regURL)
+	pod := fillBuildImagePod(podName, podNamespace, job.URL, regURL)
 	if err := i.Create(i, pod); err != nil {
-		i.setFailedStatus(job.Token, fmt.Errorf("Failed to create build-image pod: %s.", err.Error()))
+		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image pod: %s", err.Error()))
 		return
 	}
 
-	logrus.Infof("build image for token %s started.", job.Token)
+	logrus.Debugf("build-image: job for token %s started.", job.Token)
 	if err := i.registrationCache.setDownloadURL(job.Token, ""); err != nil {
-		logrus.Errorf("Cannot update build-image download URL for job with token %s: %s", job.Token, err.Error())
+		logrus.Errorf("build-image: cannot update build-image download URL for token %s: %s", job.Token, err.Error())
 	}
 	if err := i.registrationCache.setBuildImageStatus(job.Token, jobStatusStarted); err != nil {
-		logrus.Errorf("Cannot update build-image status for job with token %s: %s", job.Token, err.Error())
+		logrus.Errorf("build-image: cannot update build-image status for token %s: %s", job.Token, err.Error())
 	}
 
 	// TODO: create a Service to expose the built ISO and set properly the download URL
@@ -198,22 +199,24 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		failedCunter--
 		if err := i.Get(i, client.ObjectKey{Name: podName, Namespace: podNamespace}, watchPod); err != nil {
 			if failedCunter == 0 {
-				logrus.Errorf("Cannot check %s pod status.", podName)
+				logrus.Errorf("build-image: cannot check %s pod status.", podName)
 				i.setBuildStatus(job.Token, jobStatusFailed)
 				return
 			}
 		}
 		switch watchPod.Status.Phase {
 		case corev1.PodRunning:
+			logrus.Infof("build-image: job %s: Completed.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusCompleted)
 			return
 		case corev1.PodFailed:
+			logrus.Infof("build-image: job %s: Failed.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
 			return
 		}
 
 		if failedCunter == 0 {
-			logrus.Errorf("POD %s timed out.", podName)
+			logrus.Errorf("build-image: job %s timed out.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
 			return
 		}
@@ -223,12 +226,12 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 
 func (i *InventoryServer) setBuildStatus(token string, status string) {
 	if err := i.registrationCache.setBuildImageStatus(token, status); err != nil {
-		logrus.Errorf("Cannot update build-image status for job with token %s: %s.", token, err.Error())
+		logrus.Errorf("build-image: cannot update build-image status for token %s: %s.", token, err.Error())
 	}
 }
 
 func (i *InventoryServer) setFailedStatus(token string, err error) {
-	logrus.Errorf("Failed to build img %s: %s.", token, err.Error())
+	logrus.Errorf("build-image: failed to build img %s: %s.", token, err.Error())
 	i.setBuildStatus(token, jobStatusFailed)
 }
 
@@ -253,7 +256,7 @@ func (i *InventoryServer) getRegistrationURL(token string) (string, error) {
 	return regURL, nil
 }
 
-func buildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
+func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 	const buildImage = "registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-builder-image/5.3:latest"
 	// TODO: find a better serveImage
 	const serveImage = "quay.io/fgiudici/busybox:latest"
