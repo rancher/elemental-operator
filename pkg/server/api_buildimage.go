@@ -192,11 +192,11 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	service := fillBuildImageService(podName, podNamespace)
 	if err := i.Create(i, service); err != nil {
 		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image service: %s", err.Error()))
+		i.deleteBuildImagePodService(pod, nil)
 		return
 	}
 
 	// TODO: use a watcher and have a timeout
-	// TODO: delete the pod on failure
 	failedCunter := 12
 	watchPod := &corev1.Pod{}
 	for {
@@ -205,6 +205,7 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 			if failedCunter == 0 {
 				logrus.Errorf("build-image: cannot check %s pod status.", podName)
 				i.setBuildStatus(job.Token, jobStatusFailed)
+				i.deleteBuildImagePodService(pod, service)
 				return
 			}
 		}
@@ -216,12 +217,14 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		case corev1.PodFailed:
 			logrus.Infof("build-image: job %s: Failed.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
+			i.deleteBuildImagePodService(pod, service)
 			return
 		}
 
 		if failedCunter == 0 {
 			logrus.Errorf("build-image: job %s timed out.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
+			i.deleteBuildImagePodService(pod, service)
 			return
 		}
 		time.Sleep(5 * time.Second)
@@ -359,4 +362,19 @@ func fillBuildImageService(name, namespace string) *corev1.Service {
 	}
 
 	return service
+}
+
+func (i *InventoryServer) deleteBuildImagePodService(pod *corev1.Pod, service *corev1.Service) {
+	if pod != nil {
+		if err := i.Delete(i, pod); err != nil {
+			logrus.Errorf("build-image: cannot delete Pod %s:%s.", pod.Name, pod.Namespace)
+		}
+		logrus.Debugf("build-image: Pod %s:%s deleted.", pod.Name, pod.Namespace)
+	}
+	if service != nil {
+		if err := i.Delete(i, service); err != nil {
+			logrus.Errorf("build-image: cannot delete Service %s:%s.", service.Name, service.Namespace)
+		}
+		logrus.Debugf("build-image: Service %s:%s deleted.", service.Name, service.Namespace)
+	}
 }
