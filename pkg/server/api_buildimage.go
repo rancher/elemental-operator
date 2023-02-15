@@ -189,7 +189,11 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		logrus.Errorf("build-image: cannot update build-image status for token %s: %s", job.Token, err.Error())
 	}
 
-	// TODO: create a Service to expose the built ISO and set properly the download URL
+	service := fillBuildImageService(podName, podNamespace)
+	if err := i.Create(i, service); err != nil {
+		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image service: %s", err.Error()))
+		return
+	}
 
 	// TODO: use a watcher and have a timeout
 	// TODO: delete the pod on failure
@@ -334,4 +338,25 @@ func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 		},
 	}
 	return pod
+}
+
+func fillBuildImageService(name, namespace string) *corev1.Service {
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app.kubernetes.io/name": name},
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "elemental-build-image",
+					Protocol: corev1.ProtocolTCP,
+					Port:     80,
+				},
+			},
+		},
+	}
+
+	return service
 }
