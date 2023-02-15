@@ -41,6 +41,11 @@ const (
 	jobStatusNotStarted = "Not Started"
 )
 
+const (
+	buildImgResName      = "build-img"
+	buildImgResNamespace = "cattle-elemental-system"
+)
+
 type buildImageJobStatus struct {
 	Status string `json:"status"`
 	URL    string `json:"url"`
@@ -141,6 +146,25 @@ func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *
 		}
 	}
 
+	// Pod lifecycle: currently we allow just one build task at a time that stays around till we don't start another one.
+	// TODO: extend to allow multiple build Pods
+	// TODO: ensure proper clean-up when the operator is removed or upgraded
+	regList := i.registrationCache.getRegistrationKeys()
+	for _, token := range regList {
+		if status, _ := i.registrationCache.getBuildImageStatus(token); status == jobStatusStarted || status == jobStatusInit {
+			errMsg := fmt.Errorf("a build image task is already running for MachineRegistration with token %s", token)
+			http.Error(resp, errMsg.Error(), http.StatusServiceUnavailable)
+			return errMsg
+		} else if status == jobStatusCompleted {
+			logrus.Debugf("build-image: delete completed job with token %s.", token)
+			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: buildImgResName, Namespace: buildImgResNamespace}}
+			svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: buildImgResName, Namespace: buildImgResNamespace}}
+			i.deleteBuildImagePodService(pod, svc)
+			_ = i.registrationCache.setBuildImageStatus(token, jobStatusNotStarted)
+			break
+		}
+	}
+
 	i.registrationCache.setRegistrationData(sanitizedJob.Token, registrationData{
 		buildImageURL:    sanitizedJob.URL,
 		buildImageStatus: jobStatusInit,
@@ -166,16 +190,13 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	// - generates the elemental image (seed image + registration yaml)
 	// - returns the elemental image (url)
 
-	const podName = "build-img"
-	const podNamespace = "cattle-elemental-system"
-
 	regURL, err := i.getRegistrationURL(job.Token)
 	if err != nil {
 		i.setFailedStatus(job.Token, err)
 		return
 	}
 
-	pod := fillBuildImagePod(podName, podNamespace, job.URL, regURL)
+	pod := fillBuildImagePod(buildImgResName, buildImgResNamespace, job.URL, regURL)
 	if err := i.Create(i, pod); err != nil {
 		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image pod: %s", err.Error()))
 		return
@@ -189,7 +210,7 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		logrus.Errorf("build-image: cannot update build-image status for token %s: %s", job.Token, err.Error())
 	}
 
-	service := fillBuildImageService(podName, podNamespace)
+	service := fillBuildImageService(buildImgResName, buildImgResNamespace)
 	if err := i.Create(i, service); err != nil {
 		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image service: %s", err.Error()))
 		i.deleteBuildImagePodService(pod, nil)
@@ -201,9 +222,9 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	watchPod := &corev1.Pod{}
 	for {
 		failedCunter--
-		if err := i.Get(i, client.ObjectKey{Name: podName, Namespace: podNamespace}, watchPod); err != nil {
+		if err := i.Get(i, client.ObjectKey{Name: buildImgResName, Namespace: buildImgResNamespace}, watchPod); err != nil {
 			if failedCunter == 0 {
-				logrus.Errorf("build-image: cannot check %s pod status.", podName)
+				logrus.Errorf("build-image: cannot check %s pod status.", buildImgResName)
 				i.setBuildStatus(job.Token, jobStatusFailed)
 				i.deleteBuildImagePodService(pod, service)
 				return
