@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -38,6 +36,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 // MachineInventoryReconciler reconciles a MachineInventory object.
@@ -122,7 +123,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 	if err := r.createPlanSecret(ctx, mInventory); err != nil {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
-			Reason:  elementalv1.SuccefullyCreatedPlanReason,
+			Reason:  elementalv1.SuccessfullyCreatedPlanReason,
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
@@ -220,14 +221,14 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 
 	switch {
 	case appliedChecksum != "":
-		logger.V(5).Info("Plan succefully applied")
+		logger.V(5).Info("Plan successfully applied")
 		mInventory.Status.Plan.State = elementalv1.PlanApplied
 		mInventory.Status.Plan.Checksum = appliedChecksum
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
-			Reason:  elementalv1.PlanSuccefullyAppliedReason,
+			Reason:  elementalv1.PlanSuccessfullyAppliedReason,
 			Status:  metav1.ConditionTrue,
-			Message: "plan succefully applied",
+			Message: "plan successfully applied",
 		})
 		return nil
 	case failedChecksum != "":

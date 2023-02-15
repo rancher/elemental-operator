@@ -22,8 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/test"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -33,6 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/test"
 )
 
 var _ = Describe("reconcile machine registration", func() {
@@ -91,7 +92,7 @@ var _ = Describe("reconcile machine registration", func() {
 		Expect(mRegistration.Status.ServiceAccountRef.Namespace).To(Equal(mRegistration.Namespace))
 		Expect(mRegistration.Status.Conditions).To(HaveLen(1))
 		Expect(mRegistration.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mRegistration.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccefullyCreatedReason))
+		Expect(mRegistration.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyCreatedReason))
 		Expect(mRegistration.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 
 		objKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name}

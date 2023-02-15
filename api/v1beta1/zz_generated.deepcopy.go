@@ -300,7 +300,7 @@ func (in *MachineInventorySelectorStatus) DeepCopyInto(out *MachineInventorySele
 	}
 	if in.MachineInventoryRef != nil {
 		in, out := &in.MachineInventoryRef, &out.MachineInventoryRef
-		*out = new(corev1.ObjectReference)
+		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
 }

@@ -22,8 +22,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/util"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 // MachineRegistrationReconciler reconciles a MachineRegistration object.
@@ -144,7 +145,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 	meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.SuccefullyCreatedReason,
+		Reason: elementalv1.SuccessfullyCreatedReason,
 		Status: metav1.ConditionTrue,
 	})
 

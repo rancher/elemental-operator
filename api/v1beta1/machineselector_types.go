@@ -54,7 +54,7 @@ type MachineInventorySelectorStatus struct {
 	BootstrapPlanChecksum string `json:"bootstrapPlanChecksum,omitempty"`
 	// MachineInventoryRef reference to the machine inventory that belongs to the selector.
 	// +optional
-	MachineInventoryRef *corev1.ObjectReference `json:"machineInventoryRef,omitempty"` // TODO: use LocalObjectReference
+	MachineInventoryRef *corev1.LocalObjectReference `json:"machineInventoryRef,omitempty"`
 }
 
 // +kubebuilder:object:root=true
