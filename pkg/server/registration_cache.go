@@ -31,6 +31,19 @@ type registrationCache struct {
 	registrations map[string]registrationData
 }
 
+func (rc *registrationCache) getRegistrationKeys() []string {
+	rc.Lock()
+	defer rc.Unlock()
+
+	regList := make([]string, len(rc.registrations))
+
+	i := 0
+	for key := range rc.registrations {
+		regList[i] = key
+	}
+	return regList
+}
+
 func (rc *registrationCache) getRegistrationData(token string) (registrationData, error) {
 	rc.Lock()
 	defer rc.Unlock()
@@ -46,6 +59,17 @@ func (rc *registrationCache) setRegistrationData(token string, data registration
 	defer rc.Unlock()
 
 	rc.registrations[token] = data
+}
+
+func (rc *registrationCache) getBuildImageStatus(token string) (string, error) {
+	rc.Lock()
+	defer rc.Unlock()
+
+	reg, ok := rc.registrations[token]
+	if !ok {
+		return "", fmt.Errorf("item not found")
+	}
+	return reg.buildImageStatus, nil
 }
 
 func (rc *registrationCache) setBuildImageStatus(token, status string) error {
