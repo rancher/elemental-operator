@@ -239,8 +239,18 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		}
 		switch watchPod.Status.Phase {
 		case corev1.PodRunning:
+			svc := &corev1.Service{}
 			logrus.Infof("build-image: job %s: Completed.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusCompleted)
+			if err := i.Get(i, client.ObjectKey{Name: buildImgResName, Namespace: buildImgResNamespace}, svc); err != nil {
+				logrus.Error("build-image: failed to retrieve iso-image URL.")
+				return
+			}
+			if err := i.registrationCache.setDownloadURL(job.Token, fmt.Sprintf("http://%s/elemental.iso", svc.Spec.ClusterIP)); err != nil {
+				logrus.Errorf("build-image: failed to set download URL: %s.", err.Error())
+			} else {
+				logrus.Debug("build-image: download URL set.")
+			}
 			return
 		case corev1.PodFailed:
 			logrus.Infof("build-image: job %s: Failed.", job.Token)
