@@ -202,7 +202,28 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	}
 
 	pod := fillBuildImagePod(buildImgResName, buildImgResNamespace, job.URL, regURL)
-	if err := i.Create(i, pod); err != nil {
+	// Creation may fail because we have just asked deletion of a job with the same Pod name, which may take some time.
+	// Let's wait and retry if that is the case.
+	failedCounter := 15
+	for err := i.Create(i, pod); err != nil; {
+		watchPod := &corev1.Pod{}
+		if getErr := i.Get(i, client.ObjectKey{Name: buildImgResName, Namespace: buildImgResNamespace}, watchPod); getErr != nil {
+			logrus.Debugf("build-image: failed to Get Pod %s:%s: %s.", buildImgResName, buildImgResNamespace, getErr.Error())
+			logrus.Errorf("build-image: failed to Delete Pod %s:%s: %s.", buildImgResName, buildImgResNamespace, err.Error())
+			i.setFailedStatus(job.Token, err)
+			return
+		}
+		if watchPod.DeletionTimestamp == nil {
+			logrus.Errorf("build-image: Pod %s:%s already present, stop current build.", buildImgResName, buildImgResNamespace)
+			i.setFailedStatus(job.Token, err)
+			return
+		}
+		if failedCounter > 0 {
+			failedCounter--
+			logrus.Debugf("build-image: wait for old Pod %s:%s to complete deletion.", buildImgResName, buildImgResNamespace)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image pod: %s", err.Error()))
 		return
 	}
@@ -225,12 +246,12 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	}
 
 	// TODO: use a watcher and have a timeout
-	failedCunter := 12
+	failedCounter = 15
 	watchPod := &corev1.Pod{}
 	for {
-		failedCunter--
+		failedCounter--
 		if err := i.Get(i, client.ObjectKey{Name: buildImgResName, Namespace: buildImgResNamespace}, watchPod); err != nil {
-			if failedCunter == 0 {
+			if failedCounter == 0 {
 				logrus.Errorf("build-image: cannot check %s pod status.", buildImgResName)
 				i.setBuildStatus(job.Token, jobStatusFailed)
 				i.deleteBuildImagePodService(buildImgResName, buildImgResNamespace)
@@ -259,7 +280,7 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 			return
 		}
 
-		if failedCunter == 0 {
+		if failedCounter == 0 {
 			logrus.Errorf("build-image: job %s timed out.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
 			i.deleteBuildImagePodService(buildImgResName, buildImgResNamespace)
