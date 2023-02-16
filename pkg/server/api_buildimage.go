@@ -249,7 +249,7 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	}
 
 	// TODO: use a watcher and have a timeout
-	failedCounter = 15
+	failedCounter = 30
 	watchPod := &corev1.Pod{}
 	for {
 		failedCounter--
@@ -286,7 +286,7 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 			i.setBuildStatus(job.Token, jobStatusFailed)
 			return
 		}
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 }
 
