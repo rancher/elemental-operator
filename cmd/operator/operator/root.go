@@ -52,6 +52,7 @@ import (
 // +kubebuilder:rbac:groups="",resources=events,verbs=patch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;create;delete;list;watch
 // +kubebuilder:rbac:groups="",resources=pods/log,verbs=get
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;create;delete;list;watch
 
 var (
 	scheme   = runtime.NewScheme()
