@@ -207,11 +207,16 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 	failedCounter := 15
 	for err := i.Create(i, pod); err != nil; {
 		watchPod := &corev1.Pod{}
+		if failedCounter == 0 {
+			i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image pod: %s", err.Error()))
+			return
+		}
 		if getErr := i.Get(i, client.ObjectKey{Name: buildImgResName, Namespace: buildImgResNamespace}, watchPod); getErr != nil {
 			logrus.Debugf("build-image: failed to Get Pod %s:%s: %s.", buildImgResName, buildImgResNamespace, getErr.Error())
-			logrus.Errorf("build-image: failed to Delete Pod %s:%s: %s.", buildImgResName, buildImgResNamespace, err.Error())
-			i.setFailedStatus(job.Token, err)
-			return
+			// Eventually the Pod got deleted?
+			err = i.Create(i, pod)
+			failedCounter = 0
+			continue
 		}
 		if watchPod.DeletionTimestamp == nil {
 			logrus.Errorf("build-image: Pod %s:%s already present, stop current build.", buildImgResName, buildImgResNamespace)
@@ -222,10 +227,8 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 			failedCounter--
 			logrus.Debugf("build-image: wait for old Pod %s:%s to complete deletion.", buildImgResName, buildImgResNamespace)
 			time.Sleep(5 * time.Second)
-			continue
 		}
-		i.setFailedStatus(job.Token, fmt.Errorf("failed to create build-image pod: %s", err.Error()))
-		return
+		continue
 	}
 
 	logrus.Debugf("build-image: job for token %s started.", job.Token)
