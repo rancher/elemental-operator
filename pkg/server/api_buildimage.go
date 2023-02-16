@@ -257,7 +257,6 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 			if failedCounter == 0 {
 				logrus.Errorf("build-image: cannot check %s pod status.", buildImgResName)
 				i.setBuildStatus(job.Token, jobStatusFailed)
-				i.deleteBuildImagePodService(buildImgResName, buildImgResNamespace)
 				return
 			}
 		}
@@ -279,14 +278,12 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 		case corev1.PodFailed:
 			logrus.Infof("build-image: job %s: Failed.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
-			i.deleteBuildImagePodService(buildImgResName, buildImgResNamespace)
 			return
 		}
 
 		if failedCounter == 0 {
 			logrus.Errorf("build-image: job %s timed out.", job.Token)
 			i.setBuildStatus(job.Token, jobStatusFailed)
-			i.deleteBuildImagePodService(buildImgResName, buildImgResNamespace)
 			return
 		}
 		time.Sleep(5 * time.Second)
