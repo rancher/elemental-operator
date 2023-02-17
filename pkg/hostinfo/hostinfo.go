@@ -122,6 +122,7 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	memory := map[string]interface{}{}
 	if systemData.Memory != nil {
 		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
+		memory["Total Usable Bytes"] = strconv.Itoa(int(systemData.Memory.TotalUsableBytes))
 	}
 
 	// Both checks below are due to ghw not detecting aarch64 cores/threads properly, so it ends up in a label
@@ -135,7 +136,6 @@ func FillData(data []byte) (map[string]interface{}, error) {
 		if systemData.CPU.TotalThreads > 0 {
 			cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
 		}
-
 		// This should never happen but just in case
 		if len(systemData.CPU.Processors) > 0 {
 			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
@@ -143,7 +143,7 @@ func FillData(data []byte) (map[string]interface{}, error) {
 			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
 			cpu["Model"] = systemData.CPU.Processors[0].Model
 			cpu["Vendor"] = systemData.CPU.Processors[0].Vendor
-			// Capabilities available here at systemData.CPU.Processors[X].Capabilities
+			cpu["Capabilities"] = systemData.CPU.Processors[0].Capabilities
 		}
 	}
 
@@ -159,8 +159,9 @@ func FillData(data []byte) (map[string]interface{}, error) {
 		network["Number Interfaces"] = strconv.Itoa(len(systemData.Network.NICs))
 		for _, iface := range systemData.Network.NICs {
 			network[iface.Name] = map[string]interface{}{
-				"Name":      iface.Name,
-				"IsVirtual": strconv.FormatBool(iface.IsVirtual),
+				"Name":       iface.Name,
+				"MacAddress": iface.MacAddress,
+				"IsVirtual":  strconv.FormatBool(iface.IsVirtual),
 				// Capabilities available here at iface.Capabilities
 				// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
 			}
