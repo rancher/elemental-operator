@@ -262,8 +262,7 @@ func replaceStringData(data map[string]interface{}, name string) (string, error)
 		str = str[j+i+1:]
 	}
 
-	resultStr := sanitize.ReplaceAllString(result.String(), "-")
-	resultStr = doubleDash.ReplaceAllString(resultStr, "-")
+	resultStr := sanitizeString(result.String())
 	if !start.MatchString(resultStr) {
 		resultStr = "m" + resultStr
 	}
@@ -498,7 +497,7 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 func sanitizeString(s string) string {
 	s1 := sanitize.ReplaceAllString(s, "-")
 	s2 := doubleDash.ReplaceAllString(s1, "-")
-	return strings.TrimSuffix(strings.TrimPrefix(s2, "-"), "-")
+	return s2
 }
 
 func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
