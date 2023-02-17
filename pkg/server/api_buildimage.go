@@ -22,12 +22,15 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -270,7 +273,12 @@ func (i *InventoryServer) doBuildImage(job buildImageJob) {
 				logrus.Error("build-image: failed to retrieve iso-image URL.")
 				return
 			}
-			if err := i.registrationCache.setDownloadURL(job.Token, fmt.Sprintf("http://%s/elemental.iso", svc.Spec.ClusterIP)); err != nil {
+			rancherURL, err := i.getRancherServerAddress()
+			if err != nil {
+				logrus.Errorf("build-image: failed to retrieve iso-image URL: %s.", err.Error())
+			}
+
+			if err := i.registrationCache.setDownloadURL(job.Token, fmt.Sprintf("http://%s:%d/elemental.iso", rancherURL, svc.Spec.Ports[0].NodePort)); err != nil {
 				logrus.Errorf("build-image: failed to set download URL: %s.", err.Error())
 			} else {
 				logrus.Debug("build-image: download URL set.")
@@ -300,6 +308,19 @@ func (i *InventoryServer) setBuildStatus(token string, status string) {
 func (i *InventoryServer) setFailedStatus(token string, err error) {
 	logrus.Errorf("build-image: failed to build img %s: %s.", token, err.Error())
 	i.setBuildStatus(token, jobStatusFailed)
+}
+
+func (i *InventoryServer) getRancherServerAddress() (string, error) {
+	setting := &managementv3.Setting{}
+	if err := i.Get(i, types.NamespacedName{Name: "server-url"}, setting); err != nil {
+		return "", fmt.Errorf("failed to get server url setting: %w", err)
+	}
+
+	if setting.Value == "" {
+		return "", fmt.Errorf("server-url is not set")
+	}
+
+	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
 func (i *InventoryServer) getRegistrationURL(token string) (string, error) {
@@ -418,6 +439,7 @@ func fillBuildImageService(name, namespace string) *corev1.Service {
 					Port:     80,
 				},
 			},
+			Type: corev1.ServiceTypeNodePort,
 		},
 	}
 
