@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -451,83 +450,12 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 
 // updateInventoryFromSystemData creates labels in the inventory based on the hardware information
 func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
-	systemData := &hostinfo.HostInfo{}
-	if err := json.Unmarshal(data, &systemData); err != nil {
-		return err
-	}
+
 	logrus.Info("Adding labels from system data")
 
-	memory := map[string]interface{}{}
-	if systemData.Memory != nil {
-		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
-	}
-
-	// Both checks below is due to ghw not detecting aarch64 cores/threads properly, so it ends up in a label
-	// with 0 valuie, which is not useful at all
-	// tracking bug: https://github.com/jaypipes/ghw/issues/199
-	cpu := map[string]interface{}{}
-	if systemData.CPU != nil {
-		if systemData.CPU.TotalCores > 0 {
-			cpu["Total Cores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
-		}
-
-		if systemData.CPU.TotalThreads > 0 {
-			cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
-		}
-
-		// This should never happen but just in case
-		if len(systemData.CPU.Processors) > 0 {
-			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
-			// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
-			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
-			cpu["Model"] = sanitizeString(systemData.CPU.Processors[0].Model)
-			cpu["Vendor"] = sanitizeString(systemData.CPU.Processors[0].Vendor)
-			// Capabilities available here at systemData.CPU.Processors[X].Capabilities
-		}
-	}
-
-	gpu := map[string]interface{}{}
-	// This could happen so always check.
-	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
-		gpu["Model"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
-		gpu["Vendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
-	}
-
-	network := map[string]interface{}{}
-	if systemData.Network != nil {
-		network["Number Interfaces"] = strconv.Itoa(len(systemData.Network.NICs))
-		for _, iface := range systemData.Network.NICs {
-			network[iface.Name] = map[string]interface{}{
-				"Name":      iface.Name,
-				"IsVirtual": strconv.FormatBool(iface.IsVirtual),
-				// Capabilities available here at iface.Capabilities
-				// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
-			}
-		}
-	}
-
-	block := map[string]interface{}{}
-	if systemData.Block != nil {
-		block["Number Devices"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
-		for _, disk := range systemData.Block.Disks {
-			block[disk.Name] = map[string]interface{}{
-				"Size":               strconv.Itoa(int(disk.SizeBytes)),
-				"Name":               disk.Name,
-				"Drive Type":         disk.DriveType.String(),
-				"Storage Controller": disk.StorageController.String(),
-				"Removable":          strconv.FormatBool(disk.IsRemovable),
-			}
-			// Vendor and model also available here, useful?
-		}
-	}
-
-	labels := map[string]interface{}{}
-	labels["System Data"] = map[string]interface{}{
-		"Memory":        memory,
-		"CPU":           cpu,
-		"GPU":           gpu,
-		"Network":       network,
-		"Block Devices": block,
+	labels, err := hostinfo.FillData(data)
+	if err != nil {
+		return err
 	}
 
 	// Also available but not used:
