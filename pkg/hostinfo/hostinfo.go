@@ -18,9 +18,7 @@ package hostinfo
 
 import (
 	"encoding/json"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/baseboard"
@@ -143,8 +141,8 @@ func FillData(data []byte) (map[string]interface{}, error) {
 			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
 			// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
 			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
-			cpu["Model"] = sanitizeString(systemData.CPU.Processors[0].Model)
-			cpu["Vendor"] = sanitizeString(systemData.CPU.Processors[0].Vendor)
+			cpu["Model"] = systemData.CPU.Processors[0].Model
+			cpu["Vendor"] = systemData.CPU.Processors[0].Vendor
 			// Capabilities available here at systemData.CPU.Processors[X].Capabilities
 		}
 	}
@@ -152,8 +150,8 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	gpu := map[string]interface{}{}
 	// This could happen so always check.
 	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
-		gpu["Model"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name)
-		gpu["Vendor"] = sanitizeString(systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name)
+		gpu["Model"] = systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name
+		gpu["Vendor"] = systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name
 	}
 
 	network := map[string]interface{}{}
@@ -201,17 +199,4 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
 	return labels, nil
-}
-
-// sanitizeString will sanitize a given string by:
-// replacing all invalid chars as set on the sanitize regex by dashes
-// removing any double dashes resulted from the above method
-// removing prefix+suffix if they are a dash
-func sanitizeString(s string) string {
-	sanitize := regexp.MustCompile("[^0-9a-zA-Z_]")
-	doubleDash := regexp.MustCompile("--+")
-
-	s1 := sanitize.ReplaceAllString(s, "-")
-	s2 := doubleDash.ReplaceAllString(s1, "-")
-	return strings.TrimSuffix(strings.TrimPrefix(s2, "-"), "-")
 }
