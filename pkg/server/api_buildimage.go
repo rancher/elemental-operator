@@ -100,9 +100,10 @@ func (i *InventoryServer) apiBuildImageGetStatus(resp http.ResponseWriter, req *
 }
 
 func sanitizeBuildImageJob(job buildImageJob) buildImageJob {
-	job.Token = sanitizeUserInput(job.Token)
-	job.URL = sanitizeUserInput(job.URL)
-	return job
+	sanitizedJob := buildImageJob{}
+	sanitizedJob.Token = sanitizeUserInput(job.Token)
+	sanitizedJob.URL = sanitizeUserInput(job.URL)
+	return sanitizedJob
 }
 
 func (i *InventoryServer) apiBuildImagePostStart(resp http.ResponseWriter, req *http.Request) error {
