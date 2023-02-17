@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/jaypipes/ghw"
 	"github.com/pkg/errors"
 	"github.com/sanity-io/litter"
 	"github.com/sirupsen/logrus"
@@ -226,7 +225,7 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 }
 
 func sendSystemData(conn *websocket.Conn) error {
-	data, err := hostinfo.Host(ghw.WithDisableWarnings())
+	data, err := hostinfo.Host()
 	if err != nil {
 		return errors.Wrap(err, "failed to read system data")
 	}

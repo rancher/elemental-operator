@@ -55,7 +55,11 @@ type HostInfo struct {
 
 // Host returns a pointer to a HostInfo struct that contains fields with
 // information about the host system's CPU, memory, network devices, etc
-func Host(opts ...*ghw.WithOption) (*HostInfo, error) {
+func Host() (*HostInfo, error) {
+	return host(ghw.WithDisableWarnings())
+}
+
+func host(opts ...*ghw.WithOption) (*HostInfo, error) {
 	ctx := context.New(opts...)
 
 	memInfo, err := memory.New(opts...)
