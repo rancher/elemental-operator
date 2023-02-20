@@ -17,6 +17,9 @@ limitations under the License.
 package hostinfo
 
 import (
+	"encoding/json"
+	"strconv"
+
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/baseboard"
 	"github.com/jaypipes/ghw/pkg/bios"
@@ -52,7 +55,11 @@ type HostInfo struct {
 
 // Host returns a pointer to a HostInfo struct that contains fields with
 // information about the host system's CPU, memory, network devices, etc
-func Host(opts ...*ghw.WithOption) (*HostInfo, error) {
+func Host() (*HostInfo, error) {
+	return host(ghw.WithDisableWarnings())
+}
+
+func host(opts ...*ghw.WithOption) (*HostInfo, error) {
 	ctx := context.New(opts...)
 
 	memInfo, err := memory.New(opts...)
@@ -108,4 +115,93 @@ func Host(opts ...*ghw.WithOption) (*HostInfo, error) {
 		Baseboard: baseboardInfo,
 		Product:   productInfo,
 	}, nil
+}
+
+func FillData(data []byte) (map[string]interface{}, error) {
+	systemData := &HostInfo{}
+	if err := json.Unmarshal(data, &systemData); err != nil {
+		return nil, err
+	}
+
+	memory := map[string]interface{}{}
+	if systemData.Memory != nil {
+		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
+		memory["Total Usable Bytes"] = strconv.Itoa(int(systemData.Memory.TotalUsableBytes))
+	}
+
+	// Both checks below are due to ghw not detecting aarch64 cores/threads properly, so it ends up in a label
+	// with 0 value, which is not useful at all
+	// tracking bug: https://github.com/jaypipes/ghw/issues/199
+	cpu := map[string]interface{}{}
+	if systemData.CPU != nil {
+		if systemData.CPU.TotalCores > 0 {
+			cpu["Total Cores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+		}
+		if systemData.CPU.TotalThreads > 0 {
+			cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+		}
+		// This should never happen but just in case
+		if len(systemData.CPU.Processors) > 0 {
+			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
+			// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
+			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
+			cpu["Model"] = systemData.CPU.Processors[0].Model
+			cpu["Vendor"] = systemData.CPU.Processors[0].Vendor
+			cpu["Capabilities"] = systemData.CPU.Processors[0].Capabilities
+		}
+	}
+
+	gpu := map[string]interface{}{}
+	// This could happen so always check.
+	if systemData.GPU != nil && len(systemData.GPU.GraphicsCards) > 0 && systemData.GPU.GraphicsCards[0].DeviceInfo != nil {
+		gpu["Model"] = systemData.GPU.GraphicsCards[0].DeviceInfo.Product.Name
+		gpu["Vendor"] = systemData.GPU.GraphicsCards[0].DeviceInfo.Vendor.Name
+	}
+
+	network := map[string]interface{}{}
+	if systemData.Network != nil {
+		network["Number Interfaces"] = strconv.Itoa(len(systemData.Network.NICs))
+		for _, iface := range systemData.Network.NICs {
+			network[iface.Name] = map[string]interface{}{
+				"Name":       iface.Name,
+				"MacAddress": iface.MacAddress,
+				"IsVirtual":  strconv.FormatBool(iface.IsVirtual),
+				// Capabilities available here at iface.Capabilities
+				// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
+			}
+		}
+	}
+
+	block := map[string]interface{}{}
+	if systemData.Block != nil {
+		block["Number Devices"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
+		for _, disk := range systemData.Block.Disks {
+			block[disk.Name] = map[string]interface{}{
+				"Size":               strconv.Itoa(int(disk.SizeBytes)),
+				"Name":               disk.Name,
+				"Drive Type":         disk.DriveType.String(),
+				"Storage Controller": disk.StorageController.String(),
+				"Removable":          strconv.FormatBool(disk.IsRemovable),
+			}
+			// Vendor and model also available here, useful?
+		}
+	}
+
+	labels := map[string]interface{}{}
+	labels["System Data"] = map[string]interface{}{
+		"Memory":        memory,
+		"CPU":           cpu,
+		"GPU":           gpu,
+		"Network":       network,
+		"Block Devices": block,
+	}
+
+	// Also available but not used:
+	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
+	// systemData.BIOS -> info about the bios. Useless IMO
+	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
+	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
+	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
+	return labels, nil
 }
