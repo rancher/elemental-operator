@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"gotest.tools/assert"
@@ -106,7 +107,15 @@ func TestApiBuildImage(t *testing.T) {
 		if test.method == http.MethodPost {
 			reg, err := i.registrationCache.getRegistrationData(test.token)
 			assert.NilError(t, err, "cannot find queued build job for token %s", test.token)
-			assert.Equal(t, reg.buildImageStatus, jobStatusStarted, "unexpected queued build job status for token %s", test.token)
+			if reg.buildImageStatus == jobStatusInit {
+				// let's wait that the goroutine of the build job updates the status
+				time.Sleep(time.Millisecond * 300)
+				reg, err = i.registrationCache.getRegistrationData(test.token)
+				assert.NilError(t, err, "queued build job for token %s disappeared", test.token)
+
+			}
+			// the doBuildImage goroutine will fail to retrieve the registration URL as we don't have a real cluster
+			assert.Equal(t, reg.buildImageStatus, jobStatusFailed, "unexpected queued build job status for token %s", test.token)
 		}
 	}
 }
