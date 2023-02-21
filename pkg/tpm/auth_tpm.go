@@ -28,12 +28,13 @@ import (
 	gotpm "github.com/rancher-sandbox/go-tpm"
 
 	"github.com/gorilla/websocket"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 )
 
 func (a *AuthServer) verifyChain(ek *attest.EK, namespace string) error {
@@ -127,7 +128,7 @@ func writeRead(conn *websocket.Conn, input []byte) ([]byte, error) {
 func (a *AuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error) {
 	header := req.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer TPM") {
-		logrus.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)
+		log.Debugf("websocket connection missing Authorization header from %s", req.RemoteAddr)
 		return nil, true, nil
 	}
 

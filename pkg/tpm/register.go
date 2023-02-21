@@ -24,8 +24,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jaypipes/ghw"
 	gotpm "github.com/rancher-sandbox/go-tpm"
+
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/sirupsen/logrus"
+	"github.com/rancher/elemental-operator/pkg/log"
 )
 
 type AttestationChannel struct {
@@ -59,22 +60,22 @@ type AuthClient struct {
 func (auth *AuthClient) Init(reg elementalv1.Registration) error {
 	if reg.EmulateTPM {
 		emulatedSeed := reg.EmulatedTPMSeed
-		logrus.Info("Enable TPM emulation")
+		log.Infof("Enable TPM emulation")
 		if emulatedSeed == -1 {
 			data, err := ghw.Product(ghw.WithDisableWarnings())
 			if err != nil {
 				emulatedSeed = rand.Int63()
-				logrus.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+				log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
 			} else {
 				uuid := strings.Replace(data.UUID, "-", "", -1)
 				var i big.Int
 				_, converted := i.SetString(uuid, 16)
 				if !converted {
 					emulatedSeed = rand.Int63()
-					logrus.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+					log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
 				} else {
 					emulatedSeed = i.Int64()
-					logrus.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
+					log.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
 				}
 			}
 		}

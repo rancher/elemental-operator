@@ -28,7 +28,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	values "github.com/rancher/wrangler/pkg/data"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +35,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
 )
 
@@ -63,9 +63,9 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	}
 
 	if !websocket.IsWebSocketUpgrade(req) {
-		logrus.Debug("got a plain HTTP request: send unauthenticated registration")
+		log.Debugf("got a plain HTTP request: send unauthenticated registration")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
-			logrus.Error("error sending unauthenticated response: ", err)
+			log.Errorf("error sending unauthenticated response: %w", err)
 		}
 		return err
 	}
@@ -73,30 +73,30 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	// upgrade to websocket
 	conn, err := upgrade(resp, req)
 	if err != nil {
-		logrus.Error("failed to upgrade connection to websocket: %w", err)
+		log.Errorf("failed to upgrade connection to websocket: %w", err)
 		return err
 	}
 	defer conn.Close()
-	logrus.Debug("connection upgraded to websocket")
+	log.Debugf("connection upgraded to websocket")
 
 	// attempt to authenticate the machine, if err, authentication has failed
 	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
-		logrus.Error("authentication failed: ", err)
+		log.Errorf("authentication failed: ", err)
 		return err
 	}
 	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
-		logrus.Warn("websocket connection: unrecognized authentication method")
+		log.Warningf("websocket connection: unrecognized authentication method")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
-			logrus.Error("error sending unauthenticated response: ", err)
+			log.Errorf("error sending unauthenticated response: %w", err)
 		}
 		return err
 	}
-	logrus.Debug("attestation completed")
+	log.Debugf("attestation completed")
 
 	if err = register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
-		logrus.Error("cannot finalize the authentication process: %w", err)
+		log.Errorf("cannot finalize the authentication process: %w", err)
 		return err
 	}
 
@@ -106,7 +106,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	}
 
 	if err = i.serveLoop(conn, inventory, registration); err != nil {
-		logrus.Error(err)
+		log.Errorf("Error during serve-loop: %w", err)
 		return err
 	}
 
@@ -187,7 +187,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 
 	// legacy register client (old ISO): we should send serialization of legacy (pre-kubebuilder) config.
 	if protoVersion == register.MsgUndefined {
-		logrus.Debug("Detected old register client: sending legacy CloudConfig serialization.")
+		log.Debugf("Detected old register client: sending legacy CloudConfig serialization.")
 		return sendLegacyConfig(conn, elementalConf, cloudConf)
 	}
 
@@ -199,7 +199,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	// If client does not support MsgConfig we send back the config as a
 	// byte-stream without a message-type to keep backwards-compatibility.
 	if protoVersion < register.MsgConfig {
-		logrus.Debug("Client does not support MsgConfig, sending back raw config.")
+		log.Debugf("Client does not support MsgConfig, sending back raw config.")
 
 		writer, err := conn.NextWriter(websocket.BinaryMessage)
 		if err != nil {
@@ -210,12 +210,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return yaml.NewEncoder(writer).Encode(config)
 	}
 
-	logrus.Debug("Client supports MsgConfig, sending back config.")
+	log.Debugf("Client supports MsgConfig, sending back config.")
 
 	// If the client supports the MsgConfig-message we use that.
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		logrus.Errorf("error marshalling config: %v", err)
+		log.Errorf("error marshalling config: %v", err)
 		return err
 	}
 
@@ -225,12 +225,12 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 func (i *InventoryServer) getRancherCACert() string {
 	cacert, err := i.getValue("cacerts")
 	if err != nil {
-		logrus.Errorf("Error getting cacerts: %s", err.Error())
+		log.Errorf("Error getting cacerts: %s", err.Error())
 	}
 
 	if cacert == "" {
 		if cacert, err = i.getValue("internal-cacerts"); err != nil {
-			logrus.Errorf("Error getting internal-cacerts: %s", err.Error())
+			log.Errorf("Error getting internal-cacerts: %s", err.Error())
 			return ""
 		}
 	}
@@ -291,7 +291,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err != nil {
 				return fmt.Errorf("failed to negotiate protol version: %w", err)
 			}
-			logrus.Infof("Negotiated protocol version: %d", protoVersion)
+			log.Infof("Negotiated protocol version: %d", protoVersion)
 			replyMsgType = register.MsgVersion
 			replyData = []byte{byte(protoVersion)}
 		case register.MsgSmbios:
@@ -299,7 +299,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err != nil {
 				return fmt.Errorf("failed to extract labels from SMBIOS data: %w", err)
 			}
-			logrus.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
+			log.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
 		case register.MsgLabels:
 			if err := mergeInventoryLabels(inventory, data); err != nil {
 				return err
@@ -327,7 +327,7 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 	inventory, err = i.commitMachineInventory(inventory)
 	if err != nil {
 		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
-			logrus.Errorf("Error reporting back error to client: %v", writeErr)
+			log.Errorf("Error reporting back error to client: %v", writeErr)
 		}
 
 		return err
@@ -335,13 +335,13 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 
 	if err := i.writeMachineInventoryCloudConfig(conn, protoVersion, inventory, registration); err != nil {
 		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
-			logrus.Errorf("Error reporting back error to client: %v", writeErr)
+			log.Errorf("Error reporting back error to client: %v", writeErr)
 		}
 
 		return fmt.Errorf("failed sending elemental cloud config: %w", err)
 	}
 
-	logrus.Debug("Elemental cloud config sent")
+	log.Debugf("Elemental cloud config sent")
 
 	return nil
 }
@@ -351,8 +351,8 @@ func sendLegacyConfig(conn *websocket.Conn, elementalConf elementalv1.Elemental,
 	for cloudKey, cloudData := range cloudConf {
 		var data interface{}
 		if err := json.Unmarshal(cloudData.Raw, &data); err != nil {
-			logrus.Warnf("Error unmarshalling key %s: %s", cloudKey, err.Error())
-			logrus.Debugf("Unmarshalling of '%s' failed", &cloudData.Raw)
+			log.Warningf("Error unmarshalling key %s: %s", cloudKey, err.Error())
+			log.Debugf("Unmarshalling of '%s' failed", &cloudData.Raw)
 			continue
 		}
 		legacyCloudConf[cloudKey] = data
@@ -376,7 +376,7 @@ func sendLegacyConfig(conn *websocket.Conn, elementalConf elementalv1.Elemental,
 // version supports it.
 func writeError(conn *websocket.Conn, protoVersion register.MessageType, errorMessage register.ErrorMessage) error {
 	if protoVersion < register.MsgError {
-		logrus.Debugf("client does not support reporting errors, skipping")
+		log.Debugf("client does not support reporting errors, skipping")
 		return nil
 	}
 
@@ -397,7 +397,7 @@ func decodeProtocolVersion(data []byte) (register.MessageType, error) {
 	clientVersion := register.MessageType(data[0])
 	protoVersion = clientVersion
 	if clientVersion != register.MsgLast {
-		logrus.Debugf("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
+		log.Debugf("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
 		if clientVersion > register.MsgLast {
 			protoVersion = register.MsgLast
 		}
@@ -417,7 +417,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	name, err := replaceStringData(smbiosData, mInventory.Name)
 	if err != nil {
 		if errors.Is(err, errValueNotFound) {
-			logrus.Warningf("Value not found: %v", mInventory.Name)
+			log.Warningf("Value not found: %v", mInventory.Name)
 			name = "m"
 		} else {
 			return err
@@ -425,7 +425,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	}
 
 	mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
-	logrus.Debug("Adding labels from registration")
+	log.Debugf("Adding labels from registration")
 	// Add extra label info from data coming from smbios and based on the registration data
 	if mInventory.Labels == nil {
 		mInventory.Labels = map[string]string{}
@@ -434,14 +434,14 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 		parsedData, err := replaceStringData(smbiosData, v)
 		if err != nil {
 			if errors.Is(err, errValueNotFound) {
-				logrus.Debugf("Value not found: %v", v)
+				log.Debugf("Value not found: %v", v)
 				continue
 			}
-			logrus.Errorf("Failed parsing smbios data: %v", err.Error())
+			log.Errorf("Failed parsing smbios data: %v", err.Error())
 			return err
 		}
 
-		logrus.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
+		log.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
 		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
 	}
 	return nil
@@ -449,8 +449,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 
 // updateInventoryFromSystemData creates labels in the inventory based on the hardware information
 func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
-
-	logrus.Info("Adding labels from system data")
+	log.Infof("Adding labels from system data")
 
 	labels, err := hostinfo.FillData(data)
 	if err != nil {
@@ -464,26 +463,26 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
-	logrus.Debugf("Parsing labels from System Data")
+	log.Debugf("Parsing labels from System Data")
 
 	if inv.Labels == nil {
 		inv.Labels = map[string]string{}
 	}
 
 	for k, v := range reg.Spec.MachineInventoryLabels {
-		logrus.Debugf("Parsing: %v : %v", k, v)
+		log.Debugf("Parsing: %v : %v", k, v)
 
 		parsedData, err := replaceStringData(labels, v)
 		if err != nil {
 			if errors.Is(err, errValueNotFound) {
-				logrus.Debugf("Value not found: %v", v)
+				log.Debugf("Value not found: %v", v)
 				continue
 			}
-			logrus.Errorf("Failed parsing system data: %v", err.Error())
+			log.Errorf("Failed parsing system data: %v", err.Error())
 			return err
 		}
 
-		logrus.Debugf("Parsed %s into %s with system data, setting it to label %s", v, parsedData, k)
+		log.Debugf("Parsed %s into %s with system data, setting it to label %s", v, parsedData, k)
 		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
 	}
 
@@ -505,8 +504,8 @@ func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) 
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
 	}
-	logrus.Debugf("received labels: %v", labels)
-	logrus.Warn("received labels from registering client: no more supported, skipping")
+	log.Debugf("received labels: %v", labels)
+	log.Warningf("received labels from registering client: no more supported, skipping")
 	if inventory.Labels == nil {
 		inventory.Labels = map[string]string{}
 	}

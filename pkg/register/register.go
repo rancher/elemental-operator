@@ -28,12 +28,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/sanity-io/litter"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v1"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
@@ -53,7 +53,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
 	}
 
-	logrus.Infof("Connect to %s", reg.URL)
+	log.Infof("Connect to %s", reg.URL)
 
 	conn, err := initWebsocketConn(reg.URL, caCert, auth)
 	if err != nil {
@@ -64,30 +64,30 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	if err := authenticate(conn, auth); err != nil {
 		return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
 	}
-	logrus.Infof("%s authentication completed", auth.GetName())
+	log.Infof("%s authentication completed", auth.GetName())
 
-	logrus.Debugf("elemental-register protocol version: %d", MsgLast)
+	log.Debugf("elemental-register protocol version: %d", MsgLast)
 	protoVersion, err := negotiateProtoVersion(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
 	}
-	logrus.Infof("Negotiated protocol version: %d", protoVersion)
+	log.Infof("Negotiated protocol version: %d", protoVersion)
 
 	if !reg.NoSMBIOS {
-		logrus.Info("Send SMBIOS data")
+		log.Infof("Send SMBIOS data")
 		if err := sendSMBIOSData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
 		}
 
 		if protoVersion >= MsgSystemData {
-			logrus.Info("Send system data")
+			log.Infof("Send system data")
 			if err := sendSystemData(conn); err != nil {
 				return nil, fmt.Errorf("failed to send system data: %w", err)
 			}
 		}
 	}
 
-	logrus.Info("Get elemental configuration")
+	log.Infof("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
 	}
@@ -98,7 +98,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 			return nil, fmt.Errorf("read configuration response: %w", err)
 		}
 
-		logrus.Debugf("Got configuration response: %s", msgType.String())
+		log.Debugf("Got configuration response: %s", msgType.String())
 
 		switch msgType {
 		case MsgError:
@@ -146,7 +146,7 @@ func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.C
 	}
 
 	wsURL := strings.Replace(url, "http", "ws", 1)
-	logrus.Infof("Using %s Auth with Hash %s to dial %s", auth.GetName(), authHash, wsURL)
+	log.Infof("Using %s Auth with Hash %s to dial %s", auth.GetName(), authHash, wsURL)
 
 	header := http.Header{}
 	header.Add("Authorization", authToken)
@@ -172,7 +172,7 @@ func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.C
 }
 
 func authenticate(conn *websocket.Conn, auth authClient) error {
-	logrus.Debugf("Start %s authentication", auth.GetName())
+	log.Debugf("Start %s authentication", auth.GetName())
 
 	if err := auth.Authenticate(conn); err != nil {
 		return err
@@ -218,7 +218,7 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 	}
 	err = SendJSONData(conn, MsgSmbios, data)
 	if err != nil {
-		logrus.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
+		log.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
 		return err
 	}
 	return nil
@@ -231,7 +231,7 @@ func sendSystemData(conn *websocket.Conn) error {
 	}
 	err = SendJSONData(conn, MsgSystemData, data)
 	if err != nil {
-		logrus.Debugf("system data:\n%s", litter.Sdump(data))
+		log.Debugf("system data:\n%s", litter.Sdump(data))
 		return err
 	}
 	return nil

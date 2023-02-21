@@ -22,13 +22,14 @@ import (
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/clients"
 	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1Typed "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+
+	"github.com/rancher/elemental-operator/pkg/log"
 )
 
 type ClientInterface interface {
@@ -50,9 +51,9 @@ func (c *Clients) Core() corecontrollers.Interface {
 // EventRecorder creates an event recorder associated to a controller nome for the schema (arbitrary)
 func (c *Clients) EventRecorder(name string) record.EventRecorder {
 	// Create event broadcaster
-	logrus.Info("Creating event broadcaster for " + name)
+	log.Infof("Creating event broadcaster for %s", name)
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(logrus.Infof)
+	eventBroadcaster.StartLogging(log.Infof)
 	eventBroadcaster.StartRecordingToSink(&corev1Typed.EventSinkImpl{Interface: c.Events})
 	return eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: name})
 }
