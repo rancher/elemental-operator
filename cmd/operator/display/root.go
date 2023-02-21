@@ -23,9 +23,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"k8s.io/klog/v2"
 )
 
 func NewDisplayCommand() *cobra.Command {
@@ -61,7 +61,7 @@ func displayRun(path string) {
 
 	b, err := os.ReadFile(path)
 	if err != nil {
-		logrus.Fatal(err)
+		klog.Fatal(err)
 	}
 
 	fmt.Println(string(b))

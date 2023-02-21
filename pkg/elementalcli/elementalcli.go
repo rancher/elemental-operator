@@ -23,7 +23,8 @@ import (
 	"strings"
 
 	"github.com/rancher/wrangler/pkg/data/convert"
-	"github.com/sirupsen/logrus"
+
+	"github.com/rancher/elemental-operator/pkg/log"
 )
 
 const installMediaConfigDir = "/run/initramfs/live/elemental"
@@ -42,7 +43,7 @@ func Run(conf map[string]interface{}) error {
 	if ok && configDir != "" {
 		installerOpts = append(installerOpts, "--config-dir", configDir)
 	} else {
-		logrus.Infof("Attempt to load elemental client config from default path: %s", installMediaConfigDir)
+		log.Infof("Attempt to load elemental client config from default path: %s", installMediaConfigDir)
 		installerOpts = append(installerOpts, "--config-dir", installMediaConfigDir)
 	}
 	installerOpts = append(installerOpts, "install")
@@ -77,7 +78,7 @@ func envOverrides(keyName string) string {
 func mapToEnv(prefix string, data map[string]interface{}) []string {
 	var result []string
 
-	logrus.Debugln("Computed environment variables:")
+	log.Debugln("Computed environment variables:")
 
 	for k, v := range data {
 		keyName := strings.ToUpper(prefix + convert.ToYAMLKey(k))
@@ -102,7 +103,7 @@ func mapToEnv(prefix string, data map[string]interface{}) []string {
 			result = append(result, ev)
 		} else {
 			result = append(result, fmt.Sprintf("%s=%v", keyName, v))
-			logrus.Debugf("%s=%v\n", keyName, v)
+			log.Debugf("%s=%v\n", keyName, v)
 		}
 	}
 	return result

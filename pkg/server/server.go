@@ -28,11 +28,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
@@ -67,7 +67,7 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	escapedPath := sanitizeUserInput(req.URL.Path)
 
-	logrus.Infof("Incoming HTTP request for %s", escapedPath)
+	log.Infof("Incoming HTTP request for %s", escapedPath)
 
 	// expect /elemental/{api}...
 	splittedPath := strings.Split(escapedPath, "/")
@@ -82,16 +82,16 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	switch api {
 	case "build-image":
 		if err := i.apiBuildImage(resp, req); err != nil {
-			logrus.Errorf("build-image: %s", err.Error())
+			log.Errorf("build-image: %s", err.Error())
 			return
 		}
 	case "registration":
 		if err := i.apiRegistration(resp, req); err != nil {
-			logrus.Errorf("registration: %s", err.Error())
+			log.Errorf("registration: %s", err.Error())
 			return
 		}
 	default:
-		logrus.Errorf("Unknown API: %s", api)
+		log.Errorf("Unknown API: %s", api)
 		http.Error(resp, fmt.Sprintf("unknwon api: %s", api), http.StatusBadRequest)
 		return
 	}
@@ -116,7 +116,7 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 	}
 	_ = conn.SetWriteDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second))
 	if err := conn.SetReadDeadline(time.Now().Add(register.RegistrationDeadlineSeconds * time.Second)); err != nil {
-		logrus.Warnf("Cannot set read deadline on the websocket: %s", err.Error())
+		log.Warningf("Cannot set read deadline on the websocket: %s", err.Error())
 	}
 
 	return conn, err
@@ -125,7 +125,7 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 func (i *InventoryServer) getValue(name string) (string, error) {
 	setting := &managementv3.Setting{}
 	if err := i.Get(i, types.NamespacedName{Name: name}, setting); err != nil {
-		logrus.Errorf("Error getting %s setting: %s", name, err.Error())
+		log.Errorf("Error getting %s setting: %s", name, err.Error())
 		return "", err
 	}
 	return setting.Value, nil
@@ -190,7 +190,7 @@ func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineI
 		return nil, fmt.Errorf("failed to create machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
 	}
 
-	logrus.Infof("new machine inventory created: %s", inventory.Name)
+	log.Infof("new machine inventory created: %s", inventory.Name)
 
 	return inventory, nil
 }
@@ -200,7 +200,7 @@ func (i *InventoryServer) updateMachineInventory(inventory *elementalv1.MachineI
 		return nil, fmt.Errorf("failed to update machine inventory %s/%s: %w", inventory.Namespace, inventory.Name, err)
 	}
 
-	logrus.Infof("machine inventory updated: %s", inventory.Name)
+	log.Infof("machine inventory updated: %s", inventory.Name)
 
 	return inventory, nil
 }

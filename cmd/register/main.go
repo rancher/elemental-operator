@@ -26,7 +26,6 @@ import (
 	"github.com/mudler/yip/pkg/schema"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/sanity-io/litter"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
@@ -36,6 +35,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
@@ -62,14 +62,14 @@ func main() {
 		Long:  "elemental-register registers a node with the elemental-operator via a config file or flags",
 		Run: func(_ *cobra.Command, args []string) {
 			if debug {
-				logrus.SetLevel(logrus.DebugLevel)
+				log.EnableDebugLogging()
 			}
 			if viper.GetBool("version") {
-				logrus.Infof("Support version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+				log.Infof("Support version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 				return
 			}
 
-			logrus.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+			log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 
 			if len(args) == 0 {
 				args = append(args, regConfDir)
@@ -78,15 +78,15 @@ func main() {
 			for _, arg := range args {
 				_, err := os.Stat(arg)
 				if err != nil {
-					logrus.Warnf("cannot access config path %s: %s", arg, err.Error())
+					log.Warningf("cannot access config path %s: %s", arg, err.Error())
 					continue
 				} else {
-					logrus.Debugf("scanning config path %s", arg)
+					log.Debugf("scanning config path %s", arg)
 				}
 
 				files, err := os.ReadDir(arg)
 				if err != nil {
-					logrus.Warnf("cannot read config path contents %s: %s", arg, err.Error())
+					log.Warningf("cannot read config path contents %s: %s", arg, err.Error())
 					continue
 				}
 				viper.AddConfigPath(arg)
@@ -95,18 +95,18 @@ func main() {
 						viper.SetConfigType("yaml")
 						viper.SetConfigName(f.Name())
 						if err := viper.MergeInConfig(); err != nil {
-							logrus.Fatalf("failed to read config %s: %s", f.Name(), err)
+							log.Fatalf("failed to read config %s: %s", f.Name(), err)
 						}
-						logrus.Infof("reading config file %s", f.Name())
+						log.Infof("reading config file %s", f.Name())
 					}
 				}
 			}
 
 			if err := viper.Unmarshal(&cfg); err != nil {
-				logrus.Fatal("failed to parse configuration: ", err)
+				log.Fatalf("failed to parse configuration: ", err)
 			}
 
-			logrus.Debugf("input config:\n%s", litter.Sdump(cfg))
+			log.Debugf("input config:\n%s", litter.Sdump(cfg))
 
 			run(cfg)
 		},
@@ -123,7 +123,7 @@ func main() {
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 
 	if err := cmd.Execute(); err != nil {
-		logrus.Fatalln(err)
+		log.Fatalln(err)
 	}
 }
 
@@ -131,7 +131,7 @@ func run(config elementalv1.Config) {
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
-		logrus.Fatal("Registration URL is empty")
+		log.Fatal("Registration URL is empty")
 	}
 
 	var (
@@ -142,14 +142,14 @@ func run(config elementalv1.Config) {
 	/* Here we can have a file path or the cert data itself */
 	_, err = os.Stat(registration.CACert)
 	if err == nil {
-		logrus.Debug("CACert passed as a file")
+		log.Info("CACert passed as a file")
 		caCert, err = os.ReadFile(registration.CACert)
 		if err != nil {
-			logrus.Error(err)
+			log.Error(err)
 		}
 	} else {
 		if registration.CACert == "" {
-			logrus.Warn("CACert is empty")
+			log.Warning("CACert is empty")
 		}
 		caCert = []byte(registration.CACert)
 	}
@@ -157,15 +157,15 @@ func run(config elementalv1.Config) {
 	for {
 		data, err = register.Register(registration, caCert)
 		if err != nil {
-			logrus.Error("failed to register machine inventory: ", err)
+			log.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
-		logrus.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
+		log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 
 		if yaml.Unmarshal(data, &config) != nil {
-			logrus.Error("failed to parse registration configuration: ", err)
+			log.Error("failed to parse registration configuration: ", err)
 			time.Sleep(time.Second * 5)
 			continue
 		}
@@ -175,10 +175,10 @@ func run(config elementalv1.Config) {
 
 	if !isSystemInstalled() {
 		if err := installElemental(config); err != nil {
-			logrus.Fatal("elemental installation failed: ", err)
+			log.Fatal("elemental installation failed: ", err)
 		}
 
-		logrus.Info("elemental installation completed, please reboot")
+		log.Info("elemental installation completed, please reboot")
 	}
 }
 
@@ -297,7 +297,7 @@ func writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error)
 
 		var structData interface{}
 		if err := json.Unmarshal(jsonData, &structData); err != nil {
-			logrus.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
+			log.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
 			return "", fmt.Errorf("%s: %w", k, err)
 		}
 
@@ -309,7 +309,7 @@ func writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error)
 		bytes = append(bytes, append([]byte(fmt.Sprintf("%s:\n", k)), yamlData...)...)
 	}
 
-	logrus.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
+	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
 	_, err = f.Write(bytes)
 	return f.Name(), err
 }

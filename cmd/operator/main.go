@@ -17,14 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"github.com/spf13/cobra"
+	"k8s.io/klog/v2/klogr"
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	displayCmd "github.com/rancher/elemental-operator/cmd/operator/display"
 	operatorCmd "github.com/rancher/elemental-operator/cmd/operator/operator"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/version"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 func main() {
+	logger := klogr.New()
+	ctrl.SetLogger(logger)
+
 	cmd := &cobra.Command{
 		Use:   "elemental-operator",
 		Short: "Elemental Kubernetes Operator",
@@ -37,7 +43,7 @@ func main() {
 	)
 
 	if err := cmd.Execute(); err != nil {
-		logrus.Fatalln(err)
+		log.Fatalln(err)
 	}
 }
 
@@ -46,7 +52,7 @@ func NewVersionCommand() *cobra.Command {
 		Use:   "version",
 		Short: "Print operator version",
 		Run: func(_ *cobra.Command, _ []string) {
-			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+			log.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 		},
 	}
 	return cmd

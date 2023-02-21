@@ -7,9 +7,7 @@ COPY cmd/operator/main.go /src/
 COPY api /src/api
 COPY controllers /src/controllers
 COPY pkg /src/pkg
-COPY cmd/operator /src/cmd/operator
-COPY cmd/register /src/cmd/register
-COPY cmd/support /src/cmd/support
+COPY cmd /src/cmd
 # Set arg/env after go mod download, otherwise we invalidate the cached layers due to the commit changing easily
 
 FROM build AS build-operator

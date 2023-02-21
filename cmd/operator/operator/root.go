@@ -23,16 +23,10 @@ import (
 	"os"
 	"time"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/controllers"
-	"github.com/rancher/elemental-operator/pkg/clients"
-	"github.com/rancher/elemental-operator/pkg/server"
-	"github.com/rancher/elemental-operator/pkg/version"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/steve/pkg/aggregation"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	corev1 "k8s.io/api/core/v1"
@@ -40,12 +34,18 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/controllers"
+	"github.com/rancher/elemental-operator/pkg/clients"
+	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/server"
+	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 // IMPORTANT: The RBAC permissions below should be reviewed after old code is deprecated.
@@ -95,9 +95,10 @@ func NewOperatorCommand() *cobra.Command {
 		Short: "Run the Kubernetes operator using kubebuilder.",
 		Run: func(_ *cobra.Command, _ []string) {
 			if config.debug {
-				logrus.SetLevel(logrus.DebugLevel)
+				log.EnableDebugLogging()
 			}
-			logrus.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+
+			log.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 			operatorRun(&config)
 		},
 	}
@@ -156,8 +157,6 @@ func NewOperatorCommand() *cobra.Command {
 }
 
 func operatorRun(config *rootConfig) {
-	ctrl.SetLogger(klogr.New())
-
 	if config.profilerAddress != "" {
 		klog.Infof("Profiler listening for requests at %s", config.profilerAddress)
 		go func() {
