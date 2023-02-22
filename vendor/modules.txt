@@ -397,8 +397,8 @@ github.com/rancher/wharfie/pkg/extract
 github.com/rancher/wharfie/pkg/registries
 github.com/rancher/wharfie/pkg/tarfile
 github.com/rancher/wharfie/pkg/util
-# github.com/rancher/wrangler v1.0.0
-## explicit; go 1.16
+# github.com/rancher/wrangler v1.0.1
+## explicit; go 1.17
 github.com/rancher/wrangler/pkg/apply
 github.com/rancher/wrangler/pkg/apply/injectors
 github.com/rancher/wrangler/pkg/clients

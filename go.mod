@@ -48,7 +48,7 @@ require (
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37
 	github.com/rancher/system-agent v0.2.14-0.20230106171935-24c523a4408a
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
-	github.com/rancher/wrangler v1.0.0
+	github.com/rancher/wrangler v1.0.1
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/viper v1.9.0
