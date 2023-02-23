@@ -257,10 +257,12 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 		Spec: elementalv1.MachineRegistrationSpec{
 			MachineInventoryLabels: map[string]string{
 				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
+				"elemental.cattle.io/AvailableMemory":        "${System Data/Memory/Total Usable Bytes}",
 				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
 				"elemental.cattle.io/CpuTotalThreads":        "${System Data/CPU/Total Threads}",
 				"elemental.cattle.io/NetIfacesNumber":        "${System Data/Network/Number Interfaces}",
 				"elemental.cattle.io/NetIface0-Name":         "${System Data/Network/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-MAC":          "${System Data/Network/myNic1/MacAddress}",
 				"elemental.cattle.io/NetIface0-IsVirtual":    "${System Data/Network/myNic1/IsVirtual}",
 				"elemental.cattle.io/NetIface1-Name":         "${System Data/Network/myNic2/Name}",
 				"elemental.cattle.io/BlockDevicesNumber":     "${System Data/Block Devices/Number Devices}",
@@ -292,6 +294,7 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 		Memory: &memory.Info{
 			Area: memory.Area{
 				TotalPhysicalBytes: 100,
+				TotalUsableBytes:   90,
 			},
 		},
 		CPU: &cpu.Info{
@@ -301,8 +304,9 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 		Network: &net.Info{
 			NICs: []*net.NIC{
 				{
-					Name:      "myNic1",
-					IsVirtual: true,
+					Name:       "myNic1",
+					MacAddress: "02:00:00:00:00:01",
+					IsVirtual:  true,
 				},
 				{
 					Name: "myNic2",
@@ -316,10 +320,12 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIfacesNumber"], "2")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-Name"], "myNic1")
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-MAC"], "02-00-00-00-00-01")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface0-IsVirtual"], "true")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/NetIface1-Name"], "myNic2")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevicesNumber"], "2")
