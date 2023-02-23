@@ -87,7 +87,14 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		}
 	}
 
-	log.Infof("Get elemental configuration")
+	if protoVersion >= MsgAnnotations {
+		log.Info("Send elemental annotations")
+		if err := sendAnnotations(conn); err != nil {
+			return nil, fmt.Errorf("failend to send dynamic data: %w", err)
+		}
+	}
+
+	log.Info("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
 	}
@@ -152,6 +159,7 @@ func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.C
 	header.Add("Authorization", authToken)
 
 	conn, resp, err := dialer.Dial(wsURL, header)
+	log.Infof("Local Address: %s", conn.LocalAddr().String())
 	if err != nil {
 		if resp != nil {
 			if resp.StatusCode == http.StatusUnauthorized {
@@ -232,6 +240,24 @@ func sendSystemData(conn *websocket.Conn) error {
 	err = SendJSONData(conn, MsgSystemData, data)
 	if err != nil {
 		log.Debugf("system data:\n%s", litter.Sdump(data))
+		return err
+	}
+	return nil
+}
+
+func sendAnnotations(conn *websocket.Conn) error {
+	data := map[string]string{}
+	tcpAddr := conn.LocalAddr().String()
+	idxPortNumStart := strings.LastIndexAny(tcpAddr, ":")
+	if idxPortNumStart < 0 {
+		log.Errorf("Cannot understand local IP address format [%s], skip it", tcpAddr)
+	} else {
+		data["registration-ip"] = tcpAddr[0:idxPortNumStart]
+		log.Debugf("sending local IP: %s", data["registration-ip"])
+	}
+	err := SendJSONData(conn, MsgAnnotations, data)
+	if err != nil {
+		log.Debugf("annotation data:\n%s", litter.Sdump(data))
 		return err
 	}
 	return nil
