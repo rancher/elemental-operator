@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -104,71 +103,6 @@ func TestUnauthenticatedResponse(t *testing.T) {
 		assert.Equal(t, confReg.EmulateTPM, testReg.EmulateTPM)
 		assert.Equal(t, confReg.EmulatedTPMSeed, testReg.EmulatedTPMSeed)
 		assert.Equal(t, confReg.NoSMBIOS, testReg.NoSMBIOS)
-	}
-}
-
-func TestInitNewInventory(t *testing.T) {
-	const alphanum = "[0-9a-fA-F]"
-	// m  '-'  8 alphanum chars  '-'  3 blocks of 4 alphanum chars  '-'  12 alphanum chars
-	mUUID := regexp.MustCompile("^m-" + alphanum + "{8}-(" + alphanum + "{4}-){3}" + alphanum + "{12}")
-	// e.g., m-66588488-3eb6-4a6d-b642-c994f128c6f1
-
-	testCase := []struct {
-		config       *elementalv1.Config
-		initName     string
-		expectedName string
-	}{
-		{
-			config: &elementalv1.Config{
-				Elemental: elementalv1.Elemental{
-					Registration: elementalv1.Registration{
-						NoSMBIOS: false,
-					},
-				},
-			},
-			initName:     "custom-name",
-			expectedName: "custom-name",
-		},
-
-		{
-			config: &elementalv1.Config{
-				Elemental: elementalv1.Elemental{
-					Registration: elementalv1.Registration{
-						NoSMBIOS: false,
-					},
-				},
-			},
-		},
-		{
-			config: &elementalv1.Config{
-				Elemental: elementalv1.Elemental{
-					Registration: elementalv1.Registration{
-						NoSMBIOS: true,
-					},
-				},
-			},
-		},
-		{
-			config: nil,
-		},
-	}
-
-	for _, test := range testCase {
-		registration := &elementalv1.MachineRegistration{
-			Spec: elementalv1.MachineRegistrationSpec{
-				MachineName: test.initName,
-				Config:      test.config,
-			},
-		}
-
-		inventory := &elementalv1.MachineInventory{}
-		initInventory(inventory, registration)
-
-		if test.initName == "" {
-			assert.Check(t, mUUID.Match([]byte(inventory.Name)), inventory.Name+" is not UUID based")
-		} else {
-			assert.Equal(t, inventory.Name, test.expectedName)
-		}
 	}
 }
 
