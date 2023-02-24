@@ -39,49 +39,49 @@ func EnableDebugLogging() {
 }
 
 func Infof(format string, args ...interface{}) {
-	klog.Infof(format, args)
+	klog.Infof(format, args...)
 }
 
 func Info(args ...interface{}) {
-	klog.Info(args)
+	klog.Info(args...)
 }
 
 func Debugf(format string, args ...interface{}) {
-	klog.V(DebugDepth).Infof(format, args)
+	klog.V(DebugDepth).Infof(format, args...)
 }
 
 func Debug(args ...interface{}) {
-	klog.V(DebugDepth).Info(args)
+	klog.V(DebugDepth).Info(args...)
 }
 
 func Debugln(args ...interface{}) {
-	klog.V(DebugDepth).Infoln(args)
+	klog.V(DebugDepth).Infoln(args...)
 }
 
 func Warningf(format string, args ...interface{}) {
-	klog.Warningf(format, args)
+	klog.Warningf(format, args...)
 }
 
 func Warning(args ...interface{}) {
-	klog.Warning(args)
+	klog.Warning(args...)
 }
 
 func Errorf(format string, args ...interface{}) {
-	klog.Errorf(format, args)
+	klog.Errorf(format, args...)
 }
 
 func Error(args ...interface{}) {
-	klog.Error(args)
+	klog.Error(args...)
 }
 
 func Fatalln(args ...interface{}) {
-	klog.Fatalln(args)
+	klog.Fatalln(args...)
 }
 
 func Fatalf(format string, args ...interface{}) {
-	klog.Fatalf(format, args)
+	klog.Fatalf(format, args...)
 }
 
 func Fatal(args ...interface{}) {
-	klog.Fatal(args)
+	klog.Fatal(args...)
 }
