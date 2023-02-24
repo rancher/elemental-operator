@@ -34,15 +34,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/converter"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
 )
-
-type LegacyConfig struct {
-	Elemental   elementalv1.Elemental  `yaml:"elemental"`
-	CloudConfig map[string]interface{} `yaml:"cloud-config,omitempty"`
-}
 
 var (
 	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
@@ -352,18 +348,12 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 }
 
 func sendLegacyConfig(conn *websocket.Conn, elementalConf elementalv1.Elemental, cloudConf map[string]runtime.RawExtension) (err error) {
-	legacyCloudConf := make(map[string]interface{})
-	for cloudKey, cloudData := range cloudConf {
-		var data interface{}
-		if err := json.Unmarshal(cloudData.Raw, &data); err != nil {
-			log.Warningf("Error unmarshalling key %s: %s", cloudKey, err.Error())
-			log.Debugf("Unmarshalling of '%s' failed", &cloudData.Raw)
-			continue
-		}
-		legacyCloudConf[cloudKey] = data
+	legacyCloudConf, err := converter.CloudConfigToLegacy(cloudConf)
+	if err != nil {
+		return fmt.Errorf("convert to legacy config: %w", err)
 	}
 
-	config := LegacyConfig{
+	config := converter.LegacyConfig{
 		Elemental:   elementalConf,
 		CloudConfig: legacyCloudConf,
 	}
