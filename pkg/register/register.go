@@ -69,7 +69,21 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	log.Debugf("elemental-register protocol version: %d", MsgLast)
 	protoVersion, err := negotiateProtoVersion(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
+		if protoVersion == MsgUndefined {
+			return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
+		}
+		// It could be an old operator which doesn't negotiate protocol version and tears down the
+		// connection: give it another chance without negotiating protocol version
+		conn.Close()
+		time.Sleep(time.Second)
+		log.Debugf("Failed to negotiate protocol version: %s. Retry connection assuming old operator.", err.Error())
+		conn, err = initWebsocketConn(reg.URL, caCert, auth)
+		if err != nil {
+			return nil, err
+		}
+		if err := authenticate(conn, auth); err != nil {
+			return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
+		}
 	}
 	log.Infof("Negotiated protocol version: %d", protoVersion)
 
@@ -208,7 +222,9 @@ func negotiateProtoVersion(conn *websocket.Conn) (MessageType, error) {
 	// right now).
 	msgType, data, err := ReadMessage(conn)
 	if err != nil {
-		return MsgUndefined, fmt.Errorf("communication error: %w", err)
+		// This may be an old operator tearing down the connection because doesn't know MsgVersion:
+		// let's report that by returning the base and oldest protocol version, i.e, MsgGet
+		return MsgGet, fmt.Errorf("communication error: %w", err)
 	}
 	if msgType != MsgVersion {
 		return MsgUndefined, fmt.Errorf("expected msg %s, got %s", MsgVersion, msgType)
