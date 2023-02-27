@@ -45,24 +45,29 @@ type authClient interface {
 	Authenticate(conn *websocket.Conn) error
 }
 
-func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
+// Register performs registration against the Elemental operator and returns installation
+// data when successful. It also returns the "isLegacy" boolean to signal to the caller if
+// the format of the installation data is the legacy one (operator 1.0.x).
+func Register(reg elementalv1.Registration, caCert []byte) ([]byte, bool, error) {
+	isLegacy := false
+
 	// add here alternate auth methods that implement the authClient interface
 	var auth authClient = &tpm.AuthClient{}
 
 	if err := auth.Init(reg); err != nil {
-		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
+		return nil, isLegacy, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
 	}
 
 	log.Infof("Connect to %s", reg.URL)
 
 	conn, err := initWebsocketConn(reg.URL, caCert, auth)
 	if err != nil {
-		return nil, err
+		return nil, isLegacy, err
 	}
 	defer conn.Close()
 
 	if err := authenticate(conn, auth); err != nil {
-		return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
+		return nil, isLegacy, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
 	}
 	log.Infof("%s authentication completed", auth.GetName())
 
@@ -70,7 +75,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	protoVersion, err := negotiateProtoVersion(conn)
 	if err != nil {
 		if protoVersion == MsgUndefined {
-			return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
+			return nil, isLegacy, fmt.Errorf("failed to negotiate protocol version: %w", err)
 		}
 		// It could be an old operator which doesn't negotiate protocol version and tears down the
 		// connection: give it another chance without negotiating protocol version
@@ -79,24 +84,26 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		log.Debugf("Failed to negotiate protocol version: %s. Retry connection assuming old operator.", err.Error())
 		conn, err = initWebsocketConn(reg.URL, caCert, auth)
 		if err != nil {
-			return nil, err
+			return nil, isLegacy, err
 		}
 		if err := authenticate(conn, auth); err != nil {
-			return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
+			return nil, isLegacy, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
 		}
+		// Looks like we are dealing with an old operator with legacy conf
+		isLegacy = true
 	}
 	log.Infof("Negotiated protocol version: %d", protoVersion)
 
 	if !reg.NoSMBIOS {
 		log.Infof("Send SMBIOS data")
 		if err := sendSMBIOSData(conn); err != nil {
-			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
+			return nil, isLegacy, fmt.Errorf("failed to send SMBIOS data: %w", err)
 		}
 
 		if protoVersion >= MsgSystemData {
 			log.Infof("Send system data")
 			if err := sendSystemData(conn); err != nil {
-				return nil, fmt.Errorf("failed to send system data: %w", err)
+				return nil, isLegacy, fmt.Errorf("failed to send system data: %w", err)
 			}
 		}
 	}
@@ -104,19 +111,19 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	if protoVersion >= MsgAnnotations {
 		log.Info("Send elemental annotations")
 		if err := sendAnnotations(conn); err != nil {
-			return nil, fmt.Errorf("failend to send dynamic data: %w", err)
+			return nil, isLegacy, fmt.Errorf("failend to send dynamic data: %w", err)
 		}
 	}
 
 	log.Info("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
-		return nil, fmt.Errorf("request elemental configuration: %w", err)
+		return nil, isLegacy, fmt.Errorf("request elemental configuration: %w", err)
 	}
 
 	if protoVersion >= MsgConfig {
 		msgType, data, err := ReadMessage(conn)
 		if err != nil {
-			return nil, fmt.Errorf("read configuration response: %w", err)
+			return nil, isLegacy, fmt.Errorf("read configuration response: %w", err)
 		}
 
 		log.Debugf("Got configuration response: %s", msgType.String())
@@ -125,24 +132,26 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		case MsgError:
 			msg := &ErrorMessage{}
 			if err = yaml.Unmarshal(data, &msg); err != nil {
-				return nil, errors.Wrap(err, "unable to unmarshal error-message")
+				return nil, isLegacy, errors.Wrap(err, "unable to unmarshal error-message")
 			}
 
-			return nil, errors.New(msg.Message)
+			return nil, isLegacy, errors.New(msg.Message)
 
 		case MsgConfig:
-			return data, nil
+			return data, isLegacy, nil
 
 		default:
-			return nil, fmt.Errorf("unexpected response message: %s", msgType)
+			return nil, isLegacy, fmt.Errorf("unexpected response message: %s", msgType)
 		}
 	}
 
 	_, r, err := conn.NextReader()
 	if err != nil {
-		return nil, fmt.Errorf("read elemental configuration: %w", err)
+		return nil, isLegacy, fmt.Errorf("read elemental configuration: %w", err)
 	}
-	return io.ReadAll(r)
+
+	data, err := io.ReadAll(r)
+	return data, isLegacy, err
 }
 
 func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.Conn, error) {

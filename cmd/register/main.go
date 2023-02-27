@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/converter"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
@@ -135,8 +136,9 @@ func run(config elementalv1.Config) {
 	}
 
 	var (
-		err          error
-		data, caCert []byte
+		err             error
+		data, caCert    []byte
+		gotLegacyConfig bool
 	)
 
 	/* Here we can have a file path or the cert data itself */
@@ -155,7 +157,7 @@ func run(config elementalv1.Config) {
 	}
 
 	for {
-		data, err = register.Register(registration, caCert)
+		data, gotLegacyConfig, err = register.Register(registration, caCert)
 		if err != nil {
 			log.Error("failed to register machine inventory: ", err)
 			time.Sleep(time.Second * 5)
@@ -163,6 +165,25 @@ func run(config elementalv1.Config) {
 		}
 
 		log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
+
+		if gotLegacyConfig {
+			log.Debug("Got legacy config: convert to the new format.")
+			legacyConfig := converter.LegacyConfig{}
+
+			if yaml.Unmarshal(data, &legacyConfig) != nil {
+				log.Errorf("failed to parse registration configuration (legacy): %w", err.Error())
+				time.Sleep(time.Second * 5)
+				continue
+			}
+
+			cloudConf, err := converter.CloudConfigFromLegacy(legacyConfig.CloudConfig)
+			if err != nil {
+				log.Errorf("failed converting legacy cloud-config: %s", err.Error())
+			}
+			config.Elemental = legacyConfig.Elemental
+			config.CloudConfig = cloudConf
+			break
+		}
 
 		if yaml.Unmarshal(data, &config) != nil {
 			log.Error("failed to parse registration configuration: ", err)
