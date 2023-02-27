@@ -42,3 +42,32 @@ func CloudConfigToLegacy(cloudConf map[string]runtime.RawExtension) (map[string]
 	}
 	return legacyCloudConf, nil
 }
+
+func CloudConfigFromLegacy(legacyConf map[string]interface{}) (map[string]runtime.RawExtension, error) {
+	cloudConf := make(map[string]runtime.RawExtension)
+	for cloudKey, cloudVal := range legacyConf {
+		jsonVal, err := encodeToJSON(cloudVal)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal '%s'['%+v']: %w", cloudKey, cloudVal, err)
+		}
+		extension := runtime.RawExtension{Raw: jsonVal}
+		cloudConf[cloudKey] = extension
+	}
+	return cloudConf, nil
+}
+
+func encodeToJSON(val interface{}) ([]byte, error) {
+	if m, ok := val.(map[interface{}]interface{}); ok {
+		// Convert nested map to map[string]interface{}
+		m2 := make(map[string]interface{})
+		for k, v := range m {
+			k2, ok := k.(string)
+			if !ok {
+				return nil, fmt.Errorf("key is not a string: %v", k)
+			}
+			m2[k2] = v
+		}
+		val = m2
+	}
+	return json.Marshal(val)
+}
