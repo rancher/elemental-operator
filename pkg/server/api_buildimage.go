@@ -346,8 +346,7 @@ func (i *InventoryServer) getRegistrationURL(token string) (string, error) {
 
 func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 	const buildImage = "registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-builder-image/5.3:latest"
-	// TODO: find a better serveImage
-	const serveImage = "quay.io/fgiudici/busybox:latest"
+	const serveImage = "registry.opensuse.org/opensuse/nginx:latest"
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -387,23 +386,18 @@ func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 			},
 			Containers: []corev1.Container{
 				{
-					Name:    "serve",
-					Image:   serveImage,
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{
-						"busybox httpd -f -v -p 80",
-					},
-					WorkingDir: "/iso",
+					Name:  "serve",
+					Image: serveImage,
 					Ports: []corev1.ContainerPort{
 						{
-							Name:          "http-img",
+							Name:          "http",
 							ContainerPort: 80,
 						},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",
-							MountPath: "/iso",
+							MountPath: "/srv/www/htdocs",
 						},
 					},
 				},
