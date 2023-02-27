@@ -179,6 +179,8 @@ func run(config elementalv1.Config) {
 			cloudConf, err := converter.CloudConfigFromLegacy(legacyConfig.CloudConfig)
 			if err != nil {
 				log.Errorf("failed converting legacy cloud-config: %s", err.Error())
+				time.Sleep(time.Second * 5)
+				continue
 			}
 			config.Elemental = legacyConfig.Elemental
 			config.CloudConfig = cloudConf

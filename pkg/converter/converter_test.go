@@ -26,14 +26,31 @@ import (
 var _ = Describe("Convert to legacy configuration", func() {
 
 	Context("received nested cloud-config data as map[string]interface{}", func() {
-
 		cloudConfData := map[string]interface{}{
-			"users": map[string]interface{}{
-				"name":   "bar",
-				"passwd": "foo",
-				"groups": "users",
-				"ssh_authorized_keys": []interface{}{
-					"ssh-key qwertyuyio123456",
+			"users": []interface{}{
+				map[interface{}]interface{}{
+					"name":   "bar",
+					"passwd": "foo",
+					"groups": "users",
+					"ssh_authorized_keys": []interface{}{
+						"ssh-key qwertyuyio123456",
+					},
+				},
+			},
+			"runcmd": []interface{}{
+				"foo",
+			},
+		}
+
+		expectedData := map[string]interface{}{
+			"users": []interface{}{
+				map[string]interface{}{
+					"name":   "bar",
+					"passwd": "foo",
+					"groups": "users",
+					"ssh_authorized_keys": []interface{}{
+						"ssh-key qwertyuyio123456",
+					},
 				},
 			},
 			"runcmd": []interface{}{
@@ -48,7 +65,7 @@ var _ = Describe("Convert to legacy configuration", func() {
 			cloudConfLegacy, err := CloudConfigToLegacy(cloudConf)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			for k, v := range cloudConfData {
+			for k, v := range expectedData {
 				val, ok := cloudConfLegacy[k]
 				Expect(ok).To(BeTrue(), "key '%s' is missing", k)
 				v1 := reflect.ValueOf(v)

@@ -20,8 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	jsoniter "github.com/json-iterator/go"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 )
 
 // LegacyConfig is the struct used to pass registration data by legacy Elemental
@@ -46,7 +48,7 @@ func CloudConfigToLegacy(cloudConf map[string]runtime.RawExtension) (map[string]
 func CloudConfigFromLegacy(legacyConf map[string]interface{}) (map[string]runtime.RawExtension, error) {
 	cloudConf := make(map[string]runtime.RawExtension)
 	for cloudKey, cloudVal := range legacyConf {
-		jsonVal, err := encodeToJSON(cloudVal)
+		jsonVal, err := jsoniter.Marshal(cloudVal)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal '%s'['%+v']: %w", cloudKey, cloudVal, err)
 		}
@@ -54,20 +56,4 @@ func CloudConfigFromLegacy(legacyConf map[string]interface{}) (map[string]runtim
 		cloudConf[cloudKey] = extension
 	}
 	return cloudConf, nil
-}
-
-func encodeToJSON(val interface{}) ([]byte, error) {
-	if m, ok := val.(map[interface{}]interface{}); ok {
-		// Convert nested map to map[string]interface{}
-		m2 := make(map[string]interface{})
-		for k, v := range m {
-			k2, ok := k.(string)
-			if !ok {
-				return nil, fmt.Errorf("key is not a string: %v", k)
-			}
-			m2[k2] = v
-		}
-		val = m2
-	}
-	return json.Marshal(val)
 }
