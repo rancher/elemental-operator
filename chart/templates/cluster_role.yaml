@@ -191,6 +191,26 @@ rules:
   - patch
   - update
 - apiGroups:
+  - elemental.cattle.io
+  resources:
+  - seedimages
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - seedimages/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - fleet.cattle.io
   resources:
   - bundles
