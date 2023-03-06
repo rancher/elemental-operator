@@ -104,3 +104,15 @@ const (
 	// FleetBundleCreateFailureReason documents that managed OS image controller failed to create fleet bundle.
 	FleetBundleCreateFailureReason = "FleetBundleCreateFailure"
 )
+
+// Seed Image conditions
+const (
+	// PodCreationFailureReason documents Pod creation failure.
+	PodCreationFailureReason = "PodCreationFailure"
+
+	// ServiceCreationFailureReason documents Service creation failure.
+	ServiceCreationFailureReason = "ServiceCreationFailure"
+
+	// ResourcesSuccessfullyCreatedReason documents all the resources needed to start the build image task were successfully created.
+	ResourcesSuccessfullyCreatedReason = "ResourcesSuccessfullyCreated"
+)
