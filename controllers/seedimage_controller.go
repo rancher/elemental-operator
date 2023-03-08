@@ -296,7 +296,7 @@ func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
 					},
 					Command: []string{"/bin/bash", "-c"},
 					Args: []string{
-						fmt.Sprintf("%s; %s; %s",
+						fmt.Sprintf("%s && %s && %s",
 							fmt.Sprintf("curl -Lo base.img %s", baseImg),
 							fmt.Sprintf("curl -ko reg.yaml %s", regURL),
 							"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /reg.yaml -boot_image any replay"),
