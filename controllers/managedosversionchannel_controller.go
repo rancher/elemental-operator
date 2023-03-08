@@ -156,7 +156,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		lastSync := managedOSVersionChannel.Status.LastSyncedTime.Time
 		scheduledTime := lastSync.Add(interval)
 		if time.Now().Before(scheduledTime) {
-			logger.V(5).Info("Requeuing to next interval")
+			logger.Info("Requeuing to next interval")
 			return reconcile.Result{RequeueAfter: time.Until(scheduledTime)}, nil
 		}
 	}

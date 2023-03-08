@@ -72,7 +72,7 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 	err := r.Get(ctx, req.NamespacedName, mInventory)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(5).Info("Object was not found, not an error")
+			logger.Info("Object was not found, not an error")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get machine inventory object: %w", err)
@@ -113,7 +113,7 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *elementalv1.MachineInventory) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	logger.Info("Reconciling machineregistration object")
+	logger.Info("Reconciling machineinventory object")
 
 	if mInventory.GetDeletionTimestamp() != nil {
 		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) // TODO: Handle deletion
@@ -149,10 +149,9 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 	logger := ctrl.LoggerFrom(ctx)
 
 	if readyCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition); readyCondition != nil {
-		logger.V(5).Info("Skipping plan secret creation because ready condition is already set")
+		logger.Info("Skipping plan secret creation because ready condition is already set")
 		return nil
 	}
-
 	logger.Info("Creating plan secret")
 
 	planSecret := &corev1.Secret{
@@ -207,6 +206,7 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 		},
 	}
 
+	logger.Info("Attempting to set plan status")
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: mInventory.Namespace,
 		Name:      mInventory.Name,
@@ -217,11 +217,9 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 	appliedChecksum := string(planSecret.Data["applied-checksum"])
 	failedChecksum := string(planSecret.Data["failed-checksum"])
 
-	logger.Info("Attempting to set plan status")
-
 	switch {
 	case appliedChecksum != "":
-		logger.V(5).Info("Plan successfully applied")
+		logger.Info("Plan successfully applied")
 		mInventory.Status.Plan.State = elementalv1.PlanApplied
 		mInventory.Status.Plan.Checksum = appliedChecksum
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
@@ -232,12 +230,12 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 		})
 		return nil
 	case failedChecksum != "":
-		logger.V(5).Info("Plan failed to be applied")
+		logger.Info("Plan failed to be applied")
 		mInventory.Status.Plan.State = elementalv1.PlanFailed
 		mInventory.Status.Plan.Checksum = failedChecksum
 		return fmt.Errorf("failed to apply plan")
 	default:
-		logger.V(5).Info("Waiting for plan to be applied")
+		logger.Info("Waiting for plan to be applied")
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.WaitingForPlanReason,
