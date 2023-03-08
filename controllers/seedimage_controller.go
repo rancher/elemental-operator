@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,13 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 )
 
 type SeedImageReconciler struct {
@@ -44,7 +45,10 @@ type SeedImageReconciler struct {
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations,verbs=get;watch;list
 // TODO: restrict access to pods to the required namespace only
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;watch;create;list
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services/status,verbs=get
 
 // TODO: extend SetupWithManager with "Watches" and "WithEventFilter"
 func (r *SeedImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -106,7 +110,7 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 
 	controllerutil.AddFinalizer(seedImg, elementalv1.SeedImageFinalizer)
 
-	if err := r.createBuildImagePod(ctx, seedImg); err != nil {
+	if err := r.reconcileBuildImagePod(ctx, seedImg); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Status:  metav1.ConditionFalse,
@@ -140,7 +144,7 @@ func (r *SeedImageReconciler) reconcileDelete(ctx context.Context, seedImg *elem
 
 	logger.Info("Deleting pod and service resources")
 
-	if err := r.Client.Delete(ctx, &corev1.Pod{
+	if err := r.Delete(ctx, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: seedImg.Namespace,
 			Name:      seedImg.Name,
@@ -148,7 +152,7 @@ func (r *SeedImageReconciler) reconcileDelete(ctx context.Context, seedImg *elem
 		return ctrl.Result{}, fmt.Errorf("failed to delete pod: %w", err)
 	}
 
-	if err := r.Client.Delete(ctx, &corev1.Service{
+	if err := r.Delete(ctx, &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: seedImg.Namespace,
 			Name:      seedImg.Name,
@@ -161,10 +165,10 @@ func (r *SeedImageReconciler) reconcileDelete(ctx context.Context, seedImg *elem
 	return ctrl.Result{}, nil
 }
 
-func (r *SeedImageReconciler) createBuildImagePod(ctx context.Context, seedImg *elementalv1.SeedImage) error {
+func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedImg *elementalv1.SeedImage) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	logger.Info("Reconciling POD resources")
+	logger.Info("Reconciling Pod resources")
 
 	mRegistration := &elementalv1.MachineRegistration{}
 	if err := r.Get(ctx, types.NamespacedName{
@@ -174,18 +178,67 @@ func (r *SeedImageReconciler) createBuildImagePod(ctx context.Context, seedImg *
 		return err
 	}
 
+	podName := seedImg.Name
+	podNamespace := seedImg.Namespace
+	podBaseImg := seedImg.Spec.BaseImage
+	podRegURL := mRegistration.Status.RegistrationURL
+
+	foundPod := &corev1.Pod{}
+	err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if err == nil {
+		logger.V(5).Info("Pod already there")
+
+		// ensure the pod was created by us
+		podIsOwned := false
+		for _, owner := range foundPod.GetOwnerReferences() {
+			if owner.UID == seedImg.UID {
+				podIsOwned = true
+				break
+			}
+		}
+		if !podIsOwned {
+			return fmt.Errorf("pod already exists and was not created by this controller")
+		}
+
+		// pod is configured the same and is running flawlessy
+		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
+			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL {
+
+			if foundPod.Status.Phase == corev1.PodPending {
+				return nil
+			}
+			// update the DownloadURL only when the seed image is built and exposed
+			if foundPod.Status.Phase == corev1.PodRunning {
+				rancherURL, err := r.getRancherServerAddress(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get Rancher Server Address: %w", err)
+				}
+				svc := &corev1.Service{}
+				if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, svc); err != nil {
+					return fmt.Errorf("failed to get associated service: %w", err)
+				}
+				seedImg.Status.DownloadURL = fmt.Sprintf("http://%s:%d/elemental.iso", rancherURL, svc.Spec.Ports[0].NodePort)
+				return nil
+			}
+		}
+
+		// Pod is not up-to-date: delete and recreate it
+		if err := r.Delete(ctx, foundPod); err != nil {
+			return fmt.Errorf("failed to delete old pod: %w", err)
+		}
+	}
+
+	// apierrors.IsNotFound(err) OR we just deleted the old Pod
+
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg.Name, seedImg.Namespace,
-		seedImg.Spec.BaseImage, mRegistration.Status.RegistrationURL)
-	pod.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: elementalv1.GroupVersion.String(),
-			Kind:       "SeedImage",
-			Name:       seedImg.Name,
-			UID:        seedImg.UID,
-			Controller: pointer.Bool(true),
-		},
+	pod := fillBuildImagePod(podName, podNamespace, podBaseImg, podRegURL)
+	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
+		return err
 	}
 
 	if err := r.Create(ctx, pod); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -195,7 +248,24 @@ func (r *SeedImageReconciler) createBuildImagePod(ctx context.Context, seedImg *
 	return nil
 }
 
-func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
+func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (string, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	setting := &managementv3.Setting{}
+	if err := r.Get(ctx, types.NamespacedName{Name: "server-url"}, setting); err != nil {
+		return "", fmt.Errorf("failed to get server url setting: %w", err)
+	}
+
+	if setting.Value == "" {
+		err := fmt.Errorf("server-url is not set")
+		logger.Error(err, "can't get server-url")
+		return "", err
+	}
+
+	return strings.TrimPrefix(setting.Value, "https://"), nil
+}
+
+func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
 	const buildImage = "registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-builder-image/5.3:latest"
 	const serveImage = "registry.opensuse.org/opensuse/nginx:latest"
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
@@ -206,6 +276,10 @@ func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 			Name:      name,
 			Namespace: namespace,
 			Labels:    map[string]string{"app.kubernetes.io/name": name},
+			Annotations: map[string]string{
+				"elemental.cattle.io/base-image":       baseImg,
+				"elemental.cattle.io/registration-url": regURL,
+			},
 		},
 		Spec: corev1.PodSpec{
 			InitContainers: []corev1.Container{
@@ -223,7 +297,7 @@ func fillBuildImagePod(name, namespace, seedImgURL, regURL string) *corev1.Pod {
 					Command: []string{"/bin/bash", "-c"},
 					Args: []string{
 						fmt.Sprintf("%s; %s; %s",
-							fmt.Sprintf("curl -Lo base.img %s", seedImgURL),
+							fmt.Sprintf("curl -Lo base.img %s", baseImg),
 							fmt.Sprintf("curl -ko reg.yaml %s", regURL),
 							"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /reg.yaml -boot_image any replay"),
 					},
@@ -277,14 +351,9 @@ func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedI
 	logger.V(5).Info("Creating service")
 
 	service := fillBuildImageService(seedImg.Name, seedImg.Namespace)
-	service.OwnerReferences = []metav1.OwnerReference{
-		{
-			APIVersion: elementalv1.GroupVersion.String(),
-			Kind:       "SeedImage",
-			Name:       seedImg.Name,
-			UID:        seedImg.UID,
-			Controller: pointer.Bool(true),
-		},
+
+	if err := controllerutil.SetControllerReference(seedImg, service, r.Scheme()); err != nil {
+		return err
 	}
 
 	if err := r.Create(ctx, service); err != nil && !apierrors.IsAlreadyExists(err) {
