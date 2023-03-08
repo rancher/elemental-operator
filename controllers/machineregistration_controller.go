@@ -117,7 +117,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 	}
 
 	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
-		logger.V(5).Info("Machine registration is ready, no need to reconcile it")
+		logger.Info("Machine registration is ready, no need to reconcile it")
 		return ctrl.Result{}, nil
 	}
 
@@ -206,7 +206,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 		},
 	}
 
-	logger.V(5).Info("Creating role")
+	logger.Info("Creating role")
 	if err := r.Create(ctx, &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mRegistration.Name,
@@ -230,7 +230,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 		return fmt.Errorf("failed to create role: %w", err)
 	}
 
-	logger.V(5).Info("Creating service account")
+	logger.Info("Creating service account")
 	if err := r.Create(ctx, &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mRegistration.Name,
@@ -249,7 +249,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 		return fmt.Errorf("failed to create service account: %w", err)
 	}
 
-	logger.V(5).Info("Creating token secret for the service account")
+	logger.Info("Creating token secret for the service account")
 	if err := r.Create(ctx, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            mRegistration.Name + "-token",
@@ -267,7 +267,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 
-	logger.V(5).Info("Creating role binding")
+	logger.Info("Creating role binding")
 	if err := r.Create(ctx, &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       mRegistration.Namespace,
@@ -291,7 +291,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 		return fmt.Errorf("failed to create service account: %w", err)
 	}
 
-	logger.V(5).Info("Setting service account ref")
+	logger.Info("Setting service account ref")
 	mRegistration.Status.ServiceAccountRef = &corev1.ObjectReference{
 		Kind:      "ServiceAccount",
 		Namespace: mRegistration.Namespace,

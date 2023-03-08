@@ -157,7 +157,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	logger := ctrl.LoggerFrom(ctx)
 
 	if meta.IsStatusConditionTrue(managedOSImage.Status.Conditions, elementalv1.FleetBundleCreation) {
-		logger.V(5).Info("Fleet bundle already exists, skipping bundle resource creation")
+		logger.Info("Fleet bundle already exists, skipping bundle resource creation")
 		return nil, nil
 	}
 
@@ -332,7 +332,7 @@ func (r *ManagedOSImageReconciler) createFleetBundle(ctx context.Context, manage
 	logger := ctrl.LoggerFrom(ctx)
 
 	if meta.IsStatusConditionTrue(managedOSImage.Status.Conditions, elementalv1.FleetBundleCreation) {
-		logger.V(5).Info("Fleet bundle already exists, skipping bundle resource creation")
+		logger.Info("Fleet bundle already exists, skipping bundle resource creation")
 		return nil
 	}
 

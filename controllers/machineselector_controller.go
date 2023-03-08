@@ -165,7 +165,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef != nil {
-		logger.V(5).Info("machine inventory reference already set", "machineInvetoryName", miSelector.Status.MachineInventoryRef.Name)
+		logger.Info("machine inventory reference already set", "machineInvetoryName", miSelector.Status.MachineInventoryRef.Name)
 		return nil
 	}
 
@@ -237,12 +237,12 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.V(5).Info("Waiting for machine inventory to be adopted before updating plan secret")
+		logger.Info("Waiting for machine inventory to be adopted before updating plan secret")
 		return nil
 	}
 
 	if miSelector.Status.BootstrapPlanChecksum != "" {
-		logger.V(5).Info("Secret plan already updated with bootstrap")
+		logger.Info("Secret plan already updated with bootstrap")
 		return nil
 	}
 
@@ -257,7 +257,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	}
 
 	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
-		logger.V(5).Info("Machine inventory plan reference not set yet")
+		logger.Info("Machine inventory plan reference not set yet")
 		return nil
 	}
 
@@ -294,6 +294,8 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 }
 
 func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) (string, []byte, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
 	machine, err := r.getOwnerMachine(ctx, miSelector)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to find an owner machine for inventory selector: %w", err)
@@ -307,6 +309,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		return "", nil, fmt.Errorf("machine %s/%s missing bootstrap data secret name", machine.Namespace, machine.Name)
 	}
 
+	logger.Info("setting a bootstrap plan for the selector")
 	bootstrapSecret := &corev1.Secret{}
 
 	if err := r.Get(ctx, types.NamespacedName{
@@ -439,10 +442,10 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 func (r *MachineInventorySelectorReconciler) getOwnerMachine(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) (*clusterv1.Machine, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	logger.V(5).Info("Trying to find CAPI machine that owns machine inventory selector")
+	logger.Info("Trying to find CAPI machine that owns machine inventory selector")
 	for _, owner := range miSelector.GetOwnerReferences() {
 		if owner.APIVersion == clusterv1.GroupVersion.String() && owner.Kind == "Machine" {
-			logger.V(5).Info("Found owner CAPI machine for machine inventory selector", "capiMachineName", owner.Name)
+			logger.Info("Found owner CAPI machine for machine inventory selector", "capiMachineName", owner.Name)
 			machine := &clusterv1.Machine{}
 			err := r.Client.Get(ctx, types.NamespacedName{Namespace: miSelector.Namespace, Name: owner.Name}, machine)
 			return machine, err
@@ -456,7 +459,7 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.V(5).Info("Waiting for machine inventory to be adopted before setting adresses")
+		logger.Info("Waiting for machine inventory to be adopted before setting adresses")
 		return nil
 	}
 
