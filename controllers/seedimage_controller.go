@@ -204,25 +204,63 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 			return fmt.Errorf("pod already exists and was not created by this controller")
 		}
 
-		// pod is configured the same and is running flawlessy
+		// pod is already there and with the right configuration
 		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
 			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL {
 
-			if foundPod.Status.Phase == corev1.PodPending {
+			switch foundPod.Status.Phase {
+			case corev1.PodPending:
+				meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.SeedImageConditionReady,
+					Status:  metav1.ConditionFalse,
+					Reason:  elementalv1.SeedImageBuildOngoingReason,
+					Message: "seed image build ongoing",
+				})
 				return nil
-			}
-			// update the DownloadURL only when the seed image is built and exposed
-			if foundPod.Status.Phase == corev1.PodRunning {
+			case corev1.PodRunning:
 				rancherURL, err := r.getRancherServerAddress(ctx)
 				if err != nil {
-					return fmt.Errorf("failed to get Rancher Server Address: %w", err)
+					errMsg := fmt.Errorf("failed to get Rancher Server Address: %w", err)
+					meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+						Type:    elementalv1.SeedImageConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  elementalv1.SeedImageExposeFailureReason,
+						Message: errMsg.Error(),
+					})
+					return errMsg
 				}
 				svc := &corev1.Service{}
 				if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, svc); err != nil {
-					return fmt.Errorf("failed to get associated service: %w", err)
+					errMsg := fmt.Errorf("failed to get associated service: %w", err)
+					meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+						Type:    elementalv1.SeedImageConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  elementalv1.SeedImageExposeFailureReason,
+						Message: errMsg.Error(),
+					})
+					return errMsg
 				}
 				seedImg.Status.DownloadURL = fmt.Sprintf("http://%s:%d/elemental.iso", rancherURL, svc.Spec.Ports[0].NodePort)
+				meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.SeedImageConditionReady,
+					Status:  metav1.ConditionTrue,
+					Reason:  elementalv1.SeedImageBuildSuccessReason,
+					Message: "seed image iso available",
+				})
 				return nil
+			case corev1.PodFailed:
+				meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.SeedImageConditionReady,
+					Status:  metav1.ConditionFalse,
+					Reason:  elementalv1.SeedImageBuildFailureReason,
+					Message: "pod failed",
+				})
+				return nil
+			default:
+				meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+					Type:   elementalv1.SeedImageConditionReady,
+					Status: metav1.ConditionUnknown,
+				})
 			}
 		}
 
