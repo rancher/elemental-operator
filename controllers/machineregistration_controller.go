@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
@@ -69,7 +70,7 @@ func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req recon
 	err := r.Get(ctx, req.NamespacedName, mRegistration)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Object was not found, registration client has to create it")
+			logger.V(log.DebugDepth).Info("Object was not found, not an error")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get machine registration object: %w", err)
