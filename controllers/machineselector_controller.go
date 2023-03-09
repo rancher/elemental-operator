@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
@@ -80,7 +81,7 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 	err := r.Get(ctx, req.NamespacedName, machineInventorySelector)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Object was not found")
+			logger.V(log.DebugDepth).Info("Object was not found, not an error")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get machine inventory selector object: %w", err)

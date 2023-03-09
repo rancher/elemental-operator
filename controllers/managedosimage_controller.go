@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
@@ -84,7 +85,7 @@ func (r *ManagedOSImageReconciler) Reconcile(ctx context.Context, req reconcile.
 	err := r.Get(ctx, req.NamespacedName, managedOSImage)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Object was not found, not an error")
+			logger.V(log.DebugDepth).Info("Object was not found, not an error")
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get managed OS image object: %w", err)
