@@ -110,6 +110,13 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 
 	controllerutil.AddFinalizer(seedImg, elementalv1.SeedImageFinalizer)
 
+	// Init the Ready condition as we want it to be the first one displayed
+	meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+		Type:   elementalv1.ReadyCondition,
+		Reason: elementalv1.ResourcesSuccessfullyCreatedReason,
+		Status: metav1.ConditionUnknown,
+	})
+
 	if err := r.reconcileBuildImagePod(ctx, seedImg); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
@@ -131,9 +138,10 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 	}
 
 	meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
-		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.ResourcesSuccessfullyCreatedReason,
-		Status: metav1.ConditionTrue,
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.ResourcesSuccessfullyCreatedReason,
+		Status:  metav1.ConditionTrue,
+		Message: "resources created successfully",
 	})
 
 	return ctrl.Result{}, nil
@@ -276,13 +284,31 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	pod := fillBuildImagePod(podName, podNamespace, podBaseImg, podRegURL)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.SeedImageConditionReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  elementalv1.SeedImageBuildNotStartedReason,
+			Message: err.Error(),
+		})
 		return err
 	}
 
 	if err := r.Create(ctx, pod); err != nil && !apierrors.IsAlreadyExists(err) {
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.SeedImageConditionReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  elementalv1.SeedImageBuildNotStartedReason,
+			Message: err.Error(),
+		})
 		return err
 	}
 
+	meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.SeedImageConditionReady,
+		Status:  metav1.ConditionFalse,
+		Reason:  elementalv1.SeedImageBuildOngoingReason,
+		Message: "seed image build started",
+	})
 	return nil
 }
 
