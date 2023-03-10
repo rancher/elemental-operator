@@ -104,3 +104,30 @@ const (
 	// FleetBundleCreateFailureReason documents that managed OS image controller failed to create fleet bundle.
 	FleetBundleCreateFailureReason = "FleetBundleCreateFailure"
 )
+
+// Seed Image conditions
+const (
+	// PodCreationFailureReason documents Pod creation failure.
+	PodCreationFailureReason = "PodCreationFailure"
+
+	// ServiceCreationFailureReason documents Service creation failure.
+	ServiceCreationFailureReason = "ServiceCreationFailure"
+
+	// ResourcesSuccessfullyCreatedReason documents all the resources needed to start the build image task were successfully created.
+	ResourcesSuccessfullyCreatedReason = "ResourcesSuccessfullyCreated"
+)
+
+const (
+	// SeedImageConditionReady is the condition type tracking the state of the seed image build pod.
+	SeedImageConditionReady = "SeedImageReady"
+	// SeedImageBuildNotStartedReason documents seed image build job not started.
+	SeedImageBuildNotStartedReason = "SeedImageBuildNotStarted"
+	// SeedImageBuildOngoingReason documents seed image build job is ongoing.
+	SeedImageBuildOngoingReason = "SeedImageBuildOngoing"
+	// SeedImageBuildFailureReason documents seed image build job failure.
+	SeedImageBuildFailureReason = "SeedImageBuildFailure"
+	// SeedIMageExposeFailureReason documents failure to set the URL to download the seed image.
+	SeedImageExposeFailureReason = "SeedImageExposeFailure"
+	// SeedImageBuildSuccessReason documents seed image build job success.
+	SeedImageBuildSuccessReason = "SeedImageBuildSuccess"
+)

@@ -21,11 +21,19 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ""
   resources:
   - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
   verbs:
   - get
 - apiGroups:
@@ -59,7 +67,15 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
 - apiGroups:
   - cluster.x-k8s.io
   resources:
@@ -187,6 +203,26 @@ rules:
   - elemental.cattle.io
   resources:
   - managedosversions/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - seedimages
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - seedimages/status
   verbs:
   - get
   - patch
