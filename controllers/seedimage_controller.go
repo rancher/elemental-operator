@@ -105,11 +105,13 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 	logger.Info("Reconciling seedimage object")
 
 	// Init the Ready condition as we want it to be the first one displayed
-	meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
-		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.ResourcesSuccessfullyCreatedReason,
-		Status: metav1.ConditionUnknown,
-	})
+	if readyCond := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.ReadyCondition); readyCond == nil {
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.ReadyCondition,
+			Reason: elementalv1.ResourcesSuccessfullyCreatedReason,
+			Status: metav1.ConditionUnknown,
+		})
+	}
 
 	if err := r.reconcileBuildImagePod(ctx, seedImg); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
@@ -183,6 +185,11 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		// pod is already there and with the right configuration
 		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
 			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL {
+
+			// no need to reconcile
+			if meta.IsStatusConditionTrue(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady) {
+				return nil
+			}
 
 			switch foundPod.Status.Phase {
 			case corev1.PodPending:
@@ -379,6 +386,29 @@ func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedI
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling Service resources")
+
+	svcName := seedImg.Name
+	svcNamespace := seedImg.Namespace
+
+	foundSvc := &corev1.Service{}
+	err := r.Get(ctx, types.NamespacedName{Name: svcName, Namespace: svcNamespace}, foundSvc)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if err == nil {
+		logger.V(5).Info("Service already there")
+
+		// ensure the service was created by us
+		for _, owner := range foundSvc.GetOwnerReferences() {
+			if owner.UID == seedImg.UID {
+				// nothing to do
+				return nil
+			}
+		}
+
+		return fmt.Errorf("service already exists and was not created by this controller")
+	}
 
 	logger.V(5).Info("Creating service")
 
