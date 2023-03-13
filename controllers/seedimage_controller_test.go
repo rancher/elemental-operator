@@ -35,6 +35,8 @@ var _ = Describe("reconcile seed image", func() {
 	var mRegistration *elementalv1.MachineRegistration
 	var seedImg *elementalv1.SeedImage
 	var setting *managementv3.Setting
+	var pod *corev1.Pod
+	var service *corev1.Service
 
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
@@ -70,13 +72,27 @@ var _ = Describe("reconcile seed image", func() {
 			Value: "https://example.com",
 		}
 
+		pod = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
 		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 		Expect(cl.Create(ctx, seedImg)).To(Succeed())
 		Expect(cl.Create(ctx, setting)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, setting)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, setting, pod, service)).To(Succeed())
 	})
 
 	It("should reconcile seed image object", func() {
@@ -99,5 +115,138 @@ var _ = Describe("reconcile seed image", func() {
 		Expect(seedImg.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 		Expect(seedImg.Status.Conditions[1].Type).To(Equal(elementalv1.SeedImageConditionReady))
 		Expect(seedImg.Status.Conditions[1].Status).To(Equal(metav1.ConditionFalse))
+
+		objKey := types.NamespacedName{Namespace: seedImg.Namespace, Name: seedImg.Name}
+		Expect(r.Get(ctx, objKey, &corev1.Pod{})).To(Succeed())
+		Expect(r.Get(ctx, objKey, &corev1.Service{})).To(Succeed())
+
+	})
+
+	It("should reconcile seed image object with a deletion timestamp", func() {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+		_, err := r.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Delete(ctx, seedImg)).To(Succeed())
+
+		_, err = r.Reconcile(ctx, req)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(seedImg.Finalizers).To(HaveLen(0))
+		objKey := types.NamespacedName{
+			Namespace: seedImg.Namespace,
+			Name:      seedImg.Name,
+		}
+		Expect(r.Get(ctx, objKey, &corev1.Pod{})).ToNot(Succeed())
+		Expect(r.Get(ctx, objKey, &corev1.Service{})).ToNot(Succeed())
+	})
+})
+
+var _ = Describe("reconcileBuildImagePod", func() {
+	var r *SeedImageReconciler
+	var mRegistration *elementalv1.MachineRegistration
+	var seedImg *elementalv1.SeedImage
+	var pod *corev1.Pod
+	var svc *corev1.Service
+
+	BeforeEach(func() {
+		r = &SeedImageReconciler{
+			Client: cl,
+		}
+
+		mRegistration = &elementalv1.MachineRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+		}
+
+		seedImg = &elementalv1.SeedImage{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage: "https://example.com/base.iso",
+				MachineRegistrationRef: &corev1.ObjectReference{
+					Name:      mRegistration.Name,
+					Namespace: mRegistration.Namespace,
+				},
+			},
+		}
+
+		pod = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      seedImg.Name,
+				Namespace: seedImg.Namespace,
+			},
+		}
+
+		svc = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, pod, svc)).To(Succeed())
+	})
+
+	It("should return error when a pod with the same name but different owner is there", func() {
+		pod.Spec.Containers = []corev1.Container{
+			{
+				Name:  "nginx",
+				Image: "nginx:latest",
+			},
+		}
+
+		Expect(cl.Create(ctx, pod)).To(Succeed())
+
+		err := r.reconcileBuildImagePod(ctx, seedImg)
+
+		// Pod already there and not owned by the SeedImage obj
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should recreate the pod if the pod is owned but the base iso is different", func() {
+
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, seedImg)).To(Succeed())
+
+		foundPod := &corev1.Pod{}
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
+
+		seedImg.Spec.BaseImage = "https://example.com/new-base.iso"
+		err = r.reconcileBuildImagePod(ctx, seedImg)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
 	})
 })
