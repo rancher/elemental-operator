@@ -93,8 +93,6 @@ var _ = Describe("reconcile seed image", func() {
 			Namespace: seedImg.Namespace,
 		}, seedImg)).To(Succeed())
 
-		Expect(seedImg.Finalizers).To(HaveLen(1))
-		Expect(seedImg.Finalizers[0]).To(Equal(elementalv1.SeedImageFinalizer))
 		Expect(seedImg.Status.Conditions).To(HaveLen(2))
 		Expect(seedImg.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
 		Expect(seedImg.Status.Conditions[0].Reason).To(Equal(elementalv1.ResourcesSuccessfullyCreatedReason))

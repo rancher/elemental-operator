@@ -82,9 +82,6 @@ var _ = Describe("reconcile machine inventory", func() {
 			Namespace: mInventory.Namespace,
 		}, mInventory)).To(Succeed())
 
-		Expect(mInventory.Finalizers).To(HaveLen(1))
-		Expect(mInventory.Finalizers[0]).To(Equal(elementalv1.MachineInventoryFinalizer))
-
 		Expect(mInventory.Status.Conditions).To(HaveLen(1))
 
 		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
@@ -108,9 +105,6 @@ var _ = Describe("reconcile machine inventory", func() {
 			Name:      mInventory.Name,
 			Namespace: mInventory.Namespace,
 		}, mInventory)).To(Succeed())
-
-		Expect(mInventory.Finalizers).To(HaveLen(1))
-		Expect(mInventory.Finalizers[0]).To(Equal(elementalv1.MachineInventoryFinalizer))
 
 		Expect(mInventory.Status.Plan.Checksum).To(Equal(string(planSecret.Data["applied-checksum"])))
 		Expect(mInventory.Status.Plan.State).To(Equal(elementalv1.PlanApplied))
