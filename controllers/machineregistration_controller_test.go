@@ -82,8 +82,6 @@ var _ = Describe("reconcile machine registration", func() {
 			Namespace: mRegistration.Namespace,
 		}, mRegistration)).To(Succeed())
 
-		Expect(mRegistration.Finalizers).To(HaveLen(1))
-		Expect(mRegistration.Finalizers[0]).To(Equal(elementalv1.MachineRegistrationFinalizer))
 		Expect(mRegistration.Status.RegistrationToken).ToNot(BeEmpty())
 		Expect(mRegistration.Status.RegistrationURL).To(ContainSubstring("https://example.com/elemental/registration/"))
 		Expect(mRegistration.Status.ServiceAccountRef.Kind).To(Equal("ServiceAccount"))
@@ -99,29 +97,6 @@ var _ = Describe("reconcile machine registration", func() {
 		Expect(r.Get(ctx, objKey, &corev1.ServiceAccount{})).To(Succeed())
 		Expect(r.Get(ctx, objKey, &rbacv1.RoleBinding{})).To(Succeed())
 		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, &corev1.Secret{})).To(Succeed())
-	})
-
-	It("should reconcile machine registration object with a deletion timestamp", func() {
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: mRegistration.Namespace,
-				Name:      mRegistration.Name,
-			},
-		}
-		_, err := r.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-
-		Expect(cl.Delete(ctx, mRegistration)).To(Succeed())
-
-		_, err = r.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-
-		Expect(mRegistration.Finalizers).To(HaveLen(0))
-		objKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name}
-		Expect(r.Get(ctx, objKey, &rbacv1.Role{})).ToNot(Succeed())
-		Expect(r.Get(ctx, objKey, &corev1.ServiceAccount{})).ToNot(Succeed())
-		Expect(r.Get(ctx, objKey, &rbacv1.RoleBinding{})).ToNot(Succeed())
-		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, &corev1.Secret{})).ToNot(Succeed())
 	})
 })
 
@@ -140,6 +115,10 @@ var _ = Describe("setRegistrationTokenAndURL", func() {
 				Namespace: "default",
 			},
 		}
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration)).To(Succeed())
 	})
 
 	It("should successfully set registration token and url", func() {
@@ -193,7 +172,7 @@ var _ = Describe("createRBACObjects", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
-				UID:       "test",
+				UID:       "testuid",
 			},
 		}
 
@@ -217,7 +196,7 @@ var _ = Describe("createRBACObjects", func() {
 	})
 
 	AfterEach(func() {
-		test.CleanupAndWait(ctx, cl, role, sa, roleBinding, secret)
+		Expect(test.CleanupAndWait(ctx, cl, role, sa, roleBinding, secret, mRegistration)).To(Succeed())
 	})
 
 	It("should successfully create RBAC objects", func() {
