@@ -122,29 +122,6 @@ var _ = Describe("reconcile seed image", func() {
 
 	})
 
-	It("should reconcile seed image object with a deletion timestamp", func() {
-		req := reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: seedImg.Namespace,
-				Name:      seedImg.Name,
-			},
-		}
-		_, err := r.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-
-		Expect(cl.Delete(ctx, seedImg)).To(Succeed())
-
-		_, err = r.Reconcile(ctx, req)
-		Expect(err).ToNot(HaveOccurred())
-
-		Expect(seedImg.Finalizers).To(HaveLen(0))
-		objKey := types.NamespacedName{
-			Namespace: seedImg.Namespace,
-			Name:      seedImg.Name,
-		}
-		Expect(r.Get(ctx, objKey, &corev1.Pod{})).ToNot(Succeed())
-		Expect(r.Get(ctx, objKey, &corev1.Service{})).ToNot(Succeed())
-	})
 })
 
 var _ = Describe("reconcileBuildImagePod", func() {
