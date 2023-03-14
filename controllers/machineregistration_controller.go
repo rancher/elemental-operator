@@ -34,7 +34,6 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -113,16 +112,10 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 	logger.Info("Reconciling machineregistration object")
 
-	if mRegistration.GetDeletionTimestamp() != nil {
-		return r.reconcileDelete(ctx, mRegistration)
-	}
-
 	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
 		logger.Info("Machine registration is ready, no need to reconcile it")
 		return ctrl.Result{}, nil
 	}
-
-	controllerutil.AddFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
 
 	if err := r.setRegistrationTokenAndURL(ctx, mRegistration); err != nil {
 		meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
@@ -300,45 +293,6 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 	}
 
 	return nil
-}
-
-func (r *MachineRegistrationReconciler) reconcileDelete(ctx context.Context, mRegistration *elementalv1.MachineRegistration) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	logger.Info("Deleting RBAC resources")
-
-	if err := r.Client.Delete(ctx, &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: mRegistration.Namespace,
-			Name:      mRegistration.Name,
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete role: %w", err)
-	}
-	if err := r.Client.Delete(ctx, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: mRegistration.Namespace,
-			Name:      mRegistration.Name,
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete service account: %w", err)
-	}
-	if err := r.Client.Delete(ctx, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: mRegistration.Namespace,
-			Name:      mRegistration.Name + "-token",
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete service account: %w", err)
-	}
-	if err := r.Client.Delete(ctx, &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: mRegistration.Namespace,
-			Name:      mRegistration.Name,
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete role binding: %w", err)
-	}
-
-	controllerutil.RemoveFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
-
-	return ctrl.Result{}, nil
 }
 
 func (r *MachineRegistrationReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
