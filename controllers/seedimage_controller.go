@@ -104,12 +104,6 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 
 	logger.Info("Reconciling seedimage object")
 
-	if seedImg.GetDeletionTimestamp() != nil {
-		return r.reconcileDelete(ctx, seedImg)
-	}
-
-	controllerutil.AddFinalizer(seedImg, elementalv1.SeedImageFinalizer)
-
 	// Init the Ready condition as we want it to be the first one displayed
 	meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
@@ -143,32 +137,6 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 		Status:  metav1.ConditionTrue,
 		Message: "resources created successfully",
 	})
-
-	return ctrl.Result{}, nil
-}
-
-func (r *SeedImageReconciler) reconcileDelete(ctx context.Context, seedImg *elementalv1.SeedImage) (ctrl.Result, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	logger.Info("Deleting pod and service resources")
-
-	if err := r.Delete(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: seedImg.Namespace,
-			Name:      seedImg.Name,
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete pod: %w", err)
-	}
-
-	if err := r.Delete(ctx, &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: seedImg.Namespace,
-			Name:      seedImg.Name,
-		}}); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("failed to delete service: %w", err)
-	}
-
-	controllerutil.RemoveFinalizer(seedImg, elementalv1.SeedImageFinalizer)
 
 	return ctrl.Result{}, nil
 }

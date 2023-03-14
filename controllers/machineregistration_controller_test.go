@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -302,79 +301,6 @@ var _ = Describe("createRBACObjects", func() {
 		err := r.createRBACObjects(ctx, mRegistration)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to create"))
-	})
-})
-
-var _ = Describe("reconcileDelete", func() {
-	var r *MachineRegistrationReconciler
-	var mRegistration *elementalv1.MachineRegistration
-	var role *rbacv1.Role
-	var sa *corev1.ServiceAccount
-	var roleBinding *rbacv1.RoleBinding
-	var secret *corev1.Secret
-
-	BeforeEach(func() {
-		r = &MachineRegistrationReconciler{
-			Client: cl,
-		}
-
-		mRegistration = &elementalv1.MachineRegistration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-name",
-				Namespace: "default",
-				UID:       "test",
-			},
-		}
-
-		objMeta := metav1.ObjectMeta{Namespace: mRegistration.Namespace, Name: mRegistration.Name}
-		role = &rbacv1.Role{ObjectMeta: objMeta}
-		sa = &corev1.ServiceAccount{ObjectMeta: objMeta}
-		roleBinding = &rbacv1.RoleBinding{
-			ObjectMeta: objMeta,
-			RoleRef: rbacv1.RoleRef{
-				Kind:     "Role",
-				Name:     mRegistration.Name,
-				APIGroup: "rbac.authorization.k8s.io",
-			},
-		}
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: mRegistration.Namespace,
-				Name:      mRegistration.Name + "-token",
-			},
-		}
-	})
-
-	AfterEach(func() {
-		test.CleanupAndWait(ctx, cl, role, sa, roleBinding, secret)
-	})
-
-	It("should successfully delete RBAC objects", func() {
-		controllerutil.AddFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
-		Expect(r.createRBACObjects(ctx, mRegistration)).To(Succeed())
-		_, err := r.reconcileDelete(ctx, mRegistration)
-		Expect(err).ToNot(HaveOccurred())
-		objKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name}
-		Expect(r.Get(ctx, objKey, &rbacv1.Role{})).ToNot(Succeed())
-		Expect(r.Get(ctx, objKey, &corev1.ServiceAccount{})).ToNot(Succeed())
-		Expect(r.Get(ctx, objKey, &rbacv1.RoleBinding{})).ToNot(Succeed())
-		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, &corev1.Secret{})).ToNot(Succeed())
-		Expect(mRegistration.Finalizers).To(HaveLen(0))
-	})
-
-	It("shouldn't error when RBAC already deleted", func() {
-		Expect(r.createRBACObjects(ctx, mRegistration)).To(Succeed())
-		_, err := r.reconcileDelete(ctx, mRegistration)
-		Expect(err).ToNot(HaveOccurred())
-		_, err = r.reconcileDelete(ctx, mRegistration)
-		Expect(err).ToNot(HaveOccurred())
-	})
-
-	It("should error when RBAC fails to be deleted", func() {
-		r.Client = machineRegistrationFailingClient{}
-		_, err := r.reconcileDelete(ctx, mRegistration)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to delete"))
 	})
 })
 
