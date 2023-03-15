@@ -87,11 +87,18 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	}
 	// no error and no inventory: Auth header is missing or unrecognized
 	if inventory == nil {
-		log.Warningf("websocket connection: unrecognized authentication method")
+		if authHeader := req.Header.Get("Authorization"); authHeader != "" {
+			errMsg := "unrecognized authentication method"
+			log.Errorf("websocket connection: %s", errMsg)
+			return err
+		}
+
+		log.Warning("unauthenticated websocket connection")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
 			log.Errorf("error sending unauthenticated response: %w", err)
+			return err
 		}
-		return err
+		return nil
 	}
 	log.Debugf("attestation completed")
 
