@@ -39,19 +39,31 @@ var _ = Describe("reconcile machine registration", func() {
 	var r *MachineRegistrationReconciler
 	var mRegistration *elementalv1.MachineRegistration
 	var setting *managementv3.Setting
+	var role *rbacv1.Role
+	var roleBinding *rbacv1.RoleBinding
+	var sa *corev1.ServiceAccount
+	var secret *corev1.Secret
 
 	BeforeEach(func() {
 		r = &MachineRegistrationReconciler{
 			Client: cl,
 		}
 
-		mRegistration = &elementalv1.MachineRegistration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-name",
-				Namespace: "default",
-			},
+		objKey := metav1.ObjectMeta{
+			Name:      "test-name",
+			Namespace: "default",
 		}
 
+		mRegistration = &elementalv1.MachineRegistration{ObjectMeta: objKey}
+		role = &rbacv1.Role{ObjectMeta: objKey}
+		roleBinding = &rbacv1.RoleBinding{ObjectMeta: objKey}
+		sa = &corev1.ServiceAccount{ObjectMeta: objKey}
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: mRegistration.Namespace,
+				Name:      mRegistration.Name + "-token",
+			},
+		}
 		setting = &managementv3.Setting{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "server-url",
@@ -65,7 +77,7 @@ var _ = Describe("reconcile machine registration", func() {
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, mRegistration, setting)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, setting, role, roleBinding, sa, secret)).To(Succeed())
 	})
 
 	It("should reconcile machine registration object", func() {
