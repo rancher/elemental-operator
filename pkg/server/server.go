@@ -22,7 +22,6 @@ import (
 	"html"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,8 +43,7 @@ type authenticator interface {
 type InventoryServer struct {
 	client.Client
 	context.Context
-	authenticators    []authenticator
-	registrationCache *registrationCache
+	authenticators []authenticator
 }
 
 func New(ctx context.Context, cl client.Client) *InventoryServer {
@@ -54,10 +52,6 @@ func New(ctx context.Context, cl client.Client) *InventoryServer {
 		Context: ctx,
 		authenticators: []authenticator{
 			tpm.New(ctx, cl),
-		},
-		registrationCache: &registrationCache{
-			Mutex:         &sync.Mutex{},
-			registrations: make(map[string]registrationData),
 		},
 	}
 
@@ -80,11 +74,6 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	api := splittedPath[0]
 
 	switch api {
-	case "build-image":
-		if err := i.apiBuildImage(resp, req); err != nil {
-			log.Errorf("build-image: %s", err.Error())
-			return
-		}
 	case "registration":
 		if err := i.apiRegistration(resp, req); err != nil {
 			log.Errorf("registration: %s", err.Error())
