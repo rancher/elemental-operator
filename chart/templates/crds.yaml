@@ -2632,6 +2632,9 @@ spec:
                   - type
                   type: object
                 type: array
+              downloadToken:
+                description: DownloadToken a token to identify the seed image to download.
+                type: string
               downloadURL:
                 description: DownloadURL the URL from which the SeedImage can be downloaded
                   once built.
