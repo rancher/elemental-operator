@@ -79,6 +79,12 @@ func (i *InventoryServer) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 			log.Errorf("registration: %s", err.Error())
 			return
 		}
+	case "seedimage":
+		if err := i.apiSeedImage(resp, req, splittedPath); err != nil {
+			log.Errorf("seedimage download: %s", err.Error())
+			return
+		}
+
 	default:
 		log.Errorf("Unknown API: %s", api)
 		http.Error(resp, fmt.Sprintf("unknwon api: %s", api), http.StatusBadRequest)
