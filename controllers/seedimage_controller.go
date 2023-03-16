@@ -35,6 +35,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/randomtoken"
 )
 
 type SeedImageReconciler struct {
@@ -212,8 +213,8 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 					})
 					return errMsg
 				}
-				svc := &corev1.Service{}
-				if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, svc); err != nil {
+				// Let's check here we have an associated Service, so the iso could be downloaded
+				if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, &corev1.Service{}); err != nil {
 					errMsg := fmt.Errorf("failed to get associated service: %w", err)
 					meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 						Type:    elementalv1.SeedImageConditionReady,
@@ -223,7 +224,19 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 					})
 					return errMsg
 				}
-				seedImg.Status.DownloadURL = fmt.Sprintf("http://%s:%d/elemental.iso", rancherURL, svc.Spec.Ports[0].NodePort)
+				token, err := randomtoken.Generate()
+				if err != nil {
+					errMsg := fmt.Errorf("failed to generate registration token: %s", err.Error())
+					meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+						Type:    elementalv1.SeedImageConditionReady,
+						Status:  metav1.ConditionFalse,
+						Reason:  elementalv1.SeedImageExposeFailureReason,
+						Message: errMsg.Error(),
+					})
+					return errMsg
+				}
+				seedImg.Status.DownloadToken = token
+				seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s/elemental.iso", rancherURL, token)
 				meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 					Type:    elementalv1.SeedImageConditionReady,
 					Status:  metav1.ConditionTrue,
