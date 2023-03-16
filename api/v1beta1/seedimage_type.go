@@ -47,6 +47,9 @@ type SeedImageStatus struct {
 	// Conditions describe the state of the machine registration object.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	// DownloadToken a token to identify the seed image to download.
+	// +optional
+	DownloadToken string `json:"downloadToken,omitempty"`
 	// DownloadURL the URL from which the SeedImage can be downloaded once built.
 	// +optional
 	DownloadURL string `json:"downloadURL,omitempty"`
