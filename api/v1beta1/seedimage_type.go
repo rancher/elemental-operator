@@ -21,10 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	SeedImageFinalizer = "seedimage.elemental.cattle.io"
-)
-
 type SeedImageSpec struct {
 	// BaseImg the base elemental image used to build the seed image.
 	// +optional

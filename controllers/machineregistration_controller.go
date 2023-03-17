@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -111,6 +112,11 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling machineregistration object")
+
+	if mRegistration.GetDeletionTimestamp() != nil {
+		controllerutil.RemoveFinalizer(mRegistration, elementalv1.MachineRegistrationFinalizer)
+		return ctrl.Result{}, nil
+	}
 
 	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
 		logger.Info("Machine registration is ready, no need to reconcile it")

@@ -30,6 +30,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -114,6 +115,11 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling machineinventory object")
+
+	if mInventory.GetDeletionTimestamp() != nil {
+		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+		return ctrl.Result{}, nil
+	}
 
 	if err := r.createPlanSecret(ctx, mInventory); err != nil {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
