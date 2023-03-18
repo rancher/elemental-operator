@@ -360,7 +360,7 @@ func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
 						fmt.Sprintf("%s && %s && %s",
 							fmt.Sprintf("curl -Lo base.img %s", baseImg),
 							fmt.Sprintf("curl -ko reg.yaml %s", regURL),
-							"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /reg.yaml -boot_image any replay"),
+							"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /livecd-cloud-config.yaml -boot_image any replay"),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
