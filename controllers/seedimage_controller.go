@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -33,9 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 type SeedImageReconciler struct {
@@ -162,8 +165,18 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	podBaseImg := seedImg.Spec.BaseImage
 	podRegURL := mRegistration.Status.RegistrationURL
 
+	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
+	if err != nil {
+		return err
+	}
+
+	podCloudConfigb64 := ""
+	if len(cloudConfig) != 0 {
+		podCloudConfigb64 = base64.StdEncoding.EncodeToString(cloudConfig)
+	}
+
 	foundPod := &corev1.Pod{}
-	err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
+	err = r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
@@ -185,7 +198,8 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 		// pod is already there and with the right configuration
 		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
-			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL {
+			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL &&
+			foundPod.Annotations["elemental.cattle.io/cloud-config-b64"] == podCloudConfigb64 {
 
 			return r.updateStatusFromPod(ctx, seedImg, foundPod)
 		}
@@ -200,7 +214,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, podBaseImg, podRegURL)
+	pod := fillBuildImagePod(podName, podNamespace, podBaseImg, podRegURL, podCloudConfigb64)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -326,11 +340,18 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
+func fillBuildImagePod(name, namespace, baseImg, regURL, base64CloudConfig string) *corev1.Pod {
 	const buildImage = "registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-builder-image/5.3:latest"
 	const serveImage = "registry.opensuse.org/opensuse/nginx:latest"
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
+
+	buildCommands := []string{
+		fmt.Sprintf("echo %s | base64 --decode > cloud-config.yaml", base64CloudConfig),
+		fmt.Sprintf("curl -Lo base.img %s", baseImg),
+		fmt.Sprintf("curl -ko reg.yaml %s", regURL),
+		"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /livecd-cloud-config.yaml -map cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay",
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -340,6 +361,7 @@ func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
 			Annotations: map[string]string{
 				"elemental.cattle.io/base-image":       baseImg,
 				"elemental.cattle.io/registration-url": regURL,
+				"elemental.cattle.io/cloud-config-b64": base64CloudConfig,
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -356,12 +378,7 @@ func fillBuildImagePod(name, namespace, baseImg, regURL string) *corev1.Pod {
 						},
 					},
 					Command: []string{"/bin/bash", "-c"},
-					Args: []string{
-						fmt.Sprintf("%s && %s && %s",
-							fmt.Sprintf("curl -Lo base.img %s", baseImg),
-							fmt.Sprintf("curl -ko reg.yaml %s", regURL),
-							"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /livecd-cloud-config.yaml -boot_image any replay"),
-					},
+					Args:    []string{strings.Join(buildCommands, " && ")},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",

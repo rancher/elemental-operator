@@ -52,7 +52,6 @@ const (
 	resolvConf            = "/etc/resolv.conf"
 	oemDir                = "/oem/"
 	systemOEMDir          = "/system/oem"
-	DebugDepth            = 4
 )
 
 func getServices() []string {

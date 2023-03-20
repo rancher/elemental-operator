@@ -37,6 +37,10 @@ spec:
                 description: BaseImg the base elemental image used to build the seed
                   image.
                 type: string
+              cloud-config:
+                description: CloudConfig contains cloud-config data to be put in the
+                  generated iso.
+                x-kubernetes-preserve-unknown-fields: true
               registrationRef:
                 description: MachineRegistrationRef a reference to the related MachineRegistration.
                 properties:

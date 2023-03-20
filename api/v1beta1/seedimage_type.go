@@ -19,6 +19,7 @@ package v1beta1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type SeedImageSpec struct {
@@ -27,6 +28,11 @@ type SeedImageSpec struct {
 	BaseImage string `json:"baseImage"`
 	// MachineRegistrationRef a reference to the related MachineRegistration.
 	MachineRegistrationRef *corev1.ObjectReference `json:"registrationRef"`
+	// CloudConfig contains cloud-config data to be put in the generated iso.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +optional
+	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
 }
 
 type SeedImageState string
