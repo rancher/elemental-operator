@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,9 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
+
+// Timeout to validate machine inventory adoption
+const adoptionTimeout = 5
 
 // MachineInventoryReconciler reconciles a MachineInventory object.
 type MachineInventoryReconciler struct {
@@ -124,7 +128,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 	if err := r.createPlanSecret(ctx, mInventory); err != nil {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
-			Reason:  elementalv1.SuccessfullyCreatedPlanReason,
+			Reason:  elementalv1.PlanCreationFailureReason,
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
@@ -141,13 +145,26 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 		return ctrl.Result{}, fmt.Errorf("failed to update inventory status with plan %w", err)
 	}
 
+	if requeue, err := r.updateInventoryWithAdoptionStatus(ctx, mInventory); err != nil {
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.AdoptionReadyCondition,
+			Reason:  elementalv1.AdoptionFailureReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+		return ctrl.Result{}, fmt.Errorf("failed to update inventory status with plan %w", err)
+	} else if requeue {
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 
 func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
 	logger := ctrl.LoggerFrom(ctx)
 
-	if readyCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition); readyCondition != nil {
+	readyCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition)
+	if readyCondition != nil && readyCondition.Reason != elementalv1.PlanCreationFailureReason {
 		logger.Info("Skipping plan secret creation because ready condition is already set")
 		return nil
 	}
@@ -245,6 +262,77 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 	}
 }
 
+// updateInventoryWithAdoptionStatus computes sanity checks on owner references to verify inventory owner is properly set.
+// Returns true if a requeue to wait for owner setup is required, false if no requeue is needed.
+func (r *MachineInventoryReconciler) updateInventoryWithAdoptionStatus(ctx context.Context, mInventory *elementalv1.MachineInventory) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	owner := getSelectorOwner(mInventory)
+	if owner == nil {
+		logger.V(log.DebugDepth).Info("Waiting to be adopted")
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.AdoptionReadyCondition,
+			Reason:  elementalv1.WaitingToBeAdoptedReason,
+			Status:  metav1.ConditionFalse,
+			Message: "Waiting to be adopted",
+		})
+		return false, nil
+	}
+
+	adoptedCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+	if adoptedCondition != nil && adoptedCondition.Status == metav1.ConditionTrue {
+		logger.V(log.DebugDepth).Info("Inventory already adopted")
+		return false, nil
+	}
+
+	miSelector := &elementalv1.MachineInventorySelector{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: mInventory.Namespace,
+		Name:      owner.Name,
+	},
+		miSelector,
+	); err != nil {
+		return false, fmt.Errorf("failed to get machine inventory selector: %w", err)
+	}
+
+	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.AdoptionReadyCondition,
+		Reason:  elementalv1.ValidatingAdoptionReason,
+		Status:  metav1.ConditionUnknown,
+		Message: "Adoption being validated",
+	})
+	adoptedCondition = meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+
+	deadLine := adoptedCondition.LastTransitionTime.Add(adoptionTimeout * time.Second)
+
+	switch {
+	case miSelector.Status.MachineInventoryRef == nil && time.Now().Before(deadLine):
+		logger.V(log.DebugDepth).Info("Adoption being validated")
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.AdoptionReadyCondition,
+			Reason:  elementalv1.ValidatingAdoptionReason,
+			Status:  metav1.ConditionUnknown,
+			Message: "Adoption being validated",
+		})
+		return true, nil
+	case miSelector.Status.MachineInventoryRef == nil:
+		removeSelectorOwnerShip(mInventory)
+		return false, fmt.Errorf("Adoption timeout, dropping selector ownership. Deadline was: %v ", deadLine)
+	case miSelector.Status.MachineInventoryRef.Name != mInventory.Name:
+		removeSelectorOwnerShip(mInventory)
+		return false, fmt.Errorf("Ownership mismatch, dropping selector ownership")
+	default:
+		logger.V(log.DebugDepth).Info("Successfully adopted")
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.AdoptionReadyCondition,
+			Reason:  elementalv1.SuccessfullyAdoptedReason,
+			Status:  metav1.ConditionTrue,
+			Message: "Successfully adopted",
+		})
+		return false, nil
+	}
+}
+
 func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
 	return predicate.Funcs{
 		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
@@ -265,5 +353,32 @@ func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.F
 
 			return !cmp.Equal(oldMInventory, newMInventory)
 		},
+	}
+}
+
+func findSelectorOwner(machineInventory *elementalv1.MachineInventory) (int, *metav1.OwnerReference) {
+	for idx, owner := range machineInventory.GetOwnerReferences() {
+		if owner.APIVersion == elementalv1.GroupVersion.String() && owner.Kind == "MachineInventorySelector" {
+			return idx, &owner
+		}
+	}
+	return -1, nil
+}
+
+func getSelectorOwner(machineInventory *elementalv1.MachineInventory) *metav1.OwnerReference {
+	_, owner := findSelectorOwner(machineInventory)
+	return owner
+}
+
+func isAlreadyOwned(machineInventory *elementalv1.MachineInventory) bool {
+	return getSelectorOwner(machineInventory) != nil
+}
+
+func removeSelectorOwnerShip(machineInventory *elementalv1.MachineInventory) {
+	idx, _ := findSelectorOwner(machineInventory)
+	if idx >= 0 {
+		owners := machineInventory.GetOwnerReferences()
+		owners[idx] = owners[len(owners)-1]
+		machineInventory.OwnerReferences = owners[:len(owners)-1]
 	}
 }
