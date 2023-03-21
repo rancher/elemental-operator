@@ -35,8 +35,8 @@ const (
 
 // Machine Inventory conditions
 const (
-	// SuccessfullyCreatedPlanReason documents that the secret owned by the machine inventory was successfully created.
-	SuccessfullyCreatedPlanReason = "SuccessfullyCreatedPlan"
+	// PlanCreationFailureReason documents that the secret plan owned by the machine inventory could not be created
+	PlanCreationFailureReason = "PlanCreationFailureReason"
 
 	// WaitingForPlanReason documents a machine inventory waiting for plan to applied.
 	WaitingForPlanReason = "WaitingForPlan"
@@ -48,16 +48,27 @@ const (
 	PlanSuccessfullyAppliedReason = "PlanSuccessfullyApplied"
 )
 
+const (
+	// AdoptedCondition documents the state of a machine selector adopting the machine inventory
+	AdoptionReadyCondition = "AdoptionReady"
+
+	// WaitingToBeAdoptedReason documents that the machine inventory is waiting to be adopted
+	WaitingToBeAdoptedReason = "WaitingToBeAdopted"
+
+	// ValidatinAdoptionReason documents that the machine inventory is in the process of validating its owner has the appropriate status
+	ValidatingAdoptionReason = "ValidatingAdoption"
+
+	// SuccessfullyAdoptedReason documents that the machine inventory is successully adopted by a machine selector
+	SuccessfullyAdoptedReason = "SuccessfullyAdopted"
+
+	// AdoptionFailureReason documents that the machine inventory adoption process failed
+	AdoptionFailureReason = "AdoptionFailure"
+)
+
 // Machine Selector conditions
 const (
 	// WaitingForInventoryReason documents that the machine selector is waiting for a matching machine inventory.
 	WaitingForInventoryReason = "WaitingForInventory"
-
-	// SuccessfullyAdoptedInventoryReason documents that the machine selector successfully adopted machine inventory.
-	SuccessfullyAdoptedInventoryReason = "SuccessfullyAdoptedInventory"
-
-	// FailedToAdoptInventoryReason documents that the machine selector failed to adopt machine inventory.
-	FailedToAdoptInventoryReason = "FailedToAdoptInventory"
 
 	// SuccessfullyUpdatedPlanReason documents that the machine selector successfully updated secret plan with bootstrap.
 	SuccessfullyUpdatedPlanReason = "SuccessfullyUpdatedPlan"
@@ -65,11 +76,25 @@ const (
 	// FailedToUpdatePlanReason documents that the machine selector failed to update secret plan with bootstrap.
 	FailedToUpdatePlanReason = "FailedToUpdatePlan"
 
-	// SelectorReadyReason documents that the machine selector is ready.
-	SelectorReadyReason = "SelectorReady"
-
 	// FailedToSetAdressesReason documents that the machine selector controller failed to set adresses.
 	FailedToSetAdressesReason = "FailedToSetAdresses"
+
+	// SelectorReadyReason documents that the machine selector is ready.
+	SelectorReadyReason = "SelectorReady"
+)
+
+const (
+	// InventoryReady documents the state of the selector adopting an inventory
+	InventoryReadyCondition = "InventoryReady"
+
+	// WaitForInventoryCheckReason documents the selector is waiting for the inventory to validate the adoption
+	WaitForInventoryCheckReason = "WaitForInventoryCheck"
+
+	// SuccessfullyAdoptedInventoryReason documents that the machine selector successfully adopted machine inventory.
+	SuccessfullyAdoptedInventoryReason = "SuccessfullyAdoptedInventory"
+
+	// FailedToAdoptInventoryReason documents that the machine selector failed to adopt machine inventory.
+	FailedToAdoptInventoryReason = "FailedToAdoptInventory"
 )
 
 // Managed OS Version Channel conditions

@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"time"
 
 	"encoding/base64"
 	"encoding/json"
@@ -125,7 +126,6 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 	logger.Info("Reconciling machine inventory selector object")
 
 	if miSelector.GetDeletionTimestamp() != nil {
-		// return r.reconcileDelete(ctx, machineRegistration) // TODO: add deletion logic if needed
 		return ctrl.Result{}, nil
 	}
 
@@ -137,6 +137,17 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 			Message: err.Error(),
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to find and adopt machine inventory: %w", err)
+	}
+
+	requeue, err := r.updateAdoptionStatus(ctx, miSelector)
+	if err != nil {
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.InventoryReadyCondition,
+			Reason:  elementalv1.FailedToAdoptInventoryReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+		return ctrl.Result{}, fmt.Errorf("failed to set bootstrap plan: %w", err)
 	}
 
 	if err := r.updatePlanSecretWithBootstrap(ctx, miSelector); err != nil {
@@ -157,6 +168,10 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 			Message: err.Error(),
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to set inventory selector address: %w", err)
+	}
+
+	if requeue {
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -184,11 +199,8 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	var mInventory *elementalv1.MachineInventory
 
-	if len(machineInventories.Items) > 0 {
-		for i := range machineInventories.Items {
-			if isAlreadyOwned(machineInventories.Items[i]) {
-				continue
-			}
+	for i := range machineInventories.Items {
+		if !isAlreadyOwned(&machineInventories.Items[i]) {
 			mInventory = &machineInventories.Items[i]
 			break
 		}
@@ -226,18 +238,79 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	}
 
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
-		Type:   elementalv1.ReadyCondition,
-		Reason: elementalv1.SuccessfullyAdoptedInventoryReason,
-		Status: metav1.ConditionFalse,
+		Type:               elementalv1.InventoryReadyCondition,
+		Reason:             elementalv1.WaitForInventoryCheckReason,
+		Status:             metav1.ConditionUnknown,
+		LastTransitionTime: metav1.NewTime(time.Now()),
 	})
 
 	return nil
 }
 
-func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) error {
+func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
+		logger.Info("Waiting for a machine inventory match")
+		return false, nil
+	}
+
+	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+	if inventoryReady == nil {
+		return false, fmt.Errorf("Missing required InventoryReadyCondition it must be already set at this phase")
+	}
+	if inventoryReady.Status == metav1.ConditionTrue {
+		logger.Info("Machine inventory is successfully adopted already")
+		return false, nil
+	}
+
+	mInventory := &elementalv1.MachineInventory{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: miSelector.Namespace,
+		Name:      miSelector.Status.MachineInventoryRef.Name,
+	},
+		mInventory,
+	); err != nil {
+		return false, fmt.Errorf("failed to get machine inventory: %w", err)
+	}
+
+	// Check the machine inventory ownership is sane and it is successfully adopted
+	adoptedCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+	owner := getSelectorOwner(mInventory)
+	orphanInventory := owner == nil || adoptedCondition == nil || adoptedCondition.Status != metav1.ConditionTrue
+	deadLine := inventoryReady.LastTransitionTime.Add(adoptionTimeout * time.Second)
+	now := time.Now()
+
+	switch {
+	case owner != nil && owner.Name != miSelector.Name:
+		miSelector.Status.MachineInventoryRef = nil
+		return false, fmt.Errorf("Machine inventory ownership mismatch detected, restart adoption")
+	case orphanInventory && now.After(deadLine):
+		miSelector.Status.MachineInventoryRef = nil
+		return false, fmt.Errorf("Machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
+	case orphanInventory:
+		logger.Info("Machine inventory adoption not completed")
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.InventoryReadyCondition,
+			Reason: elementalv1.WaitForInventoryCheckReason,
+			Status: metav1.ConditionUnknown,
+		})
+		return true, nil
+	default:
+		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.InventoryReadyCondition,
+			Reason: elementalv1.SuccessfullyAdoptedInventoryReason,
+			Status: metav1.ConditionTrue,
+		})
+		return false, nil
+	}
+}
+
+func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+	if inventoryReady == nil || inventoryReady.Status != metav1.ConditionTrue {
 		logger.Info("Waiting for machine inventory to be adopted before updating plan secret")
 		return nil
 	}
@@ -464,6 +537,11 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 		return nil
 	}
 
+	if miSelector.Status.BootstrapPlanChecksum == "" {
+		logger.Info("Waiting for the bootstrap plan to be created")
+		return nil
+	}
+
 	mInventory := &elementalv1.MachineInventory{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: miSelector.Namespace,
@@ -529,16 +607,6 @@ func (r *MachineInventorySelectorReconciler) ignoreIncrementalStatusUpdate() pre
 	}
 }
 
-func isAlreadyOwned(machineInventory elementalv1.MachineInventory) bool {
-	for _, owner := range machineInventory.GetOwnerReferences() {
-		if owner.APIVersion == elementalv1.GroupVersion.String() && owner.Kind == "MachineInventorySelector" {
-			return true
-		}
-	}
-
-	return false
-}
-
 func planChecksum(input []byte) string {
 	h := sha256.New()
 	h.Write(input)
@@ -560,31 +628,36 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 	ctx := context.Background()
 	log := ctrl.LoggerFrom(ctx, "MachineInventory", klog.KObj(mInventory))
 
+	// If machine inventory is already owned reconcile its owner
+	if owner := getSelectorOwner(mInventory); owner != nil {
+		return append(result, reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      owner.Name,
+				Namespace: mInventory.Namespace,
+			},
+		})
+	}
+
 	// If machine inventory has no labels it can't be adopted.
 	if mInventory.Labels == nil {
-		return nil
+		return result
 	}
 
 	miSelectorList := &elementalv1.MachineInventorySelectorList{}
-	err := r.List(context.Background(), miSelectorList, client.InNamespace(mInventory.Namespace))
+	err := r.List(ctx, miSelectorList, client.InNamespace(mInventory.Namespace))
 	if err != nil {
 		log.Error(err, "Failed to list machine inventories")
-		return nil
+		return result
 	}
 
-	var miSelectors []*elementalv1.MachineInventorySelector
 	for i := range miSelectorList.Items {
-		miSelector := &miSelectorList.Items[i]
-		if hasMatchingLabels(ctx, miSelector, mInventory) {
-			miSelectors = append(miSelectors, miSelector)
+		if hasMatchingLabels(ctx, &miSelectorList.Items[i], mInventory) {
+			result = append(result, reconcile.Request{
+				NamespacedName: client.ObjectKey{
+					Namespace: miSelectorList.Items[i].Namespace, Name: miSelectorList.Items[i].Name,
+				},
+			})
 		}
-	}
-
-	result = append(result, reconcile.Request{})
-
-	for _, miSelector := range miSelectors {
-		name := client.ObjectKey{Namespace: miSelector.Namespace, Name: miSelector.Name}
-		result = append(result, reconcile.Request{NamespacedName: name})
 	}
 
 	return result
