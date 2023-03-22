@@ -21,8 +21,8 @@ import (
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	displayCmd "github.com/rancher/elemental-operator/cmd/operator/display"
-	operatorCmd "github.com/rancher/elemental-operator/cmd/operator/operator"
+	displaycmd "github.com/rancher/elemental-operator/cmd/operator/display"
+	operatorcmd "github.com/rancher/elemental-operator/cmd/operator/operator"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
@@ -37,8 +37,8 @@ func main() {
 	}
 
 	cmd.AddCommand(
-		operatorCmd.NewOperatorCommand(),
-		displayCmd.NewDisplayCommand(),
+		operatorcmd.NewOperatorCommand(),
+		displaycmd.NewDisplayCommand(),
 		NewVersionCommand(),
 	)
 

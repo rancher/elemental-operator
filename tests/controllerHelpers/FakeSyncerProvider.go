@@ -14,18 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllerHelpers
+package controllerhelpers
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/syncer"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/syncer"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,7 +48,7 @@ type FakeSyncerProvider struct {
 	loopsCount   int
 }
 
-func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
+func (fs FakeSyncer) Sync(_ context.Context, _ client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
 	var errs []error
 	res := []elementalv1.ManagedOSVersion{}
 
@@ -78,7 +79,7 @@ func (fs FakeSyncer) Sync(ctx context.Context, cl client.Client, c *elementalv1.
 	return res, errorutils.NewAggregate(errs)
 }
 
-func (sp *FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (syncer.Syncer, error) {
+func (sp *FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, _ string, _ *rest.Config) (syncer.Syncer, error) {
 	sp.loopsCount++
 	if spec.Type == sp.UnknownType {
 		return FakeSyncer{}, fmt.Errorf("Unknown type of channel")

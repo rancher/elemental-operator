@@ -81,9 +81,9 @@ func main() {
 				if err != nil {
 					log.Warningf("cannot access config path %s: %s", arg, err.Error())
 					continue
-				} else {
-					log.Debugf("scanning config path %s", arg)
 				}
+
+				log.Debugf("scanning config path %s", arg)
 
 				files, err := os.ReadDir(arg)
 				if err != nil {
