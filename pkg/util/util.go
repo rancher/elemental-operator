@@ -41,7 +41,7 @@ func RemoveInvalidConditions(conditions []metav1.Condition) []metav1.Condition {
 func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, error) {
 	if len(cloudConfig) == 0 {
 		log.Warningf("no cloud-config data to decode")
-		return nil, nil
+		return []byte{}, nil
 	}
 
 	var err error
@@ -50,18 +50,18 @@ func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, er
 	for k, v := range cloudConfig {
 		var jsonData []byte
 		if jsonData, err = v.MarshalJSON(); err != nil {
-			return bytes, fmt.Errorf("%s: %w", k, err)
+			return nil, fmt.Errorf("%s: %w", k, err)
 		}
 
 		var structData interface{}
 		if err := json.Unmarshal(jsonData, &structData); err != nil {
 			log.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
-			return bytes, fmt.Errorf("%s: %w", k, err)
+			return nil, fmt.Errorf("%s: %w", k, err)
 		}
 
 		var yamlData []byte
 		if yamlData, err = yaml.Marshal(structData); err != nil {
-			return bytes, err
+			return nil, err
 		}
 
 		bytes = append(bytes, append([]byte(fmt.Sprintf("%s:\n", k)), yamlData...)...)
