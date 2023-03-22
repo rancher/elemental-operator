@@ -1,0 +1,18 @@
+FROM registry.suse.com/bci/golang:1.18 AS build
+WORKDIR /src
+COPY utils/httpfy/httpfy.go /src/
+ENV CGO_ENABLED=0
+RUN go build \
+    -o /usr/bin/httpfy httpfy.go
+
+FROM registry.opensuse.org/opensuse/tumbleweed:latest AS base
+RUN mkdir -p /installroot/etc/products.d && \
+    cp /etc/products.d/baseproduct /installroot/etc/products.d/ && \
+    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates && \
+    cp -a /var/lib/ca-certificates/openssl/* /installroot/var/lib/ca-certificates/openssl/
+
+FROM scratch AS seedimage-builder 
+COPY --from=base /installroot /
+COPY --from=build /usr/bin/httpfy /usr/bin/httpfy
+
+ENTRYPOINT ["httpfy"]
