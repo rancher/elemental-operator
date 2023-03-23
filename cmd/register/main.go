@@ -37,6 +37,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
+	"github.com/rancher/elemental-operator/pkg/util"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
 
@@ -80,9 +81,9 @@ func main() {
 				if err != nil {
 					log.Warningf("cannot access config path %s: %s", arg, err.Error())
 					continue
-				} else {
-					log.Debugf("scanning config path %s", arg)
 				}
+
+				log.Debugf("scanning config path %s", arg)
 
 				files, err := os.ReadDir(arg)
 				if err != nil {
@@ -287,26 +288,9 @@ func writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error)
 	}
 	defer f.Close()
 
-	bytes := []byte("#cloud-config\n")
-
-	for k, v := range cloudConfig {
-		var jsonData []byte
-		if jsonData, err = v.MarshalJSON(); err != nil {
-			return "", fmt.Errorf("%s: %w", k, err)
-		}
-
-		var structData interface{}
-		if err := json.Unmarshal(jsonData, &structData); err != nil {
-			log.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
-			return "", fmt.Errorf("%s: %w", k, err)
-		}
-
-		var yamlData []byte
-		if yamlData, err = yaml.Marshal(structData); err != nil {
-			return "", err
-		}
-
-		bytes = append(bytes, append([]byte(fmt.Sprintf("%s:\n", k)), yamlData...)...)
+	bytes, err := util.MarshalCloudConfig(cloudConfig)
+	if err != nil {
+		return "", err
 	}
 
 	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))

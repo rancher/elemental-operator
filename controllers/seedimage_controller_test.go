@@ -22,12 +22,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/test"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/test"
 )
 
 var _ = Describe("reconcile seed image", func() {
@@ -225,5 +227,39 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			Namespace: seedImg.Namespace,
 		}, foundPod)).To(Succeed())
 		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
+	})
+
+	It("should recreate the pod if the pod is owned but the cloud-config is different", func() {
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, seedImg)).To(Succeed())
+
+		foundPod := &corev1.Pod{}
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/cloud-config-b64"]).To(Equal(""))
+
+		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{
+			"write_files": {},
+		}
+
+		err = r.reconcileBuildImagePod(ctx, seedImg)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/cloud-config-b64"]).To(Equal("I2Nsb3VkLWNvbmZpZwp3cml0ZV9maWxlczoKbnVsbAo="))
 	})
 })

@@ -19,8 +19,11 @@ package util
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 )
 
 var _ = Describe("removeInvalidConditions", func() {
@@ -62,3 +65,35 @@ var _ = Describe("removeInvalidConditions", func() {
 		Expect(cond[0].LastTransitionTime).NotTo(BeZero())
 	})
 })
+
+var _ = Describe("MarshalCloudConfig", func() {
+	It("should marshal an empty config to an empty byte array", func() {
+		data, err := MarshalCloudConfig(nil)
+		Expect(err).To(BeNil())
+		Expect(data).To(Equal([]byte{}))
+
+		data, err = MarshalCloudConfig(map[string]runtime.RawExtension{})
+		Expect(err).To(BeNil())
+		Expect(data).To(Equal([]byte{}))
+	})
+
+	It("should marshal an example cloud-init file correctly", func() {
+		data, err := MarshalCloudConfig(map[string]runtime.RawExtension{
+			"write_files": {Object: WriteFiles{}},
+		})
+		Expect(err).To(BeNil())
+		Expect(data).To(Equal([]byte("#cloud-config\nwrite_files:\n{}\n")))
+	})
+})
+
+type WriteFiles struct {
+}
+
+func (w WriteFiles) GetObjectKind() schema.ObjectKind {
+	return nil
+}
+func (w WriteFiles) DeepCopyObject() runtime.Object {
+	return nil
+}
+
+var _ runtime.Object = WriteFiles{}
