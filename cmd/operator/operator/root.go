@@ -74,6 +74,7 @@ type rootConfig struct {
 	defaultRegistry             string
 	operatorImage               string
 	watchNamespace              string
+	seedimageImage              string
 }
 
 func init() {
@@ -150,6 +151,9 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd.PersistentFlags().BoolVar(&config.debug, "debug", false, "registration debug logging")
 	_ = viper.BindPFlag("debug", cmd.PersistentFlags().Lookup("debug"))
+
+	cmd.PersistentFlags().StringVar(&config.seedimageImage, "seedimage-image", "", "SeedImage builder image. Used to build a SeedImage ISO.")
+	_ = viper.BindPFlag("seedimage-image", cmd.PersistentFlags().Lookup("seedimage-image"))
 
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 
@@ -276,7 +280,8 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		os.Exit(1)
 	}
 	if err := (&controllers.SeedImageReconciler{
-		Client: mgr.GetClient(),
+		Client:         mgr.GetClient(),
+		SeedImageImage: config.seedimageImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "SeedImage")
 		os.Exit(1)

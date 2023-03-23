@@ -35,6 +35,8 @@ spec:
         - {{ .Release.Namespace }}
         - --operator-image
         - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        - --seedimage-image
+        - {{ template "system_default_registry" . }}{{ .Values.seedImage.repository }}:{{ .Values.seedImage.tag | default .Chart.AppVersion }}
       serviceAccountName: {{ .Release.Name }}
       {{- with .Values.tolerations }}
       tolerations:

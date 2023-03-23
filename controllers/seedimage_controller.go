@@ -43,6 +43,7 @@ import (
 
 type SeedImageReconciler struct {
 	client.Client
+	SeedImageImage string
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages,verbs=get;list;watch;create;update;patch;delete
@@ -214,7 +215,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, podBaseImg, podRegURL, podCloudConfigb64)
+	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, podRegURL, podCloudConfigb64)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -340,9 +341,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, baseImg, regURL, base64CloudConfig string) *corev1.Pod {
-	const buildImage = "registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-builder-image/5.3:latest"
-	const serveImage = "registry.opensuse.org/opensuse/nginx:latest"
+func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudConfig string) *corev1.Pod {
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -367,8 +366,9 @@ func fillBuildImagePod(name, namespace, baseImg, regURL, base64CloudConfig strin
 		Spec: corev1.PodSpec{
 			InitContainers: []corev1.Container{
 				{
-					Name:  "build",
-					Image: buildImage,
+					Name:            "build",
+					Image:           buildImg,
+					ImagePullPolicy: corev1.PullIfNotPresent,
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceEphemeralStorage: *resource.NewQuantity(volLim, resource.BinarySI),
@@ -389,8 +389,9 @@ func fillBuildImagePod(name, namespace, baseImg, regURL, base64CloudConfig strin
 			},
 			Containers: []corev1.Container{
 				{
-					Name:  "serve",
-					Image: serveImage,
+					Name:            "serve",
+					Image:           buildImg,
+					ImagePullPolicy: corev1.PullIfNotPresent,
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "http",
@@ -400,9 +401,10 @@ func fillBuildImagePod(name, namespace, baseImg, regURL, base64CloudConfig strin
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",
-							MountPath: "/srv/www/htdocs",
+							MountPath: "/srv",
 						},
 					},
+					WorkingDir: "/srv",
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
