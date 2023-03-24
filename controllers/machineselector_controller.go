@@ -88,7 +88,9 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 		return reconcile.Result{}, fmt.Errorf("failed to get machine inventory selector object: %w", err)
 	}
 
-	patchBase := client.MergeFrom(machineInventorySelector.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically
+	// overwrite the adopted reference when it was already set
+	patchBase := client.MergeFromWithOptions(machineInventorySelector.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	// We have to sanitize the conditions because old API definitions didn't have proper validation.
 	machineInventorySelector.Status.Conditions = util.RemoveInvalidConditions(machineInventorySelector.Status.Conditions)
