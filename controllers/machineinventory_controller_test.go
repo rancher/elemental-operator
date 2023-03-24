@@ -167,12 +167,12 @@ var _ = Describe("createPlanSecret", func() {
 		Expect(mInventory.Status.Plan.PlanSecretRef.Name).To(Equal(mInventory.Name))
 		Expect(mInventory.Status.Plan.PlanSecretRef.Namespace).To(Equal(mInventory.Namespace))
 
-		Expect(mInventory.Status.Conditions).To(HaveLen(1))
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(cond).NotTo(BeNil())
 
-		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.WaitingForPlanReason))
-		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(mInventory.Status.Conditions[0].Message).To(Equal("waiting for plan to be applied"))
+		Expect(cond.Reason).To(Equal(elementalv1.WaitingForPlanReason))
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Message).To(Equal("waiting for plan to be applied"))
 	})
 
 	It("shouldn't return error is secret already exists", func() {
