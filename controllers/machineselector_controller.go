@@ -190,6 +190,11 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	}
 
 	logger.V(log.DebugDepth).Info("Trying to find matching machine inventory")
+	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
+		Type:   elementalv1.ReadyCondition,
+		Reason: elementalv1.WaitingForInventoryReason,
+		Status: metav1.ConditionFalse,
+	})
 
 	labelSelector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
 	if err != nil {
@@ -210,12 +215,6 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 
 	if mInventory == nil {
 		logger.V(log.DebugDepth).Info("No matching machine inventories found")
-		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
-			Type:   elementalv1.ReadyCondition,
-			Reason: elementalv1.WaitingForInventoryReason,
-			Status: metav1.ConditionFalse,
-		})
-
 		return nil
 	}
 
@@ -317,12 +316,12 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
 	if inventoryReady == nil || inventoryReady.Status != metav1.ConditionTrue {
-		logger.Info("Waiting for machine inventory to be adopted before updating plan secret")
+		logger.V(log.DebugDepth).Info("Waiting for machine inventory to be adopted before updating plan secret")
 		return nil
 	}
 
 	if miSelector.Status.BootstrapPlanChecksum != "" {
-		logger.Info("Secret plan already updated with bootstrap")
+		logger.V(log.DebugDepth).Info("Secret plan already updated with bootstrap")
 		return nil
 	}
 
@@ -339,7 +338,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	}
 
 	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
-		logger.Info("Machine inventory plan reference not set yet")
+		logger.V(log.DebugDepth).Info("Machine inventory plan reference not set yet")
 		return nil
 	}
 
