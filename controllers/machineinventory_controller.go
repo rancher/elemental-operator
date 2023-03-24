@@ -165,10 +165,9 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 
 	readyCondition := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition)
 	if readyCondition != nil && readyCondition.Reason != elementalv1.PlanCreationFailureReason {
-		logger.Info("Skipping plan secret creation because ready condition is already set")
+		logger.V(log.DebugDepth).Info("Skipping plan secret creation because ready condition is already set")
 		return nil
 	}
-	logger.Info("Creating plan secret")
 
 	planSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -202,6 +201,7 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 		},
 	}
 
+	logger.Info("Plan secret created")
 	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 		Type:    elementalv1.ReadyCondition,
 		Reason:  elementalv1.WaitingForPlanReason,
@@ -222,7 +222,7 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 		},
 	}
 
-	logger.Info("Attempting to set plan status")
+	logger.V(log.DebugDepth).Info("Attempting to set plan status")
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: mInventory.Namespace,
 		Name:      mInventory.Name,
@@ -246,12 +246,12 @@ func (r *MachineInventoryReconciler) updateInventoryWithPlanStatus(ctx context.C
 		})
 		return nil
 	case failedChecksum != "":
-		logger.Info("Plan failed to be applied")
+		logger.V(log.DebugDepth).Info("Plan failed to be applied")
 		mInventory.Status.Plan.State = elementalv1.PlanFailed
 		mInventory.Status.Plan.Checksum = failedChecksum
 		return fmt.Errorf("failed to apply plan")
 	default:
-		logger.Info("Waiting for plan to be applied")
+		logger.V(log.DebugDepth).Info("Waiting for plan to be applied")
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.WaitingForPlanReason,
@@ -322,7 +322,7 @@ func (r *MachineInventoryReconciler) updateInventoryWithAdoptionStatus(ctx conte
 		removeSelectorOwnerShip(mInventory)
 		return false, fmt.Errorf("Ownership mismatch, dropping selector ownership")
 	default:
-		logger.V(log.DebugDepth).Info("Successfully adopted")
+		logger.Info("Successfully adopted")
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.AdoptionReadyCondition,
 			Reason:  elementalv1.SuccessfullyAdoptedReason,
