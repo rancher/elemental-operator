@@ -129,7 +129,9 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.findAndAdoptInventory(ctx, miSelector); err != nil {
+	var mInventory *elementalv1.MachineInventory
+
+	if err := r.findAndAdoptInventory(ctx, miSelector, mInventory); err != nil {
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.FailedToAdoptInventoryReason,
@@ -139,7 +141,7 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 		return ctrl.Result{}, fmt.Errorf("failed to find and adopt machine inventory: %w", err)
 	}
 
-	requeue, err := r.updateAdoptionStatus(ctx, miSelector)
+	requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
 	if err != nil {
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.InventoryReadyCondition,
@@ -150,7 +152,7 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 		return ctrl.Result{}, fmt.Errorf("failed to set bootstrap plan: %w", err)
 	}
 
-	if err := r.updatePlanSecretWithBootstrap(ctx, miSelector); err != nil {
+	if err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory); err != nil {
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.FailedToUpdatePlanReason,
@@ -160,7 +162,7 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 		return ctrl.Result{}, fmt.Errorf("failed to set bootstrap plan: %w", err)
 	}
 
-	if err := r.setInvetorySelectorAddresses(ctx, miSelector); err != nil {
+	if err := r.setInvetorySelectorAddresses(ctx, miSelector, mInventory); err != nil {
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.FailedToSetAdressesReason,
@@ -177,7 +179,7 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) error {
+func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef != nil {
@@ -196,8 +198,6 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	if err := r.List(ctx, machineInventories, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
 		return err
 	}
-
-	var mInventory *elementalv1.MachineInventory
 
 	for i := range machineInventories.Items {
 		if !isAlreadyOwned(&machineInventories.Items[i]) {
@@ -247,7 +247,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	return nil
 }
 
-func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) (bool, error) {
+func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) (bool, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
@@ -264,14 +264,16 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 		return false, nil
 	}
 
-	mInventory := &elementalv1.MachineInventory{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: miSelector.Namespace,
-		Name:      miSelector.Status.MachineInventoryRef.Name,
-	},
-		mInventory,
-	); err != nil {
-		return false, fmt.Errorf("failed to get machine inventory: %w", err)
+	if mInventory == nil {
+		mInventory = &elementalv1.MachineInventory{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		},
+			mInventory,
+		); err != nil {
+			return false, fmt.Errorf("failed to get machine inventory: %w", err)
+		}
 	}
 
 	// Check the machine inventory ownership is sane and it is successfully adopted
@@ -297,6 +299,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 		})
 		return true, nil
 	default:
+		logger.Info("Machine inventory adoption successfully completed")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.InventoryReadyCondition,
 			Reason: elementalv1.SuccessfullyAdoptedInventoryReason,
@@ -306,7 +309,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 	}
 }
 
-func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) error {
+func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
@@ -320,14 +323,16 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 		return nil
 	}
 
-	mInventory := &elementalv1.MachineInventory{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: miSelector.Namespace,
-		Name:      miSelector.Status.MachineInventoryRef.Name,
-	},
-		mInventory,
-	); err != nil {
-		return fmt.Errorf("failed to get machine inventory: %w", err)
+	if mInventory == nil {
+		mInventory = &elementalv1.MachineInventory{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		},
+			mInventory,
+		); err != nil {
+			return fmt.Errorf("failed to get machine inventory: %w", err)
+		}
 	}
 
 	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
@@ -529,7 +534,7 @@ func (r *MachineInventorySelectorReconciler) getOwnerMachine(ctx context.Context
 	return nil, nil
 }
 
-func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) error {
+func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
@@ -542,14 +547,16 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 		return nil
 	}
 
-	mInventory := &elementalv1.MachineInventory{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: miSelector.Namespace,
-		Name:      miSelector.Status.MachineInventoryRef.Name,
-	},
-		mInventory,
-	); err != nil {
-		return fmt.Errorf("failed to get machine inventory: %w", err)
+	if mInventory == nil {
+		mInventory = &elementalv1.MachineInventory{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		},
+			mInventory,
+		); err != nil {
+			return fmt.Errorf("failed to get machine inventory: %w", err)
+		}
 	}
 
 	if val := mInventory.Labels["elemental.cattle.io/ExternalIP"]; val != "" {

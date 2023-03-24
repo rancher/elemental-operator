@@ -210,7 +210,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 		}
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 
-		Expect(r.findAndAdoptInventory(ctx, miSelector)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
@@ -236,7 +236,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 
-		Expect(r.findAndAdoptInventory(ctx, miSelector)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
@@ -249,7 +249,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 			Name: "test",
 		}
 
-		Expect(r.findAndAdoptInventory(ctx, miSelector)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
 	})
 })
 
@@ -334,12 +334,12 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 	})
 
 	It("should do nothing if machine inventory ref is missing", func() {
-		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
+		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)).To(Succeed())
 	})
 
 	It("should do nothing if bootstrap plan checksum is already set", func() {
 		miSelector.Status.BootstrapPlanChecksum = "test"
-		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
+		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)).To(Succeed())
 	})
 
 	It("do nothing if machine inventory plan not ready yet", func() {
@@ -349,7 +349,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			Name: mInventory.Name,
 		}
 
-		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
+		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)).To(Succeed())
 	})
 
 	It("return error if failed to create new bootstrap plan", func() {
@@ -368,7 +368,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			Name: mInventory.Name,
 		}
 
-		err := r.updatePlanSecretWithBootstrap(ctx, miSelector)
+		err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get bootstrap plan"))
 	})
@@ -389,7 +389,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
 			Name: mInventory.Name,
 		}
-		err := r.updatePlanSecretWithBootstrap(ctx, miSelector)
+		err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get plan secret"))
 	})
@@ -412,7 +412,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
 			Name: mInventory.Name,
 		}
-		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector)).To(Succeed())
+		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)).To(Succeed())
 
 		Expect(miSelector.Status.BootstrapPlanChecksum).ToNot(BeEmpty())
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
@@ -563,7 +563,7 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 	})
 
 	It("should return early if machine inventory reference is missing", func() {
-		Expect(r.setInvetorySelectorAddresses(ctx, miSelector)).To(Succeed())
+		Expect(r.setInvetorySelectorAddresses(ctx, miSelector, mInventory)).To(Succeed())
 	})
 
 	It("should return error if machine inventory is missing", func() {
@@ -571,7 +571,7 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 			Name: mInventory.Name,
 		}
 
-		err := r.setInvetorySelectorAddresses(ctx, miSelector)
+		err := r.setInvetorySelectorAddresses(ctx, miSelector, mInventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get machine inventory"))
 	})
@@ -589,7 +589,7 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 		}
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 
-		err := r.setInvetorySelectorAddresses(ctx, miSelector)
+		err := r.setInvetorySelectorAddresses(ctx, miSelector, mInventory)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(miSelector.Status.Ready).To(BeTrue())
