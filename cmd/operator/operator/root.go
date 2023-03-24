@@ -181,7 +181,6 @@ func operatorRun(config *rootConfig) {
 			&corev1.ConfigMap{},
 			&corev1.Secret{},
 			&elementalv1.ManagedOSVersion{},
-			&elementalv1.MachineInventorySelector{},
 		},
 		Port:                   config.webhookPort,
 		CertDir:                config.webhookCertDir,
