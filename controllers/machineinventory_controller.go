@@ -33,10 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
@@ -59,13 +57,6 @@ func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineInventory{}).
 		Owns(&corev1.Secret{}).
-		Watches(
-			&source.Kind{
-				Type: &corev1.Secret{},
-			},
-			&handler.EnqueueRequestForOwner{
-				IsController: true,
-				OwnerType:    &elementalv1.MachineInventory{}}).
 		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
 		Complete(r)
 }
