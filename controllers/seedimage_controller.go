@@ -346,7 +346,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
 	buildCommands := []string{
-		fmt.Sprintf("echo %s | base64 --decode > cloud-config.yaml", base64CloudConfig),
+		fmt.Sprintf("echo %s | base64 -d > cloud-config.yaml", base64CloudConfig),
 		fmt.Sprintf("curl -Lo base.img %s", baseImg),
 		fmt.Sprintf("curl -ko reg.yaml %s", regURL),
 		"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /livecd-cloud-config.yaml -map cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay",
