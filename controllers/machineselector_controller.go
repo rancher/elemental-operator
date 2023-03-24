@@ -183,11 +183,11 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef != nil {
-		logger.Info("machine inventory reference already set", "machineInvetoryName", miSelector.Status.MachineInventoryRef.Name)
+		logger.V(log.DebugDepth).Info("machine inventory reference already set", "machineInvetoryName", miSelector.Status.MachineInventoryRef.Name)
 		return nil
 	}
 
-	logger.Info("Trying to find matching machine inventory")
+	logger.V(log.DebugDepth).Info("Trying to find matching machine inventory")
 
 	labelSelector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
 	if err != nil {
@@ -207,7 +207,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	}
 
 	if mInventory == nil {
-		logger.Info("No matching machine inventories found")
+		logger.V(log.DebugDepth).Info("No matching machine inventories found")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.ReadyCondition,
 			Reason: elementalv1.WaitingForInventoryReason,
@@ -237,6 +237,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		Name: mInventory.Name,
 	}
 
+	logger.Info("Inventory adoption started")
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 		Type:               elementalv1.InventoryReadyCondition,
 		Reason:             elementalv1.WaitForInventoryCheckReason,
@@ -251,7 +252,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.Info("Waiting for a machine inventory match")
+		logger.V(log.DebugDepth).Info("Waiting for a machine inventory match")
 		return false, nil
 	}
 
@@ -260,7 +261,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 		return false, fmt.Errorf("Missing required InventoryReadyCondition it must be already set at this phase")
 	}
 	if inventoryReady.Status == metav1.ConditionTrue {
-		logger.Info("Machine inventory is successfully adopted already")
+		logger.V(log.DebugDepth).Info("Machine inventory is successfully adopted already")
 		return false, nil
 	}
 
@@ -291,7 +292,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 		miSelector.Status.MachineInventoryRef = nil
 		return false, fmt.Errorf("Machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
 	case orphanInventory:
-		logger.Info("Machine inventory adoption not completed")
+		logger.V(log.DebugDepth).Info("Machine inventory adoption not completed")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.InventoryReadyCondition,
 			Reason: elementalv1.WaitForInventoryCheckReason,
@@ -363,6 +364,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 
 	miSelector.Status.BootstrapPlanChecksum = checksum
 
+	logger.Info("Machine inventory plan updated")
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
 		Reason: elementalv1.SuccessfullyUpdatedPlanReason,
@@ -388,7 +390,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		return "", nil, fmt.Errorf("machine %s/%s missing bootstrap data secret name", machine.Namespace, machine.Name)
 	}
 
-	logger.Info("setting a bootstrap plan for the selector")
+	logger.V(log.DebugDepth).Info("setting a bootstrap plan for the selector")
 	bootstrapSecret := &corev1.Secret{}
 
 	if err := r.Get(ctx, types.NamespacedName{
@@ -521,10 +523,10 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 func (r *MachineInventorySelectorReconciler) getOwnerMachine(ctx context.Context, miSelector *elementalv1.MachineInventorySelector) (*clusterv1.Machine, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
-	logger.Info("Trying to find CAPI machine that owns machine inventory selector")
+	logger.V(log.DebugDepth).Info("Trying to find CAPI machine that owns machine inventory selector")
 	for _, owner := range miSelector.GetOwnerReferences() {
 		if owner.APIVersion == clusterv1.GroupVersion.String() && owner.Kind == "Machine" {
-			logger.Info("Found owner CAPI machine for machine inventory selector", "capiMachineName", owner.Name)
+			logger.V(log.DebugDepth).Info("Found owner CAPI machine for machine inventory selector", "capiMachineName", owner.Name)
 			machine := &clusterv1.Machine{}
 			err := r.Client.Get(ctx, types.NamespacedName{Namespace: miSelector.Namespace, Name: owner.Name}, machine)
 			return machine, err
@@ -538,12 +540,12 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
-		logger.Info("Waiting for machine inventory to be adopted before setting adresses")
+		logger.V(log.DebugDepth).Info("Waiting for machine inventory to be adopted before setting adresses")
 		return nil
 	}
 
 	if miSelector.Status.BootstrapPlanChecksum == "" {
-		logger.Info("Waiting for the bootstrap plan to be created")
+		logger.V(log.DebugDepth).Info("Waiting for the bootstrap plan to be created")
 		return nil
 	}
 
@@ -580,8 +582,8 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 		})
 	}
 
+	logger.Info("Inventory selector is ready")
 	miSelector.Status.Ready = true
-
 	meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
 		Type:   elementalv1.ReadyCondition,
 		Reason: elementalv1.SelectorReadyReason,
@@ -633,7 +635,7 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 
 	// This won't log unless the global logger is set
 	ctx := context.Background()
-	log := ctrl.LoggerFrom(ctx, "MachineInventory", klog.KObj(mInventory))
+	logger := ctrl.LoggerFrom(ctx, "MachineInventory", klog.KObj(mInventory))
 
 	// If machine inventory is already owned reconcile its owner
 	if owner := getSelectorOwner(mInventory); owner != nil {
@@ -653,7 +655,7 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 	miSelectorList := &elementalv1.MachineInventorySelectorList{}
 	err := r.List(ctx, miSelectorList, client.InNamespace(mInventory.Namespace))
 	if err != nil {
-		log.Error(err, "Failed to list machine inventories")
+		logger.Error(err, "Failed to list machine inventories")
 		return result
 	}
 
@@ -671,7 +673,7 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 }
 
 func hasMatchingLabels(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) bool {
-	log := ctrl.LoggerFrom(ctx)
+	logger := ctrl.LoggerFrom(ctx)
 
 	selector, err := metav1.LabelSelectorAsSelector(&miSelector.Spec.Selector)
 	if err != nil {
@@ -680,12 +682,12 @@ func hasMatchingLabels(ctx context.Context, miSelector *elementalv1.MachineInven
 	}
 
 	if selector.Empty() {
-		log.V(5).Info("machine selector has empty selector", "mSelector.Name", miSelector.Name)
+		logger.V(log.DebugDepth).Info("machine selector has empty selector", "mSelector.Name", miSelector.Name)
 		return false
 	}
 
 	if !selector.Matches(labels.Set(mInventory.Labels)) {
-		log.V(5).Info("machine inventory has mismatch labels", "mInventory.Name", mInventory.Name, "mSelector.Name", miSelector.Name)
+		logger.V(log.DebugDepth).Info("machine inventory has mismatch labels", "mInventory.Name", mInventory.Name, "mSelector.Name", miSelector.Name)
 		return false
 	}
 
