@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -136,16 +137,17 @@ var _ = Describe("reconcile machine inventory selector", func() {
 		_, err := r.reconcile(ctx, miSelector)
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(miSelector.Status.Ready).To(BeTrue())
-		Expect(miSelector.Status.BootstrapPlanChecksum).ToNot(BeEmpty())
+		Expect(miSelector.Status.Ready).To(BeFalse())
+		Expect(miSelector.Status.BootstrapPlanChecksum).To(BeEmpty())
 
 		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
 		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
 
-		Expect(miSelector.Status.Conditions).To(HaveLen(1))
-		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SelectorReadyReason))
+		cond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(cond).NotTo(BeNil())
+
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(elementalv1.WaitingForInventoryReason))
 	})
 
 	It("should reconcile when matching inventory doesn't exist", func() {
@@ -212,10 +214,17 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
 
-		Expect(miSelector.Status.Conditions).To(HaveLen(1))
-		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyAdoptedInventoryReason))
-		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+
+		Expect(rCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(rCond.Reason).To(Equal(elementalv1.WaitingForInventoryReason))
+
+		aCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+		Expect(aCond).NotTo(BeNil())
+
+		Expect(aCond.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(aCond.Reason).To(Equal(elementalv1.WaitForInventoryCheckReason))
 
 		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
 		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
@@ -236,7 +245,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 
-		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, nil)).To(Succeed())
 
 		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
@@ -353,7 +362,9 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 	})
 
 	It("return error if failed to create new bootstrap plan", func() {
+		// emulate inventory adoption first
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
 		mInventory.Status = elementalv1.MachineInventoryStatus{
 			Plan: &elementalv1.PlanStatus{
 				PlanSecretRef: &corev1.ObjectReference{
@@ -361,44 +372,61 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 					Namespace: "test",
 				},
 			},
+			Conditions: []metav1.Condition{{
+				Type:               elementalv1.AdoptionReadyCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             elementalv1.SuccessfullyAdoptedReason,
+				LastTransitionTime: metav1.Now(),
+			}},
 		}
+		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(update).To(BeFalse())
+		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
-			Name: mInventory.Name,
-		}
-
-		err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
+		// fails to create the bootstrap plan
+		err = r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get bootstrap plan"))
 	})
 
 	It("return error if plan secret doesn't exist", func() {
+		// emulate inventory adoption first
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 		Expect(r.Create(ctx, machine)).To(Succeed())
 		Expect(r.Create(ctx, boostrapSecret)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
 		mInventory.Status = elementalv1.MachineInventoryStatus{
 			Plan: &elementalv1.PlanStatus{
 				PlanSecretRef: &corev1.ObjectReference{
 					Name: "invalidname",
 				},
 			},
+			Conditions: []metav1.Condition{{
+				Type:               elementalv1.AdoptionReadyCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             elementalv1.SuccessfullyAdoptedReason,
+				LastTransitionTime: metav1.Now(),
+			}},
 		}
+		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(update).To(BeFalse())
+		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
-			Name: mInventory.Name,
-		}
-		err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
+		// fails to create the bootstrap plan
+		err = r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get plan secret"))
 	})
 
 	It("succefully update plan secret with bootstrap", func() {
+		// emulate inventory adoption first
 		Expect(r.Create(ctx, mInventory)).To(Succeed())
 		Expect(r.Create(ctx, machine)).To(Succeed())
 		Expect(r.Create(ctx, boostrapSecret)).To(Succeed())
 		Expect(r.Create(ctx, planSecret)).To(Succeed())
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
 		mInventory.Status = elementalv1.MachineInventoryStatus{
 			Plan: &elementalv1.PlanStatus{
 				PlanSecretRef: &corev1.ObjectReference{
@@ -406,21 +434,27 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 					Namespace: planSecret.Namespace,
 				},
 			},
+			Conditions: []metav1.Condition{{
+				Type:               elementalv1.AdoptionReadyCondition,
+				Status:             metav1.ConditionTrue,
+				Reason:             elementalv1.SuccessfullyAdoptedReason,
+				LastTransitionTime: metav1.Now(),
+			}},
 		}
+		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(update).To(BeFalse())
+		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
-		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
-			Name: mInventory.Name,
-		}
 		Expect(r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory)).To(Succeed())
 
 		Expect(miSelector.Status.BootstrapPlanChecksum).ToNot(BeEmpty())
-		Expect(miSelector.Status.Conditions).To(HaveLen(1))
 
-		Expect(miSelector.Status.Conditions).To(HaveLen(1))
-		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SuccessfullyUpdatedPlanReason))
-		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+
+		Expect(rCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(rCond.Reason).To(Equal(elementalv1.SuccessfullyUpdatedPlanReason))
 	})
 
 })
@@ -570,8 +604,9 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
 			Name: mInventory.Name,
 		}
+		miSelector.Status.BootstrapPlanChecksum = "thisIsAChecksum"
 
-		err := r.setInvetorySelectorAddresses(ctx, miSelector, mInventory)
+		err := r.setInvetorySelectorAddresses(ctx, miSelector, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to get machine inventory"))
 	})
@@ -580,6 +615,7 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
 			Name: mInventory.Name,
 		}
+		miSelector.Status.BootstrapPlanChecksum = "thisIsAChecksum"
 
 		mInventory.Labels = map[string]string{
 			"location":                       "testregion",
@@ -594,10 +630,11 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 
 		Expect(miSelector.Status.Ready).To(BeTrue())
 
-		Expect(miSelector.Status.Conditions).To(HaveLen(1))
-		Expect(miSelector.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(miSelector.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(miSelector.Status.Conditions[0].Reason).To(Equal(elementalv1.SelectorReadyReason))
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+
+		Expect(rCond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(rCond.Reason).To(Equal(elementalv1.SelectorReadyReason))
 
 		Expect(miSelector.Status.Addresses).To(HaveLen(3))
 
