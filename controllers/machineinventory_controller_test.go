@@ -82,12 +82,12 @@ var _ = Describe("reconcile machine inventory", func() {
 			Namespace: mInventory.Namespace,
 		}, mInventory)).To(Succeed())
 
-		Expect(mInventory.Status.Conditions).To(HaveLen(1))
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(cond).NotTo(BeNil())
 
-		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.WaitingForPlanReason))
-		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-		Expect(mInventory.Status.Conditions[0].Message).To(Equal("waiting for plan to be applied"))
+		Expect(cond.Reason).To(Equal(elementalv1.WaitingForPlanReason))
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Message).To(Equal("waiting for plan to be applied"))
 	})
 
 	It("should reconcile machine inventory object when plan secret already exists", func() {
@@ -109,12 +109,12 @@ var _ = Describe("reconcile machine inventory", func() {
 		Expect(mInventory.Status.Plan.Checksum).To(Equal(string(planSecret.Data["applied-checksum"])))
 		Expect(mInventory.Status.Plan.State).To(Equal(elementalv1.PlanApplied))
 
-		Expect(mInventory.Status.Conditions).To(HaveLen(1))
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(cond).NotTo(BeNil())
 
-		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
-		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.PlanSuccessfullyAppliedReason))
-		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-		Expect(mInventory.Status.Conditions[0].Message).To(Equal("plan successfully applied"))
+		Expect(cond.Reason).To(Equal(elementalv1.PlanSuccessfullyAppliedReason))
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Message).To(Equal("plan successfully applied"))
 	})
 })
 
