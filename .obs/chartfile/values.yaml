@@ -4,6 +4,10 @@ image:
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
+seedImage:
+  repository: "quay.io/costoolkit/seedimage-builder"
+  tag: "latest"
+
 # number of operator replicas to deploy
 replicas: 1
 
