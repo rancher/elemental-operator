@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -260,6 +262,169 @@ var _ = Describe("findAndAdoptInventory", func() {
 
 		Expect(r.findAndAdoptInventory(ctx, miSelector, &elementalv1.MachineInventory{})).To(Succeed())
 	})
+})
+
+var _ = Describe("updateAdoptionStatus", func() {
+	var r *MachineInventorySelectorReconciler
+	var miSelector *elementalv1.MachineInventorySelector
+	var mInventory *elementalv1.MachineInventory
+
+	BeforeEach(func() {
+		r = &MachineInventorySelectorReconciler{
+			Client: cl,
+		}
+
+		miSelector = &elementalv1.MachineInventorySelector{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-suite",
+				Namespace: "default",
+				UID:       "test",
+			},
+			Spec: elementalv1.MachineInventorySelectorSpec{
+				Selector: metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{
+							Key:      "location",
+							Operator: "In",
+							Values:   []string{"testregion"},
+						},
+					},
+				},
+			},
+		}
+
+		mInventory = &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-suite",
+				Namespace: miSelector.Namespace,
+				Labels: map[string]string{
+					"location": "testregion",
+				},
+			},
+		}
+		Expect(r.Create(ctx, miSelector)).To(Succeed())
+		Expect(r.Create(ctx, mInventory)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, miSelector, mInventory)).To(Succeed())
+	})
+
+	It("successfully checks ongoing adoption", func() {
+		// Start adoption check process
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		}, mInventory)).To(Succeed())
+
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+		Expect(rCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(rCond.Reason).To(Equal(elementalv1.WaitingForInventoryReason))
+
+		aCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+		Expect(aCond).NotTo(BeNil())
+		Expect(aCond.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(aCond.Reason).To(Equal(elementalv1.WaitForInventoryCheckReason))
+
+		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
+		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
+
+		// Set machine inventory adopted status
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:   elementalv1.AdoptionReadyCondition,
+			Status: metav1.ConditionTrue,
+			Reason: elementalv1.SuccessfullyAdoptedReason,
+		})
+
+		// Successfully check adoption
+		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(err).To(BeNil())
+		Expect(requeue).To(BeFalse())
+
+		aCond = meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+		Expect(aCond).NotTo(BeNil())
+		Expect(aCond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(aCond.Reason).To(Equal(elementalv1.SuccessfullyAdoptedInventoryReason))
+	})
+
+	It("reaches adoption validation timeout", func() {
+		// Start adoption check process
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		}, mInventory)).To(Succeed())
+
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+		Expect(rCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(rCond.Reason).To(Equal(elementalv1.WaitingForInventoryReason))
+
+		aCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+		Expect(aCond).NotTo(BeNil())
+		Expect(aCond.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(aCond.Reason).To(Equal(elementalv1.WaitForInventoryCheckReason))
+
+		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
+		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
+
+		// Successfully check adoption
+		testTimeout := time.Now().Add(adoptionTimeout * time.Second * 2)
+		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		for err == nil {
+			Expect(time.Now().Before(testTimeout)).To(BeTrue())
+			Expect(requeue).To(BeTrue())
+			time.Sleep(time.Second)
+			requeue, err = r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		}
+		Expect(err.Error()).To(ContainSubstring("adoption validation timeout"))
+	})
+
+	It("detects an adoption owneship mismatch", func() {
+		// Start adoption check process
+		Expect(r.findAndAdoptInventory(ctx, miSelector, mInventory)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Status.MachineInventoryRef.Name,
+		}, mInventory)).To(Succeed())
+
+		rCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.ReadyCondition)
+		Expect(rCond).NotTo(BeNil())
+		Expect(rCond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(rCond.Reason).To(Equal(elementalv1.WaitingForInventoryReason))
+
+		aCond := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
+		Expect(aCond).NotTo(BeNil())
+		Expect(aCond.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(aCond.Reason).To(Equal(elementalv1.WaitForInventoryCheckReason))
+
+		Expect(miSelector.Status.MachineInventoryRef).ToNot(BeNil())
+		Expect(miSelector.Status.MachineInventoryRef.Name).To(Equal(mInventory.Name))
+
+		// Swap owner to an invalid name
+		mInventory.OwnerReferences = []metav1.OwnerReference{
+			{
+				APIVersion: elementalv1.GroupVersion.String(),
+				Kind:       "MachineInventorySelector",
+				Name:       "differentName",
+			},
+		}
+
+		// Detect adoption mismatch
+		_, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(ContainSubstring("inventory ownership mismatch detected"))
+	})
+
+	It("does nothing if adoption has not started", func() {
+		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
+		Expect(requeue).To(BeFalse())
+		Expect(err).To(BeNil())
+		Expect(meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)).To(BeNil())
+	})
+
 })
 
 var _ = Describe("updatePlanSecretWithBootstrap", func() {

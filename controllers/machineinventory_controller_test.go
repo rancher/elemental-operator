@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -196,6 +197,118 @@ var _ = Describe("createPlanSecret", func() {
 		})
 		Expect(r.createPlanSecret(ctx, mInventory)).To(Succeed())
 	})
+})
+
+var _ = Describe("updateInventoryWithAdoptionStatus", func() {
+	var r *MachineInventoryReconciler
+	var mInventory *elementalv1.MachineInventory
+	var miSelector *elementalv1.MachineInventorySelector
+
+	BeforeEach(func() {
+		r = &MachineInventoryReconciler{
+			Client: cl,
+		}
+
+		miSelector = &elementalv1.MachineInventorySelector{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-selector",
+				Namespace: "default",
+				UID:       "test",
+			},
+		}
+		mInventory = &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-suite",
+				Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: elementalv1.GroupVersion.String(),
+						Kind:       "MachineInventorySelector",
+						Name:       miSelector.ObjectMeta.Name,
+						UID:        miSelector.ObjectMeta.UID,
+					},
+				},
+			},
+		}
+
+		Expect(cl.Create(ctx, mInventory)).To(Succeed())
+		Expect(cl.Create(ctx, miSelector)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mInventory, miSelector)).To(Succeed())
+	})
+
+	It("successfully verifies owner reference in status", func() {
+		// Set selector reference
+		Expect(cl.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Name,
+		}, miSelector)).To(Succeed())
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: mInventory.Name,
+		}
+		Expect(cl.Status().Update(ctx, miSelector)).To(Succeed())
+
+		requeue, err := r.updateInventoryWithAdoptionStatus(ctx, mInventory)
+		Expect(err).To(Succeed())
+		Expect(requeue).To(BeFalse())
+
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(elementalv1.SuccessfullyAdoptedReason))
+	})
+
+	It("reaches adoption validation timeout", func() {
+
+		testTimeout := time.Now().Add(adoptionTimeout * 2 * time.Second)
+		requeue, err := r.updateInventoryWithAdoptionStatus(ctx, mInventory)
+		for err == nil {
+			Expect(err).To(Succeed())
+			Expect(requeue).To(BeTrue())
+			Expect(time.Now().Before(testTimeout)).To(BeTrue())
+			time.Sleep(time.Second)
+			requeue, err = r.updateInventoryWithAdoptionStatus(ctx, mInventory)
+		}
+		Expect(err.Error()).To(ContainSubstring("Adoption timeout"))
+
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(cond.Reason).To(Equal(elementalv1.ValidatingAdoptionReason))
+	})
+
+	It("detects an adoption mismatch", func() {
+		// Set selector reference
+		Expect(cl.Get(ctx, types.NamespacedName{
+			Namespace: miSelector.Namespace,
+			Name:      miSelector.Name,
+		}, miSelector)).To(Succeed())
+		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
+			Name: "unexpectedName",
+		}
+		Expect(cl.Status().Update(ctx, miSelector)).To(Succeed())
+
+		requeue, err := r.updateInventoryWithAdoptionStatus(ctx, mInventory)
+		Expect(err).NotTo(Succeed())
+		Expect(err.Error()).To(ContainSubstring("Ownership mismatch"))
+		Expect(requeue).To(BeFalse())
+	})
+
+	It("has nothing if no owner is set", func() {
+		mInventory.ObjectMeta.OwnerReferences = []metav1.OwnerReference{}
+
+		requeue, err := r.updateInventoryWithAdoptionStatus(ctx, mInventory)
+		Expect(err).To(Succeed())
+		Expect(requeue).To(BeFalse())
+
+		cond := meta.FindStatusCondition(mInventory.Status.Conditions, elementalv1.AdoptionReadyCondition)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+		Expect(cond.Reason).To(Equal(elementalv1.WaitingToBeAdoptedReason))
+	})
+
 })
 
 var _ = Describe("updateInventoryWithPlanStatus", func() {

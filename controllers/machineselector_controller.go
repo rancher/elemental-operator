@@ -151,7 +151,7 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 			Status:  metav1.ConditionFalse,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, fmt.Errorf("failed to set bootstrap plan: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to set adoption status: %w", err)
 	}
 
 	if err := r.updatePlanSecretWithBootstrap(ctx, miSelector, mInventory); err != nil {
