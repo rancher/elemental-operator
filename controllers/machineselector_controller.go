@@ -259,7 +259,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 
 	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
 	if inventoryReady == nil {
-		return false, fmt.Errorf("Missing required InventoryReadyCondition it must be already set at this phase")
+		return false, fmt.Errorf("missing required InventoryReadyCondition it must be already set at this phase")
 	}
 	if inventoryReady.Status == metav1.ConditionTrue {
 		logger.V(log.DebugDepth).Info("Machine inventory is successfully adopted already")
@@ -288,10 +288,10 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 	switch {
 	case owner != nil && owner.Name != miSelector.Name:
 		miSelector.Status.MachineInventoryRef = nil
-		return false, fmt.Errorf("Machine inventory ownership mismatch detected, restart adoption")
+		return false, fmt.Errorf("machine inventory ownership mismatch detected, restart adoption")
 	case orphanInventory && now.After(deadLine):
 		miSelector.Status.MachineInventoryRef = nil
-		return false, fmt.Errorf("Machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
+		return false, fmt.Errorf("machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
 	case orphanInventory:
 		logger.V(log.DebugDepth).Info("Machine inventory adoption not completed")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
@@ -656,7 +656,7 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 	miSelectorList := &elementalv1.MachineInventorySelectorList{}
 	err := r.List(ctx, miSelectorList, client.InNamespace(mInventory.Namespace))
 	if err != nil {
-		logger.Error(err, "Failed to list machine inventories")
+		logger.Error(err, "failed to list machine inventories")
 		return result
 	}
 
