@@ -71,7 +71,7 @@ func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) 
 			},
 			handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
 		).
-		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
+		WithEventFilter(filterSelectorUpdateEvents()).
 		Complete(r)
 }
 
@@ -218,7 +218,9 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 		return nil
 	}
 
-	patchBase := client.MergeFrom(mInventory.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically
+	// set the ownership of an already owned inventory
+	patchBase := client.MergeFromWithOptions(mInventory.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	mInventory.OwnerReferences = []metav1.OwnerReference{
 		{
@@ -594,25 +596,34 @@ func (r *MachineInventorySelectorReconciler) setInvetorySelectorAddresses(ctx co
 	return nil
 }
 
-func (r *MachineInventorySelectorReconciler) ignoreIncrementalStatusUpdate() predicate.Funcs {
+func filterSelectorUpdateEvents() predicate.Funcs {
 	return predicate.Funcs{
-		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
-		// for MachineInventorySelector resources only
+
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineInventorySelector" {
-				return true
+			switch e.ObjectOld.GetObjectKind().GroupVersionKind().Kind {
+			case "MachineInventorySelector":
+				// Avoid reconciling if the event triggering the reconciliation is related to
+				// incremental status updates for MachineInventorySelector resources only
+				oldS := e.ObjectOld.(*elementalv1.MachineInventorySelector).DeepCopy()
+				newS := e.ObjectNew.(*elementalv1.MachineInventorySelector).DeepCopy()
+
+				oldS.Status = elementalv1.MachineInventorySelectorStatus{}
+				newS.Status = elementalv1.MachineInventorySelectorStatus{}
+
+				oldS.ObjectMeta.ResourceVersion = ""
+				newS.ObjectMeta.ResourceVersion = ""
+				return !cmp.Equal(oldS, newS)
+			case "MachineInventory":
+				// Avoid reconciling if the event triggering the reconciliation is related to
+				// adopting an inventory resource
+				oldI := e.ObjectOld.(*elementalv1.MachineInventory)
+				newI := e.ObjectNew.(*elementalv1.MachineInventory)
+
+				// Do not reconcile if new owners are set
+				return len(oldI.ObjectMeta.OwnerReferences) >= len(newI.ObjectMeta.OwnerReferences)
+			default:
+				return false
 			}
-
-			oldMISelector := e.ObjectOld.(*elementalv1.MachineInventorySelector).DeepCopy()
-			newMISelector := e.ObjectNew.(*elementalv1.MachineInventorySelector).DeepCopy()
-
-			oldMISelector.Status = elementalv1.MachineInventorySelectorStatus{}
-			newMISelector.Status = elementalv1.MachineInventorySelectorStatus{}
-
-			oldMISelector.ObjectMeta.ResourceVersion = ""
-			newMISelector.ObjectMeta.ResourceVersion = ""
-
-			return !cmp.Equal(oldMISelector, newMISelector)
 		},
 	}
 }
