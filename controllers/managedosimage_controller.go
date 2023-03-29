@@ -44,9 +44,7 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -68,13 +66,7 @@ type ManagedOSImageReconciler struct {
 func (r *ManagedOSImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.ManagedOSImage{}).
-		Watches(
-			&source.Kind{
-				Type: &fleetv1.Bundle{},
-			},
-			&handler.EnqueueRequestForOwner{
-				IsController: true,
-				OwnerType:    &elementalv1.ManagedOSImage{}}).
+		Owns(&fleetv1.Bundle{}).
 		Complete(r)
 }
 

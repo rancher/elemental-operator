@@ -329,20 +329,27 @@ func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.F
 		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
 		// for MachineInventory resources only
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineInventory" {
-				return true
+			logger := ctrl.LoggerFrom(context.Background())
+
+			if oldMInventory, ok := e.ObjectOld.(*elementalv1.MachineInventory); ok {
+
+				oldMInventory = oldMInventory.DeepCopy()
+				newMInventory := e.ObjectNew.(*elementalv1.MachineInventory).DeepCopy()
+
+				oldMInventory.Status = elementalv1.MachineInventoryStatus{}
+				newMInventory.Status = elementalv1.MachineInventoryStatus{}
+
+				oldMInventory.ObjectMeta.ResourceVersion = ""
+				newMInventory.ObjectMeta.ResourceVersion = ""
+
+				update := !cmp.Equal(oldMInventory, newMInventory)
+				if !update {
+					logger.V(log.DebugDepth).Info("Ignoring status update", "MInventory", oldMInventory.Name)
+				}
+				return !cmp.Equal(oldMInventory, newMInventory)
 			}
-
-			oldMInventory := e.ObjectOld.(*elementalv1.MachineInventory).DeepCopy()
-			newMInventory := e.ObjectNew.(*elementalv1.MachineInventory).DeepCopy()
-
-			oldMInventory.Status = elementalv1.MachineInventoryStatus{}
-			newMInventory.Status = elementalv1.MachineInventoryStatus{}
-
-			oldMInventory.ObjectMeta.ResourceVersion = ""
-			newMInventory.ObjectMeta.ResourceVersion = ""
-
-			return !cmp.Equal(oldMInventory, newMInventory)
+			// Return true in case it watches other types
+			return true
 		},
 	}
 }

@@ -600,30 +600,37 @@ func filterSelectorUpdateEvents() predicate.Funcs {
 	return predicate.Funcs{
 
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			switch e.ObjectOld.GetObjectKind().GroupVersionKind().Kind {
-			case "MachineInventorySelector":
+			logger := ctrl.LoggerFrom(context.Background())
+
+			if oldS, ok := e.ObjectOld.(*elementalv1.MachineInventorySelector); ok {
 				// Avoid reconciling if the event triggering the reconciliation is related to
 				// incremental status updates for MachineInventorySelector resources only
-				oldS := e.ObjectOld.(*elementalv1.MachineInventorySelector).DeepCopy()
+				oldS = oldS.DeepCopy()
 				newS := e.ObjectNew.(*elementalv1.MachineInventorySelector).DeepCopy()
 
 				oldS.Status = elementalv1.MachineInventorySelectorStatus{}
 				newS.Status = elementalv1.MachineInventorySelectorStatus{}
-
 				oldS.ObjectMeta.ResourceVersion = ""
 				newS.ObjectMeta.ResourceVersion = ""
-				return !cmp.Equal(oldS, newS)
-			case "MachineInventory":
+
+				update := !cmp.Equal(oldS, newS)
+				if !update {
+					logger.V(log.DebugDepth).Info("Ignoring status update", "MISelector", oldS.Name)
+				}
+				return update
+			}
+			if oldI, ok := e.ObjectOld.(*elementalv1.MachineInventory); ok {
 				// Avoid reconciling if the event triggering the reconciliation is related to
 				// adopting an inventory resource
-				oldI := e.ObjectOld.(*elementalv1.MachineInventory)
 				newI := e.ObjectNew.(*elementalv1.MachineInventory)
-
-				// Do not reconcile if new owners are set
-				return len(oldI.ObjectMeta.OwnerReferences) >= len(newI.ObjectMeta.OwnerReferences)
-			default:
-				return false
+				update := len(newI.ObjectMeta.OwnerReferences) <= len(oldI.ObjectMeta.OwnerReferences)
+				if !update {
+					logger.V(log.DebugDepth).Info("Ignoring new additional owner update", "MInventory", oldI.Name)
+				}
+				return update
 			}
+			// Return true in case it watches other types
+			return true
 		},
 	}
 }

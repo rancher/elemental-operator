@@ -306,20 +306,25 @@ func (r *MachineRegistrationReconciler) ignoreIncrementalStatusUpdate() predicat
 		// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
 		// for MachineRegistration resources only
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.ObjectOld.GetObjectKind().GroupVersionKind().Kind != "MachineRegistration" {
-				return true
+			logger := ctrl.LoggerFrom(context.Background())
+
+			if oldMRegistration, ok := e.ObjectOld.(*elementalv1.MachineRegistration); ok {
+				oldMRegistration = oldMRegistration.DeepCopy()
+				newMregistration := e.ObjectNew.(*elementalv1.MachineRegistration).DeepCopy()
+
+				oldMRegistration.Status = elementalv1.MachineRegistrationStatus{}
+				newMregistration.Status = elementalv1.MachineRegistrationStatus{}
+				oldMRegistration.ObjectMeta.ResourceVersion = ""
+				newMregistration.ObjectMeta.ResourceVersion = ""
+
+				update := !cmp.Equal(oldMRegistration, newMregistration)
+				if !update {
+					logger.V(log.DebugDepth).Info("Ignoring status update", "MRegistration", oldMRegistration.Name)
+				}
+				return !cmp.Equal(oldMRegistration, newMregistration)
 			}
-
-			oldMRegistration := e.ObjectOld.(*elementalv1.MachineRegistration).DeepCopy()
-			newMregistration := e.ObjectNew.(*elementalv1.MachineRegistration).DeepCopy()
-
-			oldMRegistration.Status = elementalv1.MachineRegistrationStatus{}
-			newMregistration.Status = elementalv1.MachineRegistrationStatus{}
-
-			oldMRegistration.ObjectMeta.ResourceVersion = ""
-			newMregistration.ObjectMeta.ResourceVersion = ""
-
-			return !cmp.Equal(oldMRegistration, newMregistration)
+			// Return true in case it watches other resources
+			return true
 		},
 	}
 }
