@@ -159,7 +159,6 @@ func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.C
 	header.Add("Authorization", authToken)
 
 	conn, resp, err := dialer.Dial(wsURL, header)
-	log.Infof("Local Address: %s", conn.LocalAddr().String())
 	if err != nil {
 		if resp != nil {
 			if resp.StatusCode == http.StatusUnauthorized {
@@ -173,6 +172,7 @@ func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.C
 		}
 		return nil, err
 	}
+	log.Infof("Local Address: %s", conn.LocalAddr().String())
 	_ = conn.SetWriteDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 	_ = conn.SetReadDeadline(time.Now().Add(RegistrationDeadlineSeconds * time.Second))
 
