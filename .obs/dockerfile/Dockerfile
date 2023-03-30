@@ -5,7 +5,14 @@
 #!BuildTag: rancher/elemental-operator/5.3:%OPERATOR_VERSION%-%RELEASE%
 #
 
-FROM suse/sle15:15.4
+FROM suse/sle15:15.4 as BASE
+
+RUN mkdir /installroot
+RUN zypper --installroot /installroot in -y elemental-operator
+
+FROM scratch as OPERATOR
+
+COPY --from=BASE /installroot /
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.rancher.elemental
@@ -19,14 +26,6 @@ LABEL org.opensuse.reference="%%IMG_REPO%%/rancher/elemental-operator/5.3"
 LABEL org.openbuildservice.disturl="%DISTURL%"
 LABEL com.suse.supportlevel="techpreview"
 # endlabelprefix
-
-RUN zypper in -y elemental-operator
-
-# Save some space
-RUN zypper clean --all && \
-    rm -rf /var/log/update* && \
-    >/var/log/lastlog && \
-    rm -rf /boot/vmlinux*
 
 USER 10010:10010
 
