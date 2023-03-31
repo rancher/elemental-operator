@@ -79,6 +79,10 @@ register:
 support:
 	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-support $(ROOT_DIR)/cmd/support
 
+.PHONY: httpfy
+httpfy:
+	CGO_ENABLED=0 go build -ldflags '$(LDFLAGS)' -o $(BUILD_DIR)/elemental-httpfy $(ROOT_DIR)/utils/httpfy
+
 .PHONY: build-docker-operator
 build-docker-operator:
 	DOCKER_BUILDKIT=1 docker build \

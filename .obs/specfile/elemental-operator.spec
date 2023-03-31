@@ -56,6 +56,12 @@ Summary: Collect important logs for support
 This collects essential configuration files and logs to improve issue
 resolution.
 
+%package -n elemental-httpfy
+Summary: Simple http server
+
+%description -n elemental-httpfy
+httpfy starts a simple http server, serving files from the current dir.
+
 %prep
 %setup -q -n %{name}-%{version}
 cp %{S:1} .
@@ -79,6 +85,7 @@ export COMMITDATE=$(date -d @${MTIME} +%Y%m%d)
 CGO_ENABLED=0 make operator
 CGO_ENABLED=1 make register
 make support
+make httpfy
 
 %install
 %goinstall
@@ -91,6 +98,7 @@ make support
 %{__install} -m 755 build/elemental-operator %{buildroot}%{_sbindir}
 %{__install} -m 755 build/elemental-register %{buildroot}%{_sbindir}
 %{__install} -m 755 build/elemental-support %{buildroot}%{_sbindir}
+%{__install} -m 755 build/elemental-httpfy %{buildroot}%{_sbindir}
 
 %files
 %defattr(-,root,root,-)
@@ -107,5 +115,10 @@ make support
 %license LICENSE
 %{_sbindir}/elemental-support
 
+
+%files -n elemental-httpfy
+%defattr(-,root,root,-)
+%license LICENSE
+%{_sbindir}/elemental-httpfy
 
 %changelog
