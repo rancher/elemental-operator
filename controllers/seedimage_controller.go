@@ -42,6 +42,8 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
+const seedImgVolSize = 4 * 1024 * 1024 * 1024 // 4 GiB
+
 type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
@@ -447,20 +449,12 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 }
 
 func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
-	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
-	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
-
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
 	deadline := seedImg.Spec.LifetimeMinutes
 	configMap := name
-
 	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
-	buildCommands := []string{
-		fmt.Sprintf("curl -Lo base.iso %s", baseImg),
-		"xorriso -indev base.iso -outdev /iso/" + isoName + " -map /overlay / -boot_image any replay",
-	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -472,32 +466,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 			},
 		},
 		Spec: corev1.PodSpec{
-			InitContainers: []corev1.Container{
-				{
-					Name:            "build",
-					Image:           buildImg,
-					ImagePullPolicy: pullPolicy,
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceEphemeralStorage: *resource.NewQuantity(volLim, resource.BinarySI),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceEphemeralStorage: *resource.NewQuantity(volRes, resource.BinarySI),
-						},
-					},
-					Command: []string{"/bin/bash", "-c"},
-					Args:    []string{strings.Join(buildCommands, " && ")},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "iso-storage",
-							MountPath: "/iso",
-						}, {
-							Name:      "config-map",
-							MountPath: "/overlay",
-						},
-					},
-				},
-			},
+			InitContainers: defineInitContainers(baseImg, isoName, buildImg, pullPolicy),
 			Containers: []corev1.Container{
 				{
 					Name:            "serve",
@@ -525,7 +494,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 					Name: "iso-storage",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{
-							SizeLimit: resource.NewQuantity(volLim, resource.BinarySI),
+							SizeLimit: resource.NewQuantity(seedImgVolSize, resource.BinarySI),
 						},
 					},
 				}, {
@@ -544,6 +513,68 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 		},
 	}
 	return pod
+}
+
+func defineInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
+	const baseIsoPath = "/iso/base.iso"
+
+	containers := []corev1.Container{}
+	buildCommands := []string{
+		fmt.Sprintf("xorriso -indev %s -outdev /iso/%s -map /overlay / -boot_image any replay", baseIsoPath, isoName),
+		fmt.Sprintf("rm -rf %s", baseIsoPath),
+	}
+
+	if util.IsHTTP(baseImg) {
+		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, baseImg)}, buildCommands...)
+	} else {
+		// If baseImg is not an HTTP url assume it is an image reference
+		containers = append(
+			containers, corev1.Container{
+				Name:            "baseiso",
+				Image:           baseImg,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"busybox", "sh", "-c"},
+				Args:            []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)},
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "iso-storage",
+						MountPath: "/iso",
+					},
+				},
+			},
+		)
+	}
+
+	containers = append(
+		containers, corev1.Container{
+			Name:            "build",
+			Image:           buildImg,
+			ImagePullPolicy: pullPolicy,
+			Command:         []string{"/bin/bash", "-c"},
+			Args:            []string{strings.Join(buildCommands, " && ")},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "iso-storage",
+					MountPath: "/iso",
+				}, {
+					Name:      "config-map",
+					MountPath: "/overlay",
+				},
+			},
+		},
+	)
+
+	// Make sure the pod starts starts having enough disk for the maximum volume size
+	// volume size just represents a maximum it is not computed to schedule pods.
+	// To ensure there is enough local disk space we add a storage requirement to the first
+	// init container of the pod.
+	containers[0].Resources = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceEphemeralStorage: *resource.NewQuantity(seedImgVolSize, resource.BinarySI),
+		},
+	}
+
+	return containers
 }
 
 func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedImg *elementalv1.SeedImage) error {

@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"gopkg.in/yaml.v3"
@@ -108,4 +110,13 @@ func IsObjectOwned(obj *metav1.ObjectMeta, uid types.UID) bool {
 		}
 	}
 	return false
+}
+
+func IsHTTP(uri string) bool {
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		return false
+	}
+
+	return strings.HasPrefix(parsed.Scheme, "http")
 }
