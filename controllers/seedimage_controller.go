@@ -111,6 +111,13 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 
 	logger.Info("Reconciling seedimage object")
 
+	// RetriggerBuild resets the conditions: the controller will reconcile anew all the resources in the following loop
+	if seedImg.Spec.RetriggerBuild {
+		seedImg.Status.Conditions = []metav1.Condition{}
+		seedImg.Spec.RetriggerBuild = false
+		return ctrl.Result{}, nil
+	}
+
 	// Init the Ready condition as we want it to be the first one displayed
 	if readyCond := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.ReadyCondition); readyCond == nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
@@ -140,7 +147,7 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 			Reason:  elementalv1.PodCreationFailureReason,
 			Message: err.Error(),
 		})
-		return ctrl.Result{}, fmt.Errorf("failed to create pod: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile pod: %w", err)
 	}
 
 	if err := r.createBuildImageService(ctx, seedImg); err != nil {
@@ -184,6 +191,19 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling Pod resources")
+
+	seedImgCondition := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady)
+	seedImgConditionMet := false
+	if seedImgCondition != nil && seedImgCondition.Status == metav1.ConditionTrue {
+		seedImgConditionMet = true
+	}
+
+	if seedImgConditionMet && seedImgCondition.Reason == elementalv1.SeedImageBuildDeadline {
+		logger.V(5).Info("Seed image deadline passed, skip")
+		return nil
+	}
+
+	seedImg.Spec.RetriggerBuild = false
 
 	podConfigMap := &corev1.ConfigMap{}
 	if err := r.Get(ctx, types.NamespacedName{
@@ -236,6 +256,10 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		}
 	}
 
+	if seedImgConditionMet {
+		logger.V(5).Info("SeedImageReady condition is met: skip Pod creation")
+		return nil
+	}
 	// apierrors.IsNotFound(err) OR we just deleted the old Pod
 
 	logger.V(5).Info("Creating pod")
@@ -312,10 +336,15 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 	podName := seedImg.Name
 	podNamespace := seedImg.Namespace
 
+	logger := ctrl.LoggerFrom(ctx)
+
 	// no need to reconcile
-	if meta.IsStatusConditionTrue(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady) {
+	if meta.IsStatusConditionTrue(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady) &&
+		foundPod.Status.Phase != corev1.PodSucceeded {
 		return nil
 	}
+
+	logger.V(5).Info("Sync SeedImage Status from builder Pod", "pod-phase", foundPod.Status.Phase)
 
 	switch foundPod.Status.Phase {
 	case corev1.PodPending:
@@ -375,6 +404,25 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 			Status:  metav1.ConditionFalse,
 			Reason:  elementalv1.SeedImageBuildFailureReason,
 			Message: "pod failed",
+		})
+		return nil
+	case corev1.PodSucceeded:
+		if err := r.Delete(ctx, foundPod); err != nil {
+			errMsg := fmt.Errorf("failed to delete builder pod: %w", err)
+			meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.SeedImageConditionReady,
+				Status:  metav1.ConditionFalse,
+				Reason:  elementalv1.SeedImageBuildDeadline,
+				Message: errMsg.Error(),
+			})
+			return errMsg
+		}
+		seedImg.Status.DownloadURL = ""
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.SeedImageConditionReady,
+			Status:  metav1.ConditionTrue,
+			Reason:  elementalv1.SeedImageBuildDeadline,
+			Message: "seed image deadline elapsed",
 		})
 		return nil
 	default:
