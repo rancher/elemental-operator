@@ -28,6 +28,16 @@ type SeedImageSpec struct {
 	BaseImage string `json:"baseImage"`
 	// MachineRegistrationRef a reference to the related MachineRegistration.
 	MachineRegistrationRef *corev1.ObjectReference `json:"registrationRef"`
+	// LifetimeMinutes the time at which the built seed image will be cleaned up.
+	// If when the lifetime elapses the built image is being downloaded, the active
+	// download will be completed before removing the built image.
+	// Default is 60 minutes, set to 0 to disable.
+	// +kubebuilder:default:=60
+	// +optional
+	LifetimeMinutes int32 `json:"cleanupAfterMinutes"`
+	// RetriggerBuild triggers to build again a cleaned up seed image.
+	// +optional
+	RetriggerBuild bool `json:"retriggerBuild"`
 	// CloudConfig contains cloud-config data to be put in the generated iso.
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
