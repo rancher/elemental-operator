@@ -158,4 +158,6 @@ const (
 	SeedImageExposeFailureReason = "SeedImageExposeFailure"
 	// SeedImageBuildSuccessReason documents seed image build job success.
 	SeedImageBuildSuccessReason = "SeedImageBuildSuccess"
+	// SeedImageBuildDeadline documents seed image build deadline has elapsed.
+	SeedImageBuildDeadline = "SeedImageBuildDeadline"
 )

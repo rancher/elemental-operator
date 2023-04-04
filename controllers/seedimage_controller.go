@@ -202,6 +202,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	podName := seedImg.Name
 	podNamespace := seedImg.Namespace
 	podBaseImg := seedImg.Spec.BaseImage
+	podDeadline := seedImg.Spec.LifetimeMinutes
 
 	foundPod := &corev1.Pod{}
 	err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
@@ -239,7 +240,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, seedImg.Name, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, seedImg.Name, r.SeedImageImagePullPolicy, podDeadline)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -403,7 +404,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, buildImg, baseImg, configMap string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(name, namespace, buildImg, baseImg, configMap string, pullPolicy corev1.PullPolicy, deadline int32) *corev1.Pod {
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -459,6 +460,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, configMap string, pul
 							ContainerPort: 80,
 						},
 					},
+					Args: []string{"-t", fmt.Sprintf("%d", deadline*60)},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",

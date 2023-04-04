@@ -2520,6 +2520,14 @@ spec:
                 description: BaseImg the base elemental image used to build the seed
                   image.
                 type: string
+              cleanupAfterMinutes:
+                default: 60
+                description: LifetimeMinutes the time at which the built seed image
+                  will be cleaned up. If when the lifetime elapses the built image
+                  is being downloaded, the active download will be completed before
+                  removing the built image. Default is 60 minutes, set to 0 to disable.
+                format: int32
+                type: integer
               cloud-config:
                 description: CloudConfig contains cloud-config data to be put in the
                   generated iso.
@@ -2561,6 +2569,10 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              retriggerBuild:
+                description: RetriggerBuild triggers to build again a cleaned up seed
+                  image.
+                type: boolean
             required:
             - registrationRef
             type: object
