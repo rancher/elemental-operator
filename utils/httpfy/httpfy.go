@@ -17,18 +17,22 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
-	var port int
+	var port, timeout int
 	var dir string
+	var srv http.Server
 
 	flag.IntVar(&port, "p", 80, "listening port")
+	flag.IntVar(&timeout, "t", 0, "timeout in seconds")
 	flag.StringVar(&dir, "d", "", "serving dir"+" (default current dir)")
 
 	flag.Parse()
@@ -48,6 +52,26 @@ func main() {
 		log.Fatalf("%s is not a directory", dir)
 	}
 
+	shutdownCompleted := make(chan struct{})
+	if timeout > 0 {
+		go func() {
+			log.Printf("Deadline set to %d seconds", timeout)
+			time.Sleep(time.Duration(timeout) * time.Second)
+			log.Printf("Deadline reached, closing idle connections")
+			// Shutdown makes ListenAndServe to return immediately, than waits for
+			// active connections to complete before unblocking
+			if err := srv.Shutdown(context.Background()); err != nil {
+				log.Printf("Got unexpected error on shutdown: %s", err.Error())
+			}
+			close(shutdownCompleted)
+		}()
+	}
+
 	log.Printf("Serving '%s' on port %d", dir, port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), http.FileServer(http.Dir(dir))))
+	srv.Addr = fmt.Sprintf(":%d", port)
+	srv.Handler = http.FileServer(http.Dir(dir))
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
+	<-shutdownCompleted
 }
