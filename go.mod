@@ -1,6 +1,6 @@
 module github.com/rancher/elemental-operator
 
-go 1.18
+go 1.19
 
 replace (
 	k8s.io/api => k8s.io/api v0.22.2
@@ -43,12 +43,12 @@ require (
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20221213084338-a8ffdd2b87e3
 	github.com/rancher-sandbox/go-tpm v0.0.0-20220823075603-d273b298fcda
 	github.com/rancher/fleet/pkg/apis v0.0.0-20220318160658-4dc66c946ca2
-	github.com/rancher/lasso v0.0.0-20220628160937-749b3397db38
+	github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc
 	github.com/rancher/rancher/pkg/apis v0.0.0-20211013185633-a636bda2a00e
 	github.com/rancher/steve v0.0.0-20220503004032-53511a06ff37
 	github.com/rancher/system-agent v0.2.14-0.20230106171935-24c523a4408a
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
-	github.com/rancher/wrangler v1.0.0
+	github.com/rancher/wrangler v1.1.1
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/spf13/cobra v1.6.0
 	github.com/spf13/viper v1.9.0
@@ -142,11 +142,11 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
-	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
-	golang.org/x/sys v0.4.0 // indirect
-	golang.org/x/term v0.4.0 // indirect
-	golang.org/x/text v0.6.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -157,13 +157,13 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.24.0
+	k8s.io/apiextensions-apiserver v0.25.4
 	k8s.io/apiserver v0.24.0 // indirect
 	k8s.io/component-base v0.26.0 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.80.1
-	k8s.io/kube-aggregator v0.24.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
+	k8s.io/kube-aggregator v0.25.4 // indirect
+	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
 	k8s.io/kubelet v0.26.0 // indirect
 	k8s.io/kubernetes v1.26.0 // indirect
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
