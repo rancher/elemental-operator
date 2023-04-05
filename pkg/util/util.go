@@ -17,12 +17,16 @@ limitations under the License.
 package util
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"gopkg.in/yaml.v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/elemental-operator/pkg/log"
 )
@@ -68,4 +72,31 @@ func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, er
 	}
 
 	return bytes, nil
+}
+
+// GetSettingsValue find the given name in Rancher settings and returns its value if found
+func GetSettingsValue(ctx context.Context, cli client.Client, name string) (string, error) {
+	setting := &managementv3.Setting{}
+	if err := cli.Get(ctx, types.NamespacedName{Name: name}, setting); err != nil {
+		log.Errorf("Error getting %s setting: %s", name, err.Error())
+		return "", err
+	}
+	return setting.Value, nil
+}
+
+// GetRancherCACert returns the cacerts included within Rancher settings. If not configured
+// returns an empty string
+func GetRancherCACert(ctx context.Context, cli client.Client) string {
+	cacert, err := GetSettingsValue(ctx, cli, "cacerts")
+	if err != nil {
+		log.Errorf("Error getting cacerts: %s", err.Error())
+	}
+
+	if cacert == "" {
+		if cacert, err = GetSettingsValue(ctx, cli, "internal-cacerts"); err != nil {
+			log.Errorf("Error getting internal-cacerts: %s", err.Error())
+			return ""
+		}
+	}
+	return cacert
 }

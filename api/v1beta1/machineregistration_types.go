@@ -74,6 +74,30 @@ type MachineRegistrationList struct {
 	Items           []MachineRegistration `json:"items"`
 }
 
+// GetClientRegistrationConfig returns the configuration required by the elemental-register
+// to register itself against this MachineRegistration instance.
+func (m MachineRegistration) GetClientRegistrationConfig(cacert string) *Config {
+	conf := m.Spec.Config
+
+	if conf == nil {
+		conf = &Config{}
+	}
+
+	mRegistration := conf.Elemental.Registration
+
+	return &Config{
+		Elemental: Elemental{
+			Registration: Registration{
+				URL:             m.Status.RegistrationURL,
+				CACert:          cacert,
+				EmulateTPM:      mRegistration.EmulateTPM,
+				EmulatedTPMSeed: mRegistration.EmulatedTPMSeed,
+				NoSMBIOS:        mRegistration.NoSMBIOS,
+			},
+		},
+	}
+}
+
 func init() {
 	SchemeBuilder.Register(&MachineRegistration{}, &MachineRegistrationList{})
 }
