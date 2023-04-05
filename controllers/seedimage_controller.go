@@ -18,10 +18,10 @@ package controllers
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -55,6 +55,7 @@ type SeedImageReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create;get
 
 // TODO: extend SetupWithManager with "Watches" and "WithEventFilter"
 func (r *SeedImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -184,23 +185,26 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.Info("Reconciling Pod resources")
 
+	podConfigMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      seedImg.Name,
+		Namespace: seedImg.Namespace,
+	}, podConfigMap); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed fetching config map: %w", err)
+		}
+		podConfigMap, err = r.createConfigMapObject(ctx, seedImg, mRegistration)
+		if err != nil {
+			return fmt.Errorf("failed creating config map: %w", err)
+		}
+	}
+
 	podName := seedImg.Name
 	podNamespace := seedImg.Namespace
 	podBaseImg := seedImg.Spec.BaseImage
-	podRegURL := mRegistration.Status.RegistrationURL
-
-	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
-	if err != nil {
-		return err
-	}
-
-	podCloudConfigb64 := ""
-	if len(cloudConfig) != 0 {
-		podCloudConfigb64 = base64.StdEncoding.EncodeToString(cloudConfig)
-	}
 
 	foundPod := &corev1.Pod{}
-	err = r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
+	err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
@@ -222,9 +226,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 		// pod is already there and with the right configuration
 		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
-			foundPod.Annotations["elemental.cattle.io/registration-url"] == podRegURL &&
-			foundPod.Annotations["elemental.cattle.io/cloud-config-b64"] == podCloudConfigb64 {
-
+			foundPod.Annotations["elemental.cattle.io/configmap-uid"] == string(podConfigMap.ObjectMeta.UID) {
 			return r.updateStatusFromPod(ctx, seedImg, foundPod)
 		}
 
@@ -238,7 +240,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, podRegURL, podCloudConfigb64, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, r.SeedImageImagePullPolicy, podConfigMap)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -266,6 +268,44 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		Message: "seed image build started",
 	})
 	return nil
+}
+
+func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) (*corev1.ConfigMap, error) {
+	data := map[string][]byte{}
+
+	regClientConf := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
+	regData, err := yaml.Marshal(regClientConf)
+	if err != nil {
+		return nil, fmt.Errorf("failed marshalling registration config: %w", err)
+	}
+	data["registration"] = regData
+
+	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed marshalling cloud-config: %w", err)
+	}
+	if len(cloudConfig) > 0 {
+		data["cloud-config"] = cloudConfig
+	} else {
+		data["cloud-config"] = []byte{}
+	}
+
+	conf := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		},
+		BinaryData: data,
+	}
+	if err := controllerutil.SetControllerReference(seedImg, conf, r.Scheme()); err != nil {
+		return nil, fmt.Errorf("failed setting configmap ownership: %w", err)
+	}
+
+	if err := r.Create(ctx, conf); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("failed to create registration config map: %w", err)
+	}
+
+	return conf, nil
 }
 
 func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *elementalv1.SeedImage, foundPod *corev1.Pod) error {
@@ -364,15 +404,13 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudConfig string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(name, namespace, buildImg, baseImg string, pullPolicy corev1.PullPolicy, configMap *corev1.ConfigMap) *corev1.Pod {
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
 	buildCommands := []string{
-		fmt.Sprintf("echo %s | base64 -d > cloud-config.yaml", base64CloudConfig),
-		fmt.Sprintf("curl -Lo base.img %s", baseImg),
-		fmt.Sprintf("curl -ko reg.yaml %s", regURL),
-		"xorriso -indev base.img -outdev /iso/elemental.iso -map reg.yaml /livecd-cloud-config.yaml -map cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay",
+		fmt.Sprintf("curl -Lo base.iso %s", baseImg),
+		"xorriso -indev base.iso -outdev /iso/elemental.iso -map /overlay / -boot_image any replay",
 	}
 
 	pod := &corev1.Pod{
@@ -381,9 +419,8 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 			Namespace: namespace,
 			Labels:    map[string]string{"app.kubernetes.io/name": name},
 			Annotations: map[string]string{
-				"elemental.cattle.io/base-image":       baseImg,
-				"elemental.cattle.io/registration-url": regURL,
-				"elemental.cattle.io/cloud-config-b64": base64CloudConfig,
+				"elemental.cattle.io/base-image":    baseImg,
+				"elemental.cattle.io/configmap-uid": string(configMap.ObjectMeta.UID),
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -406,6 +443,9 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 						{
 							Name:      "iso-storage",
 							MountPath: "/iso",
+						}, {
+							Name:      "config-map",
+							MountPath: "/overlay",
 						},
 					},
 				},
@@ -437,6 +477,17 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{
 							SizeLimit: resource.NewQuantity(volLim, resource.BinarySI),
+						},
+					},
+				}, {
+					Name: "config-map",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+							Items: []corev1.KeyToPath{
+								{Key: "registration", Path: "livecd-cloud-config.yaml"},
+								{Key: "cloud-config", Path: "iso-config/cloud-config.yaml"},
+							},
 						},
 					},
 				},
