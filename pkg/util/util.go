@@ -23,6 +23,7 @@ import (
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -99,4 +100,13 @@ func GetRancherCACert(ctx context.Context, cli client.Client) string {
 		}
 	}
 	return cacert
+}
+
+func IsPodOwned(pod *corev1.Pod, uid types.UID) bool {
+	for _, owner := range pod.GetOwnerReferences() {
+		if owner.UID == uid {
+			return true
+		}
+	}
+	return false
 }
