@@ -234,7 +234,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		logger.V(5).Info("Pod already there")
 
 		// ensure the pod was created by us
-		if !util.IsPodOwned(foundPod, seedImg.UID) {
+		if !util.IsObjectOwned(&foundPod.ObjectMeta, seedImg.UID) {
 			return fmt.Errorf("pod already exists and was not created by this controller")
 		}
 

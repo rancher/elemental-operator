@@ -97,3 +97,27 @@ func (w WriteFiles) DeepCopyObject() runtime.Object {
 }
 
 var _ runtime.Object = WriteFiles{}
+
+var _ = Describe("IsObjectOwned", func() {
+	obj := metav1.ObjectMeta{
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				Name: "owner1",
+				UID:  "owner1UID",
+			},
+			{
+				Name: "owner2",
+				UID:  "owner2UID",
+			},
+		},
+	}
+
+	It("should return true when the passed owner UID is found", func() {
+		Expect(IsObjectOwned(&obj, "owner1UID")).To(BeTrue())
+		Expect(IsObjectOwned(&obj, "owner2UID")).To(BeTrue())
+	})
+	It("should return false when the passed owner UID is not found", func() {
+		Expect(IsObjectOwned(&obj, "owner3UID")).To(BeFalse())
+		Expect(IsObjectOwned(&metav1.ObjectMeta{}, "owner1UID")).To(BeFalse())
+	})
+})
