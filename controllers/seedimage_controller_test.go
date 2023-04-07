@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,6 +27,7 @@ import (
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -203,6 +205,28 @@ var _ = Describe("reconcileBuildImagePod", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should skip the reconcile loop when the SeedImageReady condition is met and the Image lifetime has expired", func() {
+		seedImg.Status.Conditions = []metav1.Condition{
+			{
+				Type:   elementalv1.SeedImageConditionReady,
+				Status: metav1.ConditionTrue,
+				Reason: elementalv1.SeedImageBuildDeadline,
+			},
+		}
+
+		err := r.reconcileBuildImagePod(ctx, seedImg, mRegistration)
+
+		Expect(err).ToNot(HaveOccurred())
+		foundPod := &corev1.Pod{}
+		err = cl.Get(ctx, types.NamespacedName{
+			Namespace: seedImg.Namespace,
+			Name:      seedImg.Name,
+		}, foundPod)
+
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+	})
+
 	It("should recreate the pod if the pod is owned but the base iso is different", func() {
 
 		_, err := r.Reconcile(ctx, reconcile.Request{
@@ -362,5 +386,77 @@ var _ = Describe("createConfigMapObject", func() {
 		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{}
 		seedImg.Spec.CloudConfig["write_files"] = runtime.RawExtension{Raw: []byte("invalid data")}
 		Expect(r.createConfigMapObject(ctx, seedImg, mRegistration)).ToNot(Succeed())
+	})
+})
+
+var _ = Describe("updateStatusFromPod", func() {
+	var r *SeedImageReconciler
+	var seedImg *elementalv1.SeedImage
+	var pod *corev1.Pod
+
+	BeforeEach(func() {
+		r = &SeedImageReconciler{
+			Client:         cl,
+			SeedImageImage: "quay.io/costoolkit/seedimage-builder:latest",
+		}
+		seedImg = &elementalv1.SeedImage{
+			Status: elementalv1.SeedImageStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   elementalv1.SeedImageConditionReady,
+						Status: metav1.ConditionUnknown,
+					},
+				},
+			},
+		}
+
+		pod = &corev1.Pod{}
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, seedImg, pod)).To(Succeed())
+	})
+
+	It("should sync SeedImageReady condition to Pod phase", func() {
+		expectedStates := []struct {
+			podPhase           corev1.PodPhase
+			errorExpected      bool
+			imgConditionState  metav1.ConditionStatus
+			imgConditionReason string
+		}{
+			{corev1.PodPending, false, metav1.ConditionFalse, elementalv1.SeedImageBuildOngoingReason},
+			{corev1.PodRunning, true, metav1.ConditionFalse, elementalv1.SeedImageExposeFailureReason},
+			{corev1.PodFailed, false, metav1.ConditionFalse, elementalv1.SeedImageBuildFailureReason},
+			{corev1.PodSucceeded, true, metav1.ConditionFalse, elementalv1.SeedImageBuildDeadline},
+			{corev1.PodUnknown, false, metav1.ConditionUnknown, elementalv1.SeedImageBuildUnknown},
+		}
+
+		for _, expectedState := range expectedStates {
+			pod.Status.Phase = expectedState.podPhase
+			err := r.updateStatusFromPod(ctx, seedImg, pod)
+			if expectedState.errorExpected {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
+			annotation := fmt.Sprintf("pod phase: %s", expectedState.podPhase)
+			Expect(seedImg.Status.Conditions[0].Status).To(Equal(expectedState.imgConditionState), annotation)
+			Expect(seedImg.Status.Conditions[0].Reason).To(Equal(expectedState.imgConditionReason), annotation)
+		}
+	})
+
+	It("should skip syncing when SeedImageReady condition is True", func() {
+		seedImg.Status.Conditions = []metav1.Condition{
+			{
+				Type:   elementalv1.SeedImageConditionReady,
+				Status: metav1.ConditionTrue,
+				Reason: "should stay untouched",
+			},
+		}
+
+		err := r.updateStatusFromPod(ctx, seedImg, pod)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(seedImg.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(seedImg.Status.Conditions[0].Reason).To(Equal("should stay untouched"))
 	})
 })

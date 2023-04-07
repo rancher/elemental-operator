@@ -160,4 +160,6 @@ const (
 	SeedImageBuildSuccessReason = "SeedImageBuildSuccess"
 	// SeedImageBuildDeadline documents seed image build deadline has elapsed.
 	SeedImageBuildDeadline = "SeedImageBuildDeadline"
+	// SeedImageBuildUnknown documents seed image build job in unknown status.
+	SeedImageBuildUnknown = "SeedImageBuildUnknown"
 )
