@@ -42,8 +42,9 @@ var _ = Describe("reconcile seed image", func() {
 
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
-			Client:         cl,
-			SeedImageImage: "quay.io/costoolkit/seedimage-builder:latest",
+			Client:                   cl,
+			SeedImageImage:           "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
 		}
 
 		mRegistration = &elementalv1.MachineRegistration{
@@ -136,8 +137,9 @@ var _ = Describe("reconcileBuildImagePod", func() {
 
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
-			Client:         cl,
-			SeedImageImage: "quay.io/costoolkit/seedimage-builder:latest",
+			Client:                   cl,
+			SeedImageImage:           "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
 		}
 
 		mRegistration = &elementalv1.MachineRegistration{
