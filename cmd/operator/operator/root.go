@@ -19,6 +19,7 @@ package operator
 import (
 	"context"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -75,6 +76,7 @@ type rootConfig struct {
 	operatorImage               string
 	watchNamespace              string
 	seedimageImage              string
+	seedimageImagePullPolicy    string
 }
 
 func init() {
@@ -94,6 +96,16 @@ func NewOperatorCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operator",
 		Short: "Run the Kubernetes operator using kubebuilder.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if config.seedimageImagePullPolicy != string(corev1.PullAlways) &&
+				config.seedimageImagePullPolicy != string(corev1.PullIfNotPresent) &&
+				config.seedimageImagePullPolicy != string(corev1.PullNever) {
+				return fmt.Errorf("invalid pull policy '%s', valid values: '%s', '%s', '%s'",
+					config.seedimageImagePullPolicy,
+					corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever)
+			}
+			return nil
+		},
 		Run: func(_ *cobra.Command, _ []string) {
 			if config.debug {
 				log.EnableDebugLogging()
@@ -154,6 +166,9 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&config.seedimageImage, "seedimage-image", "", "SeedImage builder image. Used to build a SeedImage ISO.")
 	_ = viper.BindPFlag("seedimage-image", cmd.PersistentFlags().Lookup("seedimage-image"))
+
+	cmd.PersistentFlags().StringVar(&config.seedimageImagePullPolicy, "seedimage-image-pullpolicy", "IfNotPresent", "PullPolicy for the SeedImage builder image.")
+	_ = viper.BindPFlag("seedimage-image-pullpolicy", cmd.PersistentFlags().Lookup("seedimage-image-pullpolicy"))
 
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 
@@ -279,8 +294,9 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		os.Exit(1)
 	}
 	if err := (&controllers.SeedImageReconciler{
-		Client:         mgr.GetClient(),
-		SeedImageImage: config.seedimageImage,
+		Client:                   mgr.GetClient(),
+		SeedImageImage:           config.seedimageImage,
+		SeedImageImagePullPolicy: corev1.PullPolicy(config.seedimageImagePullPolicy),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "SeedImage")
 		os.Exit(1)

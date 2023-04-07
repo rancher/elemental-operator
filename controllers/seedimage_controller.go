@@ -43,7 +43,8 @@ import (
 
 type SeedImageReconciler struct {
 	client.Client
-	SeedImageImage string
+	SeedImageImage           string
+	SeedImageImagePullPolicy corev1.PullPolicy
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages,verbs=get;list;watch;create;update;patch;delete
@@ -215,7 +216,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, podRegURL, podCloudConfigb64)
+	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, podRegURL, podCloudConfigb64, r.SeedImageImagePullPolicy)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -341,7 +342,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudConfig string) *corev1.Pod {
+func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudConfig string, pullPolicy corev1.PullPolicy) *corev1.Pod {
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -368,7 +369,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 				{
 					Name:            "build",
 					Image:           buildImg,
-					ImagePullPolicy: corev1.PullIfNotPresent,
+					ImagePullPolicy: pullPolicy,
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
 							corev1.ResourceEphemeralStorage: *resource.NewQuantity(volLim, resource.BinarySI),
@@ -391,7 +392,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg, regURL, base64CloudCo
 				{
 					Name:            "serve",
 					Image:           buildImg,
-					ImagePullPolicy: corev1.PullIfNotPresent,
+					ImagePullPolicy: pullPolicy,
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "http",
