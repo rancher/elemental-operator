@@ -422,6 +422,7 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
 			Status:  metav1.ConditionUnknown,
+			Reason:  elementalv1.SeedImageBuildUnknown,
 			Message: fmt.Sprintf("pod phase %s", foundPod.Status.Phase),
 		})
 		return nil
