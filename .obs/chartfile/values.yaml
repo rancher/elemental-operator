@@ -7,6 +7,7 @@ image:
 seedImage:
   repository: "%%IMG_REPO%%/rancher/seedimage-builder/5.3"
   tag: "%VERSION%"
+  imagePullPolicy: IfNotPresent
 
 # number of operator replicas to deploy
 replicas: 1
