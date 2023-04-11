@@ -7,13 +7,15 @@
 
 FROM suse/sle15:15.4 as BASE
 
-RUN mkdir /installroot
 RUN  mkdir -p /installroot && \
     zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends elemental-httpfy xorriso curl coreutils ca-certificates ca-certificates-mozilla
+
 
 FROM scratch as SEEDIMAGE_BUILDER
 
 COPY --from=BASE /installroot /
+
+RUN /usr/sbin/update-ca-certificates
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.rancher.elemental

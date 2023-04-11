@@ -8,11 +8,12 @@ RUN go build \
 FROM registry.opensuse.org/opensuse/tumbleweed:latest AS base
 RUN mkdir -p /installroot/etc/products.d && \
     cp /etc/products.d/baseproduct /installroot/etc/products.d/ && \
-    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates && \
-    cp -a /var/lib/ca-certificates/openssl/* /installroot/var/lib/ca-certificates/openssl/
+    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates ca-certificates-mozilla
+
 
 FROM scratch AS seedimage-builder 
 COPY --from=base /installroot /
 COPY --from=build /usr/bin/httpfy /usr/bin/httpfy
+RUN /usr/sbin/update-ca-certificates
 
 ENTRYPOINT ["httpfy"]
