@@ -5,8 +5,8 @@ image:
   imagePullPolicy: IfNotPresent
 
 seedImage:
-  repository: "quay.io/costoolkit/seedimage-builder"
-  tag: "latest"
+  repository: "%%IMG_REPO%%/rancher/seedimage-builder/5.3"
+  tag: "%VERSION%"
 
 # number of operator replicas to deploy
 replicas: 1
