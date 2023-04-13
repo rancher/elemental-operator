@@ -119,6 +119,19 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 		})
 	}
 
+	mRegistration := &elementalv1.MachineRegistration{}
+
+	if err := r.reconcileSeedImageOwner(ctx, seedImg, mRegistration); err != nil {
+		errMsg := fmt.Errorf("failed to set seedimage owner: %w", err)
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Status:  metav1.ConditionFalse,
+			Reason:  elementalv1.SetOwnerFailureReason,
+			Message: errMsg.Error(),
+		})
+		return ctrl.Result{}, errMsg
+	}
+
 	if err := r.reconcileBuildImagePod(ctx, seedImg); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
@@ -147,6 +160,23 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 	})
 
 	return ctrl.Result{}, nil
+}
+
+func (r *SeedImageReconciler) reconcileSeedImageOwner(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      seedImg.Spec.MachineRegistrationRef.Name,
+		Namespace: seedImg.Spec.MachineRegistrationRef.Namespace,
+	}, mRegistration); err != nil {
+		return err
+	}
+
+	for _, o := range seedImg.OwnerReferences {
+		if o.UID == mRegistration.UID {
+			return nil
+		}
+	}
+
+	return controllerutil.SetOwnerReference(mRegistration, seedImg, r.Scheme())
 }
 
 func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedImg *elementalv1.SeedImage) error {
