@@ -132,6 +132,9 @@ const (
 
 // Seed Image conditions
 const (
+	// SetOwnerFailureReason documents failure setting MachineRegistratioRef as SeedImage owner.
+	SetOwnerFailureReason = "RegistrationNotFound"
+
 	// PodCreationFailureReason documents Pod creation failure.
 	PodCreationFailureReason = "PodCreationFailure"
 
