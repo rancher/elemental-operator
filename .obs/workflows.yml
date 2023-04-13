@@ -9,6 +9,9 @@ push_workflow:
     - trigger_services:
         project: isv:Rancher:Elemental:Dev:Teal53
         package: operator-image
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev:Teal53
+        package: seedimage-builder
   filters:
     branches:
       only:
@@ -35,6 +38,12 @@ tag_workflow:
     - trigger_services:
         project: isv:Rancher:Elemental:Dev:Teal53
         package: operator-image
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev:Teal53
+        package: seedimage-builder
+    - trigger_services:
+        project: isv:Rancher:Elemental:Staging:Teal53
+        package: seedimage-builder
   filters:
     event: tag_push
 
@@ -51,6 +60,10 @@ pr_workflow:
     - branch_package:
         source_project: isv:Rancher:Elemental:Dev:Teal53
         source_package: operator-image
+        target_project: isv:Rancher:Elemental:PR:Teal53
+    - branch_package:
+        source_project: isv:Rancher:Elemental:Dev:Teal53
+        source_package: seedimage-builder
         target_project: isv:Rancher:Elemental:PR:Teal53
   filters:
     event: pull_request
