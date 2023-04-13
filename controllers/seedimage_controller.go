@@ -132,7 +132,7 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 		return ctrl.Result{}, errMsg
 	}
 
-	if err := r.reconcileBuildImagePod(ctx, seedImg); err != nil {
+	if err := r.reconcileBuildImagePod(ctx, seedImg, mRegistration); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Status:  metav1.ConditionFalse,
@@ -179,18 +179,10 @@ func (r *SeedImageReconciler) reconcileSeedImageOwner(ctx context.Context, seedI
 	return controllerutil.SetOwnerReference(mRegistration, seedImg, r.Scheme())
 }
 
-func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedImg *elementalv1.SeedImage) error {
+func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling Pod resources")
-
-	mRegistration := &elementalv1.MachineRegistration{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      seedImg.Spec.MachineRegistrationRef.Name,
-		Namespace: seedImg.Spec.MachineRegistrationRef.Namespace,
-	}, mRegistration); err != nil {
-		return err
-	}
 
 	podName := seedImg.Name
 	podNamespace := seedImg.Namespace
