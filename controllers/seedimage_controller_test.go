@@ -64,7 +64,6 @@ var _ = Describe("reconcile seed image", func() {
 				MachineRegistrationRef: &corev1.ObjectReference{
 					Name:      mRegistration.Name,
 					Namespace: mRegistration.Namespace,
-					Kind:      mRegistration.Kind,
 				},
 			},
 		}
@@ -119,6 +118,7 @@ var _ = Describe("reconcile seed image", func() {
 		Expect(seedImg.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 		Expect(seedImg.Status.Conditions[1].Type).To(Equal(elementalv1.SeedImageConditionReady))
 		Expect(seedImg.Status.Conditions[1].Status).To(Equal(metav1.ConditionFalse))
+		Expect(seedImg.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 
 		objKey := types.NamespacedName{Namespace: seedImg.Namespace, Name: seedImg.Name}
 		Expect(r.Get(ctx, objKey, &corev1.Pod{})).To(Succeed())
