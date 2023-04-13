@@ -195,7 +195,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 
 		Expect(cl.Create(ctx, pod)).To(Succeed())
 
-		err := r.reconcileBuildImagePod(ctx, seedImg)
+		err := r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
 
 		// Pod already there and not owned by the SeedImage obj
 		Expect(err).To(HaveOccurred())
@@ -224,7 +224,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
 
 		seedImg.Spec.BaseImage = "https://example.com/new-base.iso"
-		err = r.reconcileBuildImagePod(ctx, seedImg)
+		err = r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
@@ -258,7 +258,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			"write_files": {},
 		}
 
-		err = r.reconcileBuildImagePod(ctx, seedImg)
+		err = r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
