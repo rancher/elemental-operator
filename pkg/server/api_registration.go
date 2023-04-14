@@ -123,23 +123,8 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 }
 
 func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.MachineRegistration, writer io.Writer) error {
-	if registration.Spec.Config == nil {
-		registration.Spec.Config = &elementalv1.Config{}
-	}
-
-	mRegistration := registration.Spec.Config.Elemental.Registration
-
-	return yaml.NewEncoder(writer).Encode(elementalv1.Config{
-		Elemental: elementalv1.Elemental{
-			Registration: elementalv1.Registration{
-				URL:             registration.Status.RegistrationURL,
-				CACert:          i.getRancherCACert(),
-				EmulateTPM:      mRegistration.EmulateTPM,
-				EmulatedTPMSeed: mRegistration.EmulatedTPMSeed,
-				NoSMBIOS:        mRegistration.NoSMBIOS,
-			},
-		},
-	})
+	return yaml.NewEncoder(writer).
+		Encode(registration.GetClientRegistrationConfig(i.getRancherCACert()))
 }
 
 func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
