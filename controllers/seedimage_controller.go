@@ -193,7 +193,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed fetching config map: %w", err)
 		}
-		podConfigMap, err = r.createConfigMapObject(ctx, seedImg, mRegistration)
+		err = r.createConfigMapObject(ctx, seedImg, mRegistration)
 		if err != nil {
 			return fmt.Errorf("failed creating config map: %w", err)
 		}
@@ -239,7 +239,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, r.SeedImageImagePullPolicy, podConfigMap)
+	pod := fillBuildImagePod(podName, podNamespace, r.SeedImageImage, podBaseImg, seedImg.Name, r.SeedImageImagePullPolicy)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -269,19 +269,19 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	return nil
 }
 
-func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) (*corev1.ConfigMap, error) {
+func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
 	data := map[string][]byte{}
 
 	regClientConf := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
 	regData, err := yaml.Marshal(regClientConf)
 	if err != nil {
-		return nil, fmt.Errorf("failed marshalling registration config: %w", err)
+		return fmt.Errorf("failed marshalling registration config: %w", err)
 	}
 	data["registration"] = regData
 
 	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed marshalling cloud-config: %w", err)
+		return fmt.Errorf("failed marshalling cloud-config: %w", err)
 	}
 	if len(cloudConfig) > 0 {
 		data["cloud-config"] = cloudConfig
@@ -297,14 +297,14 @@ func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg
 		BinaryData: data,
 	}
 	if err := controllerutil.SetControllerReference(seedImg, conf, r.Scheme()); err != nil {
-		return nil, fmt.Errorf("failed setting configmap ownership: %w", err)
+		return fmt.Errorf("failed setting configmap ownership: %w", err)
 	}
 
 	if err := r.Create(ctx, conf); err != nil && !apierrors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("failed to create registration config map: %w", err)
+		return fmt.Errorf("failed to create registration config map: %w", err)
 	}
 
-	return conf, nil
+	return nil
 }
 
 func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *elementalv1.SeedImage, foundPod *corev1.Pod) error {
@@ -403,7 +403,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(name, namespace, buildImg, baseImg string, pullPolicy corev1.PullPolicy, configMap *corev1.ConfigMap) *corev1.Pod {
+func fillBuildImagePod(name, namespace, buildImg, baseImg, configMap string, pullPolicy corev1.PullPolicy) *corev1.Pod {
 	const volLim = 4 * 1024 * 1024 * 1024 // 4 GiB
 	const volRes = 2 * 1024 * 1024 * 1024 // 2 GiB
 
@@ -481,7 +481,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg string, pullPolicy cor
 					Name: "config-map",
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
-							LocalObjectReference: corev1.LocalObjectReference{Name: configMap.Name},
+							LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
 							Items: []corev1.KeyToPath{
 								{Key: "registration", Path: "livecd-cloud-config.yaml"},
 								{Key: "cloud-config", Path: "iso-config/cloud-config.yaml"},

@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -263,5 +265,102 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
 		}, foundPod)).To(Succeed())
+	})
+})
+
+var _ = Describe("createConfigMapObject", func() {
+	var r *SeedImageReconciler
+	var mRegistration *elementalv1.MachineRegistration
+	var seedImg *elementalv1.SeedImage
+	var configMap *corev1.ConfigMap
+	var pod *corev1.Pod
+	var svc *corev1.Service
+
+	BeforeEach(func() {
+		r = &SeedImageReconciler{
+			Client:                   cl,
+			SeedImageImage:           "seedimage-builder-container:some-tag",
+			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
+		}
+
+		mRegistration = &elementalv1.MachineRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+		}
+
+		seedImg = &elementalv1.SeedImage{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage: "https://example.com/base.iso",
+				MachineRegistrationRef: &corev1.ObjectReference{
+					Name:      mRegistration.Name,
+					Namespace: mRegistration.Namespace,
+				},
+			},
+		}
+		pod = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      seedImg.Name,
+				Namespace: seedImg.Namespace,
+			},
+		}
+
+		svc = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, configMap, pod, svc)).To(Succeed())
+	})
+
+	It("should create a configmap with empty cloud-config data", func() {
+		Expect(r.createConfigMapObject(ctx, seedImg, mRegistration)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, configMap)).To(Succeed())
+		Expect(len(configMap.BinaryData["cloud-config"])).To(Equal(0))
+	})
+
+	It("should create a configmap with non-empty cloud-config data", func() {
+		config := []map[string]string{{
+			"path":    "/some/path",
+			"content": "file contents",
+		}}
+		rawConf, err := json.Marshal(config)
+		Expect(err).ToNot(HaveOccurred())
+		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{}
+		seedImg.Spec.CloudConfig["write_files"] = runtime.RawExtension{Raw: rawConf}
+		Expect(r.createConfigMapObject(ctx, seedImg, mRegistration)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, configMap)).To(Succeed())
+		Expect(string(configMap.BinaryData["cloud-config"])).
+			To(ContainSubstring("#cloud-config\nwrite_files:"))
+	})
+
+	It("should fail if cloud-config can't be marshalled", func() {
+		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{}
+		seedImg.Spec.CloudConfig["write_files"] = runtime.RawExtension{Raw: []byte("invalid data")}
+		Expect(r.createConfigMapObject(ctx, seedImg, mRegistration)).ToNot(Succeed())
 	})
 })
