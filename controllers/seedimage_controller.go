@@ -225,8 +225,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		}
 
 		// pod is already there and with the right configuration
-		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg &&
-			foundPod.Annotations["elemental.cattle.io/configmap-uid"] == string(podConfigMap.ObjectMeta.UID) {
+		if foundPod.Annotations["elemental.cattle.io/base-image"] == podBaseImg {
 			return r.updateStatusFromPod(ctx, seedImg, foundPod)
 		}
 
@@ -419,8 +418,7 @@ func fillBuildImagePod(name, namespace, buildImg, baseImg string, pullPolicy cor
 			Namespace: namespace,
 			Labels:    map[string]string{"app.kubernetes.io/name": name},
 			Annotations: map[string]string{
-				"elemental.cattle.io/base-image":    baseImg,
-				"elemental.cattle.io/configmap-uid": string(configMap.ObjectMeta.UID),
+				"elemental.cattle.io/base-image": baseImg,
 			},
 		},
 		Spec: corev1.PodSpec{
