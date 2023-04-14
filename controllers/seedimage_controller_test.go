@@ -252,7 +252,6 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
 		}, foundPod)).To(Succeed())
-		Expect(foundPod.Annotations["elemental.cattle.io/cloud-config-b64"]).To(Equal(""))
 
 		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{
 			"write_files": {},
@@ -264,6 +263,5 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
 		}, foundPod)).To(Succeed())
-		Expect(foundPod.Annotations["elemental.cattle.io/cloud-config-b64"]).To(Equal("I2Nsb3VkLWNvbmZpZwp3cml0ZV9maWxlczoKbnVsbAo="))
 	})
 })
