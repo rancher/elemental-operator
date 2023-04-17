@@ -23,7 +23,7 @@ jobs:
       - name: Build chart for release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          REPO=quay.io/costoolkit/elemental-operator TAG=${GITHUB_REF##*/} make chart
+          REPO=quay.io/costoolkit/elemental-operator REPO_SEEDIMAGE=quay.io/costoolkit/elemental-seedimage TAG=${GITHUB_REF##*/} make chart
       - name: Publish chart to release
         uses: fnkr/github-action-ghr@v1
         if: startsWith(github.ref, 'refs/tags/')
