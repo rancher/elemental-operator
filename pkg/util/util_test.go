@@ -24,6 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/test"
+	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 )
 
 var _ = Describe("removeInvalidConditions", func() {
@@ -119,5 +121,52 @@ var _ = Describe("IsObjectOwned", func() {
 	It("should return false when the passed owner UID is not found", func() {
 		Expect(IsObjectOwned(&obj, "owner3UID")).To(BeFalse())
 		Expect(IsObjectOwned(&metav1.ObjectMeta{}, "owner1UID")).To(BeFalse())
+	})
+})
+
+var _ = Describe("IsHTTP", func() {
+	It("should return true on a valid HTTP or HTTPS URL", func() {
+		Expect(IsHTTP("https://example.com")).To(BeTrue())
+		Expect(IsHTTP("http://insecure-url.org")).To(BeTrue())
+	})
+	It("should return false on a invalid URL or image reference", func() {
+		Expect(IsHTTP("domain.org/container/reference:some-tag")).To(BeFalse())
+		Expect(IsHTTP("!@#invalid$%&")).To(BeFalse())
+	})
+})
+
+var _ = Describe("GetRancherCacert", func() {
+	var setting *managementv3.Setting
+	BeforeEach(func() {
+		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "internal-cacerts",
+				Namespace: "default",
+			},
+			Value: "internalcertificate",
+		}
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+	})
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
+	})
+	It("should return the internal certificate", func() {
+		Expect(GetRancherCACert(ctx, cl)).To(Equal("internalcertificate"))
+	})
+	It("should return an empty string if internal certificate is not found", func() {
+		Expect(cl.Delete(ctx, setting)).To(Succeed())
+		Expect(GetRancherCACert(ctx, cl)).To(BeEmpty())
+	})
+	It("should returns the default cacerts if found", func() {
+		cacertsSetting := &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cacerts",
+				Namespace: "default",
+			},
+			Value: "mycertificate",
+		}
+		Expect(cl.Create(ctx, cacertsSetting)).To(Succeed())
+		Expect(GetRancherCACert(ctx, cl)).To(Equal("mycertificate"))
+		Expect(cl.Delete(ctx, cacertsSetting)).To(Succeed())
 	})
 })

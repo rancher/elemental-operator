@@ -130,6 +130,32 @@ var _ = Describe("reconcile seed image", func() {
 
 	})
 
+	It("should create the pod pulling the ISO from a container", func() {
+		seedImg.Spec.BaseImage = "domain.org/some/repo:and-a-tag"
+
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, seedImg)).To(Succeed())
+
+		foundPod := &corev1.Pod{}
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
+		Expect(len(foundPod.Spec.InitContainers)).To(Equal(2))
+		Expect(foundPod.Spec.InitContainers[0].Image).To(Equal(seedImg.Spec.BaseImage))
+	})
+
 })
 
 var _ = Describe("reconcileBuildImagePod", func() {
