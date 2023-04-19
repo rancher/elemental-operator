@@ -23,33 +23,58 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"time"
 )
 
+type singleFileHandler struct {
+	name string
+}
+
+func (sf *singleFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// since the URL here will likely not specify a file name, pass the file name in the header
+	w.Header().Add("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(sf.name)))
+	http.ServeFile(w, r, sf.name)
+}
+
+func serveSingleFile(filePath string) http.Handler {
+	return &singleFileHandler{filePath}
+}
+
+func selectHTTPHandler(srvPath string) (http.Handler, error) {
+	srvPathInfo, err := os.Stat(srvPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if srvPathInfo.IsDir() {
+		return http.FileServer(http.Dir(srvPath)), nil
+	}
+
+	return serveSingleFile(srvPath), nil
+}
+
 func main() {
 	var port, timeout int
-	var dir string
+	var path string
 	var srv http.Server
+	var err error
 
 	flag.IntVar(&port, "p", 80, "listening port")
 	flag.IntVar(&timeout, "t", 0, "timeout in seconds")
-	flag.StringVar(&dir, "d", "", "serving dir"+" (default current dir)")
+	flag.StringVar(&path, "d", "", "serving dir or file"+" (default current dir)")
 
 	flag.Parse()
-	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
+	if path == "" {
+		path, err = os.Getwd()
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	fileinfo, err := os.Stat(dir)
+	srv.Handler, err = selectHTTPHandler(path)
 	if err != nil {
 		log.Fatal(err)
-	}
-	if !fileinfo.IsDir() {
-		log.Fatalf("%s is not a directory", dir)
 	}
 
 	shutdownCompleted := make(chan struct{})
@@ -67,9 +92,8 @@ func main() {
 		}()
 	}
 
-	log.Printf("Serving '%s' on port %d", dir, port)
+	log.Printf("Serving '%s' on port %d", path, port)
 	srv.Addr = fmt.Sprintf(":%d", port)
-	srv.Handler = http.FileServer(http.Dir(dir))
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
