@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/log"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -55,7 +54,6 @@ func (i *InventoryServer) apiSeedImage(resp http.ResponseWriter, req *http.Reque
 		return errMsg
 	}
 
-	log.Debugf("%+v", *req.URL)
 	rawURL := fmt.Sprintf("http://%s", svc.Spec.ClusterIP)
 	seedImgURL, err := url.Parse(rawURL)
 	if err != nil {
