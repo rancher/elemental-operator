@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
@@ -382,7 +383,7 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 			return errMsg
 		}
 		seedImg.Status.DownloadToken = token
-		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s/elemental.iso", rancherURL, token)
+		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s", rancherURL, token)
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
 			Status:  metav1.ConditionTrue,
@@ -455,9 +456,10 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 	deadline := seedImg.Spec.LifetimeMinutes
 	configMap := name
 
+	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
 	buildCommands := []string{
 		fmt.Sprintf("curl -Lo base.iso %s", baseImg),
-		"xorriso -indev base.iso -outdev /iso/elemental.iso -map /overlay / -boot_image any replay",
+		"xorriso -indev base.iso -outdev /iso/" + isoName + " -map /overlay / -boot_image any replay",
 	}
 
 	pod := &corev1.Pod{
@@ -507,7 +509,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 							ContainerPort: 80,
 						},
 					},
-					Args: []string{"-t", fmt.Sprintf("%d", deadline*60)},
+					Args: []string{"-d", isoName, "-t", fmt.Sprintf("%d", deadline*60)},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",
