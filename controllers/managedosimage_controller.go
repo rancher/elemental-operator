@@ -208,12 +208,15 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	}
 
 	if upgradeContainerSpec == nil {
-		upgradeContainerSpec = &upgradev1.ContainerSpec{
-			Image: prefixPrivateRegistry(image[0], r.DefaultRegistry),
-			Command: []string{
-				"/usr/sbin/suc-upgrade",
-			},
-		}
+		upgradeContainerSpec = &upgradev1.ContainerSpec{}
+	}
+
+	if upgradeContainerSpec.Image == "" {
+		upgradeContainerSpec.Image = prefixPrivateRegistry(image[0], r.DefaultRegistry)
+	}
+
+	if len(upgradeContainerSpec.Command) == 0 {
+		upgradeContainerSpec.Command = []string{"/usr/sbin/suc-upgrade"}
 	}
 
 	// Encode metadata from the spec as environment in the upgrade spec pod
