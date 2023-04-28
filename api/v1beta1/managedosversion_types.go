@@ -29,6 +29,7 @@ import (
 
 const (
 	containerType = "container"
+	isoType       = "iso"
 )
 
 // +kubebuilder:object:root=true
@@ -80,50 +81,41 @@ func (m *ManagedOSVersion) MetadataObject(v interface{}) error {
 	return object.RenderRawExtension(m.Spec.Metadata, v)
 }
 
+// ISO is the basic set of data to refer to an specific ISO
+type ISOImage struct {
+	ImageURI string `json:"uri,omitempty"`
+}
+
 // ContainerImage is the metadata for ManagedOSVersions which carries over
 // information about the upgrade
 type ContainerImage struct {
-	Metadata
-	TargetUpgradeImage string `json:"targetUpgradeImage,omitempty"`
-}
-
-// ISO is a ISO upgrade strategy
-type ISO struct {
-	Metadata
-	URL      string `json:"isoURL,omitempty"`
-	Checksum string `json:"isoChecksum,omitempty"`
-}
-
-// Metadata is the basic set of data required to construct objects needed to perform upgrades via Kubernetes
-type Metadata struct {
 	ImageURI string `json:"upgradeImage,omitempty"`
 }
 
-// IsContainerImage returns true if the metadata attached to the version is refered to a
-// upgrade via container strategy
+// IsContainerImage returns true if the metadata attached to the version is refered to container image type
 func (m *ManagedOSVersion) IsContainerImage() bool {
 	return strings.ToLower(m.Spec.Type) == containerType
 }
 
-// ContainerImageMetadata returns a ContainerImageMetadata struct from the underlaying metadata
-func (m *ManagedOSVersion) ContainerImageMetadata() (*ContainerImage, error) {
-	c := &ContainerImage{}
-
-	if m.IsContainerImage() {
-		err := m.MetadataObject(c)
-		if err != nil {
-			return nil, fmt.Errorf("foo")
-
-		}
-
-		return c, nil
-	}
-
-	return nil, fmt.Errorf("metadata is not containerimage type")
+// IsISOImage returns true if the metadata attached to the version is refered to container image type
+func (m *ManagedOSVersion) IsISOImage() bool {
+	return strings.ToLower(m.Spec.Type) == isoType
 }
 
-// Metadata returns the underlaying basic metadata required to handle upgrades
-func (m *ManagedOSVersion) Metadata() (*Metadata, error) {
-	c := &Metadata{}
+// ContainerImage returns the metadata of ManegedOSVersion of container type
+func (m *ManagedOSVersion) ContainerImage() (*ContainerImage, error) {
+	c := &ContainerImage{}
+	if !m.IsContainerImage() {
+		return nil, fmt.Errorf("ManagedOsVersion %s is not of a container type: %s", m.Name, m.Spec.Type)
+	}
 	return c, m.MetadataObject(c)
+}
+
+// ISOImage returns the metadata of ManegedOSVersion of container type
+func (m *ManagedOSVersion) ISOImage() (*ISOImage, error) {
+	i := &ISOImage{}
+	if !m.IsISOImage() {
+		return nil, fmt.Errorf("ManagedOsVersion %s is not of a iso type: %s", m.Name, m.Spec.Type)
+	}
+	return i, m.MetadataObject(i)
 }

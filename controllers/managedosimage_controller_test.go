@@ -116,6 +116,7 @@ var _ = Describe("newFleetBundleResources", func() {
 				Namespace: "default",
 			},
 			Spec: elementalv1.ManagedOSVersionSpec{
+				Type: "container",
 				UpgradeContainer: &upgradev1.ContainerSpec{
 					Image: "foo/bar:image",
 				},
