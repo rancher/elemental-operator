@@ -474,11 +474,11 @@ func getCloudConfig(managedOSImage *elementalv1.ManagedOSImage) ([]byte, error) 
 func getImageVersion(managedOSImage *elementalv1.ManagedOSImage, managedOSVersion *elementalv1.ManagedOSVersion) ([]string, string, error) {
 	baseImage := managedOSImage.Spec.OSImage
 	if baseImage == "" && managedOSVersion != nil {
-		osMeta, err := managedOSVersion.Metadata()
+		osImg, err := managedOSVersion.ContainerImage()
 		if err != nil {
 			return []string{}, "", err
 		}
-		baseImage = osMeta.ImageURI
+		baseImage = osImg.ImageURI
 	}
 
 	image := strings.SplitN(baseImage, ":", 2)
