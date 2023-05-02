@@ -9,6 +9,10 @@ seedImage:
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
+channel:
+  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel/5.3" 
+  tag: latest
+
 # number of operator replicas to deploy
 replicas: 1
 
