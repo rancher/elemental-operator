@@ -1,4 +1,4 @@
-{{ if and .Values.channel.repository .Values.channel.tag }}
+{{ if and .Values.channel .Values.channel.repository .Values.channel.tag }}
 apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSVersionChannel
 metadata:
