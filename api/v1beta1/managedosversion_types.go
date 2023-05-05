@@ -81,15 +81,22 @@ func (m *ManagedOSVersion) MetadataObject(v interface{}) error {
 	return object.RenderRawExtension(m.Spec.Metadata, v)
 }
 
+// ImageCommons is the basic set of data every single image type has
+type ImageCommons struct {
+	DisplayName string `json:"displayName,omitempty"`
+}
+
 // ISO is the basic set of data to refer to an specific ISO
 type ISOImage struct {
-	ImageURI string `json:"uri,omitempty"`
+	ImageCommons `json:",inline"`
+	ImageURI     string `json:"uri,omitempty"`
 }
 
 // ContainerImage is the metadata for ManagedOSVersions which carries over
 // information about the upgrade
 type ContainerImage struct {
-	ImageURI string `json:"upgradeImage,omitempty"`
+	ImageCommons `json:",inline"`
+	ImageURI     string `json:"upgradeImage,omitempty"`
 }
 
 // IsContainerImage returns true if the metadata attached to the version is refered to container image type
