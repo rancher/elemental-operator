@@ -5,6 +5,7 @@ version: 0.0.0
 appVersion: 0.0.0
 annotations:
   catalog.cattle.io/certified: rancher
+  catalog.cattle.io/display-name: Elemental
   catalog.cattle.io/experimental: "true"
   catalog.cattle.io/namespace: cattle-elemental-system
   catalog.cattle.io/os: linux
