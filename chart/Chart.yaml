@@ -1,6 +1,7 @@
 apiVersion: v2
 name: elemental-operator
 description: Rancher Elemental Operator
+icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
 version: 0.0.0
 appVersion: 0.0.0
 annotations:
