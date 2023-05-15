@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/drone/envsubst/v2"
 	"sigs.k8s.io/yaml"
@@ -27,6 +29,7 @@ import (
 
 type E2EConfig struct {
 	Chart            string `yaml:"chart"`
+	CRDsChart        string `yaml:"crdsChart"`
 	ExternalIP       string `yaml:"externalIP"`
 	MagicDNS         string `yaml:"magicDNS"`
 	BridgeIP         string `yaml:"bridgeIP"`
@@ -67,6 +70,9 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 
 	if chart := os.Getenv("CHART"); chart != "" {
 		config.Chart = chart
+		dir, chartFile := filepath.Split(chart)
+		chartFile = strings.Replace(chartFile, "elemental-operator", "elemental-operator-crds", 1)
+		config.CRDsChart = filepath.Join(dir, chartFile)
 	}
 
 	if config.Chart == "" {

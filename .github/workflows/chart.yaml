@@ -40,7 +40,7 @@ jobs:
       - name: Set chart output
         id: chart
         run: |
-          CHART=$(find . -type f  -name "elemental-operator*.tgz" -print)
+          CHART=$(find . -type f  -name "elemental-operator-[1-9]*.tgz" -print)
           echo "chart_name=$CHART" >> $GITHUB_OUTPUT
       - name: Test chart values
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}

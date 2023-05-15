@@ -7,8 +7,8 @@ REPO_REGISTER?=quay.io/costoolkit/elemental-register-ci
 TAG_SEEDIMAGE?=${TAG}
 REPO_SEEDIMAGE?=quay.io/costoolkit/seedimage-builder-ci
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator*.tgz" -print)
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
+CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
 KUBE_VERSION?="v1.24.6"
 CLUSTER_NAME?="operator-e2e"
 RAWCOMMITDATE=$(shell git log -n1 --format="%at")
