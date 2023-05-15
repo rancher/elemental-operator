@@ -56,6 +56,7 @@ func init() {
 const (
 	operatorNamespace         = "cattle-elemental-system"
 	operatorName              = "elemental-operator"
+	operatorCRDsName          = operatorName + "-crds"
 	nginxNamespace            = "ingress-nginx"
 	nginxName                 = "ingress-nginx-controller"
 	certManagerNamespace      = "cert-manager"
@@ -83,6 +84,7 @@ var (
 		"managedosversionchannels.elemental.cattle.io",
 		"machineinventoryselectors.elemental.cattle.io",
 		"machineinventoryselectortemplates.elemental.cattle.io",
+		"seedimages.elemental.cattle.io",
 	}
 )
 
@@ -272,14 +274,9 @@ func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 			"--create-namespace",
 			"--set", "debug=true",
 			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
-			operatorName,
-			config.Chart,
+			operatorCRDsName,
+			config.CRDsChart,
 		)).To(Succeed())
-
-		By("Waiting for elemental-operator deployment to be available")
-		Eventually(func() bool {
-			return isDeploymentReady(operatorNamespace, operatorName)
-		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 
 		By("Waiting for CRDs to be created")
 		Eventually(func() bool {
@@ -295,6 +292,22 @@ func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 				}
 			}
 			return true
+		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+		Expect(kubectl.RunHelmBinaryWithCustomErr(
+			"-n",
+			operatorNamespace,
+			"install",
+			"--create-namespace",
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			operatorName,
+			config.Chart,
+		)).To(Succeed())
+
+		By("Waiting for elemental-operator deployment to be available")
+		Eventually(func() bool {
+			return isDeploymentReady(operatorNamespace, operatorName)
 		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 
 		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)

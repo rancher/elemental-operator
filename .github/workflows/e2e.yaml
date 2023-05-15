@@ -56,7 +56,7 @@ jobs:
       - name: Set chart output
         id: chart
         run: |
-          CHART=$(basename `find . -type f  -name "elemental-operator*.tgz" -print`)
+          CHART=$(basename `find . -type f  -name "elemental-operator-[1-9]*.tgz" -print`)
           echo "chart_name=$CHART" >> $GITHUB_OUTPUT
       - name: Upload chart
         uses: actions/upload-artifact@v3.1.0
