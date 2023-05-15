@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#!BuildTag: rancher/elemental-operator-chart:latest
+#!BuildTag: rancher/elemental-operator-chart:%VERSION%
+#!BuildTag: rancher/elemental-operator-chart:%VERSION%-%RELEASE%
+apiVersion: v2
+name: elemental-operator-crds
+description: A Helm chart for deploying Rancher Elemental Operator CRDs
+icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
+version: "%VERSION%"
+appVersion: "%VERSION%"
+annotations:
+  catalog.cattle.io/certified: rancher
+  catalog.cattle.io/display-name: Elemental CRDs
+  catalog.cattle.io/experimental: "true"
+  catalog.cattle.io/namespace: cattle-elemental-system
+  catalog.cattle.io/os: linux
+  catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
+  catalog.cattle.io/release-name: elemental-operator-crds
+  catalog.cattle.io/hidden: true # Hide specific charts. Only use on CRD charts.
