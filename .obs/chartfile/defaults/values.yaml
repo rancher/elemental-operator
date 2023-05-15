@@ -1,0 +1,12 @@
+channel:
+  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel/5.3" 
+  tag: latest
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+tolerations:
+  - key: cattle.io/os
+    operator: "Equal"
+    value: "linux"
+    effect: NoSchedule

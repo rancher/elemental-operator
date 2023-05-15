@@ -56,6 +56,7 @@ func init() {
 const (
 	operatorNamespace         = "cattle-elemental-system"
 	operatorName              = "elemental-operator"
+	operatorDefaultsName      = operatorName + "-defaults"
 	nginxNamespace            = "ingress-nginx"
 	nginxName                 = "ingress-nginx-controller"
 	certManagerNamespace      = "cert-manager"
@@ -83,6 +84,7 @@ var (
 		"managedosversionchannels.elemental.cattle.io",
 		"machineinventoryselectors.elemental.cattle.io",
 		"machineinventoryselectortemplates.elemental.cattle.io",
+		"seedimages.elemental.cattle.io",
 	}
 )
 
@@ -296,6 +298,17 @@ func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 			}
 			return true
 		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+		Expect(kubectl.RunHelmBinaryWithCustomErr(
+			"-n",
+			operatorNamespace,
+			"install",
+			"--create-namespace",
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			operatorDefaultsName,
+			config.DefaultsChart,
+		)).To(Succeed())
 
 		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
 		// We need to manually set this value, which is the same value you would get from doing the bootstrap

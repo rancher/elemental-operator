@@ -1,0 +1,12 @@
+channel:
+  repository: "" 
+  tag: latest
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+tolerations:
+  - key: cattle.io/os
+    operator: "Equal"
+    value: "linux"
+    effect: NoSchedule

@@ -85,7 +85,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 						},
 					},
 					CloudConfig: map[string]runtime.RawExtension{
-						"write_files": runtime.RawExtension{
+						"write_files": {
 							Raw: cconfig,
 						},
 					},
