@@ -124,13 +124,16 @@ build-docker-push-seedimage-builder: build-docker-seedimage-builder
 .PHONY: chart
 chart:
 	mkdir -p  $(ROOT_DIR)/build
-	cp -rf $(ROOT_DIR)/chart $(ROOT_DIR)/build/chart
-	yq -i '.image.tag = "${TAG}"' $(ROOT_DIR)/build/chart/values.yaml
-	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/chart/values.yaml
-	yq -i '.seedImage.tag = "${TAG_SEEDIMAGE}"' $(ROOT_DIR)/build/chart/values.yaml
-	yq -i '.seedImage.repository = "${REPO_SEEDIMAGE}"' $(ROOT_DIR)/build/chart/values.yaml
-	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/chart
-	rm -Rf $(ROOT_DIR)/build/chart
+	cp -rf $(ROOT_DIR)/charts/crds $(ROOT_DIR)/build/crds
+	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds
+	rm -Rf $(ROOT_DIR)/build/crds
+	cp -rf $(ROOT_DIR)/charts/operator $(ROOT_DIR)/build/operator
+	yq -i '.image.tag = "${TAG}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.seedImage.tag = "${TAG_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.seedImage.repository = "${REPO_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
+	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
+	rm -Rf $(ROOT_DIR)/build/operator
 
 validate:
 	scripts/validate
@@ -208,10 +211,10 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 		paths=./api/...
 
 build-crds: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/crd > chart/templates/crds.yaml
+	$(KUSTOMIZE) build config/crd > charts/crds/templates/crds.yaml
 
 build-rbac: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/rbac > chart/templates/cluster_role.yaml
+	$(KUSTOMIZE) build config/rbac > charts/operator/templates/cluster_role.yaml
 
 build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
