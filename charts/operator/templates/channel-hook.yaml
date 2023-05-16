@@ -4,9 +4,6 @@ kind: ManagedOSVersionChannel
 metadata:
   name: elemental-teal-channel
   namespace: fleet-default
-  annotations:
-    "helm.sh/hook": post-install
-    "helm.sh/hook-delete-policy": hook-failed
 spec:
   options:
     image: {{ .Values.channel.repository }}:{{ .Values.channel.tag }}
