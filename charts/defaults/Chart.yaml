@@ -12,3 +12,4 @@ annotations:
   catalog.cattle.io/os: linux
   catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
   catalog.cattle.io/release-name: elemental-operator-defaults
+  catalog.cattle.io/hidden: "true"
