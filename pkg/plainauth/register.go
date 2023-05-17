@@ -19,7 +19,6 @@ package plainauth
 import (
 	"crypto/sha256"
 	"fmt"
-	"net"
 	"strings"
 
 	"github.com/gorilla/websocket"
@@ -103,31 +102,30 @@ func (auth *AuthClient) Authenticate(_ *websocket.Conn) error {
 }
 
 func getHostMacAddr() (string, error) {
-	var hwAddr string
+	netInfo, err := ghw.Network(ghw.WithDisableWarnings())
+	if err != nil {
+		return "", fmt.Errorf("cannot access networking data: %w", err)
+	}
 
-	for i := 1; i < 5; i++ {
-		iface, err := net.InterfaceByIndex(i)
-		if err != nil {
+	hwAddr := ""
+	for _, nic := range netInfo.NICs {
+		if nic.IsVirtual || nic.MacAddress == "" || nic.MacAddress == "00:00:00:00:00:00" {
 			continue
 		}
-		if len(iface.HardwareAddr) == 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			log.Errorf("Cannot get IP address for interface %s, skip it", iface.Name)
-			continue
-		}
-		if len(addrs) == 0 {
+		if hwAddr == "" {
+			hwAddr = nic.MacAddress
 			continue
 		}
 
-		hwAddr = iface.HardwareAddr.String()
-		break
+		// pick the "lower" MAC address
+		if strings.Compare(hwAddr, nic.MacAddress) > 0 {
+			hwAddr = nic.MacAddress
+			continue
+		}
 	}
 
 	if hwAddr == "" {
-		return "", fmt.Errorf("cannot retrieve MAC address from an active interface")
+		return "", fmt.Errorf("cannot retrieve MAC address from any network interface")
 	}
 
 	return hwAddr, nil
