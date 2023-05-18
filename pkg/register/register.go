@@ -114,6 +114,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		return getConfig(conn)
 	}
 
+	// Support old Elemental Operator (<= v1.1.0)
 	_, r, err := conn.NextReader()
 	if err != nil {
 		return nil, fmt.Errorf("read elemental configuration: %w", err)
