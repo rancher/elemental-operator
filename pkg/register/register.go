@@ -111,28 +111,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	}
 
 	if protoVersion >= MsgConfig {
-		msgType, data, err := ReadMessage(conn)
-		if err != nil {
-			return nil, fmt.Errorf("read configuration response: %w", err)
-		}
-
-		log.Debugf("Got configuration response: %s", msgType.String())
-
-		switch msgType {
-		case MsgError:
-			msg := &ErrorMessage{}
-			if err = yaml.Unmarshal(data, &msg); err != nil {
-				return nil, errors.Wrap(err, "unable to unmarshal error-message")
-			}
-
-			return nil, errors.New(msg.Message)
-
-		case MsgConfig:
-			return data, nil
-
-		default:
-			return nil, fmt.Errorf("unexpected response message: %s", msgType)
-		}
+		return getConfig(conn)
 	}
 
 	_, r, err := conn.NextReader()
@@ -278,4 +257,27 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 		return err
 	}
 	return nil
+}
+
+func getConfig(conn *websocket.Conn) ([]byte, error) {
+	msgType, data, err := ReadMessage(conn)
+	if err != nil {
+		return nil, fmt.Errorf("read configuration response: %w", err)
+	}
+
+	log.Debugf("Got configuration response: %s", msgType.String())
+
+	switch msgType {
+	case MsgError:
+		msg := &ErrorMessage{}
+		if err = yaml.Unmarshal(data, &msg); err != nil {
+			return nil, errors.Wrap(err, "unable to unmarshal error-message")
+		}
+
+		return nil, errors.New(msg.Message)
+	case MsgConfig:
+		return data, nil
+	default:
+		return nil, fmt.Errorf("unexpected response message: %s", msgType)
+	}
 }
