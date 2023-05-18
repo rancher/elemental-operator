@@ -100,7 +100,7 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 
 	if protoVersion >= MsgAnnotations {
 		log.Info("Send elemental annotations")
-		if err := sendAnnotations(conn); err != nil {
+		if err := sendAnnotations(conn, reg); err != nil {
 			return nil, fmt.Errorf("failend to send dynamic data: %w", err)
 		}
 	}
@@ -256,8 +256,14 @@ func sendSystemData(conn *websocket.Conn) error {
 	return nil
 }
 
-func sendAnnotations(conn *websocket.Conn) error {
+func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 	data := map[string]string{}
+
+	if reg.EmulateTPM {
+		data["auth"] = "emulated-tpm"
+	} else {
+		data["auth"] = reg.Auth
+	}
 	tcpAddr := conn.LocalAddr().String()
 	idxPortNumStart := strings.LastIndexAny(tcpAddr, ":")
 	if idxPortNumStart < 0 {
