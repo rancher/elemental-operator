@@ -1,7 +1,6 @@
 apiVersion: v2
 name: elemental-operator-defaults
 description: A Helm chart for deploying Rancher Elemental Operator default resources
-icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
 version: 0.0.0
 appVersion: 0.0.0
 annotations:
@@ -10,6 +9,5 @@ annotations:
   catalog.cattle.io/experimental: "true"
   catalog.cattle.io/namespace: cattle-elemental-system
   catalog.cattle.io/os: linux
-  catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
   catalog.cattle.io/release-name: elemental-operator-defaults
   catalog.cattle.io/hidden: "true"
