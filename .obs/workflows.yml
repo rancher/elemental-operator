@@ -70,7 +70,7 @@ pr_workflow:
           - type: build
             repository: images
             status: disable
-            project: isv:Rancher:Elemental:PR
+            project: isv:Rancher:Elemental:PR:Teal53
   filters:
     event: pull_request
     branches:
