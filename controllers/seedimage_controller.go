@@ -114,11 +114,12 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 
 	logger.Info("Reconciling seedimage object")
 
-	// RetriggerBuild resets the conditions: the controller will reconcile anew all the resources in the following loop
+	// RetriggerBuild resets the conditions and the buider pod: the controller
+	// will reconcile anew all the resources in the following loop
 	if seedImg.Spec.RetriggerBuild {
 		seedImg.Status.Conditions = []metav1.Condition{}
 		seedImg.Spec.RetriggerBuild = false
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.deleteChildResources(ctx, seedImg)
 	}
 
 	// Init the Ready condition as we want it to be the first one displayed
@@ -427,6 +428,44 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 		})
 		return nil
 	}
+}
+
+func (r *SeedImageReconciler) deleteChildResources(ctx context.Context, seedImg *elementalv1.SeedImage) error {
+	foundPod := &corev1.Pod{}
+	podName := seedImg.Name
+	podNamespace := seedImg.Namespace
+	if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNamespace}, foundPod); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		if !util.IsObjectOwned(&foundPod.ObjectMeta, seedImg.UID) {
+			return fmt.Errorf("pod %s/%s doesn't belong to seedimage %s/%s", podNamespace, podName, seedImg.Namespace, seedImg.Name)
+		}
+
+		if err := r.Delete(ctx, foundPod); err != nil {
+			return err
+		}
+	}
+
+	foundSvc := &corev1.Service{}
+	svcName := seedImg.Name
+	svcNamespace := seedImg.Namespace
+	if err := r.Get(ctx, types.NamespacedName{Name: svcName, Namespace: svcNamespace}, foundSvc); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		if !util.IsObjectOwned(&foundSvc.ObjectMeta, seedImg.UID) {
+			return fmt.Errorf("service %s/%s doesn't belong to seedimage %s/%s", svcNamespace, svcName, seedImg.Namespace, seedImg.Name)
+		}
+
+		if err := r.Delete(ctx, foundSvc); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (string, error) {
