@@ -206,8 +206,6 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		return nil
 	}
 
-	seedImg.Spec.RetriggerBuild = false
-
 	podConfigMap := &corev1.ConfigMap{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      seedImg.Name,
