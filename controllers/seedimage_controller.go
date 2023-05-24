@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -207,18 +208,8 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		return nil
 	}
 
-	podConfigMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      seedImg.Name,
-		Namespace: seedImg.Namespace,
-	}, podConfigMap); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed fetching config map: %w", err)
-		}
-		err = r.createConfigMapObject(ctx, seedImg, mRegistration)
-		if err != nil {
-			return fmt.Errorf("failed creating config map: %w", err)
-		}
+	if err := r.reconcileConfigMapObject(ctx, seedImg, mRegistration); err != nil {
+		return err
 	}
 
 	podName := seedImg.Name
@@ -288,26 +279,52 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	return nil
 }
 
-func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
-	data := map[string][]byte{}
+func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Reconciling ConfigMap resources")
+
+	podConfigMap := &corev1.ConfigMap{}
 
 	regClientConf := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
 	regData, err := yaml.Marshal(regClientConf)
 	if err != nil {
 		return fmt.Errorf("failed marshalling registration config: %w", err)
 	}
-	data["registration"] = regData
 
 	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
 	if err != nil {
 		return fmt.Errorf("failed marshalling cloud-config: %w", err)
 	}
-	if len(cloudConfig) > 0 {
-		data["cloud-config"] = cloudConfig
+
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      seedImg.Name,
+		Namespace: seedImg.Namespace,
+	}, podConfigMap); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed fetching config map: %w", err)
+		}
 	} else {
-		data["cloud-config"] = []byte{}
+		// ConfigMap is already there...
+		if bytes.Equal(regData, podConfigMap.BinaryData["registration"]) &&
+			bytes.Equal(cloudConfig, podConfigMap.BinaryData["cloud-config"]) {
+			logger.V(5).Info("ConfigMap is up-to-date")
+			return nil
+		}
+		logger.V(5).Info("ConfigMap is out of date", "configmap", podConfigMap.Namespace+"/"+podConfigMap.Name)
+		// ...but values are not up-to-date
+		if err := r.Delete(ctx, podConfigMap); err != nil {
+			return fmt.Errorf("failed to delete old config map: %w", err)
+		}
 	}
 
+	// (re)create the configmap
+	logger.V(5).Info("Create ConfigMap", "seedimage", seedImg.Namespace+"/"+seedImg.Name)
+
+	data := map[string][]byte{
+		"registration": regData,
+		"cloud-config": cloudConfig,
+	}
 	conf := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      seedImg.Name,
@@ -315,11 +332,12 @@ func (r *SeedImageReconciler) createConfigMapObject(ctx context.Context, seedImg
 		},
 		BinaryData: data,
 	}
+
 	if err := controllerutil.SetControllerReference(seedImg, conf, r.Scheme()); err != nil {
 		return fmt.Errorf("failed setting configmap ownership: %w", err)
 	}
 
-	if err := r.Create(ctx, conf); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := r.Create(ctx, conf); err != nil {
 		return fmt.Errorf("failed to create registration config map: %w", err)
 	}
 
