@@ -1,7 +1,6 @@
 apiVersion: v2
 name: elemental-operator-crds
 description: A Helm chart for deploying Rancher Elemental Operator CRDs
-icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
 version: 0.0.0
 appVersion: 0.0.0
 annotations:
