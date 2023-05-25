@@ -39,7 +39,7 @@ spec:
     metadata:
       name: {{ .Release.Name }}-helm-hook
     spec:
-      serviceAccountName: elemental-operator-helm-hook
+      serviceAccountName: {{ .Release.Name }}-helm-hook
       containers:
       - name: crd-keep-policy
         image: rancher/kubectl:v1.24.13
