@@ -54,12 +54,13 @@ type SeedImageReconciler struct {
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineregistrations,verbs=get;watch;list
-// TODO: restrict access to pods to the required namespace only
+// TODO: restrict access to resources to the required namespace only:
+//   https://github.com/rancher/elemental-operator/issues/457
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create;get
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // TODO: extend SetupWithManager with "Watches" and "WithEventFilter"
 func (r *SeedImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
