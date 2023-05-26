@@ -132,6 +132,9 @@ const (
 
 // Seed Image conditions
 const (
+	// ResourcesNotCreatedYet documents resources creation not started yet.
+	ResourcesNotCreatedYet = "ResourcesNotCreatedYet"
+
 	// SetOwnerFailureReason documents failure setting MachineRegistratioRef as SeedImage owner.
 	SetOwnerFailureReason = "RegistrationNotFound"
 

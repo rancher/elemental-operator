@@ -128,7 +128,7 @@ func (r *SeedImageReconciler) reconcile(ctx context.Context, seedImg *elementalv
 	if readyCond := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.ReadyCondition); readyCond == nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.ReadyCondition,
-			Reason: elementalv1.ResourcesSuccessfullyCreatedReason,
+			Reason: elementalv1.ResourcesNotCreatedYet,
 			Status: metav1.ConditionUnknown,
 		})
 	}
