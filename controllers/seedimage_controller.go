@@ -351,6 +351,17 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 
 	logger := ctrl.LoggerFrom(ctx)
 
+	if !foundPod.DeletionTimestamp.IsZero() {
+		logger.V(5).Info("Wait the builder Pod to terminate")
+		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.SeedImageConditionReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  elementalv1.SeedImageBuildNotStartedReason,
+			Message: "wait old builder Pod termination",
+		})
+		return nil
+	}
+
 	// no need to reconcile
 	if meta.IsStatusConditionTrue(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady) &&
 		foundPod.Status.Phase != corev1.PodSucceeded {
