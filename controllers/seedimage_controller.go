@@ -458,6 +458,7 @@ func (r *SeedImageReconciler) deleteChildResources(ctx context.Context, seedImg 
 			return err
 		}
 	} else {
+		// Pod found, delete it
 		if !util.IsObjectOwned(&foundPod.ObjectMeta, seedImg.UID) {
 			return fmt.Errorf("pod %s/%s doesn't belong to seedimage %s/%s", podNamespace, podName, seedImg.Namespace, seedImg.Name)
 		}
@@ -466,6 +467,7 @@ func (r *SeedImageReconciler) deleteChildResources(ctx context.Context, seedImg 
 			return err
 		}
 	}
+	seedImg.Status.DownloadURL = ""
 
 	foundSvc := &corev1.Service{}
 	svcName := seedImg.Name
