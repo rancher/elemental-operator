@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-helm-hook
   namespace: {{ .Release.Namespace }}
   annotations:
-    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook": pre-install
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 ---
@@ -13,7 +13,7 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ .Release.Name }}-helm-hook
   annotations:
-    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook": pre-install
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 roleRef:
@@ -31,7 +31,7 @@ metadata:
   name: {{ .Release.Name }}-helm-hook
   namespace: {{ .Release.Namespace }}
   annotations:
-    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook": pre-install
     "helm.sh/hook-weight": "1"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
@@ -47,8 +47,7 @@ spec:
           - "kubectl"
           - "annotate"
           - "crds"
-          - "--selector=release-name={{ .Release.Name }}"
-          - "--namespace={{ .Release.Namespace }}"
+          - "--selector=release-name={{ .Values.legacyReleaseName }}"
           - "helm.sh/resource-policy=keep"
           - "--overwrite=true"
       - name: crd-release-name
@@ -57,9 +56,8 @@ spec:
           - "kubectl"
           - "annotate"
           - "crds"
-          - "--selector=release-name={{ .Release.Name }}"
-          - "--namespace={{ .Release.Namespace }}"
-          - "meta.helm.sh/release-name={{ .Release.Name }}-crds"
+          - "--selector=release-name={{ .Values.legacyReleaseName }}"
+          - "meta.helm.sh/release-name={{ .Values.newCRDsReleaseName }}"
           - "--overwrite=true"
       restartPolicy: Never
   backoffLimit: 2

@@ -1,0 +1,2 @@
+legacyReleaseName: "elemental-operator"
+newCRDsReleaseName: "elemental-operator-crds"
