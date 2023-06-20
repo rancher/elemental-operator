@@ -572,7 +572,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
 							Items: []corev1.KeyToPath{
-								{Key: "registration", Path: "livecd-cloud-config.yaml"},
+								{Key: "registration", Path: "reg/livecd-cloud-config.yaml"},
 								{Key: "cloud-config", Path: "iso-config/cloud-config.yaml"},
 							},
 						},
@@ -589,7 +589,7 @@ func defineInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.P
 
 	containers := []corev1.Container{}
 	buildCommands := []string{
-		fmt.Sprintf("xorriso -indev %s -outdev /iso/%s -map /overlay / -boot_image any replay", baseIsoPath, isoName),
+		fmt.Sprintf("xorriso -indev %s -outdev /iso/%s -map /overlay/reg/livecd-cloud-config.yaml /livecd-cloud-config.yaml -map /overlay/iso-config/cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay", baseIsoPath, isoName),
 		fmt.Sprintf("rm -rf %s", baseIsoPath),
 	}
 
