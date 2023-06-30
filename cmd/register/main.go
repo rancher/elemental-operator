@@ -47,6 +47,7 @@ const (
 	agentConfDir     = "/etc/rancher/elemental/agent"
 	afterInstallHook = "/oem/install-hook.yaml"
 	regConfDir       = "/oem/registration"
+	liveRegConfDir   = "/run/initramfs/live"
 
 	// This file stores the registration URL and certificate used for the registration
 	// this file will be stored into the install system by an after-install hook
@@ -73,7 +74,7 @@ func main() {
 			log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 
 			if len(args) == 0 {
-				args = append(args, regConfDir)
+				args = append(args, getRegistrationConfigDir())
 			}
 
 			for _, arg := range args {
@@ -182,6 +183,15 @@ func run(config elementalv1.Config) {
 
 		log.Info("elemental installation completed, please reboot")
 	}
+}
+
+func getRegistrationConfigDir() string {
+	if isSystemInstalled() {
+		log.Debugf("System is not running live, using configuration in directory: %s\n", regConfDir)
+		return regConfDir
+	}
+	log.Debugf("Using live configuration in directory: %s\n", liveRegConfDir)
+	return liveRegConfDir
 }
 
 func installElemental(config elementalv1.Config) error {
