@@ -157,6 +157,11 @@ func run(config elementalv1.Config) {
 		caCert = []byte(registration.CACert)
 	}
 
+	if isSystemInstalled() && isUsingRandomEmulatedTPM(config.Elemental.Registration) {
+		log.Debugln("System is not running live and TPM seed is randomized, will not retry registration")
+		return
+	}
+
 	for {
 		data, err = register.Register(registration, caCert)
 		if err != nil {
@@ -258,6 +263,10 @@ func structToMap(str interface{}) (map[string]interface{}, error) {
 func isSystemInstalled() bool {
 	_, err := os.Stat(stateInstallFile)
 	return err == nil
+}
+
+func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
+	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
 }
 
 func installRegistrationYAML(reg elementalv1.Registration) error {
