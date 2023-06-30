@@ -161,6 +161,10 @@ func run(config elementalv1.Config) {
 		data, err = register.Register(registration, caCert)
 		if err != nil {
 			log.Error("failed to register machine inventory: ", err)
+			if isSystemInstalled() {
+				log.Debugln("System is not running live, will not retry registration")
+				break
+			}
 			time.Sleep(time.Second * 5)
 			continue
 		}
@@ -169,6 +173,10 @@ func run(config elementalv1.Config) {
 
 		if yaml.Unmarshal(data, &config) != nil {
 			log.Error("failed to parse registration configuration: ", err)
+			if isSystemInstalled() {
+				log.Debugln("System is not running live, will not retry registration")
+				break
+			}
 			time.Sleep(time.Second * 5)
 			continue
 		}
