@@ -46,7 +46,10 @@ type authClient interface {
 	Authenticate(conn *websocket.Conn) error
 }
 
-func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
+// Register attempts to register the machine with the elemental-operator.
+// If the machine is already installed and registered, a registration can still be attempted turning the `isUpdate` flag on.
+// Registration updates will fetch and apply new labels, and update Machine annotations such as the IP address.
+func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byte, error) {
 	var auth authClient
 
 	switch reg.Auth {
@@ -106,8 +109,9 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 	}
 
 	log.Info("Get elemental configuration")
-	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
-		return nil, fmt.Errorf("request elemental configuration: %w", err)
+	requestMsgType := getRequestConfigMsgType(isUpdate)
+	if err := WriteMessage(conn, requestMsgType, []byte{}); err != nil {
+		return nil, fmt.Errorf("%s request elemental configuration: %w", requestMsgType, err)
 	}
 
 	if protoVersion >= MsgConfig {
@@ -281,4 +285,11 @@ func getConfig(conn *websocket.Conn) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unexpected response message: %s", msgType)
 	}
+}
+
+func getRequestConfigMsgType(isUpdate bool) MessageType {
+	if isUpdate {
+		return MsgUpdate
+	}
+	return MsgGet
 }

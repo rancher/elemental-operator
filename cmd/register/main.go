@@ -157,17 +157,24 @@ func run(config elementalv1.Config) {
 		caCert = []byte(registration.CACert)
 	}
 
-	if isSystemInstalled() && isUsingRandomEmulatedTPM(config.Elemental.Registration) {
-		log.Debugln("System is not running live and TPM seed is randomized, will not retry registration")
-		return
+	// If the system is already installed, it implies we already registered once and we are only updating registration information.
+	isRegistrationUpdate := isSystemInstalled()
+	if isRegistrationUpdate {
+		if isUsingRandomEmulatedTPM(registration) {
+			log.Error("TPM emulation is active and using a randomized seed, registration update is not supported")
+			return
+		}
+		log.Debugln("Attempting to update registration...")
+	} else {
+		log.Debugln("Attempting to perform first time registration...")
 	}
 
 	for {
-		data, err = register.Register(registration, caCert)
+		data, err = register.Register(registration, caCert, isRegistrationUpdate)
 		if err != nil {
 			log.Error("failed to register machine inventory: ", err)
-			if isSystemInstalled() {
-				log.Debugln("System is not running live, will not retry registration")
+			if isRegistrationUpdate {
+				log.Debugln("Registration update failed, will not retry again")
 				break
 			}
 			time.Sleep(time.Second * 5)
@@ -178,8 +185,8 @@ func run(config elementalv1.Config) {
 
 		if yaml.Unmarshal(data, &config) != nil {
 			log.Error("failed to parse registration configuration: ", err)
-			if isSystemInstalled() {
-				log.Debugln("System is not running live, will not retry registration")
+			if isRegistrationUpdate {
+				log.Debugln("Registration update failed, will not retry again")
 				break
 			}
 			time.Sleep(time.Second * 5)
@@ -263,10 +270,6 @@ func structToMap(str interface{}) (map[string]interface{}, error) {
 func isSystemInstalled() bool {
 	_, err := os.Stat(stateInstallFile)
 	return err == nil
-}
-
-func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
-	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
 }
 
 func installRegistrationYAML(reg elementalv1.Registration) error {
@@ -399,4 +402,8 @@ func writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
 	})
 
 	return f.Name(), err
+}
+
+func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
+	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
 }

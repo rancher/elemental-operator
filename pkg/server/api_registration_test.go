@@ -33,6 +33,7 @@ import (
 	"github.com/jaypipes/ghw/pkg/cpu"
 	"github.com/jaypipes/ghw/pkg/memory"
 	"github.com/jaypipes/ghw/pkg/net"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -460,7 +461,7 @@ func TestRegistrationMsgGet(t *testing.T) {
 		},
 	}
 
-	server := NewInventoryServer()
+	server := NewInventoryServer(&FakeAuthServer{})
 
 	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -504,41 +505,7 @@ func TestRegistrationMsgGet(t *testing.T) {
 		},
 	})
 
-	server.Client.Create(context.Background(), &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-secret",
-		},
-
-		Type: v1.SecretTypeServiceAccountToken,
-	})
-
-	server.Client.Create(context.Background(), &v1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-account",
-		},
-
-		Secrets: []v1.ObjectReference{
-			{
-				Name: "test-secret",
-			},
-		},
-	})
-
-	server.Client.Create(context.Background(), &managementv3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "server-url",
-		},
-
-		Value: "https://test-server.example.com",
-	})
-
-	server.Client.Create(context.Background(), &managementv3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cacerts",
-		},
-
-		Value: "cacerts",
-	})
+	createDefaultResources(t, server)
 
 	wsServer := httptest.NewServer(server)
 	defer wsServer.Close()
@@ -600,8 +567,118 @@ func TestRegistrationMsgGet(t *testing.T) {
 	}
 }
 
+func TestRegistrationMsgUpdate(t *testing.T) {
+	testCases := []struct {
+		name                       string
+		machineName                string
+		doesMachineInventoryExists bool
+		wantMessageType            register.MessageType
+	}{
+		{
+			name:            "returns not-found error for unknown machine inventory",
+			machineName:     "machine-1",
+			wantMessageType: register.MsgError,
+		},
+		{
+			name:                       "returns MsgConfig config on registration update",
+			machineName:                "machine-1",
+			doesMachineInventoryExists: true,
+			wantMessageType:            register.MsgConfig,
+		},
+	}
+
+	authenticator := &FakeAuthServer{}
+	server := NewInventoryServer(authenticator)
+
+	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "machine-1",
+		},
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineName: "machine-1",
+		},
+		Status: elementalv1.MachineRegistrationStatus{
+			ServiceAccountRef: &v1.ObjectReference{
+				Name: "test-account",
+			},
+			RegistrationToken: "machine-1",
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	})
+
+	createDefaultResources(t, server)
+
+	wsServer := httptest.NewServer(server)
+	defer wsServer.Close()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			if tc.doesMachineInventoryExists {
+				// Actually create the MachineInventory
+				server.Client.Create(context.Background(), &elementalv1.MachineInventory{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              tc.machineName,
+						CreationTimestamp: metav1.Now(),
+					},
+					Spec: elementalv1.MachineInventorySpec{
+						TPMHash: tc.machineName,
+					}})
+				// Fetch it back with all the fields correctly initialized
+				existingInventory := &elementalv1.MachineInventory{}
+				server.Client.Get(context.Background(), types.NamespacedName{
+					Name: tc.machineName,
+				},
+					existingInventory)
+				defer server.Client.Delete(context.Background(), existingInventory)
+				// Feed the real MachineInventory to the FakeAuthenticator so that we can return a real object that can be updated
+				authenticator.FoundInventory = existingInventory
+				defer authenticator.Reset()
+			}
+
+			url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), "elemental/registration/"+tc.machineName)
+
+			header := http.Header{}
+			header.Add("Authorization", fmt.Sprintf("Bearer TPM%s", tc.machineName))
+
+			ws, _, err := websocket.DefaultDialer.Dial(url, header)
+			defer ws.Close()
+
+			// Read MsgReady
+			msgType, _, err := register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Equal(t, register.MsgReady, msgType)
+
+			// Negotiate version
+			err = register.WriteMessage(ws, register.MsgVersion, []byte{byte(register.MsgUpdate)})
+			assert.NilError(t, err)
+			msgType, _, err = register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Equal(t, register.MsgVersion, msgType)
+
+			// Actual send MsgUpdate
+			err = register.WriteMessage(ws, register.MsgUpdate, []byte{})
+			assert.NilError(t, err)
+
+			msgType, data, err := register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Assert(t, data != nil)
+			assert.Equal(t, tc.wantMessageType, msgType)
+
+			config := &elementalv1.Config{}
+			err = yaml.Unmarshal(data, &config)
+			assert.NilError(t, err)
+		})
+	}
+}
+
 func TestRegistrationDynamicLabels(t *testing.T) {
-	server := NewInventoryServer()
+	server := NewInventoryServer(&FakeAuthServer{})
 
 	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -628,41 +705,7 @@ func TestRegistrationDynamicLabels(t *testing.T) {
 		},
 	})
 
-	server.Client.Create(context.Background(), &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-secret",
-		},
-
-		Type: v1.SecretTypeServiceAccountToken,
-	})
-
-	server.Client.Create(context.Background(), &v1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-account",
-		},
-
-		Secrets: []v1.ObjectReference{
-			{
-				Name: "test-secret",
-			},
-		},
-	})
-
-	server.Client.Create(context.Background(), &managementv3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "server-url",
-		},
-
-		Value: "https://test-server.example.com",
-	})
-
-	server.Client.Create(context.Background(), &managementv3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cacerts",
-		},
-
-		Value: "cacerts",
-	})
+	createDefaultResources(t, server)
 
 	wsServer := httptest.NewServer(server)
 	defer wsServer.Close()
@@ -724,7 +767,7 @@ func TestRegistrationDynamicLabels(t *testing.T) {
 	})
 }
 
-func NewInventoryServer() *InventoryServer {
+func NewInventoryServer(auth authenticator) *InventoryServer {
 	scheme := runtime.NewScheme()
 	elementalv1.AddToScheme(scheme)
 	clientgoscheme.AddToScheme(scheme)
@@ -734,12 +777,14 @@ func NewInventoryServer() *InventoryServer {
 		Context: context.Background(),
 		Client:  fake.NewClientBuilder().WithScheme(scheme).Build(),
 		authenticators: []authenticator{
-			&FakeAuthServer{},
+			auth,
 		},
 	}
 }
 
-type FakeAuthServer struct{}
+type FakeAuthServer struct {
+	FoundInventory *elementalv1.MachineInventory
+}
 
 // Authenticate always returns true and a MachineInventory with the TPM-Hash
 // set to the machine-name from the URL.
@@ -748,9 +793,55 @@ func (a *FakeAuthServer) Authenticate(conn *websocket.Conn, req *http.Request, r
 	escapedToken := strings.Replace(token, "\n", "", -1)
 	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
 
-	return &elementalv1.MachineInventory{
-		Spec: elementalv1.MachineInventorySpec{
-			TPMHash: token,
+	if a.FoundInventory == nil {
+		return &elementalv1.MachineInventory{
+			Spec: elementalv1.MachineInventorySpec{
+				TPMHash: token,
+			},
+		}, true, nil
+	}
+	return a.FoundInventory, true, nil
+}
+
+func (a *FakeAuthServer) Reset() {
+	a.FoundInventory = nil
+}
+
+func createDefaultResources(t *testing.T, server *InventoryServer) {
+	t.Helper()
+	server.Client.Create(context.Background(), &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-secret",
 		},
-	}, true, nil
+
+		Type: v1.SecretTypeServiceAccountToken,
+	})
+
+	server.Client.Create(context.Background(), &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-account",
+		},
+
+		Secrets: []v1.ObjectReference{
+			{
+				Name: "test-secret",
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "server-url",
+		},
+
+		Value: "https://test-server.example.com",
+	})
+
+	server.Client.Create(context.Background(), &managementv3.Setting{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cacerts",
+		},
+
+		Value: "cacerts",
+	})
 }
