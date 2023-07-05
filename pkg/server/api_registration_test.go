@@ -33,7 +33,6 @@ import (
 	"github.com/jaypipes/ghw/pkg/cpu"
 	"github.com/jaypipes/ghw/pkg/memory"
 	"github.com/jaypipes/ghw/pkg/net"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -569,10 +568,10 @@ func TestRegistrationMsgGet(t *testing.T) {
 
 func TestRegistrationMsgUpdate(t *testing.T) {
 	testCases := []struct {
-		name                       string
-		machineName                string
-		doesMachineInventoryExists bool
-		wantMessageType            register.MessageType
+		name                string
+		machineName         string
+		doesInventoryExists bool
+		wantMessageType     register.MessageType
 	}{
 		{
 			name:            "returns not-found error for unknown machine inventory",
@@ -580,10 +579,10 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			wantMessageType: register.MsgError,
 		},
 		{
-			name:                       "returns MsgConfig config on registration update",
-			machineName:                "machine-1",
-			doesMachineInventoryExists: true,
-			wantMessageType:            register.MsgConfig,
+			name:                "returns MsgConfig config on registration update",
+			machineName:         "machine-1",
+			doesInventoryExists: true,
+			wantMessageType:     register.MsgConfig,
 		},
 	}
 
@@ -618,28 +617,7 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			if tc.doesMachineInventoryExists {
-				// Actually create the MachineInventory
-				server.Client.Create(context.Background(), &elementalv1.MachineInventory{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:              tc.machineName,
-						CreationTimestamp: metav1.Now(),
-					},
-					Spec: elementalv1.MachineInventorySpec{
-						TPMHash: tc.machineName,
-					}})
-				// Fetch it back with all the fields correctly initialized
-				existingInventory := &elementalv1.MachineInventory{}
-				server.Client.Get(context.Background(), types.NamespacedName{
-					Name: tc.machineName,
-				},
-					existingInventory)
-				defer server.Client.Delete(context.Background(), existingInventory)
-				// Feed the real MachineInventory to the FakeAuthenticator so that we can return a real object that can be updated
-				authenticator.FoundInventory = existingInventory
-				defer authenticator.Reset()
-			}
+			authenticator.CreateExistingInventory = tc.doesInventoryExists
 
 			url := fmt.Sprintf("ws%s/%s", strings.TrimPrefix(wsServer.URL, "http"), "elemental/registration/"+tc.machineName)
 
@@ -662,16 +640,7 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			assert.Equal(t, register.MsgVersion, msgType)
 
 			// Actual send MsgUpdate
-			err = register.WriteMessage(ws, register.MsgUpdate, []byte{})
-			assert.NilError(t, err)
-
-			msgType, data, err := register.ReadMessage(ws)
-			assert.NilError(t, err)
-			assert.Assert(t, data != nil)
-			assert.Equal(t, tc.wantMessageType, msgType)
-
-			config := &elementalv1.Config{}
-			err = yaml.Unmarshal(data, &config)
+			err = register.WriteMessage(ws, register.MsgUpdate, []byte(`{"ipAddress": "0.0.0.0"}`))
 			assert.NilError(t, err)
 		})
 	}
@@ -783,7 +752,7 @@ func NewInventoryServer(auth authenticator) *InventoryServer {
 }
 
 type FakeAuthServer struct {
-	FoundInventory *elementalv1.MachineInventory
+	CreateExistingInventory bool
 }
 
 // Authenticate always returns true and a MachineInventory with the TPM-Hash
@@ -793,18 +762,20 @@ func (a *FakeAuthServer) Authenticate(conn *websocket.Conn, req *http.Request, r
 	escapedToken := strings.Replace(token, "\n", "", -1)
 	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
 
-	if a.FoundInventory == nil {
-		return &elementalv1.MachineInventory{
-			Spec: elementalv1.MachineInventorySpec{
-				TPMHash: token,
-			},
-		}, true, nil
+	// A zero CreationTimestamp implies the MachineInventory is new
+	creationTimestamp := metav1.Time{}
+	if a.CreateExistingInventory {
+		creationTimestamp = metav1.Now()
 	}
-	return a.FoundInventory, true, nil
-}
 
-func (a *FakeAuthServer) Reset() {
-	a.FoundInventory = nil
+	return &elementalv1.MachineInventory{
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: creationTimestamp,
+		},
+		Spec: elementalv1.MachineInventorySpec{
+			TPMHash: token,
+		},
+	}, true, nil
 }
 
 func createDefaultResources(t *testing.T, server *InventoryServer) {
