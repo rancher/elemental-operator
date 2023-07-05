@@ -327,9 +327,9 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 
 func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory) error {
 	if isNewInventory(inventory) {
-		log.Errorf("MachineInventory '%v' was not found, but the machine is still running. Reprovisioning is needed.\n", inventory)
+		log.Errorf("MachineInventory '%+v' was not found, but the machine is still running. Reprovisioning is needed.\n", inventory)
 		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(errInventoryNotFound)); writeErr != nil {
-			log.Errorf("Error reporting back error to client: %+v\n", writeErr)
+			log.Errorf("Error reporting back error to client: %v\n", writeErr)
 		}
 		return errInventoryNotFound
 	}
