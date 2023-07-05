@@ -306,7 +306,10 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgGet:
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgUpdate:
-			return i.handleUpdate(conn, protoVersion, inventory, data)
+			err = i.handleUpdate(conn, protoVersion, inventory, data)
+			if err != nil {
+				return fmt.Errorf("failed to negotiate registration update: %w", err)
+			}
 		case register.MsgSystemData:
 			err = updateInventoryFromSystemData(data, inventory, registration)
 			if err != nil {
