@@ -281,15 +281,7 @@ func getLocalIPAddress(conn *websocket.Conn) (string, error) {
 }
 
 func sendUpdateData(conn *websocket.Conn) error {
-	ipAddress, err := getLocalIPAddress(conn)
-	if err != nil {
-		return fmt.Errorf("retrieving the local IP address: %w", err)
-	}
-	updateMessage := UpdateMessage{
-		IPAddress: ipAddress,
-	}
-	if err := SendJSONData(conn, MsgUpdate, updateMessage); err != nil {
-		log.Debugf("update data:\n%s", litter.Sdump(updateMessage))
+	if err := WriteMessage(conn, MsgUpdate, []byte{}); err != nil {
 		return fmt.Errorf("sending update data: %w", err)
 	}
 	return nil

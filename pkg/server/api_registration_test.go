@@ -640,7 +640,7 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			assert.Equal(t, register.MsgVersion, msgType)
 
 			// Actual send MsgUpdate
-			err = register.WriteMessage(ws, register.MsgUpdate, []byte(`{"ipAddress": "0.0.0.0"}`))
+			err = register.WriteMessage(ws, register.MsgUpdate, []byte{})
 			assert.NilError(t, err)
 		})
 	}

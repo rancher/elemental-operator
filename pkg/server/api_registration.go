@@ -306,7 +306,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgGet:
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgUpdate:
-			err = i.handleUpdate(conn, protoVersion, inventory, data)
+			err = i.handleUpdate(conn, protoVersion, inventory)
 			if err != nil {
 				return fmt.Errorf("failed to negotiate registration update: %w", err)
 			}
@@ -325,14 +325,9 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 	}
 }
 
-func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, data []byte) error {
-	updateMessage := &register.UpdateMessage{}
-	if err := json.Unmarshal(data, updateMessage); err != nil {
-		log.Debugf("Unmarshalling of '%s' failed", &data)
-		return fmt.Errorf("decoding update message: %w", err)
-	}
+func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory) error {
 	if isNewInventory(inventory) {
-		log.Errorf("MachineInventory '%v' was not found, but the machine is still running at %s. Reprovisioning is needed.\n", inventory, updateMessage.IPAddress)
+		log.Errorf("MachineInventory '%v' was not found, but the machine is still running. Reprovisioning is needed.\n", inventory)
 		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(errInventoryNotFound)); writeErr != nil {
 			log.Errorf("Error reporting back error to client: %v", writeErr)
 		}

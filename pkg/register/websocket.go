@@ -72,12 +72,6 @@ func (mt MessageType) String() string {
 	}
 }
 
-// UpdateMessage is a payload used with the MsgUpdate type.
-// The local IPAddress of the machine can be used on the operator side to identify this machine in case of failures.
-type UpdateMessage struct {
-	IPAddress string `json:"ipAddress,omitempty"`
-}
-
 type ErrorMessage struct {
 	Message string `json:"message,omitempty" yaml:"message"`
 }
