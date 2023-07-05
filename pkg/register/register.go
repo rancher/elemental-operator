@@ -92,7 +92,9 @@ func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byt
 			return nil, errors.New("elemental-operator protocol version does not support update")
 		}
 		log.Debugln("Initiating registration update")
-		sendUpdateData(conn)
+		if err := sendUpdateData(conn); err != nil {
+			return nil, fmt.Errorf("failed to send update data: %w", err)
+		}
 	}
 
 	if !reg.NoSMBIOS {
