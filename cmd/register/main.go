@@ -172,7 +172,7 @@ func run(config elementalv1.Config) {
 	for {
 		data, err = register.Register(registration, caCert, isRegistrationUpdate)
 		if err != nil {
-			log.Error("failed to register machine inventory: ", err)
+			log.Errorf("failed to register machine inventory: %w", err)
 			if isRegistrationUpdate {
 				log.Debugln("Registration update failed, will not retry again")
 				break
@@ -183,8 +183,8 @@ func run(config elementalv1.Config) {
 
 		log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 
-		if yaml.Unmarshal(data, &config) != nil {
-			log.Error("failed to parse registration configuration: ", err)
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Errorf("failed to parse registration configuration: %w", err)
 			if isRegistrationUpdate {
 				log.Debugln("Registration update failed, will not retry again")
 				break

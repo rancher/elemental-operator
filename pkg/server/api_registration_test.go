@@ -582,7 +582,7 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			name:                "returns MsgConfig config on registration update",
 			machineName:         "machine-1",
 			doesInventoryExists: true,
-			wantMessageType:     register.MsgConfig,
+			wantMessageType:     register.MsgReady,
 		},
 	}
 
@@ -642,6 +642,11 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			// Actual send MsgUpdate
 			err = register.WriteMessage(ws, register.MsgUpdate, []byte{})
 			assert.NilError(t, err)
+
+			// Read response message
+			msgType, _, err = register.ReadMessage(ws)
+			assert.NilError(t, err)
+			assert.Equal(t, tc.wantMessageType, msgType)
 		})
 	}
 }

@@ -284,7 +284,22 @@ func sendUpdateData(conn *websocket.Conn) error {
 	if err := WriteMessage(conn, MsgUpdate, []byte{}); err != nil {
 		return fmt.Errorf("sending update data: %w", err)
 	}
-	return nil
+	msgType, data, err := ReadMessage(conn)
+	if err != nil {
+		return fmt.Errorf("receiving MsgUpdate response: %w", err)
+	}
+	switch msgType {
+	case MsgError:
+		msg := &ErrorMessage{}
+		if err = yaml.Unmarshal(data, &msg); err != nil {
+			return fmt.Errorf("decoding error-message on MsgUpdate response: %w", err)
+		}
+		return fmt.Errorf("update error: %s", msg.Message)
+	case MsgReady:
+		return nil
+	default:
+		return fmt.Errorf("unexpected update response message: %s", msgType)
+	}
 }
 
 func getConfig(conn *websocket.Conn) ([]byte, error) {
