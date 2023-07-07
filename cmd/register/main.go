@@ -419,7 +419,9 @@ func isRegistrationUpdate() bool {
 func updateRegistrationState() error {
 	if _, err := os.Stat(regConfDir); os.IsNotExist(err) {
 		log.Debugf("Registration config dir '%s' does not exist. Creating now.", regConfDir)
-		os.MkdirAll(regConfDir, 0700)
+		if err := os.MkdirAll(regConfDir, 0700); err != nil {
+			return fmt.Errorf("creating registration config directory: %w", err)
+		}
 	}
 	file, err := os.Create(stateRegistrationFile)
 	if err != nil {
