@@ -42,12 +42,13 @@ import (
 )
 
 const (
-	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
-	agentStateDir    = "/var/lib/elemental/agent"
-	agentConfDir     = "/etc/rancher/elemental/agent"
-	afterInstallHook = "/oem/install-hook.yaml"
-	regConfDir       = "/oem/registration"
-	liveRegConfDir   = "/run/initramfs/live"
+	stateInstallFile      = "/run/initramfs/cos-state/state.yaml"
+	stateRegistrationFile = "/oem/registration/state.yaml"
+	agentStateDir         = "/var/lib/elemental/agent"
+	agentConfDir          = "/etc/rancher/elemental/agent"
+	afterInstallHook      = "/oem/install-hook.yaml"
+	regConfDir            = "/oem/registration"
+	liveRegConfDir        = "/run/initramfs/live"
 
 	// This file stores the registration URL and certificate used for the registration
 	// this file will be stored into the install system by an after-install hook
@@ -157,8 +158,7 @@ func run(config elementalv1.Config) {
 		caCert = []byte(registration.CACert)
 	}
 
-	// If the system is already installed, it implies we already registered once and we are only updating registration information.
-	isRegistrationUpdate := isSystemInstalled()
+	isRegistrationUpdate := isRegistrationUpdate()
 	if isRegistrationUpdate {
 		if isUsingRandomEmulatedTPM(registration) {
 			log.Error("TPM emulation is active and using a randomized seed, registration update is not supported")
@@ -201,6 +201,10 @@ func run(config elementalv1.Config) {
 		}
 
 		log.Info("elemental installation completed, please reboot")
+	}
+
+	if err := updateRegistrationState(); err != nil {
+		log.Errorf("failed to update registration state file %s: %w", stateRegistrationFile, err)
 	}
 }
 
@@ -405,4 +409,18 @@ func writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
 
 func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
 	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
+}
+
+func isRegistrationUpdate() bool {
+	_, err := os.Stat(stateRegistrationFile)
+	return err == nil
+}
+
+func updateRegistrationState() error {
+	file, err := os.Create(stateRegistrationFile)
+	if err != nil {
+		return fmt.Errorf("creating registration state file: %w", err)
+	}
+	defer file.Close()
+	return nil
 }
