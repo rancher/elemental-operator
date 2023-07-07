@@ -135,6 +135,13 @@ chart:
 	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator
 
+.PHONY: migration-chart
+migration-chart:
+	mkdir -p  $(ROOT_DIR)/build
+	cp -rf $(ROOT_DIR)/charts/crds-migration $(ROOT_DIR)/build/crds-migration
+	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds-migration
+	rm -Rf $(ROOT_DIR)/build/crds-migration
+
 validate:
 	scripts/validate
 
