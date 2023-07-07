@@ -24,7 +24,7 @@ LABEL org.opencontainers.image.created="%BUILDTIME%"
 LABEL org.opencontainers.image.vendor="SUSE LLC"
 LABEL org.opensuse.reference="%%IMG_REPO%%/rancher/elemental-operator/5.3"
 LABEL org.openbuildservice.disturl="%DISTURL%"
-LABEL com.suse.supportlevel="techpreview"
+LABEL com.suse.supportlevel="l3"
 # endlabelprefix
 
 USER 10010:10010
