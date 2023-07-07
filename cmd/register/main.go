@@ -186,7 +186,6 @@ func run(config elementalv1.Config) {
 		if err := yaml.Unmarshal(data, &config); err != nil {
 			log.Errorf("failed to parse registration configuration: %w", err)
 			if isRegistrationUpdate {
-				log.Debugln("Registration update failed, will not retry again")
 				break
 			}
 			time.Sleep(time.Second * 5)
