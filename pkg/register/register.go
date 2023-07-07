@@ -46,7 +46,10 @@ type authClient interface {
 	Authenticate(conn *websocket.Conn) error
 }
 
-func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
+// Register attempts to register the machine with the elemental-operator.
+// If the machine is already installed and registered, a registration can still be attempted turning the `isUpdate` flag on.
+// Registration updates will fetch and apply new labels, and update Machine annotations such as the IP address.
+func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byte, error) {
 	var auth authClient
 
 	switch reg.Auth {
@@ -83,6 +86,16 @@ func Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
 	}
 	log.Infof("Negotiated protocol version: %d", protoVersion)
+
+	if isUpdate {
+		if protoVersion < MsgUpdate {
+			return nil, errors.New("elemental-operator protocol version does not support update")
+		}
+		log.Debugln("Initiating registration update")
+		if err := sendUpdateData(conn); err != nil {
+			return nil, fmt.Errorf("failed to send update data: %w", err)
+		}
+	}
 
 	if !reg.NoSMBIOS {
 		log.Infof("Send SMBIOS data")
@@ -244,12 +257,10 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 	} else {
 		data["auth"] = reg.Auth
 	}
-	tcpAddr := conn.LocalAddr().String()
-	idxPortNumStart := strings.LastIndexAny(tcpAddr, ":")
-	if idxPortNumStart < 0 {
-		log.Errorf("Cannot understand local IP address format [%s], skip it", tcpAddr)
+	if ipAddress, err := getLocalIPAddress(conn); err != nil {
+		log.Errorf("retrieving the local IP address: %w", err)
 	} else {
-		data["registration-ip"] = tcpAddr[0:idxPortNumStart]
+		data["registration-ip"] = ipAddress
 		log.Debugf("sending local IP: %s", data["registration-ip"])
 	}
 	err := SendJSONData(conn, MsgAnnotations, data)
@@ -258,6 +269,37 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 		return err
 	}
 	return nil
+}
+
+func getLocalIPAddress(conn *websocket.Conn) (string, error) {
+	tcpAddr := conn.LocalAddr().String()
+	idxPortNumStart := strings.LastIndexAny(tcpAddr, ":")
+	if idxPortNumStart < 0 {
+		return "", fmt.Errorf("Cannot understand local IP address format [%s]", tcpAddr)
+	}
+	return tcpAddr[0:idxPortNumStart], nil
+}
+
+func sendUpdateData(conn *websocket.Conn) error {
+	if err := WriteMessage(conn, MsgUpdate, []byte{}); err != nil {
+		return fmt.Errorf("sending update data: %w", err)
+	}
+	msgType, data, err := ReadMessage(conn)
+	if err != nil {
+		return fmt.Errorf("receiving MsgUpdate response: %w", err)
+	}
+	switch msgType {
+	case MsgError:
+		msg := &ErrorMessage{}
+		if err = yaml.Unmarshal(data, &msg); err != nil {
+			return fmt.Errorf("decoding error-message on MsgUpdate response: %w", err)
+		}
+		return fmt.Errorf("update error: %s", msg.Message)
+	case MsgReady:
+		return nil
+	default:
+		return fmt.Errorf("unexpected update response message: %s", msgType)
+	}
 }
 
 func getConfig(conn *websocket.Conn) ([]byte, error) {

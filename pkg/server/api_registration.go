@@ -45,11 +45,12 @@ type LegacyConfig struct {
 }
 
 var (
-	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
-	sanitizeHostname = regexp.MustCompile("[^0-9a-zA-Z]")
-	doubleDash       = regexp.MustCompile("--+")
-	start            = regexp.MustCompile("^[a-zA-Z0-9]")
-	errValueNotFound = errors.New("value not found")
+	sanitize             = regexp.MustCompile("[^0-9a-zA-Z_]")
+	sanitizeHostname     = regexp.MustCompile("[^0-9a-zA-Z]")
+	doubleDash           = regexp.MustCompile("--+")
+	start                = regexp.MustCompile("^[a-zA-Z0-9]")
+	errValueNotFound     = errors.New("value not found")
+	errInventoryNotFound = errors.New("MachineInventory not found")
 )
 
 func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
@@ -109,8 +110,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 		return err
 	}
 
-	isNewInventory := inventory.CreationTimestamp.IsZero()
-	if isNewInventory {
+	if isNewInventory(inventory) {
 		initInventory(inventory, registration)
 	}
 
@@ -305,6 +305,11 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			}
 		case register.MsgGet:
 			return i.handleGet(conn, protoVersion, inventory, registration)
+		case register.MsgUpdate:
+			err = i.handleUpdate(conn, protoVersion, inventory)
+			if err != nil {
+				return fmt.Errorf("failed to negotiate registration update: %w", err)
+			}
 		case register.MsgSystemData:
 			err = updateInventoryFromSystemData(data, inventory, registration)
 			if err != nil {
@@ -318,6 +323,17 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			return fmt.Errorf("cannot complete %s exchange", msgType)
 		}
 	}
+}
+
+func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory) error {
+	if isNewInventory(inventory) {
+		log.Errorf("MachineInventory '%+v' was not found, but the machine is still running. Reprovisioning is needed.\n", inventory)
+		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(errInventoryNotFound)); writeErr != nil {
+			log.Errorf("Error reporting back error to client: %v\n", writeErr)
+		}
+		return errInventoryNotFound
+	}
+	return nil
 }
 
 func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -524,4 +540,8 @@ func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) 
 		inventory.Labels = map[string]string{}
 	}
 	return nil
+}
+
+func isNewInventory(inventory *elementalv1.MachineInventory) bool {
+	return inventory.CreationTimestamp.IsZero()
 }

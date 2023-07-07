@@ -18,6 +18,8 @@ package v1beta1
 
 import runtime "k8s.io/apimachinery/pkg/runtime"
 
+const TPMRandomSeedValue = -1
+
 type Install struct {
 	// +optional
 	Firmware string `json:"firmware,omitempty" yaml:"firmware,omitempty"`

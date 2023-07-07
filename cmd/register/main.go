@@ -42,11 +42,13 @@ import (
 )
 
 const (
-	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
-	agentStateDir    = "/var/lib/elemental/agent"
-	agentConfDir     = "/etc/rancher/elemental/agent"
-	afterInstallHook = "/oem/install-hook.yaml"
-	regConfDir       = "/oem/registration"
+	stateInstallFile      = "/run/initramfs/cos-state/state.yaml"
+	stateRegistrationFile = "/oem/registration/state.yaml"
+	agentStateDir         = "/var/lib/elemental/agent"
+	agentConfDir          = "/etc/rancher/elemental/agent"
+	afterInstallHook      = "/oem/install-hook.yaml"
+	regConfDir            = "/oem/registration"
+	liveRegConfDir        = "/run/initramfs/live"
 
 	// This file stores the registration URL and certificate used for the registration
 	// this file will be stored into the install system by an after-install hook
@@ -73,7 +75,7 @@ func main() {
 			log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 
 			if len(args) == 0 {
-				args = append(args, regConfDir)
+				args = append(args, getRegistrationConfigDir())
 			}
 
 			for _, arg := range args {
@@ -156,18 +158,36 @@ func run(config elementalv1.Config) {
 		caCert = []byte(registration.CACert)
 	}
 
+	isRegistrationUpdate := isRegistrationUpdate()
+	if isRegistrationUpdate {
+		if isUsingRandomEmulatedTPM(registration) {
+			log.Error("TPM emulation is active and using a randomized seed, registration update is not supported")
+			return
+		}
+		log.Debugln("Attempting to update registration...")
+	} else {
+		log.Debugln("Attempting to perform first time registration...")
+	}
+
 	for {
-		data, err = register.Register(registration, caCert)
+		data, err = register.Register(registration, caCert, isRegistrationUpdate)
 		if err != nil {
-			log.Error("failed to register machine inventory: ", err)
+			log.Errorf("failed to register machine inventory: %w", err)
+			if isRegistrationUpdate {
+				log.Debugln("Registration update failed, will not retry again")
+				break
+			}
 			time.Sleep(time.Second * 5)
 			continue
 		}
 
 		log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 
-		if yaml.Unmarshal(data, &config) != nil {
-			log.Error("failed to parse registration configuration: ", err)
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			log.Errorf("failed to parse registration configuration: %w", err)
+			if isRegistrationUpdate {
+				break
+			}
 			time.Sleep(time.Second * 5)
 			continue
 		}
@@ -182,6 +202,19 @@ func run(config elementalv1.Config) {
 
 		log.Info("elemental installation completed, please reboot")
 	}
+
+	if err := updateRegistrationState(); err != nil {
+		log.Errorf("failed to update registration state file %s: %w", stateRegistrationFile, err)
+	}
+}
+
+func getRegistrationConfigDir() string {
+	if isSystemInstalled() {
+		log.Debugf("System is not running live, using configuration in directory: %s\n", regConfDir)
+		return regConfDir
+	}
+	log.Debugf("Using live configuration in directory: %s\n", liveRegConfDir)
+	return liveRegConfDir
 }
 
 func installElemental(config elementalv1.Config) error {
@@ -372,4 +405,28 @@ func writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
 	})
 
 	return f.Name(), err
+}
+
+func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
+	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
+}
+
+func isRegistrationUpdate() bool {
+	_, err := os.Stat(stateRegistrationFile)
+	return err == nil
+}
+
+func updateRegistrationState() error {
+	if _, err := os.Stat(regConfDir); os.IsNotExist(err) {
+		log.Debugf("Registration config dir '%s' does not exist. Creating now.", regConfDir)
+		if err := os.MkdirAll(regConfDir, 0700); err != nil {
+			return fmt.Errorf("creating registration config directory: %w", err)
+		}
+	}
+	file, err := os.Create(stateRegistrationFile)
+	if err != nil {
+		return fmt.Errorf("creating registration state file: %w", err)
+	}
+	defer file.Close()
+	return nil
 }
