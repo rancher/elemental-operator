@@ -213,7 +213,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Namespace:       mRegistration.Namespace,
 			OwnerReferences: ownerReferences,
 			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "",
+				elementalv1.ElementalManagedLabel: "true",
 			},
 		},
 		Rules: []rbacv1.PolicyRule{{
@@ -237,7 +237,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Namespace:       mRegistration.Namespace,
 			OwnerReferences: ownerReferences,
 			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "",
+				elementalv1.ElementalManagedLabel: "true",
 			},
 		},
 		Secrets: []corev1.ObjectReference{
@@ -259,7 +259,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 				"kubernetes.io/service-account.name": mRegistration.Name,
 			},
 			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "",
+				elementalv1.ElementalManagedLabel: "true",
 			},
 		},
 		Type: corev1.SecretTypeServiceAccountToken,
@@ -274,7 +274,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			Name:            mRegistration.Name,
 			OwnerReferences: ownerReferences,
 			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "",
+				elementalv1.ElementalManagedLabel: "true",
 			},
 		},
 		Subjects: []rbacv1.Subject{{
