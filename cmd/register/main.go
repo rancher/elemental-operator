@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/mudler/yip/pkg/schema"
 	agent "github.com/rancher/system-agent/pkg/config"
@@ -42,13 +41,17 @@ import (
 )
 
 const (
-	stateInstallFile      = "/run/initramfs/cos-state/state.yaml"
-	stateRegistrationFile = "/oem/registration/state.yaml"
-	agentStateDir         = "/var/lib/elemental/agent"
-	agentConfDir          = "/etc/rancher/elemental/agent"
-	afterInstallHook      = "/oem/install-hook.yaml"
-	regConfDir            = "/oem/registration"
-	liveRegConfDir        = "/run/initramfs/live"
+	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
+	agentStateDir    = "/var/lib/elemental/agent"
+	agentConfDir     = "/etc/rancher/elemental/agent"
+	afterInstallHook = "/oem/install-hook.yaml"
+
+	// Registration config directories, depending if system is live or not
+	regConfExt      = "yaml"
+	regConfDir      = "/oem/registration"
+	regConfName     = "config"
+	liveRegConfDir  = "/run/initramfs/live"
+	liveRegConfName = "livecd-cloud-config"
 
 	// This file stores the registration URL and certificate used for the registration
 	// this file will be stored into the install system by an after-install hook
@@ -74,35 +77,25 @@ func main() {
 
 			log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 
+			// Locate config directory and file
+			var configDir string
+			var configName string
 			if len(args) == 0 {
-				args = append(args, getRegistrationConfigDir())
+				if !isSystemInstalled() {
+					configDir = liveRegConfDir
+					configName = liveRegConfName
+				} else {
+					configDir = regConfDir
+					configName = regConfName
+				}
+			} else {
+				configDir = args[0] //Take the first argument only, ignore the rest
+				configName = regConfName
 			}
 
-			for _, arg := range args {
-				_, err := os.Stat(arg)
-				if err != nil {
-					log.Warningf("cannot access config path %s: %s", arg, err.Error())
-					continue
-				}
-
-				log.Debugf("scanning config path %s", arg)
-
-				files, err := os.ReadDir(arg)
-				if err != nil {
-					log.Warningf("cannot read config path contents %s: %s", arg, err.Error())
-					continue
-				}
-				viper.AddConfigPath(arg)
-				for _, f := range files {
-					if filepath.Ext(f.Name()) == ".yaml" {
-						viper.SetConfigType("yaml")
-						viper.SetConfigName(f.Name())
-						if err := viper.MergeInConfig(); err != nil {
-							log.Fatalf("failed to read config %s: %s", f.Name(), err)
-						}
-						log.Infof("reading config file %s", f.Name())
-					}
-				}
+			// Merge configuration from file
+			if err := mergeConfigFromFile(configDir, configName); err != nil {
+				log.Fatalf("Could not read configuration in directory '%s': %s", configDir, err)
 			}
 
 			if err := viper.Unmarshal(&cfg); err != nil {
@@ -111,7 +104,7 @@ func main() {
 
 			log.Debugf("input config:\n%s", litter.Sdump(cfg))
 
-			run(cfg)
+			run(configDir, cfg)
 		},
 	}
 
@@ -131,90 +124,59 @@ func main() {
 	}
 }
 
-func run(config elementalv1.Config) {
+func mergeConfigFromFile(path string, name string) error {
+	log.Debugf("Using configuration in directory: %s\n", path)
+	viper.AddConfigPath(path)
+	viper.SetConfigName(name)
+	viper.SetConfigType(regConfExt)
+	return viper.MergeInConfig()
+}
+
+func run(configDir string, config elementalv1.Config) {
+	// Validate Registration config
 	registration := config.Elemental.Registration
 
 	if registration.URL == "" {
 		log.Fatal("Registration URL is empty")
 	}
 
-	var (
-		err          error
-		data, caCert []byte
-	)
-
-	/* Here we can have a file path or the cert data itself */
-	_, err = os.Stat(registration.CACert)
-	if err == nil {
-		log.Info("CACert passed as a file")
-		caCert, err = os.ReadFile(registration.CACert)
-		if err != nil {
-			log.Error(err)
-		}
-	} else {
-		if registration.CACert == "" {
-			log.Warning("CACert is empty")
-		}
-		caCert = []byte(registration.CACert)
+	caCert, err := getRegistrationCA(registration)
+	if err != nil {
+		log.Fatalf("Could not load registration CA certificate: %s", err)
 	}
 
-	isRegistrationUpdate := isRegistrationUpdate()
-	if isRegistrationUpdate {
-		if isUsingRandomEmulatedTPM(registration) {
-			log.Error("TPM emulation is active and using a randomized seed, registration update is not supported")
-			return
-		}
-		log.Debugln("Attempting to update registration...")
-	} else {
-		log.Debugln("Attempting to perform first time registration...")
+	client := register.NewClient(configDir)
+
+	data, err := client.Register(registration, caCert)
+	if err != nil {
+		log.Fatalf("failed to register machine inventory: %w", err)
 	}
 
-	for {
-		data, err = register.Register(registration, caCert, isRegistrationUpdate)
-		if err != nil {
-			log.Errorf("failed to register machine inventory: %w", err)
-			if isRegistrationUpdate {
-				log.Debugln("Registration update failed, will not retry again")
-				break
-			}
-			time.Sleep(time.Second * 5)
-			continue
-		}
+	log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 
-		log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
-
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			log.Errorf("failed to parse registration configuration: %w", err)
-			if isRegistrationUpdate {
-				break
-			}
-			time.Sleep(time.Second * 5)
-			continue
-		}
-
-		break
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		log.Errorf("failed to parse registration configuration: %w", err)
 	}
 
 	if !isSystemInstalled() {
 		if err := installElemental(config); err != nil {
-			log.Fatal("elemental installation failed: ", err)
+			log.Fatalf("elemental installation failed: %w", err)
 		}
 
 		log.Info("elemental installation completed, please reboot")
 	}
-
-	if err := updateRegistrationState(); err != nil {
-		log.Errorf("failed to update registration state file %s: %w", stateRegistrationFile, err)
-	}
 }
 
-func getRegistrationConfigDir() string {
-	if isSystemInstalled() {
-		log.Debugf("System is not running live, using configuration in directory: %s\n", regConfDir)
-		return regConfDir
+func getRegistrationCA(registration elementalv1.Registration) ([]byte, error) {
+	/* Here we can have a file path or the cert data itself */
+	if _, err := os.Stat(registration.CACert); err == nil {
+		log.Info("CACert passed as a file")
+		return os.ReadFile(registration.CACert)
 	}
-	log.Debugf("Using live configuration in directory: %s\n", liveRegConfDir)
-	return liveRegConfDir
+	if registration.CACert == "" {
+		log.Warning("CACert is empty")
+	}
+	return []byte(registration.CACert), nil
 }
 
 func installElemental(config elementalv1.Config) error {
@@ -405,28 +367,4 @@ func writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
 	})
 
 	return f.Name(), err
-}
-
-func isUsingRandomEmulatedTPM(config elementalv1.Registration) bool {
-	return config.EmulateTPM && config.EmulatedTPMSeed == elementalv1.TPMRandomSeedValue
-}
-
-func isRegistrationUpdate() bool {
-	_, err := os.Stat(stateRegistrationFile)
-	return err == nil
-}
-
-func updateRegistrationState() error {
-	if _, err := os.Stat(regConfDir); os.IsNotExist(err) {
-		log.Debugf("Registration config dir '%s' does not exist. Creating now.", regConfDir)
-		if err := os.MkdirAll(regConfDir, 0700); err != nil {
-			return fmt.Errorf("creating registration config directory: %w", err)
-		}
-	}
-	file, err := os.Create(stateRegistrationFile)
-	if err != nil {
-		return fmt.Errorf("creating registration state file: %w", err)
-	}
-	defer file.Close()
-	return nil
 }
