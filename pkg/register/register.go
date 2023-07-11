@@ -131,7 +131,9 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte) ([]byte, 
 	}
 
 	log.Info("Saving registration state")
-	r.stateHandler.Save(state)
+	if err := r.stateHandler.Save(state); err != nil {
+		return nil, fmt.Errorf("saving registration state: %w", err)
+	}
 
 	log.Info("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {

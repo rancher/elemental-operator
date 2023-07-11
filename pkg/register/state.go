@@ -61,6 +61,7 @@ func (h *filesystemStateHandler) Load() (State, error) {
 	file, err := os.Open(stateFile)
 	defer file.Close()
 	if os.IsNotExist(err) {
+		log.Debugf("Could not find state file in '%s'. Assuming initial registration needs to happen.", stateFile)
 		return State{}, nil
 	}
 	if err != nil {
@@ -76,7 +77,7 @@ func (h *filesystemStateHandler) Load() (State, error) {
 
 func (h *filesystemStateHandler) Save(state State) error {
 	if _, err := os.Stat(h.directory); os.IsNotExist(err) {
-		log.Debug("Registration config dir '%s' does not exist. Creating now.", h.directory)
+		log.Debugf("Registration config dir '%s' does not exist. Creating now.", h.directory)
 		if err := os.MkdirAll(h.directory, 0700); err != nil {
 			return fmt.Errorf("creating registration config directory: %w", err)
 		}
@@ -86,11 +87,15 @@ func (h *filesystemStateHandler) Save(state State) error {
 	if err != nil {
 		return fmt.Errorf("creating registration state file: %w", err)
 	}
-	defer file.Close()
 	enc := yaml.NewEncoder(file)
-	defer enc.Close()
 	if err := enc.Encode(state); err != nil {
 		return fmt.Errorf("writing RegistrationState to file '%s': %w", stateFile, err)
+	}
+	if err := enc.Close(); err != nil {
+		return fmt.Errorf("closing encoder: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("closing file '%s': %w", stateFile, err)
 	}
 	return nil
 }
