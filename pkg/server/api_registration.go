@@ -137,13 +137,9 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return fmt.Errorf("failed to get service account: %w", err)
 	}
 
-	if len(sa.Secrets) == 0 {
-		return fmt.Errorf("no secrets associated to the %s/%s service account", sa.Namespace, sa.Name)
-	}
-
 	secret := &corev1.Secret{}
 	err := i.Get(i, types.NamespacedName{
-		Name:      sa.Secrets[0].Name,
+		Name:      sa.Name + elementalv1.SASecretSuffix,
 		Namespace: sa.Namespace,
 	}, secret)
 
