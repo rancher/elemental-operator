@@ -787,7 +787,7 @@ func createDefaultResources(t *testing.T, server *InventoryServer) {
 	t.Helper()
 	server.Client.Create(context.Background(), &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-secret",
+			Name: "test-account-token",
 		},
 
 		Type: v1.SecretTypeServiceAccountToken,
@@ -796,12 +796,6 @@ func createDefaultResources(t *testing.T, server *InventoryServer) {
 	server.Client.Create(context.Background(), &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-account",
-		},
-
-		Secrets: []v1.ObjectReference{
-			{
-				Name: "test-secret",
-			},
 		},
 	})
 
