@@ -59,7 +59,6 @@ func (h *filesystemStateHandler) getStateFullPath() string {
 func (h *filesystemStateHandler) Load() (State, error) {
 	stateFile := h.getStateFullPath()
 	file, err := os.Open(stateFile)
-	defer file.Close()
 	if os.IsNotExist(err) {
 		log.Debugf("Could not find state file in '%s'. Assuming initial registration needs to happen.", stateFile)
 		return State{}, nil
@@ -71,6 +70,9 @@ func (h *filesystemStateHandler) Load() (State, error) {
 	var state State
 	if err := dec.Decode(&state); err != nil {
 		return State{}, fmt.Errorf("decoding registration to file '%s': %w", stateFile, err)
+	}
+	if err := file.Close(); err != nil {
+		return State{}, fmt.Errorf("closing file '%s': %w", stateFile, err)
 	}
 	return state, nil
 }
