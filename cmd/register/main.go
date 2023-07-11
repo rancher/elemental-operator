@@ -79,23 +79,16 @@ func main() {
 
 			// Locate config directory and file
 			var configDir string
-			var configName string
 			if len(args) == 0 {
-				if !isSystemInstalled() {
-					configDir = liveRegConfDir
-					configName = liveRegConfName
-				} else {
-					configDir = regConfDir
-					configName = regConfName
+				if err := loadDefaultConfig(); err != nil {
+					log.Fatalf("Cloud not read default configuration: %s", err)
 				}
+				configDir = regConfDir
 			} else {
 				configDir = args[0] //Take the first argument only, ignore the rest
-				configName = regConfName
-			}
-
-			// Merge configuration from file
-			if err := mergeConfigFromFile(configDir, configName); err != nil {
-				log.Fatalf("Could not read configuration in directory '%s': %s", configDir, err)
+				if err := mergeConfigFromFile(configDir, regConfName); err != nil {
+					log.Fatalf("Could not read configuration in directory '%s': %s", configDir, err)
+				}
 			}
 
 			if err := viper.Unmarshal(&cfg); err != nil {
@@ -122,6 +115,15 @@ func main() {
 	if err := cmd.Execute(); err != nil {
 		log.Fatalln(err)
 	}
+}
+
+func loadDefaultConfig() error {
+	if !isSystemInstalled() {
+		log.Debugf("System is live. Loading registration config from %s/%s.%s", liveRegConfDir, liveRegConfName, regConfExt)
+		return mergeConfigFromFile(liveRegConfDir, liveRegConfName)
+	}
+	log.Debugf("System is installed. Loading registration config from %s/%s.%s", regConfDir, regConfName, regConfExt)
+	return mergeConfigFromFile(regConfDir, regConfName)
 }
 
 func mergeConfigFromFile(path string, name string) error {
