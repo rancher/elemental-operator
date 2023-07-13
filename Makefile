@@ -40,7 +40,7 @@ CONTROLLER_GEN_VER := v0.9.2
 CONTROLLER_GEN := $(ABS_TOOLS_DIR)/controller-gen-$(CONTROLLER_GEN_VER)
 CONTROLLER_GEN_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
 
-GINKGO_VER := v2.3.1
+GINKGO_VER := v2.11.0
 GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
 GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 

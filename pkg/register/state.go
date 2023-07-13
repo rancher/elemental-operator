@@ -19,21 +19,29 @@ package register
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/twpayne/go-vfs/v4"
 	"gopkg.in/yaml.v3"
 )
 
 type State struct {
-	initialRegistration time.Time `yaml:"initialRegistration,omitempty"`
-	lastUpdate          time.Time `yaml:"lastUpdate,omitempty"`
-	emulatedTPM         bool      `yaml:"emulatedTPM,omitempty"`
-	emulatedTPMSeed     int64     `yaml:"emulatedTPMSeed,omitempty"`
+	InitialRegistration time.Time `yaml:"initialRegistration,omitempty"`
+	LastUpdate          time.Time `yaml:"lastUpdate,omitempty"`
+	EmulatedTPM         bool      `yaml:"emulatedTPM,omitempty"`
+	EmulatedTPMSeed     int64     `yaml:"emulatedTPMSeed,omitempty"`
 }
 
 func (s *State) IsUpdatable() bool {
-	return !s.initialRegistration.IsZero()
+	return !s.InitialRegistration.IsZero()
+}
+
+func (s *State) HasLastUpdateElapsed(suppress time.Duration) bool {
+	return time.Now().After(s.LastUpdate.Add(suppress))
 }
 
 type StateHandler interface {
@@ -41,24 +49,25 @@ type StateHandler interface {
 	Save(State) error
 }
 
+var errDecodingState = errors.New("decoding state")
+
 var _ StateHandler = (*filesystemStateHandler)(nil)
 
-func NewFileStateHandler(directory string) StateHandler {
-	return &filesystemStateHandler{directory: directory}
+func NewFileStateHandler(fs vfs.FS, stateFilePath string) StateHandler {
+	return &filesystemStateHandler{
+		fs:            fs,
+		stateFilePath: stateFilePath,
+	}
 }
 
 type filesystemStateHandler struct {
-	directory string
-}
-
-func (h *filesystemStateHandler) getStateFullPath() string {
-	const stateFile = "state.yaml"
-	return fmt.Sprintf("%s/%s", h.directory, stateFile)
+	fs            vfs.FS
+	stateFilePath string
 }
 
 func (h *filesystemStateHandler) Load() (State, error) {
-	stateFile := h.getStateFullPath()
-	file, err := os.Open(stateFile)
+	stateFile := h.stateFilePath
+	file, err := h.fs.Open(stateFile)
 	if os.IsNotExist(err) {
 		log.Debugf("Could not find state file in '%s'. Assuming initial registration needs to happen.", stateFile)
 		return State{}, nil
@@ -69,7 +78,7 @@ func (h *filesystemStateHandler) Load() (State, error) {
 	dec := yaml.NewDecoder(file)
 	var state State
 	if err := dec.Decode(&state); err != nil {
-		return State{}, fmt.Errorf("decoding registration to file '%s': %w", stateFile, err)
+		return State{}, fmt.Errorf("%w from file '%s': %w", errDecodingState, stateFile, err)
 	}
 	if err := file.Close(); err != nil {
 		return State{}, fmt.Errorf("closing file '%s': %w", stateFile, err)
@@ -78,14 +87,15 @@ func (h *filesystemStateHandler) Load() (State, error) {
 }
 
 func (h *filesystemStateHandler) Save(state State) error {
-	if _, err := os.Stat(h.directory); os.IsNotExist(err) {
-		log.Debugf("Registration config dir '%s' does not exist. Creating now.", h.directory)
-		if err := os.MkdirAll(h.directory, 0700); err != nil {
+	directory := filepath.Dir(h.stateFilePath)
+	if _, err := h.fs.Stat(directory); os.IsNotExist(err) {
+		log.Debugf("Registration config dir '%s' does not exist. Creating now.", directory)
+		if err := vfs.MkdirAll(h.fs, directory, 0700); err != nil {
 			return fmt.Errorf("creating registration config directory: %w", err)
 		}
 	}
-	stateFile := h.getStateFullPath()
-	file, err := os.Create(stateFile)
+	stateFile := h.stateFilePath
+	file, err := h.fs.Create(stateFile)
 	if err != nil {
 		return fmt.Errorf("creating registration state file: %w", err)
 	}

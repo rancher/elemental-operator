@@ -56,9 +56,9 @@ type client struct {
 	stateHandler StateHandler
 }
 
-func NewClient(configDir string) Client {
+func NewClient(stateHandler StateHandler) Client {
 	return &client{
-		stateHandler: NewFileStateHandler(configDir),
+		stateHandler: stateHandler,
 	}
 }
 
@@ -104,9 +104,9 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte) ([]byte, 
 		if err := sendUpdateData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send update data: %w", err)
 		}
-		state.lastUpdate = time.Now()
+		state.LastUpdate = time.Now()
 	} else {
-		state.initialRegistration = time.Now()
+		state.InitialRegistration = time.Now()
 	}
 
 	if !reg.NoSMBIOS {
@@ -156,9 +156,9 @@ func getAuthenticator(reg elementalv1.Registration, state *State) (authClient, e
 	var auth authClient
 	switch reg.Auth {
 	case "tpm":
-		state.emulatedTPMSeed = tpm.GetTPMSeed(reg, state.emulatedTPM, state.emulatedTPMSeed)
-		state.emulatedTPM = reg.EmulateTPM
-		auth = tpm.NewAuthClient(state.emulatedTPMSeed)
+		state.EmulatedTPMSeed = tpm.GetTPMSeed(reg, state.EmulatedTPM, state.EmulatedTPMSeed)
+		state.EmulatedTPM = reg.EmulateTPM
+		auth = tpm.NewAuthClient(state.EmulatedTPMSeed)
 	case "mac":
 		auth = &plainauth.AuthClient{}
 	case "sys-uuid":
