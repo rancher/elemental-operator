@@ -79,7 +79,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				return nil
 			}
 			// Determine if registration should execute or skip a cycle
-			stateHandler.Init(statePath)
+			if err := stateHandler.Init(statePath); err != nil {
+				return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
+			}
 			if skip, err := shouldSkipRegistration(stateHandler, installer); err != nil {
 				return fmt.Errorf("determining if registration should run: %w", err)
 			} else if skip {
