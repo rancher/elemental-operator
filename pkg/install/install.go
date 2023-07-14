@@ -249,4 +249,3 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 
 	return f.Name(), err
 }
-

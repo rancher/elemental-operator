@@ -145,4 +145,3 @@ func (auth *AuthClient) GetPubHash() (string, error) {
 	}
 	return gotpm.GetPubHash(opts...)
 }
-

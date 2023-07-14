@@ -111,4 +111,3 @@ func (h *filesystemStateHandler) Save(state State) error {
 	}
 	return nil
 }
-

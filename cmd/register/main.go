@@ -165,4 +165,3 @@ func getRegistrationCA(fs vfs.FS, config elementalv1.Config) ([]byte, error) {
 	}
 	return []byte(registration.CACert), nil
 }
-

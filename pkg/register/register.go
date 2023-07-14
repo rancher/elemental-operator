@@ -362,4 +362,3 @@ func getConfig(conn *websocket.Conn) ([]byte, error) {
 		return nil, fmt.Errorf("unexpected response message: %s", msgType)
 	}
 }
-
