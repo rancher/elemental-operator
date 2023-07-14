@@ -79,7 +79,7 @@ var _ = Describe("load state from filesystem", Label("registration", "state"), f
 	var fsCleanup func()
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		handler = NewFileStateHandler(fs, testStatePath)
 		DeferCleanup(fsCleanup)
 	})
@@ -89,7 +89,7 @@ var _ = Describe("load state from filesystem", Label("registration", "state"), f
 		})
 		It("should return state if state is deserializable", func() {
 			bytes, err := yaml.Marshal(stateFixture)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(fs.WriteFile(testStatePath, bytes, 0700)).To(BeNil())
 			Expect(handler.Load()).To(Equal(stateFixture))
 		})
@@ -115,7 +115,7 @@ var _ = Describe("save state to filesystem", Label("registration", "state"), fun
 	var fsCleanup func()
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(HaveOccurred())
 		handler = NewFileStateHandler(fs, testStatePath)
 		DeferCleanup(fsCleanup)
 	})
@@ -138,7 +138,7 @@ var _ = Describe("save state to filesystem", Label("registration", "state"), fun
 		It("should return no error and create directory", func() {
 			Expect(handler.Save(stateFixture)).To(BeNil())
 			_, err := fs.Stat(testStateDir)
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(handler.Load()).To(Equal(stateFixture))
 		})
 	})
