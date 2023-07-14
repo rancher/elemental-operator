@@ -57,32 +57,55 @@ type AuthClient struct {
 	ak         []byte
 }
 
+func NewAuthClient(seed int64) *AuthClient {
+	return &AuthClient{
+		seed: seed,
+	}
+}
+
 func (auth *AuthClient) Init(reg elementalv1.Registration) error {
 	if reg.EmulateTPM {
-		emulatedSeed := reg.EmulatedTPMSeed
-		log.Infof("Enable TPM emulation")
-		if emulatedSeed == -1 {
-			data, err := ghw.Product(ghw.WithDisableWarnings())
-			if err != nil {
-				emulatedSeed = rand.Int63()
-				log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
-			} else {
-				uuid := strings.Replace(data.UUID, "-", "", -1)
-				var i big.Int
-				_, converted := i.SetString(uuid, 16)
-				if !converted {
-					emulatedSeed = rand.Int63()
-					log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
-				} else {
-					emulatedSeed = i.Int64()
-					log.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
-				}
-			}
-		}
+		log.Info("Enable TPM emulation")
 		auth.emulateTPM = true
-		auth.seed = emulatedSeed
 	}
 	return nil
+}
+
+func GetTPMSeed(reg elementalv1.Registration, usePreviousSeed bool, previousSeed int64) int64 {
+	// Config says to generate a random seed, but we have none in state, generate a new one.
+	if reg.EmulateTPM && reg.EmulatedTPMSeed == -1 && !usePreviousSeed {
+		return randomTPMSeed()
+	}
+	// Config says to use a static seed, but we already registered with a different one from state, use that instead.
+	if reg.EmulateTPM && reg.EmulatedTPMSeed != -1 && usePreviousSeed {
+		return previousSeed
+	}
+	// Config says to use a static seed, and we have none in state, use it then.
+	if reg.EmulateTPM && reg.EmulatedTPMSeed != -1 && !usePreviousSeed {
+		return reg.EmulatedTPMSeed
+	}
+	return previousSeed
+}
+
+func randomTPMSeed() int64 {
+	var emulatedSeed int64
+	data, err := ghw.Product(ghw.WithDisableWarnings())
+	if err != nil {
+		emulatedSeed = rand.Int63()
+		log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+	} else {
+		uuid := strings.Replace(data.UUID, "-", "", -1)
+		var i big.Int
+		_, converted := i.SetString(uuid, 16)
+		if !converted {
+			emulatedSeed = rand.Int63()
+			log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+		} else {
+			emulatedSeed = i.Int64()
+			log.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
+		}
+	}
+	return emulatedSeed
 }
 
 func (auth *AuthClient) Authenticate(conn *websocket.Conn) error {
@@ -122,3 +145,4 @@ func (auth *AuthClient) GetPubHash() (string, error) {
 	}
 	return gotpm.GetPubHash(opts...)
 }
+

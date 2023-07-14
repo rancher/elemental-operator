@@ -472,6 +472,7 @@ github.com/subosito/gotenv
 # github.com/twpayne/go-vfs v1.7.2
 ## explicit; go 1.13
 github.com/twpayne/go-vfs
+github.com/twpayne/go-vfs/vfst
 # github.com/urfave/cli v1.22.10
 ## explicit; go 1.11
 github.com/urfave/cli

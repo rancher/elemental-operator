@@ -38,6 +38,10 @@ import (
 	"github.com/rancher/elemental-operator/pkg/tpm"
 )
 
+type Client interface {
+	Register(reg elementalv1.Registration, caCert []byte) ([]byte, error)
+}
+
 type authClient interface {
 	Init(reg elementalv1.Registration) error
 	GetName() string
@@ -46,25 +50,30 @@ type authClient interface {
 	Authenticate(conn *websocket.Conn) error
 }
 
+var _ Client = (*client)(nil)
+
+type client struct {
+	stateHandler StateHandler
+}
+
+func NewClient(stateHandler StateHandler) Client {
+	return &client{
+		stateHandler: stateHandler,
+	}
+}
+
 // Register attempts to register the machine with the elemental-operator.
 // If the machine is already installed and registered, a registration can still be attempted turning the `isUpdate` flag on.
 // Registration updates will fetch and apply new labels, and update Machine annotations such as the IP address.
-func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byte, error) {
-	var auth authClient
-
-	switch reg.Auth {
-	case "tpm":
-		auth = &tpm.AuthClient{}
-	case "mac":
-		auth = &plainauth.AuthClient{}
-	case "sys-uuid":
-		auth = &plainauth.AuthClient{}
-	default:
-		return nil, fmt.Errorf("unsupported authentication: %s", reg.Auth)
+func (r *client) Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
+	state, err := r.stateHandler.Load()
+	if err != nil {
+		return nil, fmt.Errorf("loading registration state: %w", err)
 	}
 
-	if err := auth.Init(reg); err != nil {
-		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
+	auth, err := getAuthenticator(reg, &state)
+	if err != nil {
+		return nil, fmt.Errorf("initializing authenticator: %w", err)
 	}
 
 	log.Infof("Connect to %s", reg.URL)
@@ -87,7 +96,7 @@ func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byt
 	}
 	log.Infof("Negotiated protocol version: %d", protoVersion)
 
-	if isUpdate {
+	if state.IsUpdatable() {
 		if protoVersion < MsgUpdate {
 			return nil, errors.New("elemental-operator protocol version does not support update")
 		}
@@ -95,6 +104,9 @@ func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byt
 		if err := sendUpdateData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send update data: %w", err)
 		}
+		state.LastUpdate = time.Now()
+	} else {
+		state.InitialRegistration = time.Now()
 	}
 
 	if !reg.NoSMBIOS {
@@ -118,6 +130,11 @@ func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byt
 		}
 	}
 
+	log.Info("Saving registration state")
+	if err := r.stateHandler.Save(state); err != nil {
+		return nil, fmt.Errorf("saving registration state: %w", err)
+	}
+
 	log.Info("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
@@ -128,11 +145,32 @@ func Register(reg elementalv1.Registration, caCert []byte, isUpdate bool) ([]byt
 	}
 
 	// Support old Elemental Operator (<= v1.1.0)
-	_, r, err := conn.NextReader()
+	_, reader, err := conn.NextReader()
 	if err != nil {
 		return nil, fmt.Errorf("read elemental configuration: %w", err)
 	}
-	return io.ReadAll(r)
+	return io.ReadAll(reader)
+}
+
+func getAuthenticator(reg elementalv1.Registration, state *State) (authClient, error) {
+	var auth authClient
+	switch reg.Auth {
+	case "tpm":
+		state.EmulatedTPMSeed = tpm.GetTPMSeed(reg, state.EmulatedTPM, state.EmulatedTPMSeed)
+		state.EmulatedTPM = reg.EmulateTPM
+		auth = tpm.NewAuthClient(state.EmulatedTPMSeed)
+	case "mac":
+		auth = &plainauth.AuthClient{}
+	case "sys-uuid":
+		auth = &plainauth.AuthClient{}
+	default:
+		return nil, fmt.Errorf("unsupported authentication: %s", reg.Auth)
+	}
+
+	if err := auth.Init(reg); err != nil {
+		return nil, fmt.Errorf("init %s authentication: %w", auth.GetName(), err)
+	}
+	return auth, nil
 }
 
 func initWebsocketConn(url string, caCert []byte, auth authClient) (*websocket.Conn, error) {
@@ -324,3 +362,4 @@ func getConfig(conn *websocket.Conn) ([]byte, error) {
 		return nil, fmt.Errorf("unexpected response message: %s", msgType)
 	}
 }
+
