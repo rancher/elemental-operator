@@ -78,7 +78,7 @@ func (h *filesystemStateHandler) Load() (State, error) {
 	dec := yaml.NewDecoder(file)
 	var state State
 	if err := dec.Decode(&state); err != nil {
-		return State{}, fmt.Errorf("%w from file '%s': %w", errDecodingState, stateFile, err)
+		return State{}, fmt.Errorf("%w from file '%s': %s", errDecodingState, stateFile, err)
 	}
 	if err := file.Close(); err != nil {
 		return State{}, fmt.Errorf("closing file '%s': %w", stateFile, err)
