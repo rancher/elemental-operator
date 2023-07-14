@@ -45,6 +45,7 @@ func (s *State) HasLastUpdateElapsed(suppress time.Duration) bool {
 }
 
 type StateHandler interface {
+	Init(location string) error
 	Load() (State, error)
 	Save(State) error
 }
@@ -53,10 +54,9 @@ var errDecodingState = errors.New("decoding state")
 
 var _ StateHandler = (*filesystemStateHandler)(nil)
 
-func NewFileStateHandler(fs vfs.FS, stateFilePath string) StateHandler {
+func NewFileStateHandler(fs vfs.FS) StateHandler {
 	return &filesystemStateHandler{
-		fs:            fs,
-		stateFilePath: stateFilePath,
+		fs: fs,
 	}
 }
 
@@ -65,13 +65,30 @@ type filesystemStateHandler struct {
 	stateFilePath string
 }
 
+func (h *filesystemStateHandler) Init(path string) error {
+	h.stateFilePath = path
+	// Check if directory exists
+	directory := filepath.Dir(path)
+	if _, err := h.fs.Stat(directory); os.IsNotExist(err) {
+		log.Debugf("Registration state dir '%s' does not exist. Creating now.", directory)
+		if err := vfs.MkdirAll(h.fs, directory, 0700); err != nil {
+			return fmt.Errorf("creating registration config directory: %w", err)
+		}
+	}
+	// Check if we can actually open the file
+	_, err := h.fs.Open(path)
+	if os.IsNotExist(err) {
+		return h.Save(State{}) // Create empty state if not exist
+	}
+	if err != nil {
+		return fmt.Errorf("opening registration state file '%s': %w", path, err)
+	}
+	return nil
+}
+
 func (h *filesystemStateHandler) Load() (State, error) {
 	stateFile := h.stateFilePath
 	file, err := h.fs.Open(stateFile)
-	if os.IsNotExist(err) {
-		log.Debugf("Could not find state file in '%s'. Assuming initial registration needs to happen.", stateFile)
-		return State{}, nil
-	}
 	if err != nil {
 		return State{}, fmt.Errorf("loading registration state file '%s': %w", stateFile, err)
 	}
@@ -87,27 +104,19 @@ func (h *filesystemStateHandler) Load() (State, error) {
 }
 
 func (h *filesystemStateHandler) Save(state State) error {
-	directory := filepath.Dir(h.stateFilePath)
-	if _, err := h.fs.Stat(directory); os.IsNotExist(err) {
-		log.Debugf("Registration config dir '%s' does not exist. Creating now.", directory)
-		if err := vfs.MkdirAll(h.fs, directory, 0700); err != nil {
-			return fmt.Errorf("creating registration config directory: %w", err)
-		}
-	}
-	stateFile := h.stateFilePath
-	file, err := h.fs.Create(stateFile)
+	file, err := h.fs.Create(h.stateFilePath)
 	if err != nil {
 		return fmt.Errorf("creating registration state file: %w", err)
 	}
 	enc := yaml.NewEncoder(file)
 	if err := enc.Encode(state); err != nil {
-		return fmt.Errorf("writing RegistrationState to file '%s': %w", stateFile, err)
+		return fmt.Errorf("writing RegistrationState to file '%s': %w", h.stateFilePath, err)
 	}
 	if err := enc.Close(); err != nil {
 		return fmt.Errorf("closing encoder: %w", err)
 	}
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("closing file '%s': %w", stateFile, err)
+		return fmt.Errorf("closing file '%s': %w", h.stateFilePath, err)
 	}
 	return nil
 }

@@ -72,6 +72,40 @@ var _ = Describe("has state update elapsed", Label("registration", "state"), fun
 	})
 })
 
+var _ = Describe("init file state handler", Label("registration", "state"), func() {
+	var fs vfs.FS
+	var handler StateHandler
+	var err error
+	var fsCleanup func()
+	BeforeEach(func() {
+		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+		Expect(err).ToNot(HaveOccurred())
+		handler = NewFileStateHandler(fs)
+		DeferCleanup(fsCleanup)
+	})
+	When("directory exists", func() {
+		BeforeEach(func() {
+			Expect(vfs.MkdirAll(fs, testStateDir, os.ModePerm)).ToNot(HaveOccurred())
+		})
+		It("should create empty state", func() {
+			Expect(handler.Init(testStatePath)).ToNot(HaveOccurred())
+			Expect(fs.ReadFile(testStatePath)).To(Equal([]byte("{}\n")))
+		})
+		It("should do nothing if file exists", func() {
+			testBytes := []byte("foobar")
+			Expect(fs.WriteFile(testStatePath, testBytes, 0700)).ToNot(HaveOccurred())
+			Expect(handler.Init(testStatePath)).ToNot(HaveOccurred())
+			Expect(fs.ReadFile(testStatePath)).To(Equal(testBytes))
+		})
+	})
+	When("directory does not exist", func() {
+		It("should create empty state", func() {
+			Expect(handler.Init(testStatePath)).ToNot(HaveOccurred())
+			Expect(fs.ReadFile(testStatePath)).To(Equal([]byte("{}\n")))
+		})
+	})
+})
+
 var _ = Describe("load state from filesystem", Label("registration", "state"), func() {
 	var fs vfs.FS
 	var handler StateHandler
@@ -80,30 +114,31 @@ var _ = Describe("load state from filesystem", Label("registration", "state"), f
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
 		Expect(err).ToNot(HaveOccurred())
-		handler = NewFileStateHandler(fs, testStatePath)
+		handler = NewFileStateHandler(fs)
 		DeferCleanup(fsCleanup)
 	})
-	When("directory exists", func() {
+	When("init handler", func() {
 		BeforeEach(func() {
-			Expect(vfs.MkdirAll(fs, testStateDir, os.ModePerm)).To(BeNil())
+			Expect(handler.Init(testStatePath)).ToNot(HaveOccurred())
 		})
 		It("should return state if state is deserializable", func() {
 			bytes, err := yaml.Marshal(stateFixture)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(fs.WriteFile(testStatePath, bytes, 0700)).To(BeNil())
+			Expect(fs.WriteFile(testStatePath, bytes, 0700)).ToNot(HaveOccurred())
 			Expect(handler.Load()).To(Equal(stateFixture))
 		})
 		It("should return error if state is not deserializable", func() {
 			bytes := []byte("I am definitely not yaml")
-			Expect(fs.WriteFile(testStatePath, bytes, 0700)).To(BeNil())
+			Expect(fs.WriteFile(testStatePath, bytes, 0700)).ToNot(HaveOccurred())
 			state, err := handler.Load()
 			Expect(state).To(Equal(State{}))
 			Expect(err).To(MatchError(errDecodingState))
 		})
 	})
-	When("directory does not exist", func() {
-		It("should return empty state", func() {
-			Expect(handler.Load()).To(Equal(State{}))
+	When("missing init handler", func() {
+		It("should return error", func() {
+			_, err := handler.Load()
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })
@@ -116,30 +151,27 @@ var _ = Describe("save state to filesystem", Label("registration", "state"), fun
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
 		Expect(err).ToNot(HaveOccurred())
-		handler = NewFileStateHandler(fs, testStatePath)
+		handler = NewFileStateHandler(fs)
 		DeferCleanup(fsCleanup)
 	})
-	When("directory exists", func() {
+	When("init handler", func() {
 		BeforeEach(func() {
-			Expect(vfs.MkdirAll(fs, testStateDir, os.ModePerm)).To(BeNil())
+			Expect(handler.Init(testStatePath)).ToNot(HaveOccurred())
 		})
-		It("should return no error if state file is new", func() {
+		It("should return no error", func() {
 			Expect(handler.Save(stateFixture))
 			Expect(handler.Load()).To(Equal(stateFixture))
 		})
 		It("should return no error if file already exists", func() {
 			bytes := []byte("I am going to be overwritten")
-			Expect(fs.WriteFile(testStatePath, bytes, 0700)).To(BeNil())
+			Expect(fs.WriteFile(testStatePath, bytes, 0700)).ToNot(HaveOccurred())
 			Expect(handler.Save(stateFixture))
 			Expect(handler.Load()).To(Equal(stateFixture))
 		})
 	})
-	When("directory does not exist", func() {
-		It("should return no error and create directory", func() {
-			Expect(handler.Save(stateFixture)).To(BeNil())
-			_, err := fs.Stat(testStateDir)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(handler.Load()).To(Equal(stateFixture))
+	When("missing init handler", func() {
+		It("should return error", func() {
+			Expect(handler.Save(stateFixture)).To(HaveOccurred())
 		})
 	})
 })

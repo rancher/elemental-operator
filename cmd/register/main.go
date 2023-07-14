@@ -52,14 +52,17 @@ var (
 )
 
 func main() {
-	cmd := newCommand(vfs.OSFS)
+	fs := vfs.OSFS
+	installer := install.NewInstaller(fs)
+	stateHandler := register.NewFileStateHandler(fs)
+	client := register.NewClient(stateHandler)
+	cmd := newCommand(fs, client, stateHandler, installer)
 	if err := cmd.Execute(); err != nil {
 		log.Fatalf("FATAL: %s", err)
 	}
 }
 
-func newCommand(fs vfs.FS) *cobra.Command {
-	installer := install.NewInstaller(fs)
+func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "elemental-register",
 		Short: "Elemental register command",
@@ -76,7 +79,7 @@ func newCommand(fs vfs.FS) *cobra.Command {
 				return nil
 			}
 			// Determine if registration should execute or skip a cycle
-			stateHandler := register.NewFileStateHandler(fs, statePath)
+			stateHandler.Init(statePath)
 			if skip, err := shouldSkipRegistration(stateHandler, installer); err != nil {
 				return fmt.Errorf("determining if registration should run: %w", err)
 			} else if skip {
@@ -89,7 +92,6 @@ func newCommand(fs vfs.FS) *cobra.Command {
 				return fmt.Errorf("validating CA: %w", err)
 			}
 			// Register
-			client := register.NewClient(stateHandler)
 			data, err := client.Register(cfg.Elemental.Registration, caCert)
 			if err != nil {
 				return fmt.Errorf("registering machine: %w", err)
