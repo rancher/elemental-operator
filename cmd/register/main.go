@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/twpayne/go-vfs"
+	"github.com/twpayne/go-vfsafero"
 	"gopkg.in/yaml.v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -68,15 +69,18 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 		Short: "Elemental register command",
 		Long:  "elemental-register registers a node with the elemental-operator via a config file or flags",
 		RunE: func(_ *cobra.Command, args []string) error {
-			// Initialize Config
-			initConfig()
-			if err := viper.Unmarshal(&cfg); err != nil {
-				return fmt.Errorf("decoding configuration: %w", err)
-			}
 			// Version subcommand
 			if viper.GetBool("version") {
 				log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 				return nil
+			}
+			// Initialize Config
+			initConfig(fs)
+			if err := viper.MergeInConfig(); err != nil {
+				return fmt.Errorf("merging config: %w", err)
+			}
+			if err := viper.Unmarshal(&cfg); err != nil {
+				return fmt.Errorf("decoding configuration: %w", err)
 			}
 			// Determine if registration should execute or skip a cycle
 			if err := stateHandler.Init(statePath); err != nil {
@@ -111,6 +115,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			return nil
 		},
 	}
+	//Define flags
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
@@ -118,27 +123,27 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.Auth, "auth", "tpm", "Registration authentication method")
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
-	cmd.Flags().StringVar(&configPath, "config-path", "", "The full path of the elemental-register config")
-	cmd.Flags().StringVar(&statePath, "state-path", "", "The full path of the elemental-register config")
+	if installer.IsSystemInstalled() {
+		cmd.Flags().StringVar(&configPath, "config-path", defaultConfigPath, "The full path of the elemental-register config")
+	} else {
+		cmd.Flags().StringVar(&configPath, "config-path", defaultLiveConfigPath, "The full path of the elemental-register config")
+	}
+	cmd.Flags().StringVar(&statePath, "state-path", defaultStatePath, "The full path of the elemental-register config")
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
-	//Set Defaults
-	viper.SetDefault("state-path", defaultStatePath)
-	if installer.IsSystemInstalled() {
-		viper.SetDefault("config-path", defaultConfigPath)
-	} else {
-		viper.SetDefault("config-path", defaultLiveConfigPath)
-	}
 	return cmd
 }
 
-func initConfig() {
+func initConfig(fs vfs.FS) {
 	if debug {
 		log.EnableDebugLogging()
 	}
-
 	log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
 
+	// Use go-vfs afero compatibility layer (required by Viper)
+	afs := vfsafero.NewAferoFS(fs)
+	viper.SetFs(afs)
+	// Set final config path
 	viper.SetConfigFile(configPath)
 }
 
@@ -150,7 +155,7 @@ func shouldSkipRegistration(stateHandler register.StateHandler, installer instal
 	if err != nil {
 		return false, fmt.Errorf("loading registration state")
 	}
-	return state.HasLastUpdateElapsed(registrationUpdateSuppressTimer), nil
+	return !state.HasLastUpdateElapsed(registrationUpdateSuppressTimer), nil
 }
 
 func getRegistrationCA(fs vfs.FS, config elementalv1.Config) ([]byte, error) {

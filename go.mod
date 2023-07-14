@@ -178,6 +178,8 @@ require (
 	github.com/gobuffalo/flect v0.2.4
 	github.com/jaypipes/ghw v0.9.0
 	github.com/sanity-io/litter v1.5.5
+	github.com/twpayne/go-vfsafero v1.0.0
+	go.uber.org/mock v0.2.0
 )
 
 require (

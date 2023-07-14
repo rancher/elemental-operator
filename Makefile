@@ -216,6 +216,7 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 	$(CONTROLLER_GEN) \
 		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
 		paths=./api/...
+	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > charts/crds/templates/crds.yaml
