@@ -150,6 +150,7 @@ func initConfig(fs vfs.FS) {
 	afs := vfsafero.NewAferoFS(fs)
 	viper.SetFs(afs)
 	// Set final config path
+	log.Infof("Using base configuration file: %s", configPath)
 	viper.SetConfigFile(configPath)
 }
 
