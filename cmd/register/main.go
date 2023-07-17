@@ -19,6 +19,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -39,6 +41,7 @@ const (
 	defaultConfigPath               = "/oem/registration/config.yaml"
 	defaultLiveConfigPath           = "/run/initramfs/live/livecd-cloud-config.yaml"
 	registrationUpdateSuppressTimer = 24 * time.Hour
+	additionalConfigsDirName        = "config.d"
 )
 
 var (
@@ -75,12 +78,8 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				return nil
 			}
 			// Initialize Config
-			initConfig(fs)
-			if err := viper.MergeInConfig(); err != nil {
-				return fmt.Errorf("merging config: %w", err)
-			}
-			if err := viper.Unmarshal(&cfg); err != nil {
-				return fmt.Errorf("decoding configuration: %w", err)
+			if err := initConfig(fs); err != nil {
+				return fmt.Errorf("initializing configuration: %w", err)
 			}
 			// Determine if registration should execute or skip a cycle
 			if err := stateHandler.Init(statePath); err != nil {
@@ -140,7 +139,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	return cmd
 }
 
-func initConfig(fs vfs.FS) {
+func initConfig(fs vfs.FS) error {
 	if debug {
 		log.EnableDebugLogging()
 	}
@@ -152,6 +151,31 @@ func initConfig(fs vfs.FS) {
 	// Set final config path
 	log.Infof("Using base configuration file: %s", configPath)
 	viper.SetConfigFile(configPath)
+	// Locate and use config.d directory if exists
+	configDDir := fmt.Sprintf("%s/%s", path.Dir(configPath), additionalConfigsDirName)
+	files, err := fs.ReadDir(configDDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("accessing '%s' directory: %w", configDDir, err)
+	}
+	if err == nil {
+		log.Infof("Loading multiple configs from directory '%s'", configDDir)
+		viper.AddConfigPath(configDDir)
+		for _, file := range files {
+			if path.Ext(file.Name()) == ".yaml" {
+				log.Infof("reading config file %s", file.Name())
+				viper.SetConfigType("yaml")
+				viper.SetConfigName(file.Name())
+			}
+		}
+	}
+	// Merge all found configs
+	if err := viper.MergeInConfig(); err != nil {
+		return fmt.Errorf("merging config: %w", err)
+	}
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return fmt.Errorf("decoding configuration: %w", err)
+	}
+	return nil
 }
 
 func shouldSkipRegistration(stateHandler register.StateHandler, installer install.Installer) (bool, error) {
