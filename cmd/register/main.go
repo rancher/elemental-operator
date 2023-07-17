@@ -117,11 +117,17 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	}
 	//Define flags
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
+	_ = viper.BindPFlag("elemental.registration.url", cmd.Flags().Lookup("registration-url"))
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")
+	_ = viper.BindPFlag("elemental.registration.ca-cert", cmd.Flags().Lookup("registration-ca-cert"))
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.EmulateTPM, "emulate-tpm", false, "Emulate /dev/tpm")
+	_ = viper.BindPFlag("elemental.registration.emulate-tpm", cmd.Flags().Lookup("emulate-tpm"))
 	cmd.Flags().Int64Var(&cfg.Elemental.Registration.EmulatedTPMSeed, "emulated-tpm-seed", 1, "Seed for /dev/tpm emulation")
+	_ = viper.BindPFlag("elemental.registration.emulated-tpm-seed", cmd.Flags().Lookup("emulated-tpm-seed"))
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoSMBIOS, "no-smbios", false, "Disable the use of dmidecode to get SMBIOS")
+	_ = viper.BindPFlag("elemental.registration.no-smbios", cmd.Flags().Lookup("no-smbios"))
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.Auth, "auth", "tpm", "Registration authentication method")
+	_ = viper.BindPFlag("elemental.registration.auth", cmd.Flags().Lookup("auth"))
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
 	if installer.IsSystemInstalled() {
 		cmd.Flags().StringVar(&configPath, "config-path", defaultConfigPath, "The full path of the elemental-register config")
