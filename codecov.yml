@@ -21,3 +21,4 @@ coverage:
         informational: true
 ignore:
   - "**/mocks/**"
+  - "vendor/**"
