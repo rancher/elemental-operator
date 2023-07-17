@@ -146,6 +146,16 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().Register(gomock.Any(), gomock.Any()).Times(0)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
+			It("should not skip registration if lastUpdate is stale", func() {
+				cmd.SetArgs([]string{})
+				registrationState := register.State{
+					InitialRegistration: time.Now(),
+					LastUpdate:          time.Now().Add(-25 * time.Hour),
+				}
+				marshalIntoFile(fs, registrationState, defaultStatePath)
+				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
 			It("should use state path argument", func() {
 				newPath := "/a/custom/state/path/custom-state.yaml"
 				cmd.SetArgs([]string{"--state-path", newPath})
