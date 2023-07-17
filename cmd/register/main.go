@@ -19,8 +19,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -41,7 +39,6 @@ const (
 	defaultConfigPath               = "/oem/registration/config.yaml"
 	defaultLiveConfigPath           = "/run/initramfs/live/livecd-cloud-config.yaml"
 	registrationUpdateSuppressTimer = 24 * time.Hour
-	additionalConfigsDirName        = "config.d"
 )
 
 var (
@@ -151,24 +148,7 @@ func initConfig(fs vfs.FS) error {
 	// Set final config path
 	log.Infof("Using base configuration file: %s", configPath)
 	viper.SetConfigFile(configPath)
-	// Locate and use config.d directory if exists
-	configDDir := fmt.Sprintf("%s/%s", path.Dir(configPath), additionalConfigsDirName)
-	files, err := fs.ReadDir(configDDir)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("accessing '%s' directory: %w", configDDir, err)
-	}
-	if err == nil {
-		log.Infof("Loading multiple configs from directory '%s'", configDDir)
-		viper.AddConfigPath(configDDir)
-		for _, file := range files {
-			if path.Ext(file.Name()) == ".yaml" {
-				log.Infof("reading config file %s", file.Name())
-				viper.SetConfigType("yaml")
-				viper.SetConfigName(file.Name())
-			}
-		}
-	}
-	// Merge all found configs
+	// Merge config (considering bound flags)
 	if err := viper.MergeInConfig(); err != nil {
 		return fmt.Errorf("merging config: %w", err)
 	}

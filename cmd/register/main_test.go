@@ -210,37 +210,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 	})
 })
 
-var _ = Describe("elemental-register multiple configs loading", Label("registration", "cli"), func() {
-	var fs vfs.FS
-	var err error
-	var fsCleanup func()
-	var cmd *cobra.Command
-	var mockCtrl *gomock.Controller
-	var client *rmocks.MockClient
-	When("system is already installed", func() {
-		BeforeEach(func() {
-			fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{
-				"/run/initramfs/cos-state/state.yaml": "{}/n",
-			})
-			Expect(err).ToNot(HaveOccurred())
-			mockCtrl = gomock.NewController(GinkgoT())
-			client = rmocks.NewMockClient(mockCtrl)
-			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), install.NewInstaller(fs))
-			DeferCleanup(fsCleanup)
-		})
-		It("should load the additional config", func() {
-			customConfigDir := "/a/custom/config/directory"
-			customConfigPath := fmt.Sprintf("%s/base-config.yaml", customConfigDir)
-			additionalConfigPath := fmt.Sprintf("%s/config.d/additional-config.yaml", customConfigDir)
-			cmd.SetArgs([]string{"--config-path", customConfigPath})
-			marshalIntoFile(fs, baseConfigFixture, customConfigPath)
-			marshalIntoFile(fs, alternateConfigFixture, additionalConfigPath)
-			client.EXPECT().Register(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
-			Expect(cmd.Execute()).ToNot(HaveOccurred())
-		})
-	})
-})
-
 func marshalIntoFile(fs vfs.FS, input any, filePath string) {
 	bytes, err := yaml.Marshal(input)
 	Expect(err).ToNot(HaveOccurred())
