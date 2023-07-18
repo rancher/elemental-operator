@@ -147,7 +147,7 @@ validate:
 
 .PHONY: unit-tests
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/...
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
 
 e2e-tests: $(GINKGO) setup-kind
 	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
@@ -165,12 +165,13 @@ setup-kind:
 # and run a test that does nothing but installs everything for
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
-setup-full-cluster: build-docker-operator chart setup-kind
+setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
 	@export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REPO_SEEDIMAGE}:${TAG} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
 
 kind-e2e-tests: build-docker-operator chart setup-kind
@@ -216,6 +217,7 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 	$(CONTROLLER_GEN) \
 		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
 		paths=./api/...
+	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > charts/crds/templates/crds.yaml

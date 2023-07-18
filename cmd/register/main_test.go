@@ -1,0 +1,218 @@
+/*
+Copyright © 2022 - 2023 SUSE LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"path"
+	"testing"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/install"
+	imocks "github.com/rancher/elemental-operator/pkg/install/mocks"
+	"github.com/rancher/elemental-operator/pkg/register"
+	rmocks "github.com/rancher/elemental-operator/pkg/register/mocks"
+	"github.com/spf13/cobra"
+	"github.com/twpayne/go-vfs"
+	"github.com/twpayne/go-vfs/vfst"
+	"go.uber.org/mock/gomock"
+	"gopkg.in/yaml.v3"
+)
+
+func TestRegister(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Register CLI Suite")
+}
+
+var (
+	baseConfigFixture = elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: elementalv1.Registration{
+				URL:             "https://127.0.0.1.sslip.io",
+				CACert:          "Just for testing",
+				EmulateTPM:      true,
+				EmulatedTPMSeed: -1,
+				NoSMBIOS:        true,
+				Auth:            "test",
+			},
+		},
+	}
+	alternateConfigFixture = elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: elementalv1.Registration{
+				URL:             "https://127.0.0.2.sslip.io",
+				CACert:          "alternate ca",
+				EmulateTPM:      true,
+				EmulatedTPMSeed: 9876543210,
+				NoSMBIOS:        true,
+				Auth:            "alternate auth",
+			},
+			Install: elementalv1.Install{
+				Firmware:         "a test firmware",
+				Device:           "a test device",
+				NoFormat:         true,
+				ConfigURLs:       []string{"foo", "bar"},
+				ISO:              "a test iso",
+				SystemURI:        "a system uri",
+				Debug:            true,
+				TTY:              "a test tty",
+				PowerOff:         true,
+				Reboot:           true,
+				EjectCD:          true,
+				DisableBootEntry: true,
+				ConfigDir:        "a test config dir",
+			},
+		},
+	}
+)
+
+var _ = Describe("elemental-register arguments", Label("registration", "cli"), func() {
+	var fs vfs.FS
+	var err error
+	var fsCleanup func()
+	var cmd *cobra.Command
+	var mockCtrl *gomock.Controller
+	var client *rmocks.MockClient
+	When("system is already installed", func() {
+		BeforeEach(func() {
+			fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{
+				"/run/initramfs/cos-state/state.yaml": "{}/n",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			mockCtrl = gomock.NewController(GinkgoT())
+			client = rmocks.NewMockClient(mockCtrl)
+			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), install.NewInstaller(fs))
+			DeferCleanup(fsCleanup)
+		})
+		It("should return no error when printing version", func() {
+			cmd.SetArgs([]string{"--version"})
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+		When("using existing default config", func() {
+			BeforeEach(func() {
+				marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
+			})
+			It("should use the config if no arguments passed", func() {
+				cmd.SetArgs([]string{})
+				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should overwrite the config values with passed arguments", func() {
+				cmd.SetArgs([]string{
+					"--registration-url", alternateConfigFixture.Elemental.Registration.URL,
+					"--registration-ca-cert", alternateConfigFixture.Elemental.Registration.CACert,
+					"--emulate-tpm",
+					"--emulated-tpm-seed", fmt.Sprintf("%d", alternateConfigFixture.Elemental.Registration.EmulatedTPMSeed),
+					"--no-smbios=false",
+					"--auth", alternateConfigFixture.Elemental.Registration.Auth,
+				})
+				wantConfig := alternateConfigFixture.DeepCopy()
+				wantConfig.Elemental.Registration.NoSMBIOS = false
+				client.EXPECT().Register(wantConfig.Elemental.Registration, []byte(wantConfig.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should use config path argument", func() {
+				newPath := "/a/custom/config/path/custom-config.yaml"
+				cmd.SetArgs([]string{"--config-path", newPath})
+				marshalIntoFile(fs, alternateConfigFixture, newPath)
+				client.EXPECT().Register(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should skip registration if lastUpdate is recent", func() {
+				cmd.SetArgs([]string{})
+				registrationState := register.State{
+					InitialRegistration: time.Now(),
+					LastUpdate:          time.Now(),
+				}
+				marshalIntoFile(fs, registrationState, defaultStatePath)
+				client.EXPECT().Register(gomock.Any(), gomock.Any()).Times(0)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should not skip registration if lastUpdate is stale", func() {
+				cmd.SetArgs([]string{})
+				registrationState := register.State{
+					InitialRegistration: time.Now(),
+					LastUpdate:          time.Now().Add(-25 * time.Hour),
+				}
+				marshalIntoFile(fs, registrationState, defaultStatePath)
+				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should use state path argument", func() {
+				newPath := "/a/custom/state/path/custom-state.yaml"
+				cmd.SetArgs([]string{"--state-path", newPath})
+				registrationState := register.State{
+					InitialRegistration: time.Now(),
+					LastUpdate:          time.Now(),
+				}
+				marshalIntoFile(fs, registrationState, newPath)
+				client.EXPECT().Register(gomock.Any(), gomock.Any()).Times(0)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+		})
+	})
+	When("system is not installed", func() {
+		var installer *imocks.MockInstaller
+		BeforeEach(func() {
+			fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+			Expect(err).ToNot(HaveOccurred())
+			mockCtrl = gomock.NewController(GinkgoT())
+			installer = imocks.NewMockInstaller(mockCtrl)
+			installer.EXPECT().IsSystemInstalled().Return(false).AnyTimes()
+			client = rmocks.NewMockClient(mockCtrl)
+			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), installer)
+			DeferCleanup(fsCleanup)
+		})
+		When("using existing live config", func() {
+			BeforeEach(func() {
+				marshalIntoFile(fs, baseConfigFixture, defaultLiveConfigPath)
+			})
+			It("should trigger install on first registration", func() {
+				cmd.SetArgs([]string{})
+				installer.EXPECT().InstallElemental(alternateConfigFixture).Return(nil)
+				returnedConfig, err := yaml.Marshal(alternateConfigFixture)
+				Expect(err).ToNot(HaveOccurred())
+				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return(returnedConfig, nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+			It("should always trigger install on registration update", func() {
+				cmd.SetArgs([]string{})
+				registrationState := register.State{
+					InitialRegistration: time.Now(),
+					LastUpdate:          time.Now(),
+				}
+				marshalIntoFile(fs, registrationState, defaultStatePath)
+				installer.EXPECT().InstallElemental(alternateConfigFixture).Return(nil)
+				returnedConfig, err := yaml.Marshal(alternateConfigFixture)
+				Expect(err).ToNot(HaveOccurred())
+				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return(returnedConfig, nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
+		})
+	})
+})
+
+func marshalIntoFile(fs vfs.FS, input any, filePath string) {
+	bytes, err := yaml.Marshal(input)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(vfs.MkdirAll(fs, path.Dir(filePath), os.ModePerm)).ToNot(HaveOccurred())
+	Expect(fs.WriteFile(filePath, bytes, os.ModePerm)).ToNot(HaveOccurred())
+}

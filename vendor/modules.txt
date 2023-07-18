@@ -472,6 +472,10 @@ github.com/subosito/gotenv
 # github.com/twpayne/go-vfs v1.7.2
 ## explicit; go 1.13
 github.com/twpayne/go-vfs
+github.com/twpayne/go-vfs/vfst
+# github.com/twpayne/go-vfsafero v1.0.0
+## explicit
+github.com/twpayne/go-vfsafero
 # github.com/urfave/cli v1.22.10
 ## explicit; go 1.11
 github.com/urfave/cli
@@ -546,6 +550,10 @@ go.opentelemetry.io/proto/otlp/trace/v1
 # go.uber.org/atomic v1.10.0
 ## explicit; go 1.18
 go.uber.org/atomic
+# go.uber.org/mock v0.2.0
+## explicit; go 1.19
+go.uber.org/mock/gomock
+go.uber.org/mock/mockgen/model
 # go.uber.org/multierr v1.9.0
 ## explicit; go 1.19
 go.uber.org/multierr
