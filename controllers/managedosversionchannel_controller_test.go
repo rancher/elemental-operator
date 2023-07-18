@@ -200,7 +200,6 @@ var _ = Describe("reconcile managed os version channel", func() {
 	It("should reconcile and sync managed os version channel object with default sync time", func() {
 		managedOSVersion := &elementalv1.ManagedOSVersion{}
 		managedOSVersionChannel.Spec.Type = "custom"
-
 		name := types.NamespacedName{
 			Namespace: managedOSVersionChannel.Namespace,
 			Name:      managedOSVersionChannel.Name,
@@ -209,6 +208,10 @@ var _ = Describe("reconcile managed os version channel", func() {
 
 		// No error and status updated (triggers requeue)
 		res1, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).To(HaveOccurred()) // Can't update status if spec changed
+		Expect(res1.Requeue).To(BeTrue())
+
+		res1, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(res1.RequeueAfter).To(Equal(0 * time.Second))
 

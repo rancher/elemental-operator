@@ -59,6 +59,7 @@ type MachineRegistrationReconciler struct {
 func (r *MachineRegistrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineRegistration{}).
+		Owns(&corev1.ServiceAccount{}).
 		WithEventFilter(r.ignoreIncrementalStatusUpdate()).
 		Complete(r)
 }
@@ -76,7 +77,8 @@ func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req recon
 		return reconcile.Result{}, fmt.Errorf("failed to get machine registration object: %w", err)
 	}
 
-	patchBase := client.MergeFrom(mRegistration.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically overlap with other controllers (e.g. backup and restore)
+	patchBase := client.MergeFromWithOptions(mRegistration.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	// We have to sanitize the conditions because old API definitions didn't have proper validation.
 	mRegistration.Status.Conditions = util.RemoveInvalidConditions(mRegistration.Status.Conditions)
@@ -92,7 +94,7 @@ func (r *MachineRegistrationReconciler) Reconcile(ctx context.Context, req recon
 	machineRegistrationStatusCopy := mRegistration.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, mRegistration, patchBase); err != nil && !apierrors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine registration object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch machine registration object: %w", err))
 	}
 
 	mRegistration.Status = *machineRegistrationStatusCopy
@@ -118,7 +120,7 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 		return ctrl.Result{}, nil
 	}
 
-	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
+	if r.isReady(ctx, mRegistration) {
 		logger.Info("Machine registration is ready, no need to reconcile it")
 		return ctrl.Result{}, nil
 	}
@@ -152,15 +154,28 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
-	logger := ctrl.LoggerFrom(ctx)
-
-	logger.Info("Setting registration token and url")
-
-	serverURL, err := r.getRancherServerURL(ctx)
-	if err != nil {
-		return err
+func (r *MachineRegistrationReconciler) isReady(ctx context.Context, mRegistration *elementalv1.MachineRegistration) bool {
+	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
+		// Despite being on ready state we check if the serviceaccount token is still available as it can be deleted
+		// by the control plane during backup & restore operations see: rancher/elemental#776
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: mRegistration.Namespace,
+			Name:      mRegistration.Name,
+		}, &corev1.Secret{}); err != nil {
+			return false
+		}
+		return true
 	}
+
+	return false
+}
+
+func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
+	var err error
+	var serverURL string
+
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Setting registration token and url")
 
 	if mRegistration.Status.RegistrationToken == "" {
 		mRegistration.Status.RegistrationToken, err = randomtoken.Generate()
@@ -169,7 +184,13 @@ func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.C
 		}
 	}
 
-	mRegistration.Status.RegistrationURL = fmt.Sprintf("%s/elemental/registration/%s", serverURL, mRegistration.Status.RegistrationToken)
+	if mRegistration.Status.RegistrationURL == "" {
+		serverURL, err = r.getRancherServerURL(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get the server url: %w", err)
+		}
+		mRegistration.Status.RegistrationURL = fmt.Sprintf("%s/elemental/registration/%s", serverURL, mRegistration.Status.RegistrationToken)
+	}
 
 	return nil
 }
@@ -241,7 +262,7 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			},
 		},
 	}); err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("failed to create service account: %w", err)
+		return fmt.Errorf("Failed to create service account: %w", err)
 	}
 
 	logger.Info("Creating token secret for the service account")
@@ -252,9 +273,6 @@ func (r *MachineRegistrationReconciler) createRBACObjects(ctx context.Context, m
 			OwnerReferences: ownerReferences,
 			Annotations: map[string]string{
 				"kubernetes.io/service-account.name": mRegistration.Name,
-			},
-			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "true",
 			},
 		},
 		Type: corev1.SecretTypeServiceAccountToken,
