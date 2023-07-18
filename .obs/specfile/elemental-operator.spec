@@ -41,7 +41,11 @@ BuildRequires:  golang-packaging
 %global forgeurl   https://github.com/rancher/elemental-operator
 %global commit     25abcdc57b9409d4c5b2009cf0a2f9aa6ff647ad
 %gometa
+%if (0%{?centos_version} == 800) || (0%{?rhel_version} == 800)
 BuildRequires:  go1.20
+%else
+BuildRequires:  compiler(go-compiler)
+%endif
 %endif
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
