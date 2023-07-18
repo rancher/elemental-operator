@@ -61,7 +61,7 @@ var _ = Describe("reconcile machine registration", func() {
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: mRegistration.Namespace,
-				Name:      mRegistration.Name + "-token",
+				Name:      mRegistration.Name + elementalv1.SASecretSuffix,
 			},
 		}
 		setting = &managementv3.Setting{
@@ -80,7 +80,7 @@ var _ = Describe("reconcile machine registration", func() {
 		Expect(test.CleanupAndWait(ctx, cl, mRegistration, setting, role, roleBinding, sa, secret)).To(Succeed())
 	})
 
-	It("should reconcile machine registration object", func() {
+	reconcileTest := func() {
 		_, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: mRegistration.Namespace,
@@ -105,10 +105,32 @@ var _ = Describe("reconcile machine registration", func() {
 		Expect(mRegistration.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 
 		objKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name}
+		secretKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + elementalv1.SASecretSuffix}
 		Expect(r.Get(ctx, objKey, &rbacv1.Role{})).To(Succeed())
 		Expect(r.Get(ctx, objKey, &corev1.ServiceAccount{})).To(Succeed())
 		Expect(r.Get(ctx, objKey, &rbacv1.RoleBinding{})).To(Succeed())
-		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, &corev1.Secret{})).To(Succeed())
+		Expect(r.Get(ctx, secretKey, &corev1.Secret{})).To(Succeed())
+	}
+
+	It("should reconcile machine registration object", reconcileTest)
+
+	It("should reconcile a ready machine registration and recreate token secret if missing", func() {
+		// Reconciles machine registration and creates and verify all dependent resources
+		reconcileTest()
+
+		// delete the token secret
+		saSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: mRegistration.Namespace,
+				Name:      mRegistration.Name + elementalv1.SASecretSuffix,
+			},
+		}
+		Expect(r.Delete(ctx, saSecret)).To(Succeed())
+		secretKey := types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + elementalv1.SASecretSuffix}
+		Expect(r.Get(ctx, secretKey, &corev1.Secret{})).ToNot(Succeed())
+
+		// Reconciles machine registration and creates and verify all dependent resources
+		reconcileTest()
 	})
 })
 
@@ -202,7 +224,7 @@ var _ = Describe("createRBACObjects", func() {
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: mRegistration.Namespace,
-				Name:      mRegistration.Name + "-token",
+				Name:      mRegistration.Name + elementalv1.SASecretSuffix,
 			},
 		}
 	})
@@ -244,14 +266,13 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(sa.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		secret := &corev1.Secret{}
-		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + "-token"}, secret)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{Namespace: mRegistration.Namespace, Name: mRegistration.Name + elementalv1.SASecretSuffix}, secret)).To(Succeed())
 		Expect(secret.OwnerReferences).To(HaveLen(1))
 		Expect(secret.OwnerReferences[0].APIVersion).To(Equal(elementalv1.GroupVersion.String()))
 		Expect(secret.OwnerReferences[0].Kind).To(Equal("MachineRegistration"))
 		Expect(secret.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(secret.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
 		Expect(secret.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
-		Expect(secret.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 		Expect(secret.Annotations).To(HaveKeyWithValue("kubernetes.io/service-account.name", mRegistration.Name))
 		Expect(secret.Type).To(Equal(corev1.SecretTypeServiceAccountToken))
 

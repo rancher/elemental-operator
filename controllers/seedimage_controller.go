@@ -95,7 +95,7 @@ func (r *SeedImageReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	seedImgStatusCopy := seedImg.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, seedImg, patchBase); err != nil && !apierrors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to patch status for seedimage object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch seedimage object: %w", err))
 	}
 
 	seedImg.Status = *seedImgStatusCopy

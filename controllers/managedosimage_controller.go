@@ -83,7 +83,8 @@ func (r *ManagedOSImageReconciler) Reconcile(ctx context.Context, req reconcile.
 		return reconcile.Result{}, fmt.Errorf("failed to get managed OS image object: %w", err)
 	}
 
-	patchBase := client.MergeFrom(managedOSImage.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically overlap with other controllers (e.g. backup and restore)
+	patchBase := client.MergeFromWithOptions(managedOSImage.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	// We have to sanitize the conditions because old API definitions didn't have proper validation.
 	managedOSImage.Status.Conditions = util.RemoveInvalidConditions(managedOSImage.Status.Conditions)
@@ -99,7 +100,7 @@ func (r *ManagedOSImageReconciler) Reconcile(ctx context.Context, req reconcile.
 	managedosimageStatusCopy := managedOSImage.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, managedOSImage, patchBase); err != nil && !apierrors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to patch status for managed OS image object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch managed OS image object: %w", err))
 	}
 
 	managedOSImage.Status = *managedosimageStatusCopy
