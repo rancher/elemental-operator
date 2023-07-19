@@ -8,7 +8,7 @@
 FROM suse/sle15:15.4 as BASE
 
 RUN mkdir /installroot
-RUN zypper --installroot /installroot in -y elemental-operator
+RUN zypper --installroot /installroot in -y elemental-operator ca-certificates ca-certificates-mozilla
 
 FROM scratch as OPERATOR
 
