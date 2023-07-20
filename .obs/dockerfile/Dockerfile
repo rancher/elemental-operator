@@ -8,11 +8,14 @@
 FROM suse/sle15:15.4 as BASE
 
 RUN mkdir /installroot
-RUN zypper --installroot /installroot in -y elemental-operator
+RUN zypper --installroot /installroot in -y --no-recommends \
+      elemental-operator ca-certificates ca-certificates-mozilla
 
 FROM scratch as OPERATOR
 
 COPY --from=BASE /installroot /
+
+RUN /usr/sbin/update-ca-certificates
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.rancher.elemental
