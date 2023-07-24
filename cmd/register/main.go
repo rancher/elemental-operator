@@ -64,6 +64,10 @@ func main() {
 }
 
 func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command {
+	// Reset config and viper cache
+	cfg = elementalv1.Config{}
+	viper.Reset()
+	// Define command (using closures)
 	cmd := &cobra.Command{
 		Use:   "elemental-register",
 		Short: "Elemental register command",
@@ -108,10 +112,17 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				log.Info("Installing Elemental")
 				return installer.InstallElemental(cfg)
 			}
+			// If the System is already installed, we should update the elemental-system-agent config.
+			// In case of reset if we just registered to a new MachineInventory.
+			log.Debug("Updating Elemental System Agent")
+			if err := installer.UpdateSystemAgentConfig(cfg.Elemental); err != nil {
+				return fmt.Errorf("updating elemental-system-agent configuration: %w", err)
+			}
+
 			return nil
 		},
 	}
-	//Define flags
+	//Define and bind flags
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.URL, "registration-url", "", "Registration url to get the machine config from")
 	_ = viper.BindPFlag("elemental.registration.url", cmd.Flags().Lookup("registration-url"))
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.CACert, "registration-ca-cert", "", "File with the custom CA certificate to use against he registration url")

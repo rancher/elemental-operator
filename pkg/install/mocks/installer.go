@@ -61,3 +61,17 @@ func (mr *MockInstallerMockRecorder) IsSystemInstalled() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSystemInstalled", reflect.TypeOf((*MockInstaller)(nil).IsSystemInstalled))
 }
+
+// UpdateSystemAgentConfig mocks base method.
+func (m *MockInstaller) UpdateSystemAgentConfig(arg0 v1beta1.Elemental) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSystemAgentConfig", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateSystemAgentConfig indicates an expected call of UpdateSystemAgentConfig.
+func (mr *MockInstallerMockRecorder) UpdateSystemAgentConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSystemAgentConfig", reflect.TypeOf((*MockInstaller)(nil).UpdateSystemAgentConfig), arg0)
+}

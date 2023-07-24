@@ -45,6 +45,7 @@ const (
 type Installer interface {
 	IsSystemInstalled() bool
 	InstallElemental(config elementalv1.Config) error
+	UpdateSystemAgentConfig(config elementalv1.Elemental) error
 }
 
 func NewInstaller(fs vfs.FS) Installer {
@@ -102,6 +103,22 @@ func (i *installer) InstallElemental(config elementalv1.Config) error {
 	}
 
 	log.Info("Elemental installation completed, please reboot")
+	return nil
+}
+
+func (i *installer) UpdateSystemAgentConfig(config elementalv1.Elemental) error {
+	agentConfPath, err := i.writeSystemAgentConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to write system agent configuration: %w", err)
+	}
+	config.Install.ConfigURLs = []string{agentConfPath}
+	installDataMap, err := structToMap(config.Install)
+	if err != nil {
+		return fmt.Errorf("failed to decode elemental-cli install data: %w", err)
+	}
+	if err := elementalcli.Run(installDataMap); err != nil {
+		return fmt.Errorf("failed to install elemental: %w", err)
+	}
 	return nil
 }
 

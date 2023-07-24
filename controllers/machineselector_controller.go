@@ -403,25 +403,6 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		return "", nil, fmt.Errorf("failed to get a boostrap plan for the machine: %w", err)
 	}
 
-	stopAgentPlan := applyinator.Plan{
-		OneTimeInstructions: []applyinator.OneTimeInstruction{
-			{
-				CommonInstruction: applyinator.CommonInstruction{
-					Command: "systemctl",
-					Args: []string{
-						"stop",
-						"elemental-system-agent",
-					},
-				},
-			},
-		},
-	}
-
-	stopAgentPlanJSON, err := json.Marshal(stopAgentPlan)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to create new stop elemental agent plan: %w", err)
-	}
-
 	type LabelsFromInventory struct {
 		// NOTE: The '+' is not a typo and is needed when adding labels to k3s/rke
 		// instead of replacing them.
@@ -470,11 +451,6 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				Path:        "/usr/local/etc/hostname",
 				Permissions: "0644",
 			},
-			{
-				Content:     base64.StdEncoding.EncodeToString(stopAgentPlanJSON),
-				Path:        "/var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip",
-				Permissions: "0644",
-			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
@@ -495,16 +471,6 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 					// plan stopping elemental-system-agent is executed
 					Env: []string{
 						"CATTLE_LOCAL_ENABLED=true",
-					},
-				},
-			},
-			{
-				// Ensure the local plan can only be executed after bootstrapping script is done
-				CommonInstruction: applyinator.CommonInstruction{
-					Command: "bash",
-					Args: []string{
-						"-c",
-						"mv /var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip /var/lib/rancher/agent/plans/elemental-agent-stop.plan",
 					},
 				},
 			},

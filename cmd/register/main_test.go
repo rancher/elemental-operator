@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/install"
 	imocks "github.com/rancher/elemental-operator/pkg/install/mocks"
 	"github.com/rancher/elemental-operator/pkg/register"
 	rmocks "github.com/rancher/elemental-operator/pkg/register/mocks"
@@ -91,15 +90,16 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 	var cmd *cobra.Command
 	var mockCtrl *gomock.Controller
 	var client *rmocks.MockClient
+	var installer *imocks.MockInstaller
 	When("system is already installed", func() {
 		BeforeEach(func() {
-			fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{
-				"/run/initramfs/cos-state/state.yaml": "{}/n",
-			})
+			fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
 			Expect(err).ToNot(HaveOccurred())
 			mockCtrl = gomock.NewController(GinkgoT())
 			client = rmocks.NewMockClient(mockCtrl)
-			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), install.NewInstaller(fs))
+			installer = imocks.NewMockInstaller(mockCtrl)
+			installer.EXPECT().IsSystemInstalled().AnyTimes().Return(true)
+			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), installer)
 			DeferCleanup(fsCleanup)
 		})
 		It("should return no error when printing version", func() {
@@ -112,7 +112,10 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 			})
 			It("should use the config if no arguments passed", func() {
 				cmd.SetArgs([]string{})
-				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				client.EXPECT().
+					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(baseConfigFixture), nil)
+				installer.EXPECT().UpdateSystemAgentConfig(baseConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should overwrite the config values with passed arguments", func() {
@@ -126,14 +129,20 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				})
 				wantConfig := alternateConfigFixture.DeepCopy()
 				wantConfig.Elemental.Registration.NoSMBIOS = false
-				client.EXPECT().Register(wantConfig.Elemental.Registration, []byte(wantConfig.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				client.EXPECT().
+					Register(wantConfig.Elemental.Registration, []byte(wantConfig.Elemental.Registration.CACert)).
+					Return(marshalToBytes(wantConfig), nil)
+				installer.EXPECT().UpdateSystemAgentConfig(wantConfig.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should use config path argument", func() {
 				newPath := "/a/custom/config/path/custom-config.yaml"
 				cmd.SetArgs([]string{"--config-path", newPath})
 				marshalIntoFile(fs, alternateConfigFixture, newPath)
-				client.EXPECT().Register(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				client.EXPECT().
+					Register(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(alternateConfigFixture), nil)
+				installer.EXPECT().UpdateSystemAgentConfig(alternateConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should skip registration if lastUpdate is recent", func() {
@@ -153,7 +162,10 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 					LastUpdate:          time.Now().Add(-25 * time.Hour),
 				}
 				marshalIntoFile(fs, registrationState, defaultStatePath)
-				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return([]byte("{}\n"), nil)
+				client.EXPECT().
+					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(baseConfigFixture), nil)
+				installer.EXPECT().UpdateSystemAgentConfig(baseConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should use state path argument", func() {
@@ -176,7 +188,8 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 			Expect(err).ToNot(HaveOccurred())
 			mockCtrl = gomock.NewController(GinkgoT())
 			installer = imocks.NewMockInstaller(mockCtrl)
-			installer.EXPECT().IsSystemInstalled().Return(false).AnyTimes()
+			installer.EXPECT().IsSystemInstalled().AnyTimes().Return(false)
+			installer.EXPECT().UpdateSystemAgentConfig(gomock.Any()).Times(0) // Only expect update if the system is already installed
 			client = rmocks.NewMockClient(mockCtrl)
 			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), installer)
 			DeferCleanup(fsCleanup)
@@ -211,8 +224,13 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 })
 
 func marshalIntoFile(fs vfs.FS, input any, filePath string) {
-	bytes, err := yaml.Marshal(input)
-	Expect(err).ToNot(HaveOccurred())
+	bytes := marshalToBytes(input)
 	Expect(vfs.MkdirAll(fs, path.Dir(filePath), os.ModePerm)).ToNot(HaveOccurred())
 	Expect(fs.WriteFile(filePath, bytes, os.ModePerm)).ToNot(HaveOccurred())
+}
+
+func marshalToBytes(input any) []byte {
+	bytes, err := yaml.Marshal(input)
+	Expect(err).ToNot(HaveOccurred())
+	return bytes
 }
