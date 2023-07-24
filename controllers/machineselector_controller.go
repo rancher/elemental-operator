@@ -360,6 +360,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	patchBase := client.MergeFrom(planSecret.DeepCopy())
 
 	planSecret.Data["plan"] = plan
+	planSecret.Annotations = map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeBootstrap}
 
 	if err := r.Patch(ctx, planSecret, patchBase); err != nil {
 		return fmt.Errorf("failed to patch plan secret: %w", err)
