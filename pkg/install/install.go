@@ -19,6 +19,7 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/mudler/yip/pkg/schema"
@@ -28,7 +29,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/twpayne/go-vfs"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -38,14 +39,15 @@ const (
 	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
 	agentStateDir    = "/var/lib/elemental/agent"
 	agentConfDir     = "/etc/rancher/elemental/agent"
-	afterInstallHook = "/oem/install-hook.yaml"
 	registrationConf = "/run/cos/oem/registration/config.yaml"
+	oemDir           = "/oem"
+	oemDirLive       = "/run/cos/oem"
 )
 
 type Installer interface {
 	IsSystemInstalled() bool
 	InstallElemental(config elementalv1.Config) error
-	UpdateSystemAgentConfig(config elementalv1.Elemental) error
+	UpdateCloudConfig(config elementalv1.Config) error
 }
 
 func NewInstaller(fs vfs.FS) Installer {
@@ -68,31 +70,6 @@ func (i *installer) IsSystemInstalled() bool {
 }
 
 func (i *installer) InstallElemental(config elementalv1.Config) error {
-	cloudInitURLs := config.Elemental.Install.ConfigURLs
-	if cloudInitURLs == nil {
-		cloudInitURLs = []string{}
-	}
-
-	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
-	if err != nil {
-		return fmt.Errorf("failed to write system agent configuration: %w", err)
-	}
-	cloudInitURLs = append(cloudInitURLs, agentConfPath)
-
-	if len(config.CloudConfig) > 0 {
-		cloudInitPath, err := i.writeCloudInit(config.CloudConfig)
-		if err != nil {
-			return fmt.Errorf("failed to write custom cloud-init file: %w", err)
-		}
-		cloudInitURLs = append(cloudInitURLs, cloudInitPath)
-	}
-
-	config.Elemental.Install.ConfigURLs = cloudInitURLs
-
-	if err := i.installRegistrationYAML(config.Elemental.Registration); err != nil {
-		return fmt.Errorf("failed to prepare after-install hook: %w", err)
-	}
-
 	installDataMap, err := structToMap(config.Elemental.Install)
 	if err != nil {
 		return fmt.Errorf("failed to decode elemental-cli install data: %w", err)
@@ -106,19 +83,34 @@ func (i *installer) InstallElemental(config elementalv1.Config) error {
 	return nil
 }
 
-func (i *installer) UpdateSystemAgentConfig(config elementalv1.Elemental) error {
-	agentConfPath, err := i.writeSystemAgentConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to write system agent configuration: %w", err)
+func (i *installer) UpdateCloudConfig(config elementalv1.Config) error {
+	var baseDir string
+	if i.IsSystemInstalled() {
+		baseDir = oemDir
+	} else {
+		baseDir = oemDirLive
 	}
-	config.Install.ConfigURLs = []string{agentConfPath}
-	installDataMap, err := structToMap(config.Install)
-	if err != nil {
-		return fmt.Errorf("failed to decode elemental-cli install data: %w", err)
+
+	registrationConfigDir := fmt.Sprintf("%s/registration", baseDir)
+	if _, err := i.fs.Stat(registrationConfigDir); os.IsNotExist(err) {
+		log.Debugf("Registration config dir '%s' does not exist. Creating now.", registrationConfigDir)
+		if err := vfs.MkdirAll(i.fs, registrationConfigDir, 0700); err != nil {
+			return fmt.Errorf("creating registration config directory: %w", err)
+		}
 	}
-	if err := elementalcli.Run(installDataMap); err != nil {
-		return fmt.Errorf("failed to install elemental: %w", err)
+
+	if err := i.writeRegistrationConfig(config.Elemental.Registration, registrationConfigDir); err != nil {
+		return fmt.Errorf("writing registration config: %w", err)
 	}
+
+	if err := i.writeSystemAgentConfigPlan(config.Elemental, baseDir); err != nil {
+		return fmt.Errorf("writing system agent config plan: %w", err)
+	}
+
+	if err := i.writeCloudInitConfig(config.CloudConfig, baseDir); err != nil {
+		return fmt.Errorf("writing cloud config: %w", err)
+	}
+
 	return nil
 }
 
@@ -135,64 +127,38 @@ func structToMap(str interface{}) (map[string]interface{}, error) {
 	return nil, err
 }
 
-func (i *installer) installRegistrationYAML(reg elementalv1.Registration) error {
+func (i *installer) writeRegistrationConfig(reg elementalv1.Registration, configDir string) error {
 	registrationInBytes, err := yaml.Marshal(elementalv1.Config{
 		Elemental: elementalv1.Elemental{
 			Registration: reg,
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("marshalling elemental configuration: %w", err)
 	}
-	f, err := i.fs.Create(afterInstallHook)
-	if err != nil {
-		return err
+	configPath := fmt.Sprintf("%s/config.yaml", configDir)
+	if err := i.fs.WriteFile(configPath, registrationInBytes, os.FileMode(0600)); err != nil {
+		return fmt.Errorf("writing file '%s': %w", configPath, err)
 	}
-	defer f.Close()
-
-	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
-		Name: "Include registration config into installed system",
-		Stages: map[string][]schema.Stage{
-			"after-install": {
-				schema.Stage{
-					Directories: []schema.Directory{
-						{
-							Path:        filepath.Dir(registrationConf),
-							Permissions: 0700,
-						},
-					}, Files: []schema.File{
-						{
-							Path:        registrationConf,
-							Content:     string(registrationInBytes),
-							Permissions: 0600,
-						},
-					},
-				},
-			},
-		},
-	})
-
-	return err
+	return nil
 }
 
-func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error) {
-	f, err := i.fs.Create("/tmp/elemental-cloud-init.yaml")
+func (i *installer) writeCloudInitConfig(cloudConfig map[string]runtime.RawExtension, configDir string) error {
+	cloudConfigBytes, err := util.MarshalCloudConfig(cloudConfig)
 	if err != nil {
-		return "", fmt.Errorf("creating temporary cloud init file: %w", err)
-	}
-	defer f.Close()
-
-	bytes, err := util.MarshalCloudConfig(cloudConfig)
-	if err != nil {
-		return "", fmt.Errorf("mashalling cloud config: %w", err)
+		return fmt.Errorf("mashalling cloud config: %w", err)
 	}
 
-	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
-	_, err = f.Write(bytes)
-	return f.Name(), err
+	log.Debugf("Decoded CloudConfig:\n%s\n", string(cloudConfigBytes))
+
+	cloudConfigPath := fmt.Sprintf("%s/cloud-config.yaml", configDir)
+	if err := i.fs.WriteFile(cloudConfigPath, cloudConfigBytes, os.FileMode(0600)); err != nil {
+		return fmt.Errorf("writing file '%s': %w", cloudConfigPath, err)
+	}
+	return nil
 }
 
-func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
+func (i *installer) writeSystemAgentConfigPlan(config elementalv1.Elemental, configDir string) error {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -251,18 +217,19 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 		},
 	})
 
-	f, err := i.fs.Create("/tmp/elemental-system-agent.yaml")
-	if err != nil {
-		return "", fmt.Errorf("creating temporary elemental-system-agent file: %w", err)
-	}
-	defer f.Close()
-
-	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+	planBytes, err := yaml.Marshal(schema.YipConfig{
 		Name: "Elemental System Agent Configuration",
 		Stages: map[string][]schema.Stage{
 			"initramfs": stages,
 		},
 	})
+	if err != nil {
+		return fmt.Errorf("marshalling elemental system agent config plan: %w", err)
+	}
 
-	return f.Name(), err
+	planPath := fmt.Sprintf("%s/elemental-agent-config-plan.yaml", configDir)
+	if err := i.fs.WriteFile(planPath, planBytes, os.FileMode(0600)); err != nil {
+		return fmt.Errorf("writing file '%s': %w", planPath, err)
+	}
+	return nil
 }

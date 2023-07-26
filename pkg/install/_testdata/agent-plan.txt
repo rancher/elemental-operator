@@ -1,0 +1,18 @@
+name: Elemental System Agent Configuration
+stages:
+    initramfs:
+        - files:
+            - path: /var/lib/elemental/agent/elemental_connection.json
+              permissions: 384
+              owner: 0
+              group: 0
+              content: '{"kubeConfig":"apiVersion: v1\nclusters:\n- cluster:\n    certificate-authority-data: SnVzdCBmb3IgdGVzdGluZw==\n    server: https://127.0.0.1.sslip.io/k8s/cluster/local\n  name: cluster\ncontexts:\n- context:\n    cluster: cluster\n    user: user\n  name: context\ncurrent-context: context\nkind: Config\npreferences: {}\nusers:\n- name: user\n  user:\n    token: a test token\n","namespace":"a test namespace","secretName":"a test secret"}'
+              encoding: ""
+              ownerstring: ""
+            - path: /etc/rancher/elemental/agent/config.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: '{"workDirectory":"/var/lib/elemental/agent/work","localEnabled":true,"localPlanDirectory":"/var/lib/elemental/agent/plans","appliedPlanDirectory":"/var/lib/elemental/agent/applied","remoteEnabled":true,"connectionInfoFile":"/var/lib/elemental/agent/elemental_connection.json"}'
+              encoding: ""
+              ownerstring: ""
