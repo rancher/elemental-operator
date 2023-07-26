@@ -125,7 +125,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 				Status:  metav1.ConditionFalse,
 				Message: err.Error(),
 			})
-			return ctrl.Result{}, fmt.Errorf("failed to reconcile reset plan secret: %w", err)
+			return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -170,53 +170,85 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 
 	logger.Info("Reconciling Reset plan")
 
-	secretName := mInventory.Name
-	secretNamespace := mInventory.Namespace
-
-	foundSecret := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, foundSecret)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("looking up secret '%s' in namespace '%s': %w", secretName, secretNamespace, err)
+	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
+		logger.V(log.DebugDepth).Info("Machine inventory plan reference not set yet. Creating new empty plan.")
+		return r.createPlanSecret(ctx, mInventory) // Recover from this unexpected state by creating a new empty plan secret
 	}
 
-	if apierrors.IsNotFound(err) {
-		logger.V(log.DebugDepth).Info("No existing secret found. Creating new reset plan secret.")
-		return r.createResetPlanSecret(ctx, mInventory)
+	planSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: mInventory.Status.Plan.PlanSecretRef.Namespace,
+		Name:      mInventory.Status.Plan.PlanSecretRef.Name,
+	}, planSecret); err != nil {
+		return fmt.Errorf("getting plan secret: %w", err)
 	}
 
-	if err == nil {
-		if !util.IsObjectOwned(&foundSecret.ObjectMeta, mInventory.UID) {
-			return fmt.Errorf("secret already exists and was not created by this controller")
-		}
-
-		planType, annotationFound := foundSecret.Annotations[elementalv1.PlanTypeAnnotation]
-
-		if !annotationFound || planType != elementalv1.PlanTypeReset {
-			logger.V(log.DebugDepth).Info("Non reset plan type found. Replacing it with new reset plan secret.")
-			if err := r.Delete(ctx, foundSecret); err != nil {
-				return fmt.Errorf("deleting existing secret: %w", err)
-			}
-			return r.createResetPlanSecret(ctx, mInventory)
-		}
-
-		logger.V(log.DebugDepth).Info("Reset plan type found. Updating status to determine whether it was successfully applied.")
-		if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
-			return fmt.Errorf("updating inventory with plan status: %w", err)
-		}
-		if mInventory.Status.Plan.State == elementalv1.PlanApplied {
-			logger.V(log.DebugDepth).Info("Reset plan was successfully applied.")
-			controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
-		}
+	if !util.IsObjectOwned(&planSecret.ObjectMeta, mInventory.UID) {
+		return fmt.Errorf("secret already exists and was not created by this controller")
 	}
+
+	planType, annotationFound := planSecret.Annotations[elementalv1.PlanTypeAnnotation]
+
+	if !annotationFound || planType != elementalv1.PlanTypeReset {
+		logger.V(log.DebugDepth).Info("Non reset plan type found. Updating it with new reset plan.")
+		return r.updatePlanSecretWithReset(ctx, mInventory)
+	}
+
+	logger.V(log.DebugDepth).Info("Reset plan type found. Updating status to determine whether it was successfully applied.")
+	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
+		return fmt.Errorf("updating inventory with plan status: %w", err)
+	}
+	if mInventory.Status.Plan.State == elementalv1.PlanApplied {
+		logger.V(log.DebugDepth).Info("Reset plan was successfully applied.")
+		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+	}
+
 	return nil
 }
 
-func (r *MachineInventoryReconciler) createResetPlanSecret(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
+func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Updating Secret with Reset plan")
+
+	planSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: mInventory.Status.Plan.PlanSecretRef.Namespace,
+		Name:      mInventory.Status.Plan.PlanSecretRef.Name,
+	}, planSecret); err != nil {
+		return fmt.Errorf("getting plan secret: %w", err)
+	}
+
+	resetPlan, err := r.newResetPlan(ctx)
+	if err != nil {
+		return fmt.Errorf("getting new reset plan: %w", err)
+	}
+
+	patchBase := client.MergeFrom(planSecret.DeepCopy())
+
+	planSecret.Data["plan"] = resetPlan
+	planSecret.Annotations = map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeReset}
+
+	if err := r.Patch(ctx, planSecret, patchBase); err != nil {
+		return fmt.Errorf("patching plan secret: %w", err)
+	}
+
+	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.ReadyCondition,
+		Reason:  elementalv1.WaitingForPlanReason,
+		Status:  metav1.ConditionFalse,
+		Message: "waiting for reset plan to be applied",
+	})
+
+	return nil
+}
+
+func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Creating new Reset plan secret")
 
-	// This is the local cloud-config that the elemental-system-agent will run in recovery mode
+	// This is the local cloud-config that the elemental-system-agent will run while in recovery mode
 	resetCloudConfig := schema.YipConfig{
 		Name: "Elemental Reset",
 		Stages: map[string][]schema.Stage{
@@ -225,8 +257,11 @@ func (r *MachineInventoryReconciler) createResetPlanSecret(ctx context.Context, 
 					If:   "'[ -f /run/cos/recovery_mode ]'",
 					Name: "Runs elemental reset",
 					Commands: []string{
-						"elemental --debug reset --reset-persistent",
-						"rm -f /oem/reset-plan.yaml",
+						"cp /oem/registration/config.yaml /tmp/registration-config.yaml",
+						"elemental --debug reset --reset-persistent --reset-oem",
+						"mkdir -p /oem/registration",
+						"mv /tmp/registration-config.yaml /oem/registration/config.yaml",
+						"elemental-register --debug --reset",
 						"reboot",
 					},
 				},
@@ -236,7 +271,7 @@ func (r *MachineInventoryReconciler) createResetPlanSecret(ctx context.Context, 
 
 	resetCloudConfigBytes, err := yaml.Marshal(resetCloudConfig)
 	if err != nil {
-		return fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
+		return nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
 
 	// This is the remote plan that should trigger the reboot into recovery and reset
@@ -263,7 +298,7 @@ func (r *MachineInventoryReconciler) createResetPlanSecret(ctx context.Context, 
 			{
 				CommonInstruction: applyinator.CommonInstruction{
 					Name:    "reboot",
-					Command: "shutdown -r +1", // Postpone reboot, so the agent can mark the Plan as applied.
+					Command: "shutdown -r +1", // Need to have time to confirm plan execution before rebooting
 				},
 			},
 		},
@@ -271,35 +306,12 @@ func (r *MachineInventoryReconciler) createResetPlanSecret(ctx context.Context, 
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(resetPlan); err != nil {
-		return fmt.Errorf("failed to encode reset plan: %w", err)
+		return nil, fmt.Errorf("failed to encode plan: %w", err)
 	}
 
-	planSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeReset},
-			Namespace:   mInventory.Namespace,
-			Name:        mInventory.Name,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: elementalv1.GroupVersion.String(),
-					Kind:       "MachineInventory",
-					Name:       mInventory.Name,
-					UID:        mInventory.UID,
-					Controller: pointer.Bool(true),
-				},
-			},
-			Labels: map[string]string{
-				elementalv1.ElementalManagedLabel: "true",
-			},
-		},
-		Type: elementalv1.PlanSecretType,
-		Data: map[string][]byte{"plan": buf.Bytes()},
-	}
+	plan := buf.Bytes()
 
-	if err := r.Create(ctx, planSecret); err != nil {
-		return fmt.Errorf("failed to create secret: %w", err)
-	}
-	return nil
+	return plan, nil
 }
 
 func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
