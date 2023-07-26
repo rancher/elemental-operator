@@ -44,6 +44,7 @@ const (
 var (
 	cfg        elementalv1.Config
 	debug      bool
+	reset      bool
 	configPath string
 	statePath  string
 )
@@ -107,16 +108,16 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return fmt.Errorf("parsing returned configuration: %w", err)
 			}
+			// If --reset called explicity or this is a first installation,
+			// we need to update the cloud-config
+			if reset || !installer.IsSystemInstalled() {
+				log.Info("Resetting cloud config information")
+				installer.UpdateCloudConfig(cfg)
+			}
 			// Install
 			if !installer.IsSystemInstalled() {
 				log.Info("Installing Elemental")
 				return installer.InstallElemental(cfg)
-			}
-			// If the System is already installed, we should update the elemental-system-agent config.
-			// In case of reset if we just registered to a new MachineInventory.
-			log.Debug("Updating Elemental System Agent")
-			if err := installer.UpdateSystemAgentConfig(cfg.Elemental); err != nil {
-				return fmt.Errorf("updating elemental-system-agent configuration: %w", err)
 			}
 
 			return nil
@@ -144,6 +145,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().StringVar(&statePath, "state-path", defaultStatePath, "The full path of the elemental-register config")
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
+	cmd.Flags().BoolVar(&debug, "reset", false, "Reset the cloud-config using the remote MachineRegistration")
 	return cmd
 }
 

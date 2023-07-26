@@ -115,7 +115,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().
 					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
 					Return(marshalToBytes(baseConfigFixture), nil)
-				installer.EXPECT().UpdateSystemAgentConfig(baseConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should overwrite the config values with passed arguments", func() {
@@ -132,7 +131,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().
 					Register(wantConfig.Elemental.Registration, []byte(wantConfig.Elemental.Registration.CACert)).
 					Return(marshalToBytes(wantConfig), nil)
-				installer.EXPECT().UpdateSystemAgentConfig(wantConfig.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should use config path argument", func() {
@@ -142,7 +140,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().
 					Register(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert)).
 					Return(marshalToBytes(alternateConfigFixture), nil)
-				installer.EXPECT().UpdateSystemAgentConfig(alternateConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should skip registration if lastUpdate is recent", func() {
@@ -165,7 +162,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().
 					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
 					Return(marshalToBytes(baseConfigFixture), nil)
-				installer.EXPECT().UpdateSystemAgentConfig(baseConfigFixture.Elemental).Return(nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should use state path argument", func() {
@@ -179,6 +175,14 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 				client.EXPECT().Register(gomock.Any(), gomock.Any()).Times(0)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
+			It("should reset cloud config if reset argument", func() {
+				cmd.SetArgs([]string{"--reset"})
+				client.EXPECT().
+					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(baseConfigFixture), nil)
+				installer.EXPECT().UpdateCloudConfig(baseConfigFixture).Return(nil)
+				Expect(cmd.Execute()).ToNot(HaveOccurred())
+			})
 		})
 	})
 	When("system is not installed", func() {
@@ -189,7 +193,6 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 			mockCtrl = gomock.NewController(GinkgoT())
 			installer = imocks.NewMockInstaller(mockCtrl)
 			installer.EXPECT().IsSystemInstalled().AnyTimes().Return(false)
-			installer.EXPECT().UpdateSystemAgentConfig(gomock.Any()).Times(0) // Only expect update if the system is already installed
 			client = rmocks.NewMockClient(mockCtrl)
 			cmd = newCommand(fs, client, register.NewFileStateHandler(fs), installer)
 			DeferCleanup(fsCleanup)
@@ -200,10 +203,11 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 			})
 			It("should trigger install on first registration", func() {
 				cmd.SetArgs([]string{})
+				installer.EXPECT().UpdateCloudConfig(alternateConfigFixture).Return(nil)
 				installer.EXPECT().InstallElemental(alternateConfigFixture).Return(nil)
-				returnedConfig, err := yaml.Marshal(alternateConfigFixture)
-				Expect(err).ToNot(HaveOccurred())
-				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return(returnedConfig, nil)
+				client.EXPECT().
+					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(alternateConfigFixture), nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 			It("should always trigger install on registration update", func() {
@@ -213,10 +217,11 @@ var _ = Describe("elemental-register arguments", Label("registration", "cli"), f
 					LastUpdate:          time.Now(),
 				}
 				marshalIntoFile(fs, registrationState, defaultStatePath)
+				installer.EXPECT().UpdateCloudConfig(alternateConfigFixture).Return(nil)
 				installer.EXPECT().InstallElemental(alternateConfigFixture).Return(nil)
-				returnedConfig, err := yaml.Marshal(alternateConfigFixture)
-				Expect(err).ToNot(HaveOccurred())
-				client.EXPECT().Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).Return(returnedConfig, nil)
+				client.EXPECT().
+					Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
+					Return(marshalToBytes(alternateConfigFixture), nil)
 				Expect(cmd.Execute()).ToNot(HaveOccurred())
 			})
 		})
