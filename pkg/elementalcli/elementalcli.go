@@ -27,8 +27,6 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 )
 
-const installMediaConfigDir = "/run/initramfs/live/elemental"
-
 func Run(conf map[string]interface{}) error {
 	ev := mapToEnv("ELEMENTAL_INSTALL_", conf)
 
@@ -42,9 +40,6 @@ func Run(conf map[string]interface{}) error {
 	configDir, ok := conf["config-dir"].(string)
 	if ok && configDir != "" {
 		installerOpts = append(installerOpts, "--config-dir", configDir)
-	} else {
-		log.Infof("Attempt to load elemental client config from default path: %s", installMediaConfigDir)
-		installerOpts = append(installerOpts, "--config-dir", installMediaConfigDir)
 	}
 	installerOpts = append(installerOpts, "install")
 
