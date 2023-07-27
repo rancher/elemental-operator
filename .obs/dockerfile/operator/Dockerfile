@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Define the names/tags of the container
-#!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%
-#!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%-%RELEASE%
+#!BuildTag: rancher/elemental-operator/%%SLEMICRO_VERSION%%:latest
+#!BuildTag: rancher/elemental-operator/%%SLEMICRO_VERSION%%:%OPERATOR_VERSION%
+#!BuildTag: rancher/elemental-operator/%%SLEMICRO_VERSION%%:%OPERATOR_VERSION%-%RELEASE%
 #
 
 ARG SLE_VERSION
@@ -18,8 +19,9 @@ COPY --from=BASE /installroot /
 
 RUN /usr/sbin/update-ca-certificates
 
-ARG BUILD_REPO=registry.suse.com
-ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-operator
+ARG SLEMICRO_VERSION
+ARG BUILD_REPO=%%IMG_REPO%%
+ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-operator/$SLEMICRO_VERSION
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.rancher.elemental
