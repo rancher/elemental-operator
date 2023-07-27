@@ -220,8 +220,8 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 	planSecret := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: mInventory.Status.Plan.PlanSecretRef.Namespace,
-		Name:      mInventory.Status.Plan.PlanSecretRef.Name,
+		Namespace: mInventory.Namespace,
+		Name:      mInventory.Name,
 	}, planSecret); err != nil {
 		return fmt.Errorf("getting plan secret: %w", err)
 	}
