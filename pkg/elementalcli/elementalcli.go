@@ -20,36 +20,39 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
-	"github.com/rancher/wrangler/pkg/data/convert"
-
-	"github.com/rancher/elemental-operator/pkg/log"
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 )
 
-const installMediaConfigDir = "/run/initramfs/live/elemental"
+type Runner interface {
+	Install(elementalv1.Install) error
+	Reset(elementalv1.Reset) error
+}
 
-func Run(conf map[string]interface{}) error {
-	ev := mapToEnv("ELEMENTAL_INSTALL_", conf)
+func NewRunner() Runner {
+	return &runner{}
+}
 
+var _ Runner = (*runner)(nil)
+
+type runner struct{}
+
+func (r *runner) Install(conf elementalv1.Install) error {
 	installerOpts := []string{"elemental"}
 	// There are no env var bindings in elemental-cli for elemental root options
 	// so root flags should be passed within the command line
-	debug, ok := conf["debug"].(bool)
-	if ok && debug {
+	if conf.Debug {
 		installerOpts = append(installerOpts, "--debug")
 	}
-	configDir, ok := conf["config-dir"].(string)
-	if ok && configDir != "" {
-		installerOpts = append(installerOpts, "--config-dir", configDir)
-	} else {
-		log.Infof("Attempt to load elemental client config from default path: %s", installMediaConfigDir)
-		installerOpts = append(installerOpts, "--config-dir", installMediaConfigDir)
+	if conf.ConfigDir != "" {
+		installerOpts = append(installerOpts, "--config-dir", conf.ConfigDir)
 	}
 	installerOpts = append(installerOpts, "install")
 
 	cmd := exec.Command("elemental")
-	cmd.Env = append(os.Environ(), ev...)
+	cmd.Env = append(os.Environ(), mapToInstallEnv(conf)...)
 	cmd.Stdout = os.Stdout
 	cmd.Args = installerOpts
 	cmd.Stdin = os.Stdin
@@ -57,54 +60,55 @@ func Run(conf map[string]interface{}) error {
 	return cmd.Run()
 }
 
-// it's a mapping of how config env option should be transliterated to the elemental CLI
-var defaultOverrides = map[string]string{
-	"ELEMENTAL_INSTALL_CONFIG_URLS": "ELEMENTAL_INSTALL_CLOUD_INIT",
-	"ELEMENTAL_INSTALL_POWEROFF":    "ELEMENTAL_POWEROFF",
-	"ELEMENTAL_INSTALL_REBOOT":      "ELEMENTAL_REBOOT",
-	"ELEMENTAL_INSTALL_EJECT_CD":    "ELEMENTAL_EJECT_CD",
-	"ELEMENTAL_INSTALL_DEVICE":      "ELEMENTAL_INSTALL_TARGET",
-	"ELEMENTAL_INSTALL_SYSTEM_URI":  "ELEMENTAL_INSTALL_SYSTEM",
-	"ELEMENTAL_INSTALL_DEBUG":       "ELEMENTAL_DEBUG",
+func (r *runner) Reset(conf elementalv1.Reset) error {
+	installerOpts := []string{"elemental"}
+	// There are no env var bindings in elemental-cli for elemental root options
+	// so root flags should be passed within the command line
+	if conf.Debug {
+		installerOpts = append(installerOpts, "--debug")
+	}
+	installerOpts = append(installerOpts, "reset")
+
+	cmd := exec.Command("elemental")
+	cmd.Env = append(os.Environ(), mapToResetEnv(conf)...)
+	cmd.Stdout = os.Stdout
+	cmd.Args = installerOpts
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
-func envOverrides(keyName string) string {
-	for k, v := range defaultOverrides {
-		keyName = strings.ReplaceAll(keyName, k, v)
-	}
-	return keyName
+func mapToInstallEnv(conf elementalv1.Install) []string {
+	var variables []string
+	// See GetInstallKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_CLOUD_INIT", strings.Join(conf.ConfigURLs[:], ",")))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_TARGET", conf.Device))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_SYSTEM", conf.SystemURI))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_FIRMWARE", conf.Firmware))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_ISO", conf.ISO))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_TTY", conf.TTY))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_DISABLE_BOOT_ENTRY", strconv.FormatBool(conf.DisableBootEntry)))
+	variables = append(variables, formatEV("ELEMENTAL_INSTALL_NO_FORMAT", strconv.FormatBool(conf.NoFormat)))
+	// See GetRunKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
+	variables = append(variables, formatEV("ELEMENTAL_POWEROFF", strconv.FormatBool(conf.PowerOff)))
+	variables = append(variables, formatEV("ELEMENTAL_REBOOT", strconv.FormatBool(conf.Reboot)))
+	variables = append(variables, formatEV("ELEMENTAL_EJECT_CD", strconv.FormatBool(conf.EjectCD)))
+	return variables
 }
 
-func mapToEnv(prefix string, data map[string]interface{}) []string {
-	var result []string
+func mapToResetEnv(conf elementalv1.Reset) []string {
+	var variables []string
+	// See GetResetKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
+	variables = append(variables, formatEV("ELEMENTAL_RESET_CLOUD_INIT", strings.Join(conf.ConfigURLs[:], ",")))
+	variables = append(variables, formatEV("ELEMENTAL_RESET_SYSTEM", conf.SystemURI))
+	variables = append(variables, formatEV("ELEMENTAL_RESET_PERSISTENT", strconv.FormatBool(conf.ResetOEM)))
+	variables = append(variables, formatEV("ELEMENTAL_RESET_OEM", strconv.FormatBool(conf.ResetPersistent)))
+	// See GetRunKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
+	variables = append(variables, formatEV("ELEMENTAL_POWEROFF", strconv.FormatBool(conf.PowerOff)))
+	variables = append(variables, formatEV("ELEMENTAL_REBOOT", strconv.FormatBool(conf.Reboot)))
+	return variables
+}
 
-	log.Debugln("Computed environment variables:")
-
-	for k, v := range data {
-		keyName := strings.ToUpper(prefix + convert.ToYAMLKey(k))
-		keyName = strings.ReplaceAll(keyName, "-", "_")
-		// Apply overrides needed to convert between configs types
-		keyName = envOverrides(keyName)
-
-		if data, ok := v.(map[string]interface{}); ok {
-			subResult := mapToEnv(keyName+"_", data)
-			result = append(result, subResult...)
-		} else if slice, ok := v.([]interface{}); ok {
-			// Convert slices into comma separated values, this is
-			// what viper/cobra support on elemental-cli side
-			ev := fmt.Sprintf("%s=", keyName)
-			for i, s := range slice {
-				if i < len(slice)-1 {
-					ev += fmt.Sprintf("%v,", s)
-				} else {
-					ev += fmt.Sprintf("%v", s)
-				}
-			}
-			result = append(result, ev)
-		} else {
-			result = append(result, fmt.Sprintf("%s=%v", keyName, v))
-			log.Debugf("%s=%v\n", keyName, v)
-		}
-	}
-	return result
+func formatEV(key string, value string) string {
+	return fmt.Sprintf("%s=%s", key, value)
 }

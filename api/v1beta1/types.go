@@ -49,6 +49,28 @@ type Install struct {
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 }
 
+type Reset struct {
+	// +optional
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	// +optional
+	// +kubebuilder:default:=true
+	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty"`
+	// +optional
+	// +kubebuilder:default:=true
+	ResetOEM bool `json:"reset-oem,omitempty" yaml:"reset-oem,omitempty"`
+	// +optional
+	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty"`
+	// +optional
+	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
+	// +optional
+	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty"`
+	// +optional
+	PowerOff bool `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
+	// +optional
+	// +kubebuilder:default:=true
+	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty"`
+}
+
 type Registration struct {
 	// +optional
 	URL string `json:"url,omitempty" yaml:"url,omitempty" mapstructure:"url"`
@@ -79,6 +101,8 @@ type SystemAgent struct {
 type Elemental struct {
 	// +optional
 	Install Install `json:"install,omitempty" yaml:"install,omitempty"`
+	// +optional
+	Reset Reset `json:"reset,omitempty" yaml:"reset,omitempty"`
 	// +optional
 	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
 	// +optional

@@ -48,30 +48,16 @@ func (mr *MockInstallerMockRecorder) InstallElemental(arg0 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallElemental", reflect.TypeOf((*MockInstaller)(nil).InstallElemental), arg0)
 }
 
-// IsSystemInstalled mocks base method.
-func (m *MockInstaller) IsSystemInstalled() bool {
+// ResetElemental mocks base method.
+func (m *MockInstaller) ResetElemental(arg0 v1beta1.Config) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSystemInstalled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSystemInstalled indicates an expected call of IsSystemInstalled.
-func (mr *MockInstallerMockRecorder) IsSystemInstalled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSystemInstalled", reflect.TypeOf((*MockInstaller)(nil).IsSystemInstalled))
-}
-
-// UpdateCloudConfig mocks base method.
-func (m *MockInstaller) UpdateCloudConfig(arg0 v1beta1.Config) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateCloudConfig", arg0)
+	ret := m.ctrl.Call(m, "ResetElemental", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UpdateCloudConfig indicates an expected call of UpdateCloudConfig.
-func (mr *MockInstallerMockRecorder) UpdateCloudConfig(arg0 interface{}) *gomock.Call {
+// ResetElemental indicates an expected call of ResetElemental.
+func (mr *MockInstallerMockRecorder) ResetElemental(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCloudConfig", reflect.TypeOf((*MockInstaller)(nil).UpdateCloudConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElemental", reflect.TypeOf((*MockInstaller)(nil).ResetElemental), arg0)
 }

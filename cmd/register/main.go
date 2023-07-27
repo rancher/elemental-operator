@@ -42,11 +42,12 @@ const (
 )
 
 var (
-	cfg        elementalv1.Config
-	debug      bool
-	reset      bool
-	configPath string
-	statePath  string
+	cfg          elementalv1.Config
+	debug        bool
+	reset        bool
+	installation bool
+	configPath   string
+	statePath    string
 )
 
 var (
@@ -84,21 +85,23 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				return fmt.Errorf("initializing configuration: %w", err)
 			}
 			// Determine if registration should execute or skip a cycle
-			if err := stateHandler.Init(statePath); err != nil {
-				return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
-			}
-			if skip, err := shouldSkipRegistration(stateHandler, installer); err != nil {
-				return fmt.Errorf("determining if registration should run: %w", err)
-			} else if skip {
-				log.Info("Nothing to do")
-				return nil
+			if !installation && !reset {
+				if err := stateHandler.Init(statePath); err != nil {
+					return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
+				}
+				if skip, err := shouldSkipRegistration(stateHandler); err != nil {
+					return fmt.Errorf("determining if registration should run: %w", err)
+				} else if skip {
+					log.Info("Nothing to do")
+					return nil
+				}
 			}
 			// Validate CA
 			caCert, err := getRegistrationCA(fs, cfg)
 			if err != nil {
 				return fmt.Errorf("validating CA: %w", err)
 			}
-			// Register
+			// Register (and fetch the remote MachineRegistration)
 			data, err := client.Register(cfg.Elemental.Registration, caCert)
 			if err != nil {
 				return fmt.Errorf("registering machine: %w", err)
@@ -108,16 +111,15 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return fmt.Errorf("parsing returned configuration: %w", err)
 			}
-			// If --reset called explicity or this is a first installation,
-			// we need to update the cloud-config
-			if reset || !installer.IsSystemInstalled() {
-				log.Info("Resetting cloud config information")
-				installer.UpdateCloudConfig(cfg)
-			}
 			// Install
-			if !installer.IsSystemInstalled() {
-				log.Info("Installing Elemental")
+			if installation {
+				log.Info("Installing elemental")
 				return installer.InstallElemental(cfg)
+			}
+			// Reset
+			if reset {
+				log.Info("Resetting Elemental")
+				return installer.ResetElemental(cfg)
 			}
 
 			return nil
@@ -137,24 +139,27 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().StringVar(&cfg.Elemental.Registration.Auth, "auth", "tpm", "Registration authentication method")
 	_ = viper.BindPFlag("elemental.registration.auth", cmd.Flags().Lookup("auth"))
 	cmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging")
-	if installer.IsSystemInstalled() {
-		cmd.Flags().StringVar(&configPath, "config-path", defaultConfigPath, "The full path of the elemental-register config")
-	} else {
-		cmd.Flags().StringVar(&configPath, "config-path", defaultLiveConfigPath, "The full path of the elemental-register config")
-	}
+	cmd.Flags().StringVar(&configPath, "config-path", defaultConfigPath, "The full path of the elemental-register config")
 	cmd.Flags().StringVar(&statePath, "state-path", defaultStatePath, "The full path of the elemental-register config")
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
-	cmd.Flags().BoolVar(&debug, "reset", false, "Reset the cloud-config using the remote MachineRegistration")
+	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
+	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	return cmd
 }
 
 func initConfig(fs vfs.FS) error {
+	log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+	if installation && reset {
+		return errors.New("--install and --reset flags are mutually exclusive")
+	}
 	if debug {
 		log.EnableDebugLogging()
 	}
-	log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
-
+	// If we are installing from a live environment, the default config path must be updated
+	if installation && (configPath == defaultConfigPath) {
+		configPath = defaultLiveConfigPath
+	}
 	// Use go-vfs afero compatibility layer (required by Viper)
 	afs := vfsafero.NewAferoFS(fs)
 	viper.SetFs(afs)
@@ -171,10 +176,7 @@ func initConfig(fs vfs.FS) error {
 	return nil
 }
 
-func shouldSkipRegistration(stateHandler register.StateHandler, installer install.Installer) (bool, error) {
-	if !installer.IsSystemInstalled() {
-		return false, nil
-	}
+func shouldSkipRegistration(stateHandler register.StateHandler) (bool, error) {
 	state, err := stateHandler.Load()
 	if err != nil {
 		return false, fmt.Errorf("loading registration state")

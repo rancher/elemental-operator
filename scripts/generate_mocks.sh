@@ -6,4 +6,5 @@ go install go.uber.org/mock/mockgen@latest
 # See codecov.yml for more info 
 
 mockgen -destination=pkg/register/mocks/client.go -package=mocks github.com/rancher/elemental-operator/pkg/register Client
+mockgen -destination=pkg/register/mocks/state.go -package=mocks github.com/rancher/elemental-operator/pkg/register StateHandler
 mockgen -destination=pkg/install/mocks/installer.go -package=mocks github.com/rancher/elemental-operator/pkg/install Installer
