@@ -182,13 +182,6 @@ var _ = Describe("elemental-register", Label("registration", "cli"), func() {
 			client.EXPECT().Register(gomock.Any(), gomock.Any()).Times(0)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})
-		It("should reset cloud config if reset argument", func() {
-			cmd.SetArgs([]string{"--reset"})
-			client.EXPECT().
-				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert)).
-				Return(marshalToBytes(baseConfigFixture), nil)
-			Expect(cmd.Execute()).ToNot(HaveOccurred())
-		})
 	})
 })
 
