@@ -170,6 +170,13 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 
 	logger.Info("Reconciling Reset plan")
 
+	resettable, found := mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation]
+	if !found || resettable != "true" {
+		logger.V(log.DebugDepth).Info("Machine Inventory does not need reset. Removing finalizer.")
+		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+		return nil
+	}
+
 	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
 		logger.V(log.DebugDepth).Info("Machine inventory plan reference not set yet. Creating new empty plan.")
 		return r.createPlanSecret(ctx, mInventory) // Recover from this unexpected state by creating a new empty plan secret

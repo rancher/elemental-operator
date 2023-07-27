@@ -22,12 +22,13 @@ import (
 )
 
 var (
-	MachineInventoryFinalizer                   = "machineinventory.elemental.cattle.io"
-	PlanSecretType            corev1.SecretType = "elemental.cattle.io/plan"
-	PlanTypeAnnotation                          = "elemental.cattle.io/plan.type"
-	PlanTypeEmpty                               = "empty"
-	PlanTypeBootstrap                           = "bootstrap"
-	PlanTypeReset                               = "reset"
+	MachineInventoryFinalizer                              = "machineinventory.elemental.cattle.io"
+	PlanSecretType                       corev1.SecretType = "elemental.cattle.io/plan"
+	PlanTypeAnnotation                                     = "elemental.cattle.io/plan.type"
+	PlanTypeEmpty                                          = "empty"
+	PlanTypeBootstrap                                      = "bootstrap"
+	PlanTypeReset                                          = "reset"
+	MachineInventoryResettableAnnotation                   = "elemental.cattle.io/resettable"
 )
 
 type MachineInventorySpec struct {
