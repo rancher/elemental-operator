@@ -289,12 +289,12 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 		Files: []applyinator.File{
 			{
 				Directory:   true,
-				Path:        "/var/lib/elemental/agent/plans",
+				Path:        "/var/ib/elemental/agent/plans",
 				Permissions: "0700",
 			},
 			{
 				Content:     base64.StdEncoding.EncodeToString(localResetPlanBytes),
-				Path:        "/var/lib/elemental/agent/plans/reset.plan",
+				Path:        "/var/ib/elemental/agent/plans/reset.plan",
 				Permissions: "0600",
 			},
 		},
