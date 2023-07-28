@@ -54,7 +54,7 @@ var _ Client = (*client)(nil)
 
 type client struct{}
 
-func NewClient(stateHandler StateHandler) Client {
+func NewClient() Client {
 	return &client{}
 }
 

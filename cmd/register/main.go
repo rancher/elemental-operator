@@ -59,7 +59,7 @@ func main() {
 	fs := vfs.OSFS
 	installer := install.NewInstaller(fs)
 	stateHandler := register.NewFileStateHandler(fs)
-	client := register.NewClient(stateHandler)
+	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
 	if err := cmd.Execute(); err != nil {
 		log.Fatalf("FATAL: %s", err)
@@ -108,7 +108,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err != nil {
 				return fmt.Errorf("registering machine: %w", err)
 			}
-			stateHandler.Save(registrationState)
+			if err := stateHandler.Save(registrationState); err != nil {
+				return fmt.Errorf("saving registration state: %w", err)
+			}
 			// Validate remote config
 			log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
@@ -180,10 +182,6 @@ func initConfig(fs vfs.FS) error {
 		return fmt.Errorf("decoding configuration: %w", err)
 	}
 	return nil
-}
-
-func shouldSkipRegistration(state register.State) (bool, error) {
-	return !state.HasLastUpdateElapsed(registrationUpdateSuppressTimer), nil
 }
 
 func getRegistrationCA(fs vfs.FS, config elementalv1.Config) ([]byte, error) {
