@@ -271,6 +271,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 					Name:    "reset elemental",
 					Command: "elemental-register",
 					Args: []string{
+						"--debug",
 						"--reset",
 					},
 				},
