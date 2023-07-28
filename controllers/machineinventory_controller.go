@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/mudler/yip/pkg/schema"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -71,13 +70,9 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 	logger := ctrl.LoggerFrom(ctx)
 
 	mInventory := &elementalv1.MachineInventory{}
-	err := r.Get(ctx, req.NamespacedName, mInventory)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(log.DebugDepth).Info("Object was not found, not an error")
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, fmt.Errorf("failed to get machine inventory object: %w", err)
+	if err := r.Get(ctx, req.NamespacedName, mInventory); err != nil {
+		logger.V(log.DebugDepth).Error(err, "Unable to fetch MachineInventory")
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	patchBase := client.MergeFrom(mInventory.DeepCopy())
@@ -117,15 +112,26 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 
 	logger.Info("Reconciling machineinventory object")
 
-	if mInventory.GetDeletionTimestamp() != nil {
-		if err := r.reconcileResetPlanSecret(ctx, mInventory); err != nil {
-			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
-				Reason:  elementalv1.PlanFailureReason,
-				Status:  metav1.ConditionFalse,
-				Message: err.Error(),
-			})
-			return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
+	if mInventory.GetDeletionTimestamp().IsZero() {
+		// The object is not being deleted, so register the finalizer
+		if !controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
+			controllerutil.AddFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+			if err := r.Update(ctx, mInventory); err != nil {
+				return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
+			}
+		}
+	} else {
+		// The object is up for deletion
+		if controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
+			if err := r.reconcileResetPlanSecret(ctx, mInventory); err != nil {
+				meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.ReadyCondition,
+					Reason:  elementalv1.PlanFailureReason,
+					Status:  metav1.ConditionFalse,
+					Message: err.Error(),
+				})
+				return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
+			}
 		}
 		return ctrl.Result{}, nil
 	}
@@ -233,6 +239,8 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 	patchBase := client.MergeFrom(planSecret.DeepCopy())
 
+	planSecret.Data["applied-checksum"] = []byte("")
+	planSecret.Data["failed-checksum"] = []byte("")
 	planSecret.Data["plan"] = resetPlan
 	planSecret.Annotations = map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeReset}
 
@@ -255,23 +263,22 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 
 	logger.Info("Creating new Reset plan secret")
 
-	// This is the local cloud-config that the elemental-system-agent will run while in recovery mode
-	resetCloudConfig := schema.YipConfig{
-		Name: "Elemental Reset",
-		Stages: map[string][]schema.Stage{
-			"network": {
-				schema.Stage{
-					If:   "[ -f /run/cos/recovery_mode ]",
-					Name: "Runs elemental reset",
-					Commands: []string{
-						"elemental-register --debug --reset",
+	// This is the local reset plan that the elemental-system-agent will run while in recovery mode
+	localResetPlan := applyinator.Plan{
+		OneTimeInstructions: []applyinator.OneTimeInstruction{
+			{
+				CommonInstruction: applyinator.CommonInstruction{
+					Name:    "reset elemental",
+					Command: "elemental-register",
+					Args: []string{
+						"--reset",
 					},
 				},
 			},
 		},
 	}
 
-	resetCloudConfigBytes, err := yaml.Marshal(resetCloudConfig)
+	localResetPlanBytes, err := yaml.Marshal(localResetPlan)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
@@ -280,8 +287,13 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 	resetPlan := applyinator.Plan{
 		Files: []applyinator.File{
 			{
-				Content:     base64.StdEncoding.EncodeToString(resetCloudConfigBytes),
-				Path:        "/oem/reset-plan.yaml",
+				Directory:   true,
+				Path:        "/var/ib/elemental/agent/plans",
+				Permissions: "0700",
+			},
+			{
+				Content:     base64.StdEncoding.EncodeToString(localResetPlanBytes),
+				Path:        "/var/ib/elemental/agent/plans/reset.plan",
 				Permissions: "0600",
 			},
 		},
@@ -300,7 +312,11 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 			{
 				CommonInstruction: applyinator.CommonInstruction{
 					Name:    "reboot",
-					Command: "shutdown -r +1", // Need to have time to confirm plan execution before rebooting
+					Command: "shutdown",
+					Args: []string{
+						"-r",
+						"+1", // Need to have time to confirm plan execution before rebooting
+					},
 				},
 			},
 		},

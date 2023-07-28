@@ -157,7 +157,8 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 							Path:        filepath.Dir(registrationConf),
 							Permissions: 0700,
 						},
-					}, Files: []schema.File{
+					},
+					Files: []schema.File{
 						{
 							Path:        registrationConf,
 							Content:     string(registrationInBytes),
@@ -194,7 +195,8 @@ func (i *installer) writeRegistrationState(state register.State) (string, error)
 							Path:        filepath.Dir(registrationState),
 							Permissions: 0700,
 						},
-					}, Files: []schema.File{
+					},
+					Files: []schema.File{
 						{
 							Path:        registrationState,
 							Content:     string(stateBytes),
