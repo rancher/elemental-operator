@@ -299,8 +299,12 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 			},
 			{
 				CommonInstruction: applyinator.CommonInstruction{
-					Name:    "reboot",
-					Command: "shutdown -r +1", // Need to have time to confirm plan execution before rebooting
+					Name:    "schedule reboot",
+					Command: "shutdown",
+					Args: []string{
+						"-r",
+						"+1", // Need to have time to confirm plan execution before rebooting
+					},
 				},
 			},
 		},
