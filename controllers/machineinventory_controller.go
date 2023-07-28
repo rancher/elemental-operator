@@ -261,7 +261,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 		Stages: map[string][]schema.Stage{
 			"network": {
 				schema.Stage{
-					If:   "'[ -f /run/cos/recovery_mode ]'",
+					If:   "[ -f /run/cos/recovery_mode ]",
 					Name: "Runs elemental reset",
 					Commands: []string{
 						"elemental-register --debug --reset",

@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	v1beta1 "github.com/rancher/elemental-operator/api/v1beta1"
+	register "github.com/rancher/elemental-operator/pkg/register"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -35,16 +36,16 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // Register mocks base method.
-func (m *MockClient) Register(arg0 v1beta1.Registration, arg1 []byte) ([]byte, error) {
+func (m *MockClient) Register(arg0 v1beta1.Registration, arg1 []byte, arg2 *register.State) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Register", arg0, arg1)
+	ret := m.ctrl.Call(m, "Register", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockClientMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) Register(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockClient)(nil).Register), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockClient)(nil).Register), arg0, arg1, arg2)
 }

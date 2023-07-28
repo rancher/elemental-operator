@@ -25,6 +25,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/util"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/twpayne/go-vfs"
@@ -35,15 +36,16 @@ import (
 )
 
 const (
-	stateInstallFile = "/run/initramfs/cos-state/state.yaml"
-	agentStateDir    = "/var/lib/elemental/agent"
-	agentConfDir     = "/etc/rancher/elemental/agent"
-	registrationConf = "/oem/registration/config.yaml"
+	stateInstallFile  = "/run/initramfs/cos-state/state.yaml"
+	agentStateDir     = "/var/lib/elemental/agent"
+	agentConfDir      = "/etc/rancher/elemental/agent"
+	registrationConf  = "/oem/registration/config.yaml"
+	registrationState = "/oem/registration/state.yaml"
 )
 
 type Installer interface {
 	ResetElemental(config elementalv1.Config) error
-	InstallElemental(config elementalv1.Config) error
+	InstallElemental(config elementalv1.Config, state register.State) error
 }
 
 func NewInstaller(fs vfs.FS) Installer {
@@ -60,7 +62,7 @@ type installer struct {
 	runner elementalcli.Runner
 }
 
-func (i *installer) InstallElemental(config elementalv1.Config) error {
+func (i *installer) InstallElemental(config elementalv1.Config, state register.State) error {
 	if config.Elemental.Install.ConfigURLs == nil {
 		config.Elemental.Install.ConfigURLs = []string{}
 	}
@@ -69,6 +71,13 @@ func (i *installer) InstallElemental(config elementalv1.Config) error {
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
+	registrationStatePath, err := i.writeRegistrationState(state)
+
+	if err != nil {
+		return fmt.Errorf("writing registration state plan: %w", err)
+	}
+	additionalConfigs = append(additionalConfigs, registrationStatePath)
+
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
 
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
@@ -135,7 +144,7 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 		},
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("marshalling registration config: %w", err)
 	}
 
 	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
@@ -160,6 +169,42 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 		},
 	})
 
+	return f.Name(), err
+}
+
+func (i *installer) writeRegistrationState(state register.State) (string, error) {
+	f, err := i.fs.Create("/tmp/elemental-registration-state.yaml")
+	if err != nil {
+		return "", fmt.Errorf("creating temporary registration state plan file: %w", err)
+	}
+	defer f.Close()
+	stateBytes, err := yaml.Marshal(state)
+	if err != nil {
+		return "", fmt.Errorf("marshalling registration state: %w", err)
+	}
+
+	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+		Name: "Include registration state into installed system",
+		Stages: map[string][]schema.Stage{
+			"initramfs": {
+				schema.Stage{
+					If: fmt.Sprintf("[ ! -f %s ]", registrationState),
+					Directories: []schema.Directory{
+						{
+							Path:        filepath.Dir(registrationState),
+							Permissions: 0700,
+						},
+					}, Files: []schema.File{
+						{
+							Path:        registrationState,
+							Content:     string(stateBytes),
+							Permissions: 0600,
+						},
+					},
+				},
+			},
+		},
+	})
 	return f.Name(), err
 }
 

@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	v1beta1 "github.com/rancher/elemental-operator/api/v1beta1"
+	register "github.com/rancher/elemental-operator/pkg/register"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -35,17 +36,17 @@ func (m *MockInstaller) EXPECT() *MockInstallerMockRecorder {
 }
 
 // InstallElemental mocks base method.
-func (m *MockInstaller) InstallElemental(arg0 v1beta1.Config) error {
+func (m *MockInstaller) InstallElemental(arg0 v1beta1.Config, arg1 register.State) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallElemental", arg0)
+	ret := m.ctrl.Call(m, "InstallElemental", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallElemental indicates an expected call of InstallElemental.
-func (mr *MockInstallerMockRecorder) InstallElemental(arg0 interface{}) *gomock.Call {
+func (mr *MockInstallerMockRecorder) InstallElemental(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallElemental", reflect.TypeOf((*MockInstaller)(nil).InstallElemental), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallElemental", reflect.TypeOf((*MockInstaller)(nil).InstallElemental), arg0, arg1)
 }
 
 // ResetElemental mocks base method.

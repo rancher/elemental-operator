@@ -39,7 +39,7 @@ import (
 )
 
 type Client interface {
-	Register(reg elementalv1.Registration, caCert []byte) ([]byte, error)
+	Register(reg elementalv1.Registration, caCert []byte, state *State) ([]byte, error)
 }
 
 type authClient interface {
@@ -52,26 +52,16 @@ type authClient interface {
 
 var _ Client = (*client)(nil)
 
-type client struct {
-	stateHandler StateHandler
-}
+type client struct{}
 
 func NewClient(stateHandler StateHandler) Client {
-	return &client{
-		stateHandler: stateHandler,
-	}
+	return &client{}
 }
 
 // Register attempts to register the machine with the elemental-operator.
-// If the machine is already installed and registered, a registration can still be attempted turning the `isUpdate` flag on.
 // Registration updates will fetch and apply new labels, and update Machine annotations such as the IP address.
-func (r *client) Register(reg elementalv1.Registration, caCert []byte) ([]byte, error) {
-	state, err := r.stateHandler.Load()
-	if err != nil {
-		return nil, fmt.Errorf("loading registration state: %w", err)
-	}
-
-	auth, err := getAuthenticator(reg, &state)
+func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *State) ([]byte, error) {
+	auth, err := getAuthenticator(reg, state)
 	if err != nil {
 		return nil, fmt.Errorf("initializing authenticator: %w", err)
 	}
@@ -128,11 +118,6 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte) ([]byte, 
 		if err := sendAnnotations(conn, reg); err != nil {
 			return nil, fmt.Errorf("failend to send dynamic data: %w", err)
 		}
-	}
-
-	log.Info("Saving registration state")
-	if err := r.stateHandler.Save(state); err != nil {
-		return nil, fmt.Errorf("saving registration state: %w", err)
 	}
 
 	log.Info("Get elemental configuration")

@@ -36,6 +36,7 @@ import (
 
 const (
 	defaultStatePath                = "/oem/registration/state.yaml"
+	defaultLiveStatePath            = "/tmp/registration/state.yaml"
 	defaultConfigPath               = "/oem/registration/config.yaml"
 	defaultLiveConfigPath           = "/run/initramfs/live/livecd-cloud-config.yaml"
 	registrationUpdateSuppressTimer = 24 * time.Hour
@@ -84,17 +85,18 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := initConfig(fs); err != nil {
 				return fmt.Errorf("initializing configuration: %w", err)
 			}
+			// Load Registration State
+			if err := stateHandler.Init(statePath); err != nil {
+				return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
+			}
+			registrationState, err := stateHandler.Load()
+			if err != nil {
+				return fmt.Errorf("loading registration state: %w", err)
+			}
 			// Determine if registration should execute or skip a cycle
-			if !installation && !reset {
-				if err := stateHandler.Init(statePath); err != nil {
-					return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
-				}
-				if skip, err := shouldSkipRegistration(stateHandler); err != nil {
-					return fmt.Errorf("determining if registration should run: %w", err)
-				} else if skip {
-					log.Info("Nothing to do")
-					return nil
-				}
+			if !installation && !reset && !registrationState.HasLastUpdateElapsed(registrationUpdateSuppressTimer) {
+				log.Info("Nothing to do")
+				return nil
 			}
 			// Validate CA
 			caCert, err := getRegistrationCA(fs, cfg)
@@ -102,10 +104,11 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				return fmt.Errorf("validating CA: %w", err)
 			}
 			// Register (and fetch the remote MachineRegistration)
-			data, err := client.Register(cfg.Elemental.Registration, caCert)
+			data, err := client.Register(cfg.Elemental.Registration, caCert, &registrationState)
 			if err != nil {
 				return fmt.Errorf("registering machine: %w", err)
 			}
+			stateHandler.Save(registrationState)
 			// Validate remote config
 			log.Debugf("Fetched configuration from manager cluster:\n%s\n\n", string(data))
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
@@ -114,7 +117,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			// Install
 			if installation {
 				log.Info("Installing elemental")
-				return installer.InstallElemental(cfg)
+				if err := installer.InstallElemental(cfg, registrationState); err != nil {
+					return fmt.Errorf("installing elemental: %w", err)
+				}
 			}
 			// Reset
 			if reset {
@@ -159,6 +164,7 @@ func initConfig(fs vfs.FS) error {
 	// If we are installing from a live environment, the default config path must be updated
 	if installation && (configPath == defaultConfigPath) {
 		configPath = defaultLiveConfigPath
+		statePath = defaultLiveStatePath
 	}
 	// Use go-vfs afero compatibility layer (required by Viper)
 	afs := vfsafero.NewAferoFS(fs)
@@ -176,11 +182,7 @@ func initConfig(fs vfs.FS) error {
 	return nil
 }
 
-func shouldSkipRegistration(stateHandler register.StateHandler) (bool, error) {
-	state, err := stateHandler.Load()
-	if err != nil {
-		return false, fmt.Errorf("loading registration state")
-	}
+func shouldSkipRegistration(state register.State) (bool, error) {
 	return !state.HasLastUpdateElapsed(registrationUpdateSuppressTimer), nil
 }
 
