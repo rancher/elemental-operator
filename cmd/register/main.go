@@ -103,6 +103,12 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err != nil {
 				return fmt.Errorf("validating CA: %w", err)
 			}
+			// Reset
+			// TODO: Add `MsgReset` to protocol so that it is possible to fetch the remote MachineRegistration
+			if reset {
+				log.Info("Resetting Elemental")
+				return installer.ResetElemental(cfg)
+			}
 			// Register (and fetch the remote MachineRegistration)
 			data, err := client.Register(cfg.Elemental.Registration, caCert, &registrationState)
 			if err != nil {
@@ -123,10 +129,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 					return fmt.Errorf("installing elemental: %w", err)
 				}
 			}
-			// Reset
-			if reset {
-				log.Info("Resetting Elemental")
-				return installer.ResetElemental(cfg)
+			// Persist config in default path
+			if err := installer.WriteConfig(cfg); err != nil {
+				return fmt.Errorf("persisting updated configuration: %w", err)
 			}
 
 			return nil

@@ -62,3 +62,17 @@ func (mr *MockInstallerMockRecorder) ResetElemental(arg0 interface{}) *gomock.Ca
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElemental", reflect.TypeOf((*MockInstaller)(nil).ResetElemental), arg0)
 }
+
+// WriteConfig mocks base method.
+func (m *MockInstaller) WriteConfig(arg0 v1beta1.Config) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteConfig", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WriteConfig indicates an expected call of WriteConfig.
+func (mr *MockInstallerMockRecorder) WriteConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteConfig", reflect.TypeOf((*MockInstaller)(nil).WriteConfig), arg0)
+}

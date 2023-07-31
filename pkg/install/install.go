@@ -46,6 +46,7 @@ const (
 )
 
 type Installer interface {
+	WriteConfig(config elementalv1.Config) error
 	ResetElemental(config elementalv1.Config) error
 	InstallElemental(config elementalv1.Config, state register.State) error
 }
@@ -111,6 +112,22 @@ func (i *installer) ResetElemental(config elementalv1.Config) error {
 
 	log.Info("Elemental reset completed, please reboot")
 	return nil
+}
+
+func (i *installer) WriteConfig(config elementalv1.Config) error {
+	// Since the full config may contain sensitive info (ex. system agent token),
+	// only persist what we actually need.
+	trimmedConf := elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: config.Elemental.Registration,
+			Reset:        config.Elemental.Reset,
+		},
+	}
+	configBytes, err := yaml.Marshal(trimmedConf)
+	if err != nil {
+		return fmt.Errorf("marshalling elemental config: %w", err)
+	}
+	return i.fs.WriteFile(registrationConf, configBytes, os.FileMode(600))
 }
 
 func (i *installer) getCloudInitConfigs(config elementalv1.Config) ([]string, error) {
