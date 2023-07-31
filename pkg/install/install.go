@@ -101,12 +101,12 @@ func (i *installer) ResetElemental(config elementalv1.Config) error {
 	}
 	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, additionalConfigs...)
 
-	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
-		return fmt.Errorf("failed to reset elemental: %w", err)
-	}
-
 	if err := i.cleanupResetPlan(); err != nil {
 		return fmt.Errorf("cleaning up reset plan: %w", err)
+	}
+
+	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
+		return fmt.Errorf("failed to reset elemental: %w", err)
 	}
 
 	log.Info("Elemental reset completed, please reboot")
