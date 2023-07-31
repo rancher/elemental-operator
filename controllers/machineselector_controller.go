@@ -19,7 +19,6 @@ package controllers
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -485,7 +484,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 
 	plan := buf.Bytes()
 
-	checksum := planChecksum(plan)
+	checksum := util.PlanChecksum(plan)
 
 	return checksum, plan, nil
 }
@@ -600,13 +599,6 @@ func filterSelectorUpdateEvents() predicate.Funcs {
 			return true
 		},
 	}
-}
-
-func planChecksum(input []byte) string {
-	h := sha256.New()
-	h.Write(input)
-
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // MachineInventoryToSelector is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation

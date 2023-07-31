@@ -212,7 +212,7 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 		return r.updatePlanSecretWithReset(ctx, mInventory)
 	}
 
-	logger.V(log.DebugDepth).Info("Reset plan type found. Updating status to determine whether it was successfully applied.")
+	logger.V(log.DebugDepth).Info("Reset plan type found. Updating status and determine whether it was successfully applied.")
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
 		return fmt.Errorf("updating inventory with plan status: %w", err)
 	}
@@ -237,7 +237,7 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 		return fmt.Errorf("getting plan secret: %w", err)
 	}
 
-	resetPlan, err := r.newResetPlan(ctx)
+	checksum, resetPlan, err := r.newResetPlan(ctx)
 	if err != nil {
 		return fmt.Errorf("getting new reset plan: %w", err)
 	}
@@ -253,6 +253,11 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 		return fmt.Errorf("patching plan secret: %w", err)
 	}
 
+	mInventory.Status.Plan.Checksum = checksum
+	mInventory.Status.Plan.PlanSecretRef.Name = planSecret.Name
+	mInventory.Status.Plan.PlanSecretRef.Namespace = planSecret.Namespace
+	mInventory.Status.Plan.State = elementalv1.PlanState("")
+
 	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 		Type:    elementalv1.ReadyCondition,
 		Reason:  elementalv1.WaitingForPlanReason,
@@ -263,7 +268,7 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	return nil
 }
 
-func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, error) {
+func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, []byte, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Creating new Reset plan secret")
@@ -286,7 +291,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 
 	resetCloudConfigBytes, err := yaml.Marshal(resetCloudConfig)
 	if err != nil {
-		return nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
+		return "", nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
 
 	// This is the remote plan that should trigger the reboot into recovery and reset
@@ -325,12 +330,14 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) ([]byte, 
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(resetPlan); err != nil {
-		return nil, fmt.Errorf("failed to encode plan: %w", err)
+		return "", nil, fmt.Errorf("failed to encode plan: %w", err)
 	}
 
 	plan := buf.Bytes()
 
-	return plan, nil
+	checksum := util.PlanChecksum(plan)
+
+	return checksum, plan, nil
 }
 
 func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
