@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 )
 
 type Runner interface {
@@ -52,11 +53,16 @@ func (r *runner) Install(conf elementalv1.Install) error {
 	installerOpts = append(installerOpts, "install")
 
 	cmd := exec.Command("elemental")
-	cmd.Env = append(os.Environ(), mapToInstallEnv(conf)...)
+	environmentVariables := mapToInstallEnv(conf)
+	cmd.Env = append(os.Environ(), environmentVariables...)
 	cmd.Stdout = os.Stdout
 	cmd.Args = installerOpts
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
+	log.Debugf("running elemental %s", strings.Join(installerOpts, " "))
+	for _, env := range environmentVariables {
+		log.Debug(env)
+	}
 	return cmd.Run()
 }
 
@@ -70,11 +76,16 @@ func (r *runner) Reset(conf elementalv1.Reset) error {
 	installerOpts = append(installerOpts, "reset")
 
 	cmd := exec.Command("elemental")
-	cmd.Env = append(os.Environ(), mapToResetEnv(conf)...)
+	environmentVariables := mapToResetEnv(conf)
+	cmd.Env = append(os.Environ(), environmentVariables...)
 	cmd.Stdout = os.Stdout
 	cmd.Args = installerOpts
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
+	log.Debugf("running elemental %s", strings.Join(installerOpts, " "))
+	for _, env := range environmentVariables {
+		log.Debug(env)
+	}
 	return cmd.Run()
 }
 

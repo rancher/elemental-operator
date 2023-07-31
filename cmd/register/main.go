@@ -130,6 +130,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				}
 			}
 			// Persist config in default path
+			log.Debug("Persisting configuration")
 			if err := installer.WriteConfig(cfg); err != nil {
 				return fmt.Errorf("persisting updated configuration: %w", err)
 			}
