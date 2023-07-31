@@ -39,7 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/yaml"
+
+	"gopkg.in/yaml.v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
@@ -281,7 +282,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 	resetCloudConfig := schema.YipConfig{
 		Name: "Elemental Reset",
 		Stages: map[string][]schema.Stage{
-			"network": {
+			"network.after": {
 				schema.Stage{
 					If:   "[ -f /run/cos/recovery_mode ]",
 					Name: "Runs elemental reset",
