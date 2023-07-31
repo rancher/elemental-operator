@@ -19,10 +19,12 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/mudler/yip/pkg/schema"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/controllers"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
@@ -101,6 +103,10 @@ func (i *installer) ResetElemental(config elementalv1.Config) error {
 
 	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
 		return fmt.Errorf("failed to reset elemental: %w", err)
+	}
+
+	if err := i.cleanupResetPlan(); err != nil {
+		return fmt.Errorf("cleaning up reset plan: %w", err)
 	}
 
 	log.Info("Elemental reset completed, please reboot")
@@ -298,4 +304,15 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 	})
 
 	return f.Name(), err
+}
+
+func (i *installer) cleanupResetPlan() error {
+	_, err := i.fs.Stat(controllers.LocalResetPlanPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("checking presence of file '%s': %w", controllers.LocalResetPlanPath, err)
+	}
+	if os.IsNotExist(err) {
+		log.Debugf("local reset plan '%s' does not exist, nothing to do", controllers.LocalResetPlanPath)
+	}
+	return i.fs.Remove(controllers.LocalResetPlanPath)
 }

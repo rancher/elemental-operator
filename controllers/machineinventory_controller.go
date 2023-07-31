@@ -51,6 +51,8 @@ import (
 // Timeout to validate machine inventory adoption
 const adoptionTimeout = 5
 
+const LocalResetPlanPath = "/oem/reset-plan.yaml"
+
 // MachineInventoryReconciler reconciles a MachineInventory object.
 type MachineInventoryReconciler struct {
 	client.Client
@@ -304,7 +306,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 		Files: []applyinator.File{
 			{
 				Content:     base64.StdEncoding.EncodeToString(resetCloudConfigBytes),
-				Path:        "/oem/reset-plan.yaml",
+				Path:        LocalResetPlanPath,
 				Permissions: "0600",
 			},
 		},
