@@ -253,10 +253,13 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 		return fmt.Errorf("patching plan secret: %w", err)
 	}
 
-	mInventory.Status.Plan.Checksum = checksum
-	mInventory.Status.Plan.PlanSecretRef.Name = planSecret.Name
-	mInventory.Status.Plan.PlanSecretRef.Namespace = planSecret.Namespace
-	mInventory.Status.Plan.State = elementalv1.PlanState("")
+	mInventory.Status.Plan = &elementalv1.PlanStatus{
+		Checksum: checksum,
+		PlanSecretRef: &corev1.ObjectReference{
+			Namespace: planSecret.Namespace,
+			Name:      planSecret.Name,
+		},
+	}
 
 	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
 		Type:    elementalv1.ReadyCondition,
