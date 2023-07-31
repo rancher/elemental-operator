@@ -233,6 +233,8 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 	patchBase := client.MergeFrom(planSecret.DeepCopy())
 
+	planSecret.Data["applied-checksum"] = []byte("")
+	planSecret.Data["failed-checksum"] = []byte("")
 	planSecret.Data["plan"] = resetPlan
 	planSecret.Annotations = map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeReset}
 
