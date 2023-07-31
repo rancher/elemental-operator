@@ -124,6 +124,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 			if err := r.Update(ctx, mInventory); err != nil {
 				return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
 			}
+			return ctrl.Result{RequeueAfter: time.Second}, nil
 		}
 	} else {
 		// The object is up for deletion
