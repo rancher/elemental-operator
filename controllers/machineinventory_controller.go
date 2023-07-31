@@ -117,15 +117,26 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 
 	logger.Info("Reconciling machineinventory object")
 
-	if mInventory.GetDeletionTimestamp() != nil {
-		if err := r.reconcileResetPlanSecret(ctx, mInventory); err != nil {
-			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
-				Reason:  elementalv1.PlanFailureReason,
-				Status:  metav1.ConditionFalse,
-				Message: err.Error(),
-			})
-			return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
+	if mInventory.GetDeletionTimestamp().IsZero() {
+		// The object is not being deleted, so register the finalizer
+		if !controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
+			controllerutil.AddFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+			if err := r.Update(ctx, mInventory); err != nil {
+				return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
+			}
+		}
+	} else {
+		// The object is up for deletion
+		if controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
+			if err := r.reconcileResetPlanSecret(ctx, mInventory); err != nil {
+				meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.ReadyCondition,
+					Reason:  elementalv1.PlanFailureReason,
+					Status:  metav1.ConditionFalse,
+					Message: err.Error(),
+				})
+				return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
+			}
 		}
 		return ctrl.Result{}, nil
 	}
