@@ -29,7 +29,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/twpayne/go-vfs"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
