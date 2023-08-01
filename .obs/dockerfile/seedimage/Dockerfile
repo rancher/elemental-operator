@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Define the names/tags of the container
-#!BuildTag: rancher/seedimage-builder/%%SLEMICRO_VERSION%%:latest
-#!BuildTag: rancher/seedimage-builder/%%SLEMICRO_VERSION%%:%OPERATOR_VERSION%
-#!BuildTag: rancher/seedimage-builder/%%SLEMICRO_VERSION%%:%OPERATOR_VERSION%-%RELEASE%
+#!BuildTag: rancher/seedimage-builder:latest
+#!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%
+#!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%-%RELEASE%
 #
 
 ARG SLE_VERSION
@@ -19,9 +19,8 @@ COPY --from=BASE /installroot /
 
 RUN /usr/sbin/update-ca-certificates
 
-ARG SLEMICRO_VERSION
 ARG BUILD_REPO=%%IMG_REPO%%
-ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-seedimage-builder-image/$SLEMICRO_VERSION
+ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-seedimage-builder-image
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.rancher.elemental

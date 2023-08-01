@@ -1,17 +1,17 @@
 image:
   empty: rancher/pause:3.1
-  repository: "%%IMG_REPO%%/rancher/elemental-operator/%%SLEMICRO_VERSION%%"
+  repository: "%%IMG_REPO%%/rancher/elemental-operator"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 seedImage:
-  repository: "%%IMG_REPO%%/rancher/seedimage-builder/%%SLEMICRO_VERSION%%"
+  repository: "%%IMG_REPO%%/rancher/seedimage-builder"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 channel:
-  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel/%%SLEMICRO_VERSION%%" 
-  tag: latest
+  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel" 
+  tag: "%VESION%"
 
 # number of operator replicas to deploy
 replicas: 1
