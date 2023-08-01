@@ -107,6 +107,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			// TODO: Add `MsgReset` to protocol so that it is possible to fetch the remote MachineRegistration
 			if reset {
 				log.Info("Resetting Elemental")
+				log.Debugf("Using config: %+v", cfg)
 				return installer.ResetElemental(cfg)
 			}
 			// Register (and fetch the remote MachineRegistration)

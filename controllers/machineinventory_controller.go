@@ -127,7 +127,6 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 			if err := r.Update(ctx, mInventory); err != nil {
 				return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
 			}
-			return ctrl.Result{RequeueAfter: time.Second}, nil
 		}
 	} else {
 		// The object is up for deletion
@@ -257,6 +256,7 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 		return fmt.Errorf("patching plan secret: %w", err)
 	}
 
+	// Clear the plan status
 	mInventory.Status.Plan = &elementalv1.PlanStatus{
 		Checksum: checksum,
 		PlanSecretRef: &corev1.ObjectReference{
@@ -387,6 +387,7 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 			Namespace: planSecret.Namespace,
 			Name:      planSecret.Name,
 		},
+		State: elementalv1.PlanState(""),
 	}
 
 	logger.Info("Plan secret created")

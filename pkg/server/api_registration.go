@@ -171,6 +171,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 			SecretNamespace: inventory.Namespace,
 		},
 		Install: registration.Spec.Config.Elemental.Install,
+		Reset:   registration.Spec.Config.Elemental.Reset,
 	}
 
 	cloudConf := registration.Spec.Config.CloudConfig

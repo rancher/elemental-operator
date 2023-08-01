@@ -59,10 +59,7 @@ func (r *runner) Install(conf elementalv1.Install) error {
 	cmd.Args = installerOpts
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	log.Debugf("running elemental %s", strings.Join(installerOpts, " "))
-	for _, env := range environmentVariables {
-		log.Debug(env)
-	}
+	log.Debugf("running: %s\n with ENV:\n%s", strings.Join(installerOpts, " "), strings.Join(environmentVariables, "\n"))
 	return cmd.Run()
 }
 
@@ -82,10 +79,7 @@ func (r *runner) Reset(conf elementalv1.Reset) error {
 	cmd.Args = installerOpts
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	log.Debugf("running elemental %s", strings.Join(installerOpts, " "))
-	for _, env := range environmentVariables {
-		log.Debug(env)
-	}
+	log.Debugf("running: %s\n with ENV:\n%s", strings.Join(installerOpts, " "), strings.Join(environmentVariables, "\n"))
 	return cmd.Run()
 }
 

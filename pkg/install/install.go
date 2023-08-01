@@ -115,19 +115,21 @@ func (i *installer) ResetElemental(config elementalv1.Config) error {
 }
 
 func (i *installer) WriteConfig(config elementalv1.Config) error {
-	// Since the full config may contain sensitive info (ex. system agent token),
-	// only persist what we actually need.
-	trimmedConf := elementalv1.Config{
-		Elemental: elementalv1.Elemental{
-			Registration: config.Elemental.Registration,
-			Reset:        config.Elemental.Reset,
-		},
-	}
-	configBytes, err := yaml.Marshal(trimmedConf)
+	file, err := i.fs.Create(registrationConf)
 	if err != nil {
-		return fmt.Errorf("marshalling elemental config: %w", err)
+		return fmt.Errorf("creating registration config file: %w", err)
 	}
-	return i.fs.WriteFile(registrationConf, configBytes, os.FileMode(600))
+	enc := yaml.NewEncoder(file)
+	if err := enc.Encode(config); err != nil {
+		return fmt.Errorf("writing registration config to file '%s': %w", registrationConf, err)
+	}
+	if err := enc.Close(); err != nil {
+		return fmt.Errorf("closing encoder: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("closing file '%s': %w", registrationConf, err)
+	}
+	return nil
 }
 
 func (i *installer) getCloudInitConfigs(config elementalv1.Config) ([]string, error) {
@@ -175,6 +177,7 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
 				schema.Stage{
+					If: fmt.Sprintf("[ ! -f %s ]", registrationConf),
 					Directories: []schema.Directory{
 						{
 							Path:        filepath.Dir(registrationConf),

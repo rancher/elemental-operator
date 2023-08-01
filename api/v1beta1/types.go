@@ -51,24 +51,24 @@ type Install struct {
 
 type Reset struct {
 	// +optional
-	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty" mapstructure:"enabled"`
 	// +optional
 	// +kubebuilder:default:=true
-	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty"`
+	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty" mapstructure:"reset-persistent"`
 	// +optional
 	// +kubebuilder:default:=true
-	ResetOEM bool `json:"reset-oem,omitempty" yaml:"reset-oem,omitempty"`
+	ResetOEM bool `json:"reset-oem,omitempty" yaml:"reset-oem,omitempty" mapstructure:"reset-oem"`
 	// +optional
-	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty"`
+	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty" mapstructure:"config-urls"`
 	// +optional
-	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty"`
+	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty" mapstructure:"system-uri"`
 	// +optional
-	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty"`
+	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty" mapstructure:"debug"`
 	// +optional
-	PowerOff bool `json:"poweroff,omitempty" yaml:"poweroff,omitempty"`
+	PowerOff bool `json:"poweroff,omitempty" yaml:"poweroff,omitempty" mapstructure:"poweroff"`
 	// +optional
 	// +kubebuilder:default:=true
-	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty"`
+	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty" mapstructure:"reboot"`
 }
 
 type Registration struct {
