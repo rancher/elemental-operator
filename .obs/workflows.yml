@@ -8,6 +8,9 @@ push_workflow:
         package: elemental-operator-helm
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
+        package: elemental-operator-crds-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev
         package: operator-image
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
@@ -34,6 +37,12 @@ tag_workflow:
         package: elemental-operator-helm
     - trigger_services:
         project: isv:Rancher:Elemental:Staging
+        package: elemental-operator-crds-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Dev
+        package: elemental-operator-crds-helm
+    - trigger_services:
+        project: isv:Rancher:Elemental:Staging
         package: operator-image
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
@@ -56,6 +65,10 @@ pr_workflow:
     - branch_package:
         source_project: isv:Rancher:Elemental:Dev
         source_package: elemental-operator-helm
+        target_project: isv:Rancher:Elemental:PR
+    - branch_package:
+        source_project: isv:Rancher:Elemental:Dev
+        source_package: elemental-operator-crds-helm
         target_project: isv:Rancher:Elemental:PR
     - branch_package:
         source_project: isv:Rancher:Elemental:Dev
