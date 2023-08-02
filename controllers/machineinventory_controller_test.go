@@ -418,8 +418,6 @@ var _ = Describe("handle finalizer", func() {
 			Client: cl,
 		}
 
-		planSecret = &corev1.Secret{}
-
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
 				DeletionTimestamp: &metav1.Time{Time: time.Now()},
@@ -427,6 +425,13 @@ var _ = Describe("handle finalizer", func() {
 				Finalizers:        []string{elementalv1.MachineInventoryFinalizer},
 				Name:              "machine-inventory-suite-finalizer",
 				Namespace:         "default",
+			},
+		}
+
+		planSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      mInventory.Name,
+				Namespace: mInventory.Namespace,
 			},
 		}
 
@@ -462,14 +467,13 @@ var _ = Describe("handle finalizer", func() {
 
 	It("should update secret with reset plan", func() {
 		Expect(cl.Get(ctx, client.ObjectKey{
-			Name:      mInventory.Name,
-			Namespace: mInventory.Namespace,
-		}, mInventory)).To(Succeed())
-
+			Name:      planSecret.Name,
+			Namespace: planSecret.Namespace,
+		}, planSecret)).To(Succeed())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      mInventory.Name,
 			Namespace: mInventory.Namespace,
-		}, planSecret)).To(Succeed())
+		}, mInventory)).To(Succeed())
 
 		wantChecksum, wantPlan, err := r.newResetPlan(ctx)
 		Expect(err).ToNot(HaveOccurred())
@@ -515,7 +519,7 @@ var _ = Describe("handle finalizer", func() {
 		planSecret.Data["applied-checksum"] = []byte("applied")
 		Expect(cl.Update(ctx, planSecret)).To(Succeed())
 
-		// 7. Trigger deletion
+		// 7. Trigger finalizer removal
 		_, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: mInventory.Namespace,
@@ -526,6 +530,49 @@ var _ = Describe("handle finalizer", func() {
 
 		// Check MachineInventory was actually deleted
 		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing resettable annotation when up for deletion", func() {
+		// 6. Manually disable resettable annotation
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation] = "false"
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// 7. Trigger finalizer removal
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check MachineInventory was actually deleted
+		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing finalizer when up for deletion", func() {
+		// 6. Manually remove finalizer
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// Check MachineInventory was actually deleted
+		err := cl.Get(ctx, client.ObjectKey{
 			Name:      mInventory.Name,
 			Namespace: mInventory.Namespace,
 		}, mInventory)

@@ -204,6 +204,8 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 		return fmt.Errorf("getting plan secret: %w", err)
 	}
 
+	fmt.Printf("------------> MachineInventory: %+v", mInventory)
+	fmt.Printf("------------> PlanSecret: %+v", planSecret)
 	if !util.IsObjectOwned(&planSecret.ObjectMeta, mInventory.UID) {
 		return fmt.Errorf("secret already exists and was not created by this controller")
 	}
