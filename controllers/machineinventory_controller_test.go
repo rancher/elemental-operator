@@ -47,8 +47,9 @@ var _ = Describe("reconcile machine inventory", func() {
 
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "machine-inventory-suite",
-				Namespace: "default",
+				Finalizers: []string{elementalv1.MachineInventoryFinalizer},
+				Name:       "machine-inventory-suite",
+				Namespace:  "default",
 			},
 		}
 
