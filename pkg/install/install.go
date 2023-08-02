@@ -45,6 +45,15 @@ const (
 	registrationState = "/oem/registration/state.yaml"
 )
 
+// Temporary cloud-init configuration files.
+// These paths will be passed to the `elemental` cli as additional `config-urls`.
+const (
+	tempRegistrationConf  = "/tmp/elemental-registration-conf.yaml"
+	tempRegistrationState = "/tmp/elemental-registration-state.yaml"
+	tempCloudInit         = "/tmp/elemental-cloud-init.yaml"
+	tempSystemAgent       = "/tmp/elemental-system-agent.yaml"
+)
+
 type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State) error
 	InstallElemental(config elementalv1.Config, state register.State) error
@@ -107,6 +116,9 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 	return nil
 }
 
+// getCloudInitConfigs creates cloud-init configuration files that can be passed as additional `config-urls`
+// to the `elemental` cli. We exploit this mechanism to persist information during `elemental install`
+// or `elemental reset` calls into the newly installed or resetted system.
 func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State) ([]string, error) {
 	configs := []string{}
 	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
@@ -139,7 +151,7 @@ func (i *installer) getCloudInitConfigs(config elementalv1.Config, state registe
 }
 
 func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string, error) {
-	f, err := i.fs.Create("/tmp/elemental-registration-conf.yaml")
+	f, err := i.fs.Create(tempRegistrationConf)
 	if err != nil {
 		return "", fmt.Errorf("creating temporary registration conf plan file: %w", err)
 	}
@@ -153,7 +165,7 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 		return "", fmt.Errorf("marshalling registration config: %w", err)
 	}
 
-	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
 		Name: "Include registration config into installed system",
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
@@ -174,13 +186,14 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 				},
 			},
 		},
-	})
-
-	return f.Name(), err
+	}); err != nil {
+		return "", fmt.Errorf("writing encoded registration config config: %w", err)
+	}
+	return f.Name(), nil
 }
 
 func (i *installer) writeRegistrationState(state register.State) (string, error) {
-	f, err := i.fs.Create("/tmp/elemental-registration-state.yaml")
+	f, err := i.fs.Create(tempRegistrationState)
 	if err != nil {
 		return "", fmt.Errorf("creating temporary registration state plan file: %w", err)
 	}
@@ -190,7 +203,7 @@ func (i *installer) writeRegistrationState(state register.State) (string, error)
 		return "", fmt.Errorf("marshalling registration state: %w", err)
 	}
 
-	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
 		Name: "Include registration state into installed system",
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
@@ -211,12 +224,14 @@ func (i *installer) writeRegistrationState(state register.State) (string, error)
 				},
 			},
 		},
-	})
-	return f.Name(), err
+	}); err != nil {
+		return "", fmt.Errorf("writing encoded registration state config: %w", err)
+	}
+	return f.Name(), nil
 }
 
 func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error) {
-	f, err := i.fs.Create("/tmp/elemental-cloud-init.yaml")
+	f, err := i.fs.Create(tempCloudInit)
 	if err != nil {
 		return "", fmt.Errorf("creating temporary cloud init file: %w", err)
 	}
@@ -228,8 +243,10 @@ func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) 
 	}
 
 	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
-	_, err = f.Write(bytes)
-	return f.Name(), err
+	if _, err = f.Write(bytes); err != nil {
+		return "", fmt.Errorf("writing cloud config: %w", err)
+	}
+	return f.Name(), nil
 }
 
 func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
@@ -291,20 +308,21 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 		},
 	})
 
-	f, err := i.fs.Create("/tmp/elemental-system-agent.yaml")
+	f, err := i.fs.Create(tempSystemAgent)
 	if err != nil {
 		return "", fmt.Errorf("creating temporary elemental-system-agent file: %w", err)
 	}
 	defer f.Close()
 
-	err = yaml.NewEncoder(f).Encode(schema.YipConfig{
+	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
 		Name: "Elemental System Agent Configuration",
 		Stages: map[string][]schema.Stage{
 			"initramfs": stages,
 		},
-	})
-
-	return f.Name(), err
+	}); err != nil {
+		return "", fmt.Errorf("writing encoded system agent config: %w", err)
+	}
+	return f.Name(), nil
 }
 
 func (i *installer) cleanupResetPlan() error {
@@ -314,6 +332,7 @@ func (i *installer) cleanupResetPlan() error {
 	}
 	if os.IsNotExist(err) {
 		log.Debugf("local reset plan '%s' does not exist, nothing to do", controllers.LocalResetPlanPath)
+		return nil
 	}
 	return i.fs.Remove(controllers.LocalResetPlanPath)
 }
