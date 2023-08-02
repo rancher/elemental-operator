@@ -124,9 +124,10 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 		// The object is not being deleted, so register the finalizer
 		if !controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
 			controllerutil.AddFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
-			if err := r.Update(ctx, mInventory); err != nil {
-				return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
-			}
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+			// if err := r.Update(ctx, mInventory); err != nil {
+			// 	return ctrl.Result{}, fmt.Errorf("updating machine inventory finalizer: %w", err)
+			// }
 		}
 	} else {
 		// The object is up for deletion
