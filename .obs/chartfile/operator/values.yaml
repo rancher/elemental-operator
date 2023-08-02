@@ -1,17 +1,17 @@
 image:
   empty: rancher/pause:3.1
-  repository: "%%IMG_REPO%%/rancher/elemental-operator/5.3"
+  repository: "%%IMG_REPO%%/rancher/elemental-operator"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 seedImage:
-  repository: "%%IMG_REPO%%/rancher/seedimage-builder/5.3"
+  repository: "%%IMG_REPO%%/rancher/seedimage-builder"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 channel:
-  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel/5.3" 
-  tag: latest
+  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel" 
+  tag: "%VESION%"
 
 # number of operator replicas to deploy
 replicas: 1
