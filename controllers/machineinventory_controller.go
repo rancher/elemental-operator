@@ -104,7 +104,8 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 
 	mInventory.Status = *machineInventoryStatusCopy
 
-	if err := r.Status().Patch(ctx, mInventory, patchBase); err != nil {
+	// If the object was waiting for deletion and we just removed the finalizer, we will get a not found error
+	if err := r.Status().Patch(ctx, mInventory, patchBase); err != nil && !apierrors.IsNotFound(err) {
 		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory object: %w", err))
 	}
 
@@ -138,6 +139,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 				})
 				return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
 			}
+			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, nil
 	}
@@ -262,13 +264,6 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 			Name:      planSecret.Name,
 		},
 	}
-
-	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-		Type:    elementalv1.ReadyCondition,
-		Reason:  elementalv1.WaitingForPlanReason,
-		Status:  metav1.ConditionFalse,
-		Message: "waiting for reset plan to be applied",
-	})
 
 	return nil
 }
