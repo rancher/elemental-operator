@@ -275,14 +275,14 @@ var _ = Describe("elemental-register --reset", Label("registration", "cli", "res
 		BeforeEach(func() {
 			marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
 			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
-			stateHandler.EXPECT().Load().Return(stateFixture, nil)
-			stateHandler.EXPECT().Save(stateFixture).Return(nil)
+			stateHandler.EXPECT().Load().Times(0) // When resetting expect new state to be initialized
+			stateHandler.EXPECT().Save(register.State{}).Return(nil)
 		})
 		It("should trigger reset when --reset argument", func() {
 			cmd.SetArgs([]string{"--reset"})
-			installer.EXPECT().ResetElemental(alternateConfigFixture).Return(nil)
+			installer.EXPECT().ResetElemental(alternateConfigFixture, register.State{}).Return(nil)
 			client.EXPECT().
-				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
+				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &register.State{}).
 				Return(marshalToBytes(alternateConfigFixture), nil)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})

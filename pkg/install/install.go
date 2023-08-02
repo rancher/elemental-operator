@@ -46,8 +46,7 @@ const (
 )
 
 type Installer interface {
-	WriteConfig(config elementalv1.Config) error
-	ResetElemental(config elementalv1.Config) error
+	ResetElemental(config elementalv1.Config, state register.State) error
 	InstallElemental(config elementalv1.Config, state register.State) error
 }
 
@@ -70,16 +69,10 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		config.Elemental.Install.ConfigURLs = []string{}
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
-	registrationStatePath, err := i.writeRegistrationState(state)
-
-	if err != nil {
-		return fmt.Errorf("writing registration state plan: %w", err)
-	}
-	additionalConfigs = append(additionalConfigs, registrationStatePath)
 
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
 
@@ -91,12 +84,12 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 	return nil
 }
 
-func (i *installer) ResetElemental(config elementalv1.Config) error {
+func (i *installer) ResetElemental(config elementalv1.Config, state register.State) error {
 	if config.Elemental.Reset.ConfigURLs == nil {
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
@@ -114,25 +107,7 @@ func (i *installer) ResetElemental(config elementalv1.Config) error {
 	return nil
 }
 
-func (i *installer) WriteConfig(config elementalv1.Config) error {
-	file, err := i.fs.Create(registrationConf)
-	if err != nil {
-		return fmt.Errorf("creating registration config file: %w", err)
-	}
-	enc := yaml.NewEncoder(file)
-	if err := enc.Encode(config); err != nil {
-		return fmt.Errorf("writing registration config to file '%s': %w", registrationConf, err)
-	}
-	if err := enc.Close(); err != nil {
-		return fmt.Errorf("closing encoder: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("closing file '%s': %w", registrationConf, err)
-	}
-	return nil
-}
-
-func (i *installer) getCloudInitConfigs(config elementalv1.Config) ([]string, error) {
+func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State) ([]string, error) {
 	configs := []string{}
 	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
 	if err != nil {
@@ -153,6 +128,12 @@ func (i *installer) getCloudInitConfigs(config elementalv1.Config) ([]string, er
 		return nil, fmt.Errorf("writing registration conf plan: %w", err)
 	}
 	configs = append(configs, registrationConfPath)
+
+	registrationStatePath, err := i.writeRegistrationState(state)
+	if err != nil {
+		return nil, fmt.Errorf("writing registration state plan: %w", err)
+	}
+	configs = append(configs, registrationStatePath)
 
 	return configs, nil
 }

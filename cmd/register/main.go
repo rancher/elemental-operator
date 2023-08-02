@@ -89,9 +89,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := stateHandler.Init(statePath); err != nil {
 				return fmt.Errorf("initializing state handler on path '%s': %w", statePath, err)
 			}
-			registrationState, err := stateHandler.Load()
+			registrationState, err := getRegistrationState(stateHandler, reset)
 			if err != nil {
-				return fmt.Errorf("loading registration state: %w", err)
+				return fmt.Errorf("getting registration state: %w", err)
 			}
 			// Determine if registration should execute or skip a cycle
 			if !installation && !reset && !registrationState.HasLastUpdateElapsed(registrationUpdateSuppressTimer) {
@@ -102,13 +102,6 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			caCert, err := getRegistrationCA(fs, cfg)
 			if err != nil {
 				return fmt.Errorf("validating CA: %w", err)
-			}
-			// Reset
-			// TODO: Add `MsgReset` to protocol so that it is possible to fetch the remote MachineRegistration
-			if reset {
-				log.Info("Resetting Elemental")
-				log.Debugf("Using config: %+v", cfg)
-				return installer.ResetElemental(cfg)
 			}
 			// Register (and fetch the remote MachineRegistration)
 			data, err := client.Register(cfg.Elemental.Registration, caCert, &registrationState)
@@ -130,10 +123,10 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 					return fmt.Errorf("installing elemental: %w", err)
 				}
 			}
-			// Persist config in default path
-			log.Debug("Persisting configuration")
-			if err := installer.WriteConfig(cfg); err != nil {
-				return fmt.Errorf("persisting updated configuration: %w", err)
+			// Reset
+			if reset {
+				log.Info("Resetting Elemental")
+				return installer.ResetElemental(cfg, registrationState)
 			}
 
 			return nil
@@ -160,6 +153,18 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	return cmd
+}
+
+func getRegistrationState(stateHandler register.StateHandler, reset bool) (register.State, error) {
+	// If we are resetting, we create an empty state to perform an initial registration.
+	if reset {
+		return register.State{}, nil
+	}
+	registrationState, err := stateHandler.Load()
+	if err != nil {
+		return register.State{}, fmt.Errorf("loading registration state: %w", err)
+	}
+	return registrationState, nil
 }
 
 func initConfig(fs vfs.FS) error {
