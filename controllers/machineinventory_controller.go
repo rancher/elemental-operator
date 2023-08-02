@@ -99,7 +99,7 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 	machineInventoryStatusCopy := mInventory.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, mInventory, patchBase); err != nil {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch machine inventory object: %w", err))
 	}
 
 	mInventory.Status = *machineInventoryStatusCopy
