@@ -19,6 +19,7 @@ package install
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/controllers"
 	climocks "github.com/rancher/elemental-operator/pkg/elementalcli/mocks"
 	"github.com/rancher/elemental-operator/pkg/register"
 )
@@ -128,7 +130,7 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 	var cliRunner *climocks.MockRunner
 	var install Installer
 	BeforeEach(func() {
-		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": ""})
+		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": "", "/oem/init": ""})
 		Expect(err).ToNot(HaveOccurred())
 		mockCtrl := gomock.NewController(GinkgoT())
 		cliRunner = climocks.NewMockRunner(mockCtrl)
@@ -138,12 +140,19 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		}
 		DeferCleanup(fsCleanup)
 	})
-	It("should call elemental install", func() {
+	It("should call elemental reset", func() {
 		wantConfig := configFixture.DeepCopy()
 		wantConfig.Elemental.Reset.ConfigURLs = append(wantConfig.Elemental.Reset.ConfigURLs, additionalConfigs(fs)...)
 		cliRunner.EXPECT().Reset(wantConfig.Elemental.Reset).Return(nil)
 		Expect(install.ResetElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
 		checkConfigs(fs)
+	})
+	It("should remove reset plan", func() {
+		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(600))).ToNot(HaveOccurred())
+		cliRunner.EXPECT().Reset(gomock.Any()).Return(nil)
+		Expect(install.ResetElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
+		_, err := fs.Stat(controllers.LocalResetPlanPath)
+		Expect(err).To(MatchError(os.ErrNotExist))
 	})
 })
 
