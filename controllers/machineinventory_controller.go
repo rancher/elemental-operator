@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -192,8 +193,7 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 	}
 
 	if mInventory.Status.Plan == nil || mInventory.Status.Plan.PlanSecretRef == nil {
-		logger.V(log.DebugDepth).Info("Machine inventory plan reference not set yet. Creating new empty plan.")
-		return r.createPlanSecret(ctx, mInventory) // Recover from this unexpected state by creating a new empty plan secret
+		return errors.New("machine inventory plan secret does not exist")
 	}
 
 	planSecret := &corev1.Secret{}
