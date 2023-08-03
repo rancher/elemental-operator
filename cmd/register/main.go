@@ -176,7 +176,7 @@ func initConfig(fs vfs.FS) error {
 		log.EnableDebugLogging()
 	}
 	// If we are installing from a live environment, the default config path must be updated
-	if installation && (configPath == defaultConfigPath) {
+	if installation {
 		configPath = defaultLiveConfigPath
 		statePath = defaultLiveStatePath
 	}
