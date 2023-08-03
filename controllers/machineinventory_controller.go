@@ -52,7 +52,7 @@ import (
 // Timeout to validate machine inventory adoption
 const adoptionTimeout = 5
 
-const LocalResetPlanPath = "/oem/reset-plan.yaml"
+const LocalResetPlanPath = "/oem/reset-cloud-config.yaml"
 
 // MachineInventoryReconciler reconciles a MachineInventory object.
 type MachineInventoryReconciler struct {
