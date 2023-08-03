@@ -122,11 +122,15 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				if err := installer.InstallElemental(cfg, registrationState); err != nil {
 					return fmt.Errorf("installing elemental: %w", err)
 				}
+				return nil
 			}
 			// Reset
 			if reset {
 				log.Info("Resetting Elemental")
-				return installer.ResetElemental(cfg, registrationState)
+				if err := installer.ResetElemental(cfg, registrationState); err != nil {
+					return fmt.Errorf("resetting elemental: %w", err)
+				}
+				return nil
 			}
 
 			return nil
