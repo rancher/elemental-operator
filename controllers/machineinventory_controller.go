@@ -212,7 +212,7 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 
 	if !annotationFound || planType != elementalv1.PlanTypeReset {
 		logger.V(log.DebugDepth).Info("Non reset plan type found. Updating it with new reset plan.")
-		return r.updatePlanSecretWithReset(ctx, mInventory)
+		return r.updatePlanSecretWithReset(ctx, mInventory, planSecret)
 	}
 
 	logger.V(log.DebugDepth).Info("Reset plan type found. Updating status and determine whether it was successfully applied.")
@@ -227,18 +227,10 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 	return nil
 }
 
-func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
+func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Context, mInventory *elementalv1.MachineInventory, planSecret *corev1.Secret) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Updating Secret with Reset plan")
-
-	planSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: mInventory.Namespace,
-		Name:      mInventory.Name,
-	}, planSecret); err != nil {
-		return fmt.Errorf("getting plan secret: %w", err)
-	}
 
 	checksum, resetPlan, err := r.newResetPlan(ctx)
 	if err != nil {
