@@ -47,6 +47,7 @@ func (r *runner) Install(conf elementalv1.Install) error {
 	if conf.Debug {
 		installerOpts = append(installerOpts, "--debug")
 	}
+
 	if conf.ConfigDir != "" {
 		installerOpts = append(installerOpts, "--config-dir", conf.ConfigDir)
 	}

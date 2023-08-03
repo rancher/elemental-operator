@@ -105,7 +105,7 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 	machineInventorySelectorStatusCopy := machineInventorySelector.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, machineInventorySelector, patchBase); err != nil {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory selector object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch machine inventory selector object: %w", err))
 	}
 
 	machineInventorySelector.Status = *machineInventorySelectorStatusCopy

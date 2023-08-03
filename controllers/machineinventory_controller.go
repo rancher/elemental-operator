@@ -84,7 +84,8 @@ func (r *MachineInventoryReconciler) Reconcile(ctx context.Context, req reconcil
 		return reconcile.Result{}, fmt.Errorf("failed to get machine inventory object: %w", err)
 	}
 
-	patchBase := client.MergeFrom(mInventory.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically overlap with other controllers (e.g. backup and restore)
+	patchBase := client.MergeFromWithOptions(mInventory.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	// We have to sanitize the conditions because old API definitions didn't have proper validation.
 	mInventory.Status.Conditions = util.RemoveInvalidConditions(mInventory.Status.Conditions)
