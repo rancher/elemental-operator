@@ -38,7 +38,6 @@ import (
 )
 
 const (
-	stateInstallFile  = "/run/initramfs/cos-state/state.yaml"
 	agentStateDir     = "/var/lib/elemental/agent"
 	agentConfDir      = "/etc/rancher/elemental/agent"
 	registrationConf  = "/oem/registration/config.yaml"
