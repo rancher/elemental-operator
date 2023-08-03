@@ -121,7 +121,7 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 
 	logger.Info("Reconciling machineinventory object")
 
-	if mInventory.GetDeletionTimestamp().IsZero() {
+	if mInventory.GetDeletionTimestamp() == nil || mInventory.GetDeletionTimestamp().IsZero() {
 		// The object is not being deleted, so register the finalizer
 		if !controllerutil.ContainsFinalizer(mInventory, elementalv1.MachineInventoryFinalizer) {
 			controllerutil.AddFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
