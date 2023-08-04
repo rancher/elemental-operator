@@ -18,6 +18,7 @@ package util
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -119,4 +120,11 @@ func IsHTTP(uri string) bool {
 	}
 
 	return strings.HasPrefix(parsed.Scheme, "http")
+}
+
+func PlanChecksum(input []byte) string {
+	h := sha256.New()
+	h.Write(input)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

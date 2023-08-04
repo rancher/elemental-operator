@@ -705,6 +705,30 @@ spec:
                           url:
                             type: string
                         type: object
+                      reset:
+                        properties:
+                          config-urls:
+                            items:
+                              type: string
+                            type: array
+                          debug:
+                            type: boolean
+                          enabled:
+                            type: boolean
+                          poweroff:
+                            type: boolean
+                          reboot:
+                            default: true
+                            type: boolean
+                          reset-oem:
+                            default: true
+                            type: boolean
+                          reset-persistent:
+                            default: true
+                            type: boolean
+                          system-uri:
+                            type: string
+                        type: object
                       system-agent:
                         properties:
                           secret-name:

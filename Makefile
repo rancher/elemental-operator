@@ -229,7 +229,7 @@ build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
 	$(MAKE) build-rbac
 
-ALL_VERIFY_CHECKS = manifests vendor
+ALL_VERIFY_CHECKS = manifests vendor generate
 
 .PHONY: verify
 verify: $(addprefix verify-,$(ALL_VERIFY_CHECKS))
@@ -243,6 +243,13 @@ verify-manifests: build-manifests
 
 .PHONY: verify-vendor
 verify-vendor: vendor
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi
+
+.PHONY: verify-generate
+verify-generate: generate
 	@if !(git diff --quiet HEAD); then \
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
