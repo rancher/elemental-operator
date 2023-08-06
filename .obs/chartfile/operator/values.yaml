@@ -11,7 +11,7 @@ seedImage:
 
 channel:
   repository: "%%IMG_REPO%%/rancher/elemental-teal-channel" 
-  tag: "%VESION%"
+  tag: "%VERSION%"
 
 # number of operator replicas to deploy
 replicas: 1
