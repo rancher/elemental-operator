@@ -26,6 +26,9 @@ global:
   cattle:
     systemDefaultRegistry: ""
 
+# used only if systemDefaultRegistry is empty
+registry_url: ""
+
 # enable debug output for operator
 debug: false
 
