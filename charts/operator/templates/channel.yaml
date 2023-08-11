@@ -6,6 +6,6 @@ metadata:
   namespace: fleet-default
 spec:
   options:
-    image: {{ template "system_default_registry" . }}{{ .Values.channel.repository }}:{{ .Values.channel.tag }}
+    image: {{ template "registry_url" . }}{{ .Values.channel.repository }}:{{ .Values.channel.tag }}
   type: custom
 {{ end }}

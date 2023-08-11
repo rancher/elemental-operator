@@ -24,7 +24,7 @@ spec:
         {{- end }}
         name: {{ .Release.Name }}
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
-        image: {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        image: {{ template "registry_url" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         args:
         - operator
         {{- if .Values.debug }}
@@ -34,9 +34,9 @@ spec:
         - --namespace
         - {{ .Release.Namespace }}
         - --operator-image
-        - {{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+        - {{ template "registry_url" . }}{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
         - --seedimage-image
-        - {{ template "system_default_registry" . }}{{ .Values.seedImage.repository }}:{{ .Values.seedImage.tag | default .Chart.AppVersion }}
+        - {{ template "registry_url" . }}{{ .Values.seedImage.repository }}:{{ .Values.seedImage.tag | default .Chart.AppVersion }}
         - --seedimage-image-pullpolicy
         - {{ .Values.seedImage.imagePullPolicy}}
       serviceAccountName: {{ .Release.Name }}
