@@ -1,16 +1,16 @@
 image:
   empty: rancher/pause:3.1
-  repository: "%%IMG_REPO%%/rancher/elemental-operator"
+  repository: "rancher/elemental-operator"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 seedImage:
-  repository: "%%IMG_REPO%%/rancher/seedimage-builder"
+  repository: "rancher/seedimage-builder"
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
 channel:
-  repository: "%%IMG_REPO%%/rancher/elemental-teal-channel" 
+  repository: "rancher/elemental-teal-channel"
   tag: "%VERSION%"
 
 # number of operator replicas to deploy
@@ -25,6 +25,9 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
+
+# used only if systemDefaultRegistry is empty
+registry_url: "%%IMG_REPO%%"
 
 # enable debug output for operator
 debug: false
