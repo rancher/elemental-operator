@@ -10,7 +10,8 @@ concurrency:
 jobs:
   push-docker:
     env:
-      REPO: ttl.sh/elemental-operator-ci
+      REGISTRY_URL: ttl.sh
+      REPO: elemental-operator-ci
     runs-on: ubuntu-latest
     outputs:
       chart_name: ${{ steps.chart.outputs.chart_name }}
@@ -31,7 +32,7 @@ jobs:
         uses: docker/metadata-action@v4.1.1
         with:
           images: |
-            ${{ env.REPO }}
+            ${{ env.REGISTRY_URL}}/${{ env.REPO }}
           tags: |
             type=sha,format=short,prefix=${{ steps.export_tag.outputs.operator_tag }}-
       - name: Set up Docker Buildx
@@ -52,7 +53,7 @@ jobs:
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
       - name: Make chart
-        run: REPO=${{ env.REPO }} make chart
+        run: REPO=${{ env.REPO }} REGISTRY_URL=${{ env.REGISTRY_URL }} make chart
       - name: Set chart output
         id: chart
         run: |
