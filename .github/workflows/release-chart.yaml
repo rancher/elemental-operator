@@ -1,0 +1,61 @@
+name: Build and publish staging or stable charts
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build"
+        required: true
+        type: string
+      release:
+        description: "Release stable versions, staging otherwise"
+        type: boolean
+        default: false
+
+jobs:
+  stable-charts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Log inputs
+        run: echo "${{ toJSON(github.event.inputs) }}"
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
+      - name: Build and publish OBS staging charts
+        if: inputs.release == false
+        uses: "./.github/actions/chart"
+        with:
+          build_env: staging
+      - name: Build and publish OBS stable charts
+        if: inputs.release == true 
+        uses: "./.github/actions/chart"
+        with:
+          build_env: stable
+          keep_previous: yes
+      - name: Clear built artifacts
+        if: inputs.release == true
+        shell: bash
+        run: |
+          rm -rf build/*
+      - name: Build and publish IBS charts
+        if: inputs.release == true
+        uses: "./.github/actions/chart"
+        with:
+          build_env: stable
+          keep_previous: yes
+          ibs_release: yes
+      - name: create release
+        if: inputs.release == true
+        uses: ncipollo/release-action@v1
+        id: create_release
+        with:
+          tag: ${{ inputs.tag }}
+          draft: false
+          prerelease: true
+          generateReleaseNotes: true
+          artifacts: "build/*"
+          updateOnlyUnreleased: true
+          allowUpdates: true
