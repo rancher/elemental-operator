@@ -1,4 +1,0 @@
-apiVersion: v2
-name: elemental-operator-crds-migration
-decription: A Helm chart for enabling the upgrade from Elemental Operator releases < 1.2.4
-version: 0.0.1
