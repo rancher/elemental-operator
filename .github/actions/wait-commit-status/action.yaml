@@ -1,0 +1,40 @@
+name: Wait for commit status
+
+inputs:
+  repository:
+    required: true
+  commit:
+    required: true
+  context:
+    required: true
+  status:
+    required: true
+  interval:
+    required: false
+    default: 30
+  retries:
+    required: false
+    default: 5
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for commit status ${{ inputs.context }}
+      shell: bash
+      env:
+        REPO: ${{ inputs.repository }}
+        COMMIT: ${{ inputs.commit }}
+        CONTEXT: ${{ inputs.context }}
+        STATUS: ${{ inputs.status }}
+        SLEEP: ${{ inputs.interval }}
+        RETRIES: ${{ inputs.retries }}
+      run: |
+        QUERY_URL=https://api.github.com/repos/${REPO}/statuses/${COMMIT}
+        JQ_SELECTOR="select((.context==\"${CONTEXT}\") and (.state==\"${STATUS}\"))"
+
+        for i in $(seq ${RETRIES}); do
+          RESULT=$(curl -s "${QUERY_URL}" | jq "[.[] | ${JQ_SELECTOR}][0]")
+          [ "${RESULT}" != "null" ] && break
+          [ "${i}" != "${RETRIES}" ] && echo "Waiting" && sleep ${SLEEP}
+        done
+        [ "${RESULT}" != "null" ] || exit 1

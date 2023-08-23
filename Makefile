@@ -4,7 +4,6 @@ GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
 CHART_VERSION?=$(subst v,,$(GIT_TAG))
 TAG?=${GIT_TAG}
 REPO?=rancher/elemental-operator
-REPO_REGISTER?=rancher/elemental-register
 TAG_SEEDIMAGE?=${CHART_VERSION}
 REPO_SEEDIMAGE?=rancher/seedimage-builder
 TAG_CHANNEL?=${CHART_VERSION}
@@ -102,16 +101,6 @@ build-docker-operator:
 		--build-arg "COMMITDATE=${COMMITDATE}" \
 		-t ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} .
 
-.PHONY: build-docker-register
-build-docker-register:
-	DOCKER_BUILDKIT=1 docker build \
-		-f Dockerfile \
-		--target elemental-register \
-		--build-arg "TAG=${GIT_TAG}" \
-		--build-arg "COMMIT=${GIT_COMMIT}" \
-		--build-arg "COMMITDATE=${COMMITDATE}" \
-		-t ${REGISTRY_HEADER}${REPO_REGISTER}:${CHART_VERSION} .
-
 .PHONY: build-docker-seedimage-builder
 build-docker-seedimage-builder:
 	DOCKER_BUILDKIT=1 docker build \
@@ -121,10 +110,6 @@ build-docker-seedimage-builder:
 .PHONY: build-docker-push-operator
 build-docker-push-operator: build-docker-operator
 	docker push ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
-
-.PHONY: build-docker-push-register
-build-docker-push-register: build-docker-register
-	docker push ${REGISTRY_HEADER}${REPO_REGISTER}:${CHART_VERSION}
 
 .PHONY: build-docker-push-seedimage-builder
 build-docker-push-seedimage-builder: build-docker-seedimage-builder
