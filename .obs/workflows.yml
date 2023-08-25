@@ -24,34 +24,19 @@ push_workflow:
 tag_workflow:
   steps:
     - trigger_services:
-        project: isv:Rancher:Elemental:Staging
-        package: elemental-operator
-    - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: elemental-operator
-    - trigger_services:
-        project: isv:Rancher:Elemental:Staging
-        package: elemental-operator-helm
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: elemental-operator-helm
     - trigger_services:
-        project: isv:Rancher:Elemental:Staging
-        package: elemental-operator-crds-helm
-    - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: elemental-operator-crds-helm
-    - trigger_services:
-        project: isv:Rancher:Elemental:Staging
-        package: operator-image
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
         package: operator-image
     - trigger_services:
         project: isv:Rancher:Elemental:Dev
-        package: seedimage-builder
-    - trigger_services:
-        project: isv:Rancher:Elemental:Staging
         package: seedimage-builder
   filters:
     event: tag_push
