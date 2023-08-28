@@ -23,13 +23,15 @@ runs:
         IBS_RELEASE: ${{ inputs.ibs_release }}
       run: |
         if [ "${IBS_RELEASE}" == "yes" ]; then
-          echo "B_REPO=registry.suse.com" >> $GITHUB_OUTPUT 
+          echo "build_repo=registry.suse.com" >> $GITHUB_OUTPUT 
+          echo "build_env=release" >> $GITHUB_OUTPUT
         else
-          echo "B_REPO=registry.opensuse.org/isv/rancher/elemental/${B_ENV}/containers" >> $GITHUB_OUTPUT
+          echo "build_repo=registry.opensuse.org/isv/rancher/elemental/${B_ENV}/containers" >> $GITHUB_OUTPUT
+          echo "build_env=${B_ENV}" >> $GITHUB_OUTPUT
         fi
     - name: Build chart for release
       env:
-        B_REPO: ${{ steps.set_repo.outputs.B_REPO }}
+        B_REPO: ${{ steps.set_repo.outputs.build_repo }}
         OPERATOR_REPO: rancher/elemental-operator
         SEEDIMAGE_REPO: rancher/seedimage-builder
         CHANNEL_REPO: rancher/elemental-teal-channel
@@ -40,9 +42,9 @@ runs:
         REPO_SEEDIMAGE=${SEEDIMAGE_REPO} \
         REPO_CHANNEL=${CHANNEL_REPO} \
         make chart
-    - name: Build and push index
+    - name: Push new index and chart to GH pages
       env:
-        B_ENV: ${{ inputs.build_env }}
+        B_ENV: ${{ steps.set_repo.outputs.build_env }}
         KEEP_PREV: ${{ inputs.keep_previous }}
         IBS_RELEASE: ${{ inputs.ibs_release }}
       shell: bash
@@ -51,15 +53,12 @@ runs:
         git config --global user.email "${{ github.actor }}@users.noreply.github.com"
         git config --global user.name "${{ github.actor }}"
         git checkout gh-pages
-        if [ "${IBS_RELEASE}" == "yes" ]; then
-          B_ENV="release"
-        fi
         if [ "${KEEP_PREV}" == "no"  ]; then
           rm -rf ${B_ENV}
         fi
         mkdir -p ${B_ENV}/build
         cp -v build/* ${B_ENV}/build
-        helm repo index --url https://rancher.github.io/elemental-operator ./${B_ENV}
+        helm repo index --url "https://${{ github.repository_owner }}.github.io/elemental-operator/${B_ENV}" ./${B_ENV}
         git add ${B_ENV}/index.yaml ${B_ENV}/build/ -f
         git commit -m "Updating helm dev repo to main commit ${{ github.sha }}"
         git push --set-upstream origin gh-pages
