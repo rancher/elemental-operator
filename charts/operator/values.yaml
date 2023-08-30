@@ -27,7 +27,7 @@ global:
     systemDefaultRegistry: ""
 
 # used only if systemDefaultRegistry is empty
-registry_url: ""
+registryUrl: ""
 
 # enable debug output for operator
 debug: false
