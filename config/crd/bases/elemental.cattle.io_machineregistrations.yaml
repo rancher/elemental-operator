@@ -90,6 +90,10 @@ spec:
                             type: string
                         type: object
                       reset:
+                        default:
+                          reboot: true
+                          reset-oem: true
+                          reset-persistent: true
                         properties:
                           config-urls:
                             items:
