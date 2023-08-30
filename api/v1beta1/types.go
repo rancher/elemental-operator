@@ -102,6 +102,7 @@ type Elemental struct {
 	// +optional
 	Install Install `json:"install,omitempty" yaml:"install,omitempty"`
 	// +optional
+	// +kubebuilder:default:={"reset-persistent":true,"reset-oem":true,"reboot":true}
 	Reset Reset `json:"reset,omitempty" yaml:"reset,omitempty"`
 	// +optional
 	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
