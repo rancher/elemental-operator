@@ -68,7 +68,6 @@ pr_workflow:
           - type: publish
             status: enable
             project: isv:Rancher:Elemental:PR
-            repository: containers
 
   filters:
     event: pull_request
