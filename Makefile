@@ -139,7 +139,7 @@ chart:
 	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.tag = "${TAG}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.repository = "${REPO_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
-	yq -i '.registry_url = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.registryUrl = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
 	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator
 
