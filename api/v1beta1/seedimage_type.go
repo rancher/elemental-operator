@@ -32,7 +32,7 @@ type SeedImageSpec struct {
 	// If when the lifetime elapses the built image is being downloaded, the active
 	// download will be completed before removing the built image.
 	// Default is 60 minutes, set to 0 to disable.
-	// +kubebuilder:default=60
+	// +kubebuilder:default:=60
 	// +optional
 	LifetimeMinutes int32 `json:"cleanupAfterMinutes"`
 	// RetriggerBuild triggers to build again a cleaned up seed image.
