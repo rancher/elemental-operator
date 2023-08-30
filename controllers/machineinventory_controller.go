@@ -275,7 +275,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 					If:   "[ -f /run/cos/recovery_mode ]",
 					Name: "Runs elemental reset",
 					Commands: []string{
-						"elemental-register --debug --reset",
+						"systemctl start elemental-register-reset",
 					},
 				},
 			},
