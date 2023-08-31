@@ -1,7 +1,7 @@
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
-CHART_VERSION?=$(subst v,,$(GIT_TAG))
+CHART_VERSION?=$(shell echo $(GIT_TAG) | sed 's/[a-z]*\([0-9]\(\.[0-9]\)\{0,2\}\).*/\1/g')
 TAG?=${GIT_TAG}
 REPO?=rancher/elemental-operator
 TAG_SEEDIMAGE?=${CHART_VERSION}
