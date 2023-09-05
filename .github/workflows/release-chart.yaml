@@ -9,7 +9,7 @@ on:
       release:
         description: "Release stable versions, staging otherwise"
         type: boolean
-        default: false
+        default: true
 
 jobs:
   stable-charts:
@@ -24,29 +24,17 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.tag }}
-      - name: Build and publish OBS staging charts
+      - name: Publish OBS staging charts
         if: inputs.release == false
         uses: "./.github/actions/chart"
         with:
           build_env: staging
-      - name: Build and publish OBS stable charts
+      - name: Publish OBS stable charts
         if: inputs.release == true 
         uses: "./.github/actions/chart"
         with:
           build_env: stable
           keep_previous: yes
-      - name: Clear built artifacts
-        if: inputs.release == true
-        shell: bash
-        run: |
-          rm -rf build/*
-      - name: Build and publish IBS charts
-        if: inputs.release == true
-        uses: "./.github/actions/chart"
-        with:
-          build_env: stable
-          keep_previous: yes
-          ibs_release: yes
       - name: create release
         if: inputs.release == true
         uses: ncipollo/release-action@v1
