@@ -26,6 +26,9 @@ Usage: $0 [OPTION] ELEMENTAL_OPERATOR_CHART
     [-d|--debug] enable debug output on screen.
     [-h|--help] Usage message.
 
+    ELEMENTAL_OPERATOR_CHART could be either a chart tgz file or an url (in that case will be downloaded first)
+    it could even be 'dev', 'staging' or 'stable' to allow automatic download of the charts.
+
     Parameters could also be set passing env vars:
     CONTAINER_IMAGES_NAME           : $CONTAINER_IMAGES_NAME
     CONTAINER_IMAGES_FILE (-l)      : $CONTAINER_IMAGES_FILE
@@ -35,8 +38,13 @@ Usage: $0 [OPTION] ELEMENTAL_OPERATOR_CHART
     CHART_NAME_CRDS (-c)            : $CHART_NAME_CRDS
     CHART_VERSION (-cv)             : $CHART_VERSION
 
-    example:
-    $0 oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart
+    examples:
+
+    $0 staging
+
+    $0 oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart \\
+      -c oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-crds-chart \\
+      -r LOCAL_AIRGAPPED_REGISTRY
 EOF
 }
 
@@ -88,7 +96,6 @@ parse_parameters() {
             ;;
         esac
     done
-
     if [ "$help" = "true" ]; then
         print_help
         exit 0
@@ -98,6 +105,24 @@ parse_parameters() {
         echo ""
         exit_error "ELEMENTAL_OPERATOR_CHART is a required argument"
     fi
+    case "$CHART_NAME_OPERATOR" in
+        Dev|dev|DEV)
+        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-chart"
+        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-crds-chart"
+        ;;
+        Staging|staging|STAGING)
+        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart"
+        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-crds-chart"
+        ;;
+        Stable|stable|STABLE)
+        CHART_NAME_OPERATOR="oci://registry.suse.com/rancher/elemental-operator-chart"
+        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+            CHART_NAME_CRDS="oci://registry.suse.com/rancher/elemental-operator-crds-chart"
+        ;;
+    esac
+
 }
 
 exit_error() {
@@ -124,7 +149,7 @@ get_chart_val() {
 
     eval $local_var=$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)
     if eval $local_condition ; then
-        exit_error "cannot find \$local_val in $CHART_NAME_OPERATOR (is it an elemental-operator chart?)"
+        exit_error "cannot find \$local_val in $CHART_NAME_OPERATOR (likely not an elemental-operator chart with airgap support)"
     fi
     eval log_debug \"extracted $local_var\\t: \$$local_var\ \($local_val\)\"
 }
@@ -160,7 +185,7 @@ fetch_charts() {
                 exit_error "downloading ${chart}:\n $outstr"
             fi
             eval $c=$(ls -t1 | head -n 1)
-            log_info "Downloaded Elemental Operator chart: $chart"
+            log_info "Downloaded Elemental Operator chart: \$$c"
             ;;
             *)
             [ ! -f "$chart" ] && exit_error "chart file $chart not found"
