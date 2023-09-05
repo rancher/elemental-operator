@@ -8,7 +8,7 @@ concurrency:
 
 jobs:
   prepare-build:
-    name: Prepare chart for PR and wait for image builds
+    name: Wait for the PR project to build
     runs-on: ubuntu-latest
     outputs:
       chart_name: ${{ steps.chart.outputs.chart_name }}
@@ -17,15 +17,33 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - name: Wait for OBS worflow to start
+      - name: Wait for OBS crds chart
         uses: "./.github/actions/wait-commit-status"
         with:
           repository: ${{ github.repository }}
           commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS SCM/CI Workflow Integration started"
+          context: "OBS: elemental-operator-crds-helm - charts/x86_64"
           status: "success"
-          interval: 30
+          interval: 60
           retries: 10
+      - name: Wait for OBS operator chart
+        uses: "./.github/actions/wait-commit-status"
+        with:
+          repository: ${{ github.repository }}
+          commit: ${{ github.event.pull_request.head.sha }}
+          context: "OBS: elemental-operator-helm - charts/x86_64"
+          status: "success"
+          interval: 60
+          retries: 10
+      - name: Wait for OBS elemental-operator package
+        uses: "./.github/actions/wait-commit-status"
+        with:
+          repository: ${{ github.repository }}
+          commit: ${{ github.event.pull_request.head.sha }}
+          context: "OBS: elemental-operator - standard/x86_64"
+          status: "success"
+          interval: 60
+          retries: 30
       - name: Wait for OBS seedimage-builder build
         uses: "./.github/actions/wait-commit-status"
         with:
@@ -44,19 +62,16 @@ jobs:
           status: "success"
           interval: 60
           retries: 30
-      - name: Build chart for release
+      - name: Pull chart for PR
         env:
           PR_NUMBER: ${{ github.event.number }}
-          B_REPO: registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/containers
-          OPERATOR_REPO: rancher/elemental-operator
-          SEEDIMAGE_REPO: rancher/seedimage-builder
-          CHANNEL_REPO: rancher/elemental-teal-channel
+          B_REPO: registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/charts
+          OPERATOR_CHART: rancher/elemental-operator-chart
+          CRDS_CHART: rancher/elemental-operator-crds-chart
         run: |
-          REGISTRY_URL=${B_REPO} \
-          REPO=${OPERATOR_REPO} \
-          REPO_SEEDIMAGE=${SEEDIMAGE_REPO} \
-          REPO_CHANNEL=${CHANNEL_REPO} \
-          make chart
+          mkdir -p build
+          helm pull --debug -d build oci://${B_REPO}/${CRDS_CHART}
+          helm pull -d build oci://${B_REPO}/${OPERATOR_CHART}
       - name: Set chart output
         id: chart
         run: |
