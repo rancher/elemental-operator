@@ -6,13 +6,10 @@ inputs:
   keep_previous:
     required: false
     default: no
-  ibs_release:
-    required: false
-    default: no
 
 runs:
   using: composite
-  steps: 
+  steps:
     - name: Install yq
       uses: mikefarah/yq@v4.28.2
     - name: Set image repositories
@@ -20,33 +17,27 @@ runs:
       shell: bash
       env:
         B_ENV: ${{ inputs.build_env }}
-        IBS_RELEASE: ${{ inputs.ibs_release }}
       run: |
-        if [ "${IBS_RELEASE}" == "yes" ]; then
-          echo "build_repo=registry.suse.com" >> $GITHUB_OUTPUT 
-          echo "build_env=release" >> $GITHUB_OUTPUT
+        if [ "${B_ENV}" == "stable" ]; then
+          echo "build_repo=registry.suse.com" >> $GITHUB_OUTPUT
         else
-          echo "build_repo=registry.opensuse.org/isv/rancher/elemental/${B_ENV}/containers" >> $GITHUB_OUTPUT
-          echo "build_env=${B_ENV}" >> $GITHUB_OUTPUT
+          echo "build_repo=registry.opensuse.org/isv/rancher/elemental/${B_ENV}/charts" >> $GITHUB_OUTPUT
         fi
-    - name: Build chart for release
+    - name: Pull chart from OBS
       env:
         B_REPO: ${{ steps.set_repo.outputs.build_repo }}
-        OPERATOR_REPO: rancher/elemental-operator
-        SEEDIMAGE_REPO: rancher/seedimage-builder
-        CHANNEL_REPO: rancher/elemental-teal-channel
+        OPERATOR_CHART: rancher/elemental-operator-chart
+        CRDS_CHART: rancher/elemental-operator-crds-chart
       shell: bash
       run: |
-        REGISTRY_URL=${B_REPO} \
-        REPO=${OPERATOR_REPO} \
-        REPO_SEEDIMAGE=${SEEDIMAGE_REPO} \
-        REPO_CHANNEL=${CHANNEL_REPO} \
-        make chart
+        mkdir -p build
+        CHART_VERSION=$(git describe --abbrev=0 --tags 2>/dev/null | sed 's/[a-z]*\([0-9]\(\.[0-9]\)\{0,2\}\).*/\1/g')
+        helm pull --debug -d build --version ${CHART_VERSION} oci://${B_REPO}/${CRDS_CHART}
+        helm pull -d build --version ${CHART_VERSION} oci://${B_REPO}/${OPERATOR_CHART}
     - name: Push new index and chart to GH pages
       env:
-        B_ENV: ${{ steps.set_repo.outputs.build_env }}
+        B_ENV: ${{ inputs.build_env }}
         KEEP_PREV: ${{ inputs.keep_previous }}
-        IBS_RELEASE: ${{ inputs.ibs_release }}
       shell: bash
       run: |
         COMMIT=$(git rev-parse HEAD)
