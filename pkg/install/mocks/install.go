@@ -80,3 +80,17 @@ func (mr *MockInstallerMockRecorder) ResetElemental(arg0, arg1 interface{}) *gom
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElemental", reflect.TypeOf((*MockInstaller)(nil).ResetElemental), arg0, arg1)
 }
+
+// WriteLocalSystemAgentConfig mocks base method.
+func (m *MockInstaller) WriteLocalSystemAgentConfig(arg0 v1beta1.Elemental) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteLocalSystemAgentConfig", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WriteLocalSystemAgentConfig indicates an expected call of WriteLocalSystemAgentConfig.
+func (mr *MockInstallerMockRecorder) WriteLocalSystemAgentConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteLocalSystemAgentConfig", reflect.TypeOf((*MockInstaller)(nil).WriteLocalSystemAgentConfig), arg0)
+}
