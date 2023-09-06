@@ -47,6 +47,7 @@ var (
 	debug        bool
 	reset        bool
 	installation bool
+	noToolkit    bool
 	configPath   string
 	statePath    string
 )
@@ -118,17 +119,29 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			}
 			// Install
 			if installation {
-				log.Info("Installing elemental")
-				if err := installer.InstallElemental(cfg, registrationState); err != nil {
-					return fmt.Errorf("installing elemental: %w", err)
+				// Optionally install agent config to local filesystem (no install)
+				if noToolkit {
+					log.Info("Installing local agent config")
+					if err := installer.WriteLocalSystemAgentConfig(cfg.Elemental); err != nil {
+						return fmt.Errorf("Installing local agent config")
+					}
+				} else {
+					log.Info("Installing elemental")
+					if err := installer.InstallElemental(cfg, registrationState); err != nil {
+						return fmt.Errorf("installing elemental: %w", err)
+					}
 				}
 				return nil
 			}
 			// Reset
 			if reset {
-				log.Info("Resetting Elemental")
-				if err := installer.ResetElemental(cfg, registrationState); err != nil {
-					return fmt.Errorf("resetting elemental: %w", err)
+				if noToolkit {
+					log.Warning("Reset not supported for no-toolkit hosts")
+				} else {
+					log.Info("Resetting Elemental")
+					if err := installer.ResetElemental(cfg, registrationState); err != nil {
+						return fmt.Errorf("resetting elemental: %w", err)
+					}
 				}
 				return nil
 			}
@@ -156,6 +169,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
+	cmd.Flags().BoolVar(&noToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	return cmd
 }
 
@@ -180,7 +194,7 @@ func initConfig(fs vfs.FS) error {
 		log.EnableDebugLogging()
 	}
 	// If we are installing from a live environment, the default config path must be updated
-	if installation {
+	if installation && !cfg.Elemental.Registration.NoToolkit {
 		configPath = defaultLiveConfigPath
 		statePath = defaultLiveStatePath
 	}

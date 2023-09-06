@@ -56,6 +56,7 @@ const (
 type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State) error
 	InstallElemental(config elementalv1.Config, state register.State) error
+	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
 }
 
 func NewInstaller(fs vfs.FS) Installer {
@@ -248,7 +249,7 @@ func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) 
 	return f.Name(), nil
 }
 
-func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
+func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte, error) {
 	kubeConfig := api.Config{
 		Kind:       "Config",
 		APIVersion: "v1",
@@ -277,6 +278,14 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 		SecretName: config.SystemAgent.SecretName,
 	}
 
+	connectionInfoBytes, err := json.Marshal(connectionInfo)
+	if err != nil {
+		return nil, fmt.Errorf("encoding connectionInfo: %w", err)
+	}
+	return connectionInfoBytes, nil
+}
+
+func (i *installer) getAgentConfigBytes() ([]byte, error) {
 	agentConfig := agent.AgentConfig{
 		WorkDir:            filepath.Join(agentStateDir, "work"),
 		AppliedPlanDir:     filepath.Join(agentStateDir, "applied"),
@@ -287,8 +296,61 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 		PreserveWorkDir:    false,
 	}
 
-	connectionInfoBytes, _ := json.Marshal(connectionInfo)
-	agentConfigBytes, _ := json.Marshal(agentConfig)
+	agentConfigBytes, err := json.Marshal(agentConfig)
+	if err != nil {
+		return nil, fmt.Errorf("encoding agentConfig: %w", err)
+	}
+	return agentConfigBytes, nil
+}
+
+// Write system agent config files to local filesystem
+func (i *installer) WriteLocalSystemAgentConfig(config elementalv1.Elemental) error {
+	connectionInfoBytes, err := i.getConnectionInfoBytes(config)
+	if err != nil {
+		return fmt.Errorf("getting connection info: %w", err)
+	}
+	if _, err := i.fs.Stat(agentStateDir); os.IsNotExist(err) {
+		log.Debugf("agent state dir '%s' does not exist. Creating now.", agentStateDir)
+		if err := vfs.MkdirAll(i.fs, agentStateDir, 0700); err != nil {
+			return fmt.Errorf("creating agent state directory: %w", err)
+		}
+	}
+	connectionInfoFile := filepath.Join(agentStateDir, "elemental_connection.json")
+	err = os.WriteFile(connectionInfoFile, connectionInfoBytes, 0600)
+	if err != nil {
+		return fmt.Errorf("writing connection info file: %w", err)
+	}
+	log.Infof("connection info file '%s' written.", connectionInfoFile)
+
+	agentConfigBytes, err := i.getAgentConfigBytes()
+	if err != nil {
+		return fmt.Errorf("getting agent config: %w", err)
+	}
+	if _, err := i.fs.Stat(agentConfDir); os.IsNotExist(err) {
+		log.Debugf("agent config dir '%s' does not exist. Creating now.", agentConfDir)
+		if err := vfs.MkdirAll(i.fs, agentConfDir, 0700); err != nil {
+			return fmt.Errorf("creating agent config directory: %w", err)
+		}
+	}
+	agentConfigFile := filepath.Join(agentConfDir, "config.yaml")
+	err = os.WriteFile(agentConfigFile, agentConfigBytes, 0600)
+	if err != nil {
+		return fmt.Errorf("writing agent config file: %w", err)
+	}
+	log.Infof("agent config file '%s' written.", agentConfigFile)
+	return nil
+}
+
+// Write system agent cloud-init config to be consumed by install
+func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
+	connectionInfoBytes, err := i.getConnectionInfoBytes(config)
+	if err != nil {
+		return "", fmt.Errorf("getting connection info: %w", err)
+	}
+	agentConfigBytes, err := i.getAgentConfigBytes()
+	if err != nil {
+		return "", fmt.Errorf("getting agent config: %w", err)
+	}
 
 	var stages []schema.Stage
 
