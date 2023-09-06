@@ -32,7 +32,7 @@ runs:
       run: |
         mkdir -p build
         CHART_VERSION=$(git describe --abbrev=0 --tags 2>/dev/null | sed 's/[a-z]*\([0-9]\(\.[0-9]\)\{0,2\}\).*/\1/g')
-        helm pull --debug -d build --version ${CHART_VERSION} oci://${B_REPO}/${CRDS_CHART}
+        helm pull -d build --version ${CHART_VERSION} oci://${B_REPO}/${CRDS_CHART}
         helm pull -d build --version ${CHART_VERSION} oci://${B_REPO}/${OPERATOR_CHART}
     - name: Push new index and chart to GH pages
       env:
