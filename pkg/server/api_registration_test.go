@@ -458,6 +458,13 @@ func TestRegistrationMsgGet(t *testing.T) {
 			wantRawResponse: false,
 			wantMessageType: register.MsgError,
 		},
+		{
+			name:            "returns MsgError if mregistration status has no URL",
+			machineName:     "machine-3",
+			protoVersion:    register.MsgError,
+			wantRawResponse: false,
+			wantMessageType: register.MsgError,
+		},
 	}
 
 	server := NewInventoryServer(&FakeAuthServer{})
@@ -473,6 +480,7 @@ func TestRegistrationMsgGet(t *testing.T) {
 			ServiceAccountRef: &v1.ObjectReference{
 				Name: "test-account",
 			},
+			RegistrationURL:   "https://example.machine-1.org",
 			RegistrationToken: "machine-1",
 			Conditions: []metav1.Condition{
 				{
@@ -494,7 +502,29 @@ func TestRegistrationMsgGet(t *testing.T) {
 			ServiceAccountRef: &v1.ObjectReference{
 				Name: "test-account",
 			},
+			RegistrationURL:   "https://example.machine-2.org",
 			RegistrationToken: "machine-2",
+			Conditions: []metav1.Condition{
+				{
+					Type:   "Ready",
+					Status: "True",
+				},
+			},
+		},
+	})
+
+	server.Client.Create(context.Background(), &elementalv1.MachineRegistration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "machine-3",
+		},
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineName: "machine-3",
+		},
+		Status: elementalv1.MachineRegistrationStatus{
+			ServiceAccountRef: &v1.ObjectReference{
+				Name: "test-account",
+			},
+			RegistrationToken: "machine-3",
 			Conditions: []metav1.Condition{
 				{
 					Type:   "Ready",
