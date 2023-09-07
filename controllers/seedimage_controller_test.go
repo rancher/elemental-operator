@@ -56,6 +56,18 @@ var _ = Describe("reconcile seed image", func() {
 				Name:      "test-name",
 				Namespace: "default",
 			},
+			Status: elementalv1.MachineRegistrationStatus{
+				RegistrationURL:   "https://example.com/token",
+				RegistrationToken: "token",
+				Conditions: []metav1.Condition{
+					{
+						Type:               elementalv1.ReadyCondition,
+						Reason:             elementalv1.SuccessfullyCreatedReason,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
 		}
 
 		seedImg = &elementalv1.SeedImage{
@@ -93,9 +105,15 @@ var _ = Describe("reconcile seed image", func() {
 			},
 		}
 
+		statusCopy := mRegistration.Status.DeepCopy()
+
 		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 		Expect(cl.Create(ctx, seedImg)).To(Succeed())
 		Expect(cl.Create(ctx, setting)).To(Succeed())
+
+		patchBase := client.MergeFrom(mRegistration.DeepCopy())
+		mRegistration.Status = *statusCopy
+		Expect(cl.Status().Patch(ctx, mRegistration, patchBase)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -160,6 +178,7 @@ var _ = Describe("reconcile seed image", func() {
 
 var _ = Describe("reconcileBuildImagePod", func() {
 	var r *SeedImageReconciler
+	var setting *managementv3.Setting
 	var mRegistration *elementalv1.MachineRegistration
 	var seedImg *elementalv1.SeedImage
 	var pod *corev1.Pod
@@ -176,6 +195,18 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
+			},
+			Status: elementalv1.MachineRegistrationStatus{
+				RegistrationURL:   "https://example.com/token",
+				RegistrationToken: "token",
+				Conditions: []metav1.Condition{
+					{
+						Type:               elementalv1.ReadyCondition,
+						Reason:             elementalv1.SuccessfullyCreatedReason,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
 			},
 		}
 
@@ -207,12 +238,26 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			},
 		}
 
+		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "server-url",
+			},
+			Value: "https://example.com",
+		}
+
+		statusCopy := mRegistration.Status.DeepCopy()
+
 		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+
+		patchBase := client.MergeFrom(mRegistration.DeepCopy())
+		mRegistration.Status = *statusCopy
+		Expect(cl.Status().Patch(ctx, mRegistration, patchBase)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, pod, svc)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, setting, seedImg, pod, svc)).To(Succeed())
 	})
 
 	It("should return error when a pod with the same name but different owner is there", func() {
@@ -225,7 +270,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 
 		Expect(cl.Create(ctx, pod)).To(Succeed())
 
-		err := r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
+		err := r.reconcileBuildImagePod(ctx, seedImg, mRegistration)
 
 		// Pod already there and not owned by the SeedImage obj
 		Expect(err).To(HaveOccurred())
@@ -276,7 +321,8 @@ var _ = Describe("reconcileBuildImagePod", func() {
 		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
 
 		seedImg.Spec.BaseImage = "https://example.com/new-base.iso"
-		err = r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
+
+		err = r.reconcileBuildImagePod(ctx, seedImg, mRegistration)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
@@ -309,7 +355,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 			"write_files": {},
 		}
 
-		err = r.reconcileBuildImagePod(ctx, seedImg, &elementalv1.MachineRegistration{})
+		err = r.reconcileBuildImagePod(ctx, seedImg, mRegistration)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
@@ -320,6 +366,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 
 var _ = Describe("createConfigMapObject", func() {
 	var r *SeedImageReconciler
+	var setting *managementv3.Setting
 	var mRegistration *elementalv1.MachineRegistration
 	var seedImg *elementalv1.SeedImage
 	var configMap *corev1.ConfigMap
@@ -337,6 +384,18 @@ var _ = Describe("createConfigMapObject", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
+			},
+			Status: elementalv1.MachineRegistrationStatus{
+				RegistrationURL:   "https://example.com/token",
+				RegistrationToken: "token",
+				Conditions: []metav1.Condition{
+					{
+						Type:               elementalv1.ReadyCondition,
+						Reason:             elementalv1.SuccessfullyCreatedReason,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
 			},
 		}
 
@@ -373,12 +432,26 @@ var _ = Describe("createConfigMapObject", func() {
 			},
 		}
 
+		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "server-url",
+			},
+			Value: "https://example.com",
+		}
+
+		statusCopy := mRegistration.Status.DeepCopy()
+
 		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
 		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+
+		patchBase := client.MergeFrom(mRegistration.DeepCopy())
+		mRegistration.Status = *statusCopy
+		Expect(cl.Status().Patch(ctx, mRegistration, patchBase)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, configMap, pod, svc)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, setting, configMap, pod, svc)).To(Succeed())
 	})
 
 	It("should create a configmap with empty cloud-config data", func() {
