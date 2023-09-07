@@ -123,8 +123,12 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 }
 
 func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.MachineRegistration, writer io.Writer) error {
+	config, err := registration.GetClientRegistrationConfig(i.getRancherCACert())
+	if err != nil {
+		return err
+	}
 	return yaml.NewEncoder(writer).
-		Encode(registration.GetClientRegistrationConfig(i.getRancherCACert()))
+		Encode(config)
 }
 
 func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -159,37 +163,28 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		registration.Spec.Config = &elementalv1.Config{}
 	}
 
-	if registration.Status.RegistrationURL == "" {
-		return fmt.Errorf("registration URL is not set")
+	config, err := registration.GetClientRegistrationConfig(i.getRancherCACert())
+	if err != nil {
+		return err
 	}
-
-	elementalConf := elementalv1.Elemental{
-		Registration: elementalv1.Registration{
-			URL:    registration.Status.RegistrationURL,
-			CACert: i.getRancherCACert(),
-		},
-		SystemAgent: elementalv1.SystemAgent{
-			URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
-			Token:           string(secret.Data["token"]),
-			SecretName:      inventory.Name,
-			SecretNamespace: inventory.Namespace,
-		},
-		Install: registration.Spec.Config.Elemental.Install,
-		Reset:   registration.Spec.Config.Elemental.Reset,
+	config.Elemental.SystemAgent = elementalv1.SystemAgent{
+		URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
+		Token:           string(secret.Data["token"]),
+		SecretName:      inventory.Name,
+		SecretNamespace: inventory.Namespace,
 	}
+	config.Elemental.Install = registration.Spec.Config.Elemental.Install
+	config.Elemental.Reset = registration.Spec.Config.Elemental.Reset
 
 	cloudConf := registration.Spec.Config.CloudConfig
 
 	// legacy register client (old ISO): we should send serialization of legacy (pre-kubebuilder) config.
 	if protoVersion == register.MsgUndefined {
 		log.Debugf("Detected old register client: sending legacy CloudConfig serialization.")
-		return sendLegacyConfig(conn, elementalConf, cloudConf)
+		return sendLegacyConfig(conn, config.Elemental, cloudConf)
 	}
 
-	config := elementalv1.Config{
-		Elemental:   elementalConf,
-		CloudConfig: cloudConf,
-	}
+	config.CloudConfig = cloudConf
 
 	// If client does not support MsgConfig we send back the config as a
 	// byte-stream without a message-type to keep backwards-compatibility.

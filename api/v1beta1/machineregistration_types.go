@@ -17,7 +17,10 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -76,7 +79,7 @@ type MachineRegistrationList struct {
 
 // GetClientRegistrationConfig returns the configuration required by the elemental-register
 // to register itself against this MachineRegistration instance.
-func (m MachineRegistration) GetClientRegistrationConfig(cacert string) *Config {
+func (m MachineRegistration) GetClientRegistrationConfig(cacert string) (*Config, error) {
 	conf := m.Spec.Config
 
 	if conf == nil {
@@ -84,6 +87,14 @@ func (m MachineRegistration) GetClientRegistrationConfig(cacert string) *Config 
 	}
 
 	mRegistration := conf.Elemental.Registration
+
+	if !meta.IsStatusConditionTrue(m.Status.Conditions, ReadyCondition) {
+		return nil, fmt.Errorf("machine registration is not ready")
+	}
+
+	if m.Status.RegistrationURL == "" {
+		return nil, fmt.Errorf("registration URL is not set")
+	}
 
 	return &Config{
 		Elemental: Elemental{
@@ -96,7 +107,7 @@ func (m MachineRegistration) GetClientRegistrationConfig(cacert string) *Config 
 				Auth:            mRegistration.Auth,
 			},
 		},
-	}
+	}, nil
 }
 
 func init() {
