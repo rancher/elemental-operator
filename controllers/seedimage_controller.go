@@ -287,7 +287,11 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 
 	podConfigMap := &corev1.ConfigMap{}
 
-	regClientConf := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
+	regClientConf, err := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
+	if err != nil {
+		return fmt.Errorf("failed processing registration config: %w", err)
+	}
+
 	regData, err := yaml.Marshal(regClientConf)
 	if err != nil {
 		return fmt.Errorf("failed marshalling registration config: %w", err)

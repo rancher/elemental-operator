@@ -84,6 +84,14 @@ func TestUnauthenticatedResponse(t *testing.T) {
 		registration := elementalv1.MachineRegistration{}
 		registration.Spec.Config = test.config
 		registration.Status.RegistrationURL = test.regUrl
+		registration.Status.Conditions = []metav1.Condition{
+			{
+				Type:               elementalv1.ReadyCondition,
+				Reason:             elementalv1.SuccessfullyCreatedReason,
+				Status:             metav1.ConditionTrue,
+				LastTransitionTime: metav1.Now(),
+			},
+		}
 
 		buffer := new(bytes.Buffer)
 
