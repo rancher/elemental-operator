@@ -159,6 +159,10 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		registration.Spec.Config = &elementalv1.Config{}
 	}
 
+	if registration.Status.RegistrationURL == "" {
+		return fmt.Errorf("registration URL is not set")
+	}
+
 	elementalConf := elementalv1.Elemental{
 		Registration: elementalv1.Registration{
 			URL:    registration.Status.RegistrationURL,
