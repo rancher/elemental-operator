@@ -86,6 +86,8 @@ spec:
                             type: integer
                           no-smbios:
                             type: boolean
+                          no-toolkit:
+                            type: boolean
                           url:
                             type: string
                         type: object

@@ -85,6 +85,8 @@ type Registration struct {
 	// +optional
 	// +kubebuilder:default:=tpm
 	Auth string `json:"auth,omitempty" yaml:"auth,omitempty" mapstructure:"auth"`
+	// +optional
+	NoToolkit bool `json:"no-toolkit,omitempty" yaml:"no-toolkit,omitempty" mapstructure:"no-toolkit"`
 }
 
 type SystemAgent struct {
