@@ -47,7 +47,6 @@ var (
 	debug        bool
 	reset        bool
 	installation bool
-	noToolkit    bool
 	configPath   string
 	statePath    string
 )
@@ -120,7 +119,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			// Install
 			if installation {
 				// Optionally install agent config to local filesystem (no install)
-				if noToolkit {
+				if cfg.Elemental.Registration.NoToolkit {
 					log.Info("Installing local agent config")
 					if err := installer.WriteLocalSystemAgentConfig(cfg.Elemental); err != nil {
 						return fmt.Errorf("Installing local agent config")
@@ -135,7 +134,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			}
 			// Reset
 			if reset {
-				if noToolkit {
+				if cfg.Elemental.Registration.NoToolkit {
 					log.Warning("Reset not supported for no-toolkit hosts")
 				} else {
 					log.Info("Resetting Elemental")
@@ -169,7 +168,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
-	cmd.Flags().BoolVar(&noToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
+	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	return cmd
 }
 

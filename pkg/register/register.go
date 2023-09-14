@@ -280,6 +280,9 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 	} else {
 		data["auth"] = reg.Auth
 	}
+	if reg.NoToolkit {
+		data["os.unmanaged"] = "true"
+	}
 	if ipAddress, err := getLocalIPAddress(conn); err != nil {
 		log.Errorf("retrieving the local IP address: %w", err)
 	} else {

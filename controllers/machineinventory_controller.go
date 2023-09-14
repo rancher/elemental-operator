@@ -186,8 +186,9 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 
 	logger.Info("Reconciling Reset plan")
 
-	resettable, found := mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation]
-	if !found || resettable != "true" {
+	resettable, resettableFound := mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation]
+	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
+	if (!resettableFound || resettable != "true") || (unmanagedFound && unmanaged == "true") {
 		logger.V(log.DebugDepth).Info("Machine Inventory does not need reset. Removing finalizer.")
 		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
 		return nil
