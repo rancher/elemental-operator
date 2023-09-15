@@ -536,7 +536,7 @@ var _ = Describe("handle finalizer", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("should delete by removing resettable annotation when up for deletion", func() {
+	It("should delete by removing finalizer when resettable annotation is false", func() {
 		// 6. Manually disable resettable annotation
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      mInventory.Name,
@@ -546,6 +546,32 @@ var _ = Describe("handle finalizer", func() {
 		Expect(cl.Update(ctx, mInventory)).To(Succeed())
 
 		// 7. Trigger finalizer removal
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check MachineInventory was actually deleted
+		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing finalizer when unmanaged annotation is true", func() {
+		// Manually enable os.unmanaged annotation
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation] = "true"
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// Reconcile to trigger finalizer removal
 		_, err := r.Reconcile(ctx, reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: mInventory.Namespace,

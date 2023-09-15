@@ -54,6 +54,19 @@ var (
 			},
 		},
 	}
+	notoolkitConfigFixture = elementalv1.Config{
+		Elemental: elementalv1.Elemental{
+			Registration: elementalv1.Registration{
+				URL:             "https://127.0.0.1.sslip.io",
+				CACert:          "Just for testing",
+				EmulateTPM:      true,
+				EmulatedTPMSeed: -1,
+				NoSMBIOS:        true,
+				Auth:            "test",
+				NoToolkit:       true,
+			},
+		},
+	}
 	alternateConfigFixture = elementalv1.Config{
 		Elemental: elementalv1.Elemental{
 			Registration: elementalv1.Registration{
@@ -247,6 +260,43 @@ var _ = Describe("elemental-register --install", Label("registration", "cli", "i
 			client.EXPECT().
 				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
 				Return(marshalToBytes(alternateConfigFixture), nil)
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+	})
+})
+
+var _ = Describe("elemental-register --install --no-toolkit", Label("registration", "cli", "install-notoolkit"), func() {
+	var fs vfs.FS
+	var err error
+	var fsCleanup func()
+	var cmd *cobra.Command
+	var mockCtrl *gomock.Controller
+	var client *rmocks.MockClient
+	var installer *imocks.MockInstaller
+	var stateHandler *rmocks.MockStateHandler
+	BeforeEach(func() {
+		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+		Expect(err).ToNot(HaveOccurred())
+		mockCtrl = gomock.NewController(GinkgoT())
+		installer = imocks.NewMockInstaller(mockCtrl)
+		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
+		client = rmocks.NewMockClient(mockCtrl)
+		cmd = newCommand(fs, client, stateHandler, installer)
+		DeferCleanup(fsCleanup)
+	})
+	When("using existing default config", func() {
+		BeforeEach(func() {
+			marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
+			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
+			stateHandler.EXPECT().Load().Return(stateFixture, nil)
+			stateHandler.EXPECT().Save(stateFixture).Return(nil)
+		})
+		It("should trigger local system agent config when --install and --no-toolkit arguments", func() {
+			cmd.SetArgs([]string{"--install", "--no-toolkit"})
+			installer.EXPECT().WriteLocalSystemAgentConfig(notoolkitConfigFixture.Elemental).Return(nil)
+			client.EXPECT().
+				Register(notoolkitConfigFixture.Elemental.Registration, []byte(notoolkitConfigFixture.Elemental.Registration.CACert), &stateFixture).
+				Return(marshalToBytes(notoolkitConfigFixture), nil)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})
 	})
