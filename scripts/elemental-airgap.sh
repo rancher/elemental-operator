@@ -10,14 +10,14 @@ ELEMENTAL_OPERATOR_CRDS_CHART_NAME="\$ELEMENTAL_CRDS_CHART"
 CHANNEL_IMAGE_URL=""
 IMAGES_TO_SAVE=""
 
-: ${CONTAINER_IMAGES_NAME:="elemental-image"}
+: ${CONTAINER_IMAGES_NAME:="elemental-images"}
 : ${CONTAINER_IMAGES_FILE:=$CONTAINER_IMAGES_NAME".txt"}
 : ${CONTAINER_IMAGES_ARCHIVE:=$CONTAINER_IMAGES_NAME".tar.gz"}
 : ${DEBUG:="false"}
 : ${LOCAL_REGISTRY:=\$LOCAL_REGISTRY}
 : ${CHART_NAME_CRDS:=$ELEMENTAL_OPERATOR_CRDS_CHART_NAME}
 : ${CHART_VERSION:="latest"}
-: ${CHANNEL_IMAGE_NAME:="elemental/os-channel"}
+: ${CHANNEL_IMAGE_NAME:="\$CHANNEL_IMAGE_NAME"}
 
 print_help() {
     cat <<- EOF
@@ -264,8 +264,8 @@ pull_chart_container_images() {
     for img in "${oprtimg_repo}:${oprtimg_tag}" "${seedimg_repo}:${seedimg_tag}"; do
         [ -z "$img" ] && continue
 
-        img="${source_registry}/${img}"
-        if pull_image "${img}"; then
+        if pull_image "${source_registry}/${img}"; then
+            docker tag "${source_registry}/${img}" "${img}"
             add_image_to_export_list "${img}"
         fi
     done
@@ -316,20 +316,35 @@ build_os_channel() {
     # write the new channel and identify OS images to save
     local new_channel=""
     for i in $(seq 0 20); do
-        local item item_type item_image item_name
+        local item item_type item_image item_name item_url_field
         item=$(jq .[$i] channel.json)
         [ "$item" = "null" ] && break
 
         get_json_val item_name "$item" ".metadata.name"
         get_json_val item_type "$item" ".spec.type"
-        get_json_val item_image "$item" ".spec.metadata.upgradeImage"
         get_json_val item_display "$item" ".spec.metadata.displayName"
 
         # drop the items in the channel which are not containers
-        if [ "$item_type" != "container" ]; then
-            log_debug "skip OS $item_type entry:\t$item_name\t$item_image"
+        case $item_type in
+            container)
+            item_url_field=".spec.metadata.upgradeImage"
+            get_json_val item_image "$item" "$item_url_field"
+            ;;
+            iso)
+            item_url_field=".spec.metadata.uri"
+            get_json_val item_image "$item" "$item_url_field"
+            case $item_image in
+                http://|https://)
+                log_debug "skip OS $item_type entry:\t$item_name\t$item_image"
+                continue
+                ;;
+            esac
+            ;;
+            *)
+            log_info "ERR: unknown image type `$item_type`, skip OS entry '$item_name'"
             continue
-        fi
+            ;;
+        esac
 
         log_info "Extract OS image:\n\t$item_name ($item_display)\n\t$item_image"
 
@@ -338,14 +353,17 @@ build_os_channel() {
             add_image_to_export_list "${item_image}"
 
             # prepend the private registry name
-            set_json_val item "$item" ".spec.metadata.upgradeImage" "$LOCAL_REGISTRY/$item_image"
+            set_json_val item "$item" "$item_url_field" "${LOCAL_REGISTRY}/${item_image}"
 
-            [ -z "$new_channel" ] && new_channel="[$item" || new_channel="$new_channel,$item"
+            [ -z "$new_channel" ] && new_channel="[${item}" || new_channel="${new_channel},${item}"
         fi
     done
-    new_channel="$new_channel]"
+    new_channel="${new_channel}]"
 
     # create the new channel container image targeting the private registry
+    if [ "${CHANNEL_IMAGE_NAME}" = "\$CHANNEL_IMAGE_NAME" ]; then
+        CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY}"
+    fi
     CHANNEL_IMAGE_URL="${CHANNEL_IMAGE_NAME}:${channel_tag}"
     log_info "Create new channel image for the private registry: ${CHANNEL_IMAGE_URL}"
     jq -n "$new_channel" > channel.json
@@ -364,7 +382,7 @@ EOF
 }
 
 create_container_images_archive() {
-    log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images"
+    log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images (may take a while)"
     echo -n "" > "${CONTAINER_IMAGES_FILE}"
     for i in ${IMAGES_TO_SAVE} ; do
         log_debug "* $i"
@@ -400,8 +418,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set channel.repository="$CHANNEL_IMAGE_URL"
-
+  --set channel.repository=$CHANNEL_IMAGE_NAME
 EOF
 }
 
