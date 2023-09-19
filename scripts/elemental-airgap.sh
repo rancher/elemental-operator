@@ -362,7 +362,7 @@ build_os_channel() {
 
     # create the new channel container image targeting the private registry
     if [ "${CHANNEL_IMAGE_NAME}" = "\$CHANNEL_IMAGE_NAME" ]; then
-        CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY}"
+        CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY%:*}"
     fi
     CHANNEL_IMAGE_URL="${CHANNEL_IMAGE_NAME}:${channel_tag}"
     log_info "Create new channel image for the private registry: ${CHANNEL_IMAGE_URL}"
