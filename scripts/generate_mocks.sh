@@ -1,6 +1,6 @@
 #!/bin/sh
 
-go install go.uber.org/mock/mockgen@latest
+go install go.uber.org/mock/mockgen@v0.2.0
 
 # Always create mock files into a "mocks" subfolder to be ignored in test coverage.
 # See codecov.yml for more info 
