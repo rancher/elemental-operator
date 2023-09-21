@@ -466,7 +466,10 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 			},
 			{
 				CommonInstruction: applyinator.CommonInstruction{
-					Command: "bash -c '[ -f /var/lib/rancher/bootstrap_done ] || /var/lib/rancher/bootstrap.sh && touch /var/lib/rancher/bootstrap_done'",
+					Command: "bash",
+					Args: []string{
+						"-c", "[ -f /var/lib/rancher/bootstrap_done ] || /var/lib/rancher/bootstrap.sh && touch /var/lib/rancher/bootstrap_done",
+					},
 				},
 			},
 		},
