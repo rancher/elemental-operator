@@ -466,12 +466,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 			},
 			{
 				CommonInstruction: applyinator.CommonInstruction{
-					Command: "/var/lib/rancher/bootstrap.sh",
-					// Ensure local plans will be enabled, this is required to ensure the local
-					// plan stopping elemental-system-agent is executed
-					Env: []string{
-						"CATTLE_LOCAL_ENABLED=true",
-					},
+					Command: "bash -c '[ -f /var/lib/rancher/bootstrap_done ] || /var/lib/rancher/bootstrap.sh && touch /var/lib/rancher/bootstrap_done'",
 				},
 			},
 		},
