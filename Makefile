@@ -1,13 +1,21 @@
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 GIT_COMMIT_SHORT?=$(shell git rev-parse --short HEAD)
 GIT_TAG?=$(shell git describe --abbrev=0 --tags 2>/dev/null || echo "v0.0.0" )
-TAG?=${GIT_TAG}-${GIT_COMMIT_SHORT}
-REPO?=quay.io/costoolkit/elemental-operator-ci
-REPO_REGISTER?=quay.io/costoolkit/elemental-register-ci
-TAG_SEEDIMAGE?=${TAG}
-REPO_SEEDIMAGE?=quay.io/costoolkit/seedimage-builder-ci
+CHART_VERSION?=$(shell echo $(GIT_TAG) | sed 's/[a-z]*\([0-9]\(\.[0-9]\)\{0,2\}\).*/\1/g')
+TAG?=${GIT_TAG}
+REPO?=rancher/elemental-operator
+TAG_SEEDIMAGE?=${CHART_VERSION}
+REPO_SEEDIMAGE?=rancher/seedimage-builder
+TAG_CHANNEL?=${CHART_VERSION}
+REPO_CHANNEL?=rancher/elemental-teal-channel
+REGISTRY_URL?=registry.opensuse.org/isv/rancher/elemental/dev/containers
+ifneq ($(REGISTRY_URL),)
+	REGISTRY_HEADER := $(REGISTRY_URL)/
+else
+	REGISTRY_HEADER := ""
+endif
+
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-CHART_VERSION?=$(subst v,,$(GIT_TAG))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
 KUBE_VERSION?="v1.24.6"
 CLUSTER_NAME?="operator-e2e"
@@ -91,35 +99,21 @@ build-docker-operator:
 		--build-arg "TAG=${GIT_TAG}" \
 		--build-arg "COMMIT=${GIT_COMMIT}" \
 		--build-arg "COMMITDATE=${COMMITDATE}" \
-		-t ${REPO}:${TAG} .
-
-.PHONY: build-docker-register
-build-docker-register:
-	DOCKER_BUILDKIT=1 docker build \
-		-f Dockerfile \
-		--target elemental-register \
-		--build-arg "TAG=${GIT_TAG}" \
-		--build-arg "COMMIT=${GIT_COMMIT}" \
-		--build-arg "COMMITDATE=${COMMITDATE}" \
-		-t ${REPO_REGISTER}:${TAG} .
+		-t ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} .
 
 .PHONY: build-docker-seedimage-builder
 build-docker-seedimage-builder:
 	DOCKER_BUILDKIT=1 docker build \
 		-f Dockerfile.seedimage \
-		-t ${REPO_SEEDIMAGE}:${TAG} .
+		-t ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} .
 
 .PHONY: build-docker-push-operator
 build-docker-push-operator: build-docker-operator
-	docker push ${REPO}:${TAG}
-
-.PHONY: build-docker-push-register
-build-docker-push-register: build-docker-register
-	docker push ${REPO_REGISTER}:${TAG}
+	docker push ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
 
 .PHONY: build-docker-push-seedimage-builder
 build-docker-push-seedimage-builder: build-docker-seedimage-builder
-	docker push ${REPO_SEEDIMAGE}:${TAG}
+	docker push ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE}
 
 .PHONY: chart
 chart:
@@ -128,11 +122,14 @@ chart:
 	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds
 	rm -Rf $(ROOT_DIR)/build/crds
 	cp -rf $(ROOT_DIR)/charts/operator $(ROOT_DIR)/build/operator
-	yq -i '.image.tag = "${TAG}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.image.tag = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.tag = "${TAG_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.repository = "${REPO_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
-	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
+	yq -i '.channel.tag = "${TAG_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.channel.repository = "${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.registryUrl = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
+	helm package --version ${CHART_VERSION} --app-version ${CHART_VERSION} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator
 
 .PHONY: migration-chart
@@ -170,20 +167,20 @@ setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart s
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
-	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG} && \
-	kind load docker-image --name $(CLUSTER_NAME) ${REPO_SEEDIMAGE}:${TAG} && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
 
 kind-e2e-tests: build-docker-operator chart setup-kind
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
-	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
 	$(MAKE) e2e-tests
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
 # thus losing any registration/inventories/os CRDs already created
 reload-operator: build-docker-operator chart
-	kind load docker-image --name $(CLUSTER_NAME) ${REPO}:${TAG}
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
 	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
 
 .PHONY: vendor
@@ -229,7 +226,7 @@ build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
 	$(MAKE) build-rbac
 
-ALL_VERIFY_CHECKS = manifests vendor
+ALL_VERIFY_CHECKS = manifests vendor generate
 
 .PHONY: verify
 verify: $(addprefix verify-,$(ALL_VERIFY_CHECKS))
@@ -243,6 +240,13 @@ verify-manifests: build-manifests
 
 .PHONY: verify-vendor
 verify-vendor: vendor
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi
+
+.PHONY: verify-generate
+verify-generate: generate
 	@if !(git diff --quiet HEAD); then \
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \

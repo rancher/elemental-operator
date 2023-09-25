@@ -1,0 +1,25 @@
+name: Include registration config into installed system
+stages:
+    initramfs:
+        - files:
+            - path: /oem/registration/config.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                elemental:
+                    registration:
+                        url: https://127.0.0.1.sslip.io/test/registration/endpoint
+                        ca-cert: a test ca
+                        emulate-tpm: true
+                        emulated-tpm-seed: 9876543210
+                        no-smbios: true
+                        auth: a test auth
+              encoding: ""
+              ownerstring: ""
+          directories:
+            - path: /oem/registration
+              permissions: 448
+              owner: 0
+              group: 0
+          if: '[ ! -f /oem/registration/config.yaml ]'

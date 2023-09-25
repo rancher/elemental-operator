@@ -49,6 +49,28 @@ type Install struct {
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 }
 
+type Reset struct {
+	// +optional
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty" mapstructure:"enabled"`
+	// +optional
+	// +kubebuilder:default:=true
+	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty" mapstructure:"reset-persistent"`
+	// +optional
+	// +kubebuilder:default:=true
+	ResetOEM bool `json:"reset-oem,omitempty" yaml:"reset-oem,omitempty" mapstructure:"reset-oem"`
+	// +optional
+	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty" mapstructure:"config-urls"`
+	// +optional
+	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty" mapstructure:"system-uri"`
+	// +optional
+	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty" mapstructure:"debug"`
+	// +optional
+	PowerOff bool `json:"poweroff,omitempty" yaml:"poweroff,omitempty" mapstructure:"poweroff"`
+	// +optional
+	// +kubebuilder:default:=true
+	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty" mapstructure:"reboot"`
+}
+
 type Registration struct {
 	// +optional
 	URL string `json:"url,omitempty" yaml:"url,omitempty" mapstructure:"url"`
@@ -63,6 +85,8 @@ type Registration struct {
 	// +optional
 	// +kubebuilder:default:=tpm
 	Auth string `json:"auth,omitempty" yaml:"auth,omitempty" mapstructure:"auth"`
+	// +optional
+	NoToolkit bool `json:"no-toolkit,omitempty" yaml:"no-toolkit,omitempty" mapstructure:"no-toolkit"`
 }
 
 type SystemAgent struct {
@@ -79,6 +103,9 @@ type SystemAgent struct {
 type Elemental struct {
 	// +optional
 	Install Install `json:"install,omitempty" yaml:"install,omitempty"`
+	// +optional
+	// +kubebuilder:default:={"reset-persistent":true,"reset-oem":true,"reboot":true}
+	Reset Reset `json:"reset,omitempty" yaml:"reset,omitempty"`
 	// +optional
 	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
 	// +optional

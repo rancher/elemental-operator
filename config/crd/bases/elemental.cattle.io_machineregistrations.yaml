@@ -86,7 +86,37 @@ spec:
                             type: integer
                           no-smbios:
                             type: boolean
+                          no-toolkit:
+                            type: boolean
                           url:
+                            type: string
+                        type: object
+                      reset:
+                        default:
+                          reboot: true
+                          reset-oem: true
+                          reset-persistent: true
+                        properties:
+                          config-urls:
+                            items:
+                              type: string
+                            type: array
+                          debug:
+                            type: boolean
+                          enabled:
+                            type: boolean
+                          poweroff:
+                            type: boolean
+                          reboot:
+                            default: true
+                            type: boolean
+                          reset-oem:
+                            default: true
+                            type: boolean
+                          reset-persistent:
+                            default: true
+                            type: boolean
+                          system-uri:
                             type: string
                         type: object
                       system-agent:

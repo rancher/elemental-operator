@@ -29,13 +29,26 @@ Source1:        %{name}.obsinfo
 BuildRequires:  gcc-c++
 BuildRequires:  glibc-devel
 BuildRequires:  openssl-devel
-BuildRequires:  golang-packaging
 BuildRequires:  make
 BuildRequires:  grep
+
+%if 0%{?suse_version}
 BuildRequires:  golang(API) >= 1.16
+BuildRequires:  golang-packaging
+%{go_provides}
+%else
+%global goipath    google.golang.org/api
+%global forgeurl   https://github.com/rancher/elemental-operator
+%global commit     25abcdc57b9409d4c5b2009cf0a2f9aa6ff647ad
+%gometa
+%if (0%{?centos_version} == 800) || (0%{?rhel_version} == 800)
+BuildRequires:  go1.20
+%else
+BuildRequires:  compiler(go-compiler)
+%endif
+%endif
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-%{go_provides}
 
 %package -n elemental-register
 Summary: operator-register client
@@ -67,8 +80,9 @@ httpfy starts a simple http server, serving files from the current dir.
 cp %{S:1} .
 
 %build
-
+%if 0%{?suse_version}
 %goprep .
+%endif
 
 mkdir -p bin
 if [ "$(uname)" = "Linux" ]; then
@@ -88,7 +102,9 @@ make support
 make httpfy
 
 %install
+%if 0%{?suse_version}
 %goinstall
+%endif
 
 # /usr/sbin
 %{__install} -d -m 755 %{buildroot}/%{_sbindir}

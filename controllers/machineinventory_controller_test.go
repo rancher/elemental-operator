@@ -29,10 +29,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/test"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 var _ = Describe("reconcile machine inventory", func() {
@@ -47,8 +50,9 @@ var _ = Describe("reconcile machine inventory", func() {
 
 		mInventory = &elementalv1.MachineInventory{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "machine-inventory-suite",
-				Namespace: "default",
+				Finalizers: []string{elementalv1.MachineInventoryFinalizer},
+				Name:       "machine-inventory-suite",
+				Namespace:  "default",
 			},
 		}
 
@@ -116,6 +120,32 @@ var _ = Describe("reconcile machine inventory", func() {
 		Expect(cond.Reason).To(Equal(elementalv1.PlanSuccessfullyAppliedReason))
 		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		Expect(cond.Message).To(Equal("plan successfully applied"))
+	})
+
+	It("should add finalizer if not exist", func() {
+		noFinalizerMI := &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-no-finalizer",
+				Namespace: "default",
+			},
+		}
+		Expect(cl.Create(ctx, noFinalizerMI)).To(Succeed())
+
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, noFinalizerMI)).To(Succeed())
+
+		Expect(controllerutil.ContainsFinalizer(noFinalizerMI, elementalv1.MachineInventoryFinalizer)).To(BeTrue())
+		Expect(test.CleanupAndWait(ctx, cl, noFinalizerMI)).To(Succeed())
 	})
 })
 
@@ -376,6 +406,208 @@ var _ = Describe("updateInventoryWithPlanStatus", func() {
 		Expect(test.CleanupAndWait(ctx, cl, mInventory, planSecret)).To(Succeed())
 	})
 
+})
+
+var _ = Describe("handle finalizer", func() {
+	var r *MachineInventoryReconciler
+	var mInventory *elementalv1.MachineInventory
+	var planSecret *corev1.Secret
+
+	BeforeEach(func() {
+		r = &MachineInventoryReconciler{
+			Client: cl,
+		}
+
+		mInventory = &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				DeletionTimestamp: &metav1.Time{Time: time.Now()},
+				Annotations:       map[string]string{elementalv1.MachineInventoryResettableAnnotation: "true"},
+				Finalizers:        []string{elementalv1.MachineInventoryFinalizer},
+				Name:              "machine-inventory-suite-finalizer",
+				Namespace:         "default",
+			},
+		}
+
+		planSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      mInventory.Name,
+				Namespace: mInventory.Namespace,
+			},
+		}
+
+		// 1. Create initial MachineInventory
+		Expect(cl.Create(ctx, mInventory)).To(Succeed())
+		// 2. Create initial plan Secret
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		// 3. Update meta.DeletionTimestamp
+		Expect(cl.Delete(ctx, mInventory)).To(Succeed())
+		// 4. Update secret with reset plan
+		_, err = r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		// 5. Update MachineInventory plan status
+		_, err = r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("should update secret with reset plan", func() {
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      planSecret.Name,
+			Namespace: planSecret.Namespace,
+		}, planSecret)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+
+		wantChecksum, wantPlan, err := r.newResetPlan(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check Plan status
+		Expect(mInventory.Status.Plan.Checksum).To(Equal(wantChecksum))
+		Expect(mInventory.Status.Plan.PlanSecretRef.Name).To(Equal(planSecret.Name))
+		Expect(mInventory.Status.Plan.PlanSecretRef.Namespace).To(Equal(planSecret.Namespace))
+		Expect(mInventory.Status.Plan.State).To(Equal(elementalv1.PlanState("")))
+
+		// Check MachineInventory status
+		Expect(mInventory.Status.Conditions[0].Type).To(Equal(elementalv1.ReadyCondition))
+		Expect(mInventory.Status.Conditions[0].Reason).To(Equal(elementalv1.WaitingForPlanReason))
+		Expect(mInventory.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+		Expect(mInventory.Status.Conditions[0].Message).To(Equal("waiting for plan to be applied"))
+
+		// Check plan secret was updated
+		Expect(planSecret.Annotations[elementalv1.PlanTypeAnnotation]).To(Equal(elementalv1.PlanTypeReset))
+		Expect(planSecret.Data["plan"]).To(Equal(wantPlan))
+		Expect(planSecret.Data["applied-checksum"]).To(Equal([]byte("")))
+		Expect(planSecret.Data["failed-checksum"]).To(Equal([]byte("")))
+
+		// Check we are holding on the MachineInventory (preventing actual deletion)
+		_, err = r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+	})
+
+	It("should remove finalizer on reset plan applied", func() {
+		// 6. Mark the reset plan as applied
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, planSecret)).To(Succeed())
+		planSecret.Data["applied-checksum"] = []byte("applied")
+		Expect(cl.Update(ctx, planSecret)).To(Succeed())
+
+		// 7. Trigger finalizer removal
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check MachineInventory was actually deleted
+		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing finalizer when resettable annotation is false", func() {
+		// 6. Manually disable resettable annotation
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation] = "false"
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// 7. Trigger finalizer removal
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check MachineInventory was actually deleted
+		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing finalizer when unmanaged annotation is true", func() {
+		// Manually enable os.unmanaged annotation
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation] = "true"
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// Reconcile to trigger finalizer removal
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check MachineInventory was actually deleted
+		err = cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("should delete by removing finalizer when up for deletion", func() {
+		// 6. Manually remove finalizer
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		// Check MachineInventory was actually deleted
+		err := cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mInventory, planSecret)).To(Succeed())
+	})
 })
 
 type machineInventoryFailingClient struct {

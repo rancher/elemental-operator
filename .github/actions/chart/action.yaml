@@ -1,0 +1,56 @@
+name: Build and publish charts
+
+inputs:
+  build_env:
+    required: true
+  keep_previous:
+    required: false
+    default: no
+
+runs:
+  using: composite
+  steps:
+    - name: Install yq
+      uses: mikefarah/yq@v4.28.2
+    - name: Set image repositories
+      id: set_repo
+      shell: bash
+      env:
+        B_ENV: ${{ inputs.build_env }}
+      run: |
+        if [ "${B_ENV}" == "stable" ]; then
+          echo "build_repo=registry.suse.com" >> $GITHUB_OUTPUT
+        else
+          echo "build_repo=registry.opensuse.org/isv/rancher/elemental/${B_ENV}/charts" >> $GITHUB_OUTPUT
+        fi
+    - name: Pull chart from OBS
+      env:
+        B_REPO: ${{ steps.set_repo.outputs.build_repo }}
+        OPERATOR_CHART: rancher/elemental-operator-chart
+        CRDS_CHART: rancher/elemental-operator-crds-chart
+      shell: bash
+      run: |
+        mkdir -p build
+        CHART_VERSION=$(git describe --abbrev=0 --tags 2>/dev/null | sed 's/[a-z]*\([0-9]\(\.[0-9]\)\{0,2\}\).*/\1/g')
+        helm pull -d build --version ${CHART_VERSION} oci://${B_REPO}/${CRDS_CHART}
+        helm pull -d build --version ${CHART_VERSION} oci://${B_REPO}/${OPERATOR_CHART}
+    - name: Push new index and chart to GH pages
+      env:
+        B_ENV: ${{ inputs.build_env }}
+        KEEP_PREV: ${{ inputs.keep_previous }}
+      shell: bash
+      run: |
+        COMMIT=$(git rev-parse HEAD)
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+        git config --global user.name "${{ github.actor }}"
+        git checkout gh-pages
+        if [ "${KEEP_PREV}" == "no"  ]; then
+          rm -rf ${B_ENV}
+        fi
+        mkdir -p ${B_ENV}/build
+        cp -v build/* ${B_ENV}/build
+        helm repo index --url "https://${{ github.repository_owner }}.github.io/elemental-operator/${B_ENV}" ./${B_ENV}
+        git add ${B_ENV}/index.yaml ${B_ENV}/build/ -f
+        git commit -m "Updating helm dev repo to main commit ${{ github.sha }}"
+        git push --set-upstream origin gh-pages
+        git checkout ${COMMIT}

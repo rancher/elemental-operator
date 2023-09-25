@@ -161,6 +161,14 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 		value, _ := replaceStringData(map[string]interface{}{}, v)
 		inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(value, "-"), "-")
 	}
+
+	// Set resettable annotation on cascade from MachineRegistration spec
+	if registration.Spec.Config.Elemental.Reset.Enabled {
+		if inventory.Annotations == nil {
+			inventory.Annotations = map[string]string{}
+		}
+		inventory.Annotations[elementalv1.MachineInventoryResettableAnnotation] = "true"
+	}
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {

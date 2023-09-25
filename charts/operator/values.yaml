@@ -1,15 +1,17 @@
 image:
   empty: rancher/pause:3.1
-  # elemental-operator image is also built on:
-  #   registry.opensuse.org/isv/rancher/elemental/stable/teal53/15.4/rancher/elemental-operator
-  repository: "quay.io/costoolkit/elemental-operator"
+  repository: "rancher/elemental-operator"
   tag: latest
   imagePullPolicy: IfNotPresent
 
 seedImage:
-  repository: "quay.io/costoolkit/seedimage-builder"
+  repository: "rancher/seedimage-builder"
   tag: latest
   imagePullPolicy: IfNotPresent
+
+channel:
+  repository: "rancher/elemental-teal-channel"
+  tag: latest
 
 # number of operator replicas to deploy
 replicas: 1
@@ -23,6 +25,9 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
+
+# used only if systemDefaultRegistry is empty
+registryUrl: ""
 
 # enable debug output for operator
 debug: false

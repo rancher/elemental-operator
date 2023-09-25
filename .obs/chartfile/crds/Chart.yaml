@@ -9,10 +9,6 @@ version: "%VERSION%"
 appVersion: "%VERSION%"
 annotations:
   catalog.cattle.io/certified: rancher
-  catalog.cattle.io/display-name: Elemental CRDs
-  catalog.cattle.io/experimental: "true"
   catalog.cattle.io/namespace: cattle-elemental-system
-  catalog.cattle.io/os: linux
-  catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
   catalog.cattle.io/release-name: elemental-operator-crds
   catalog.cattle.io/hidden: true # Hide specific charts. Only use on CRD charts.

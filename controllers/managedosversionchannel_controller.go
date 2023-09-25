@@ -82,7 +82,8 @@ func (r *ManagedOSVersionChannelReconciler) Reconcile(ctx context.Context, req r
 		return reconcile.Result{}, fmt.Errorf("failed to get managed OS version channel object: %w", err)
 	}
 
-	patchBase := client.MergeFrom(managedOSVersionChannel.DeepCopy())
+	// Ensure we patch the latest version otherwise we could erratically overlap with other controllers (e.g. backup and restore)
+	patchBase := client.MergeFromWithOptions(managedOSVersionChannel.DeepCopy(), client.MergeFromWithOptimisticLock{})
 
 	// We have to sanitize the conditions because old API definitions didn't have proper validation.
 	managedOSVersionChannel.Status.Conditions = util.RemoveInvalidConditions(managedOSVersionChannel.Status.Conditions)
@@ -98,7 +99,7 @@ func (r *ManagedOSVersionChannelReconciler) Reconcile(ctx context.Context, req r
 	managedosversionchannelStatusCopy := managedOSVersionChannel.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, managedOSVersionChannel, patchBase); err != nil && !apierrors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to patch status for managed OS version channel object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch managed OS version channel object: %w", err))
 	}
 
 	managedOSVersionChannel.Status = *managedosversionchannelStatusCopy
@@ -126,7 +127,9 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	}
 
 	if managedOSVersionChannel.Spec.SyncInterval == "" {
+		// Updated spec, so we need to reconcile again before updating any state
 		managedOSVersionChannel.Spec.SyncInterval = defaultSyncTime
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	interval, err := time.ParseDuration(managedOSVersionChannel.Spec.SyncInterval)

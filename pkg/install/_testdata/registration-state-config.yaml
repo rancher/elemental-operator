@@ -1,0 +1,20 @@
+name: Include registration state into installed system
+stages:
+    initramfs:
+        - files:
+            - path: /oem/registration/state.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                initialRegistration: 2023-08-02T12:35:10.000000003Z
+                emulatedTPM: true
+                emulatedTPMSeed: 987654321
+              encoding: ""
+              ownerstring: ""
+          directories:
+            - path: /oem/registration
+              permissions: 448
+              owner: 0
+              group: 0
+          if: '[ ! -f /oem/registration/state.yaml ]'

@@ -95,7 +95,7 @@ func (r *SeedImageReconciler) Reconcile(ctx context.Context, req reconcile.Reque
 	seedImgStatusCopy := seedImg.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, seedImg, patchBase); err != nil && !apierrors.IsNotFound(err) {
-		errs = append(errs, fmt.Errorf("failed to patch status for seedimage object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch seedimage object: %w", err))
 	}
 
 	seedImg.Status = *seedImgStatusCopy
@@ -287,7 +287,11 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 
 	podConfigMap := &corev1.ConfigMap{}
 
-	regClientConf := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
+	regClientConf, err := mRegistration.GetClientRegistrationConfig(util.GetRancherCACert(ctx, r))
+	if err != nil {
+		return fmt.Errorf("failed processing registration config: %w", err)
+	}
+
 	regData, err := yaml.Marshal(regClientConf)
 	if err != nil {
 		return fmt.Errorf("failed marshalling registration config: %w", err)

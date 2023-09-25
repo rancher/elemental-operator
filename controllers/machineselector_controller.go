@@ -19,7 +19,6 @@ package controllers
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -106,7 +105,7 @@ func (r *MachineInventorySelectorReconciler) Reconcile(ctx context.Context, req 
 	machineInventorySelectorStatusCopy := machineInventorySelector.Status.DeepCopy() // Patch call will erase the status
 
 	if err := r.Patch(ctx, machineInventorySelector, patchBase); err != nil {
-		errs = append(errs, fmt.Errorf("failed to patch status for machine inventory selector object: %w", err))
+		errs = append(errs, fmt.Errorf("failed to patch machine inventory selector object: %w", err))
 	}
 
 	machineInventorySelector.Status = *machineInventorySelectorStatusCopy
@@ -360,6 +359,7 @@ func (r *MachineInventorySelectorReconciler) updatePlanSecretWithBootstrap(ctx c
 	patchBase := client.MergeFrom(planSecret.DeepCopy())
 
 	planSecret.Data["plan"] = plan
+	planSecret.Annotations = map[string]string{elementalv1.PlanTypeAnnotation: elementalv1.PlanTypeBootstrap}
 
 	if err := r.Patch(ctx, planSecret, patchBase); err != nil {
 		return fmt.Errorf("failed to patch plan secret: %w", err)
@@ -401,25 +401,6 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		Name:      *machine.Spec.Bootstrap.DataSecretName,
 	}, bootstrapSecret); err != nil {
 		return "", nil, fmt.Errorf("failed to get a boostrap plan for the machine: %w", err)
-	}
-
-	stopAgentPlan := applyinator.Plan{
-		OneTimeInstructions: []applyinator.OneTimeInstruction{
-			{
-				CommonInstruction: applyinator.CommonInstruction{
-					Command: "systemctl",
-					Args: []string{
-						"stop",
-						"elemental-system-agent",
-					},
-				},
-			},
-		},
-	}
-
-	stopAgentPlanJSON, err := json.Marshal(stopAgentPlan)
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to create new stop elemental agent plan: %w", err)
 	}
 
 	type LabelsFromInventory struct {
@@ -470,11 +451,6 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				Path:        "/usr/local/etc/hostname",
 				Permissions: "0644",
 			},
-			{
-				Content:     base64.StdEncoding.EncodeToString(stopAgentPlanJSON),
-				Path:        "/var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip",
-				Permissions: "0644",
-			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
@@ -490,21 +466,9 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 			},
 			{
 				CommonInstruction: applyinator.CommonInstruction{
-					Command: "/var/lib/rancher/bootstrap.sh",
-					// Ensure local plans will be enabled, this is required to ensure the local
-					// plan stopping elemental-system-agent is executed
-					Env: []string{
-						"CATTLE_LOCAL_ENABLED=true",
-					},
-				},
-			},
-			{
-				// Ensure the local plan can only be executed after bootstrapping script is done
-				CommonInstruction: applyinator.CommonInstruction{
 					Command: "bash",
 					Args: []string{
-						"-c",
-						"mv /var/lib/rancher/agent/plans/elemental-agent-stop.plan.skip /var/lib/rancher/agent/plans/elemental-agent-stop.plan",
+						"-c", "[ -f /var/lib/rancher/bootstrap_done ] || /var/lib/rancher/bootstrap.sh && touch /var/lib/rancher/bootstrap_done",
 					},
 				},
 			},
@@ -518,7 +482,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 
 	plan := buf.Bytes()
 
-	checksum := planChecksum(plan)
+	checksum := util.PlanChecksum(plan)
 
 	return checksum, plan, nil
 }
@@ -633,13 +597,6 @@ func filterSelectorUpdateEvents() predicate.Funcs {
 			return true
 		},
 	}
-}
-
-func planChecksum(input []byte) string {
-	h := sha256.New()
-	h.Write(input)
-
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // MachineInventoryToSelector is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
