@@ -334,7 +334,7 @@ build_os_channel() {
             item_url_field=".spec.metadata.uri"
             get_json_val item_image "$item" "$item_url_field"
             case $item_image in
-                http://|https://)
+                "http://"*|"https://"*)
                 log_debug "skip OS $item_type entry:\t$item_name\t$item_image"
                 continue
                 ;;
