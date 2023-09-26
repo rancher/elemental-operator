@@ -105,17 +105,14 @@ const (
 	// SyncingReason documents that managed OS version channel is synchronizing managed OS versions
 	SyncingReason = "Synchronizing"
 
-	// GotChannelDataReason documents that managed OS version channel successfully fetched managed OS versions data
-	GotChannelDataReason = "GotChannelData"
-
 	// SyncedReason documents that managed OS version channel finalized synchroniziation and managed OS versions, if any, were created
 	SyncedReason = "Synchronized"
 
 	// FailedToSyncReason documents that managed OS version channel failed synchronization
 	FailedToSyncReason = "FailedToSync"
 
-	// FailedToCreateVersionsReason documents that managed OS version channel failed to create managed OS versions
-	FailedToCreateVersionsReason = "FailedToCreateVersions"
+	// FailedToCreatePodReason documents that managed OS version channel failed to create the synchronization pod
+	FailedToCreatePodReason = "FailedToCreatePod"
 )
 
 // Managed OS Image conditions

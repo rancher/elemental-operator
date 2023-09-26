@@ -36,6 +36,7 @@ spec:
               options:
                 x-kubernetes-preserve-unknown-fields: true
               syncInterval:
+                default: 1h
                 type: string
               type:
                 type: string

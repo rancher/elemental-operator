@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	displaycmd "github.com/rancher/elemental-operator/cmd/operator/display"
+	downloadcmd "github.com/rancher/elemental-operator/cmd/operator/download"
 	operatorcmd "github.com/rancher/elemental-operator/cmd/operator/operator"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/version"
@@ -39,6 +40,7 @@ func main() {
 	cmd.AddCommand(
 		operatorcmd.NewOperatorCommand(),
 		displaycmd.NewDisplayCommand(),
+		downloadcmd.NewDownloadCommand(),
 		NewVersionCommand(),
 	)
 

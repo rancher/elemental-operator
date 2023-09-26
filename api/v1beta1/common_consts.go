@@ -22,4 +22,7 @@ const (
 
 	// SASecretSuffix is the suffix used to name registration service account's token secret
 	SASecretSuffix = "-token"
+
+	// TimeoutEnvVar is the environment variable key passed to pods to express a timeout
+	TimeoutEnvVar = "ELEMENTAL_TIMEOUT"
 )

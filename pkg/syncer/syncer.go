@@ -17,54 +17,162 @@ limitations under the License.
 package syncer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/object"
+
+	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
-	jsonType   = "json"
-	customType = "custom"
+	jsonType        = "json"
+	customType      = "custom"
+	defaultMountDir = "/data"
+	defaultOutFile  = defaultMountDir + "/output"
+	logsTimeout     = 30
 )
 
+type commons struct {
+	MountPath  string `json:"mountPath"`
+	OutputFile string `json:"outputFile"`
+}
+
+type CustomSyncer struct {
+	upgradev1.ContainerSpec
+	commons
+}
+
+type JSONSyncer struct {
+	URI     string `json:"uri"`
+	Timeout string `json:"timeout"`
+	image   string
+	commons
+}
+
 type Syncer interface {
-	// Sync function returns a list of managed os versions and sets the ready condition of the channel status accordingly
-	Sync(ctx context.Context, cl client.Client, ch *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error)
+	ToContainers() []corev1.Container
+	GetMountPath() string
+	GetOutputFile() string
 }
 
 type Provider interface {
-	NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (Syncer, error)
+	NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string) (Syncer, error)
+	ReadPodLogs(ctx context.Context, kcl *kubernetes.Clientset, pod *corev1.Pod, container string) ([]byte, error)
 }
 
 type DefaultProvider struct{}
 
-func (sp DefaultProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string, config *rest.Config) (Syncer, error) {
+func (sp DefaultProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, operatorImage string) (Syncer, error) {
+	common := commons{
+		MountPath:  defaultMountDir,
+		OutputFile: defaultOutFile,
+	}
 	switch strings.ToLower(spec.Type) {
 	case jsonType:
-		j := &JSONSyncer{}
-		err := object.RenderRawExtension(spec.Options, j)
+		js := &JSONSyncer{commons: common, image: operatorImage}
+		err := object.RenderRawExtension(spec.Options, js)
 		if err != nil {
 			return nil, err
 		}
-		return j, nil
+		return js, nil
 	case customType:
-		kcl, err := kubernetes.NewForConfig(config)
+		cs := &CustomSyncer{commons: common}
+		err := object.RenderRawExtension(spec.Options, cs)
 		if err != nil {
 			return nil, err
 		}
-		j := &CustomSyncer{kcl: kcl, operatorImage: operatorImage}
-		err = object.RenderRawExtension(spec.Options, j)
-		if err != nil {
-			return nil, err
-		}
-		return j, nil
+		return cs, nil
 	default:
 		return nil, fmt.Errorf("unknown version channel type '%s'", spec.Type)
 	}
+}
+
+func (sp DefaultProvider) ReadPodLogs(ctx context.Context, kcl *kubernetes.Clientset, pod *corev1.Pod, container string) ([]byte, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logCtx, cancel := context.WithTimeout(context.Background(), logsTimeout*time.Second)
+
+	defer cancel()
+
+	var podLogs io.ReadCloser
+
+	req := kcl.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: container})
+	podLogs, err := req.Stream(logCtx)
+	if err != nil {
+		logger.Error(err, "failed opening stream")
+		return nil, err
+	}
+	defer podLogs.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		logger.Error(err, "failed copying logs to buffer")
+		return nil, err
+	}
+
+	logger.V(log.DebugDepth).Info("Got raw versions", "json", buf.String())
+	return buf.Bytes(), nil
+}
+
+func (c *CustomSyncer) ToContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			VolumeMounts: []corev1.VolumeMount{{Name: "output",
+				MountPath: c.MountPath,
+			}},
+			Name:    "runner",
+			Image:   c.Image,
+			Command: c.Command,
+			Args:    c.Args,
+			EnvFrom: c.EnvFrom,
+			Env:     c.Env,
+		},
+	}
+}
+
+func (c *CustomSyncer) GetMountPath() string {
+	return c.MountPath
+}
+
+func (c *CustomSyncer) GetOutputFile() string {
+	return c.OutputFile
+}
+
+func (j *JSONSyncer) ToContainers() []corev1.Container {
+	envVars := []corev1.EnvVar{}
+
+	if j.Timeout != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: elementalv1.TimeoutEnvVar, Value: j.Timeout})
+	}
+	return []corev1.Container{
+		{
+			VolumeMounts: []corev1.VolumeMount{{Name: "output",
+				MountPath: j.MountPath,
+			}},
+			Name:    "runner",
+			Image:   j.image,
+			Command: []string{},
+			Args:    []string{"download", "--url", j.URI, "--file", j.OutputFile},
+			Env:     envVars,
+		},
+	}
+}
+
+func (j *JSONSyncer) GetMountPath() string {
+	return j.MountPath
+}
+
+func (j *JSONSyncer) GetOutputFile() string {
+	return j.OutputFile
 }
