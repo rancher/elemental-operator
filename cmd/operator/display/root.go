@@ -19,9 +19,6 @@ package displaycmd
 import (
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -48,25 +45,10 @@ func NewDisplayCommand() *cobra.Command {
 }
 
 func displayRun(path string) {
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	go func() {
-		<-sigc
-		os.Exit(0)
-	}()
-
 	b, err := os.ReadFile(path)
 	if err != nil {
-		klog.Fatal(err)
+		klog.Fatal("failed reading the path:", path, err)
 	}
 
 	fmt.Println(string(b))
-
-	for {
-		time.Sleep(time.Duration(int64(^uint64(0) >> 1)))
-	}
 }

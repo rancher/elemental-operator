@@ -18,71 +18,64 @@ package controllerhelpers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-
-	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sync"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/syncer"
-
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
-// On asynchronous sync this is the number of reconcile loops required to get some data
-const syncLoops = 3
-
-type FakeSyncer struct {
-	json         string
-	asynchronous bool
-	loopsCount   int
-}
+type FakeSyncer struct{}
 
 type FakeSyncerProvider struct {
-	JSON         string
-	UnknownType  string
-	Asynchronous bool
-	loopsCount   int
+	UnknownType string
+	LogsError   bool
+	mu          sync.Mutex
+	json        string
 }
 
-func (fs FakeSyncer) Sync(_ context.Context, _ client.Client, c *elementalv1.ManagedOSVersionChannel) ([]elementalv1.ManagedOSVersion, error) {
-	var errs []error
-	res := []elementalv1.ManagedOSVersion{}
-
-	err := json.Unmarshal([]byte(fs.json), &res)
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	if fs.asynchronous {
-		if fs.loopsCount < syncLoops {
-			meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
-				Reason:  elementalv1.SyncingReason,
-				Status:  metav1.ConditionFalse,
-				Message: "On going channel synchronization",
-			})
-			return nil, nil
-		}
-	}
-
-	meta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
-		Type:    elementalv1.ReadyCondition,
-		Reason:  elementalv1.GotChannelDataReason,
-		Status:  metav1.ConditionFalse,
-		Message: "Got valid channel data",
-	})
-
-	return res, errorutils.NewAggregate(errs)
+func (fs *FakeSyncer) GetMountPath() string {
+	return "/fake/data"
 }
 
-func (sp *FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, _ string, _ *rest.Config) (syncer.Syncer, error) {
-	sp.loopsCount++
+func (fs *FakeSyncer) GetOutputFile() string {
+	return "/fake/data/file"
+}
+
+func (fs *FakeSyncer) ToContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			VolumeMounts: []corev1.VolumeMount{{Name: "output",
+				MountPath: "/fake/data",
+			}},
+			Name:    "runner",
+			Image:   "non/existing/image:latest",
+			Command: []string{"fakecmd"},
+			Args:    []string{"--file", "/fake/data/file"},
+		},
+	}
+}
+
+func (sp *FakeSyncerProvider) NewOSVersionsSyncer(spec elementalv1.ManagedOSVersionChannelSpec, _ string) (syncer.Syncer, error) {
 	if spec.Type == sp.UnknownType {
-		return FakeSyncer{}, fmt.Errorf("Unknown type of channel")
+		return &FakeSyncer{}, fmt.Errorf("Unknown type of channel")
 	}
-	return FakeSyncer{json: sp.JSON, asynchronous: sp.Asynchronous, loopsCount: sp.loopsCount}, nil
+	return &FakeSyncer{}, nil
+}
+
+func (sp *FakeSyncerProvider) ReadPodLogs(_ context.Context, _ *kubernetes.Clientset, _ *corev1.Pod, _ string) ([]byte, error) {
+	if sp.LogsError {
+		return nil, fmt.Errorf("Failed retrieving pod logs")
+	}
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return []byte(sp.json), nil
+}
+
+func (sp *FakeSyncerProvider) SetJSON(json string) {
+	sp.mu.Lock()
+	sp.json = json
+	sp.mu.Unlock()
 }

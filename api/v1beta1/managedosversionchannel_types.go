@@ -37,6 +37,7 @@ type ManagedOSVersionChannelSpec struct {
 	// +optional
 	Type string `json:"type,omitempty"`
 	// +optional
+	// +kubebuilder:default:="1h"
 	SyncInterval string `json:"syncInterval,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields

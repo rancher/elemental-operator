@@ -531,7 +531,7 @@ func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.F
 				if !update {
 					logger.V(log.DebugDepth).Info("Ignoring status update", "MInventory", oldMInventory.Name)
 				}
-				return !cmp.Equal(oldMInventory, newMInventory)
+				return update
 			}
 			// Return true in case it watches other types
 			return true
