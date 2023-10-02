@@ -20,6 +20,9 @@ const (
 	// ElementalManagedLabel label used to put on resources managed by the elemental operator.
 	ElementalManagedLabel = "elemental.cattle.io/managed"
 
+	// ElementalManagedLabel label used to put on resources managed by the elemental operator.
+	ElementalManagedOSVersionChannelLabel = "elemental.cattle.io/channel"
+
 	// SASecretSuffix is the suffix used to name registration service account's token secret
 	SASecretSuffix = "-token"
 

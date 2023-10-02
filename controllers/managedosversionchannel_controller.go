@@ -283,8 +283,12 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		return err
 	}
 
-	var errs []error
+	curVersions := r.getAllOwnedManagedOSVersions(ctx, client.ObjectKey{
+		Name:      ch.Name,
+		Namespace: ch.Namespace,
+	})
 
+	var errs []error
 	for _, v := range vers {
 		vcpy := v.DeepCopy()
 		vcpy.ObjectMeta.Namespace = ch.Namespace
@@ -297,12 +301,25 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 				Controller: pointer.Bool(true),
 			},
 		}
+		vcpy.ObjectMeta.Labels = map[string]string{
+			elementalv1.ElementalManagedOSVersionChannelLabel: ch.Name,
+		}
 
 		if ch.Spec.UpgradeContainer != nil {
 			vcpy.Spec.UpgradeContainer = ch.Spec.UpgradeContainer
 		}
 
-		if err := r.Create(ctx, vcpy); err != nil {
+		if cv, ok := curVersions[v.Name]; ok {
+			patchBase := client.MergeFrom(cv.DeepCopy())
+			cv.Spec = vcpy.Spec
+			err = r.Patch(ctx, cv, patchBase)
+			if err != nil {
+				logger.Error(err, "failed to patch a managedosversion", "name", cv.Name)
+				errs = append(errs, err)
+			} else {
+				logger.Info("patched managedOSVersion", "name", cv.Name)
+			}
+		} else if err = r.Create(ctx, vcpy); err != nil {
 			if apierrors.IsAlreadyExists(err) {
 				logger.Info("already existing managedOSVersion", "name", vcpy.Name)
 			} else {
@@ -317,10 +334,32 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 	return errorutils.NewAggregate(errs)
 }
 
+// getAllOwnedManagedOSVersions returns a map of all ManagedOSVersions labeled with the given channel, resource name is used as the map key
+func (r *ManagedOSVersionChannelReconciler) getAllOwnedManagedOSVersions(ctx context.Context, chKey client.ObjectKey) map[string]*elementalv1.ManagedOSVersion {
+	logger := ctrl.LoggerFrom(ctx)
+	versions := &elementalv1.ManagedOSVersionList{}
+	result := map[string]*elementalv1.ManagedOSVersion{}
+
+	err := r.List(ctx, versions, client.InNamespace(chKey.Namespace), client.MatchingLabels(map[string]string{
+		elementalv1.ElementalManagedOSVersionChannelLabel: chKey.Name,
+	}))
+	if err != nil {
+		// only log error and return an empty map
+		logger.Error(err, "failed listing existing versions from channel")
+		return result
+	}
+
+	for _, ver := range versions.Items {
+		result[ver.Name] = &ver
+	}
+
+	return result
+}
+
 // createSyncerPod creates the pod according to the managed OS version channel configuration
 func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, sync syncer.Syncer) error {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("Launching syncer pod", "pod", ch.Name)
+	logger.Info("Launching syncer", "pod", ch.Name)
 
 	serviceAccount := false
 	pod := &corev1.Pod{

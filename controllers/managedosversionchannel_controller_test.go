@@ -56,10 +56,10 @@ const updatedJSON = `[
       "name": "v0.1.0"
     },
     "spec": {
-      "version": "v0.1.0",
+      "version": "v0.1.0-patched",
       "type": "container",
       "metadata": {
-        "upgradeImage": "foo/bar:v0.1.0"
+        "upgradeImage": "foo/bar:v0.1.0-patched"
       }
     }
   },
@@ -575,5 +575,12 @@ var _ = Describe("managed os version channel controller integration tests", func
 			}, managedOSVersion)
 			return err == nil
 		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+
+		// After channel update already existing versions were patched
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: ch.Namespace,
+		}, managedOSVersion)).To(Succeed())
+		Expect(managedOSVersion.Spec.Version).To(Equal("v0.1.0-patched"))
 	})
 })
