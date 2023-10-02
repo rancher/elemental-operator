@@ -65,17 +65,20 @@ jobs:
       - name: Pull chart for PR
         env:
           PR_NUMBER: ${{ github.event.number }}
-          B_REPO: registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/charts
           OPERATOR_CHART: rancher/elemental-operator-chart
           CRDS_CHART: rancher/elemental-operator-crds-chart
         run: |
+          set -x
+          B_REPO=registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/charts
           mkdir -p build
-          helm pull --debug -d build oci://${B_REPO}/${CRDS_CHART}
+          helm pull -d build oci://${B_REPO}/${CRDS_CHART}
           helm pull -d build oci://${B_REPO}/${OPERATOR_CHART}
       - name: Set chart output
         id: chart
         run: |
-          CHART=$(basename `find . -type f  -name "elemental-operator-[1-9]*.tgz" -print`)
+          set -x
+          FILE=$(find . -type f  -name "elemental-operator-chart-[1-9]*.tgz" -print)
+          CHART=$(basename $FILE)
           echo "chart_name=$CHART" >> $GITHUB_OUTPUT
       - name: Upload chart
         uses: actions/upload-artifact@v3.1.0
