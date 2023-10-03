@@ -35,6 +35,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+// default paths here is where the syncer container stores serialized that
+// and from where the elemental-operator display command reads it from
 const (
 	jsonType        = "json"
 	customType      = "custom"

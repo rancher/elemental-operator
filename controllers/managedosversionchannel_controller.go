@@ -43,10 +43,10 @@ import (
 )
 
 const (
-	baseRateTime        = 1 * time.Second
-	maxDelayTime        = 256 * time.Second
-	displayContainer    = "display"
-	minTimeBetweenSyncs = 10 * time.Second
+	baseRateTime               = 1 * time.Second
+	maxDelayTime               = 256 * time.Second
+	displayContainer           = "display"
+	defaultMinTimeBetweenSyncs = 60 * time.Second
 )
 
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
@@ -56,6 +56,8 @@ type ManagedOSVersionChannelReconciler struct {
 	OperatorImage string
 	// syncerProvider is mostly an interface to facilitate unit tests
 	syncerProvider syncer.Provider
+	// minTimeBetweenSyncs is mostly added here to be configurable in tests
+	minTimeBetweenSyncs time.Duration
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversionchannels,verbs=get;list;watch;create;update;patch;delete
@@ -68,6 +70,9 @@ func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) e
 
 	if r.syncerProvider == nil {
 		r.syncerProvider = syncer.DefaultProvider{}
+	}
+	if r.minTimeBetweenSyncs == 0 {
+		r.minTimeBetweenSyncs = defaultMinTimeBetweenSyncs
 	}
 	r.kcl, err = kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
@@ -175,8 +180,8 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	}
 
 	lastSync := managedOSVersionChannel.Status.LastSyncedTime
-	if lastSync != nil && lastSync.Add(minTimeBetweenSyncs).After(time.Now()) {
-		logger.Info("last synchronization already done at", "time", lastSync)
+	if lastSync != nil && lastSync.Add(r.minTimeBetweenSyncs).After(time.Now()) {
+		logger.Info("synchronization already done shortly before", "lastSync", lastSync)
 		return ctrl.Result{RequeueAfter: time.Until(lastSync.Add(interval))}, nil
 	}
 
@@ -186,7 +191,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		Name:      managedOSVersionChannel.Name,
 	}, pod)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) && readyCondition.Reason != elementalv1.SyncingReason {
 			return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 		}
 		logger.Error(err, "failed getting pod resource", "pod", pod.Name)
@@ -218,9 +223,9 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.SyncingReason,
 			Status:  metav1.ConditionFalse,
-			Message: "on going channel synchronization",
+			Message: "ongoing channel synchronization",
 		})
-		return ctrl.Result{RequeueAfter: minTimeBetweenSyncs / 2}, nil
+		return ctrl.Result{RequeueAfter: r.minTimeBetweenSyncs / 2}, nil
 	case corev1.PodSucceeded:
 		data, err = r.syncerProvider.ReadPodLogs(ctx, r.kcl, pod, displayContainer)
 		if err != nil {
@@ -405,17 +410,12 @@ func filterChannelEvents() predicate.Funcs {
 			logger.V(log.DebugDepth).Info("Processing update event", "Obj", e.ObjectNew.GetName())
 			return true
 		},
-		// Ignore succeeded pods deletion
+		// Ignore pods deletion
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			logger := ctrl.LoggerFrom(context.Background())
 
-			if pod, ok := e.Object.(*corev1.Pod); ok {
-				if pod.Status.Phase == corev1.PodSucceeded {
-					logger.V(log.DebugDepth).Info("Ignoring delete event", "Pod", pod.Name, "Phase", pod.Status.Phase)
-					return false
-				}
-				logger.V(log.DebugDepth).Info("Processing delete event", "Pod", pod.Name, "Phase", pod.Status.Phase)
-				return true
+			if _, ok := e.Object.(*corev1.Pod); ok {
+				return false
 			}
 			// Return true in case it watches other types
 			logger.V(log.DebugDepth).Info("Processing create event", "Obj", e.Object.GetName())
