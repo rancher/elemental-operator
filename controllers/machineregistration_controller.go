@@ -325,10 +325,13 @@ func (r *MachineRegistrationReconciler) ignoreIncrementalStatusUpdate() predicat
 				oldMRegistration = oldMRegistration.DeepCopy()
 				newMregistration := e.ObjectNew.(*elementalv1.MachineRegistration).DeepCopy()
 
+				// Ignore all fields that might be updated on a status update
 				oldMRegistration.Status = elementalv1.MachineRegistrationStatus{}
 				newMregistration.Status = elementalv1.MachineRegistrationStatus{}
 				oldMRegistration.ObjectMeta.ResourceVersion = ""
 				newMregistration.ObjectMeta.ResourceVersion = ""
+				oldMRegistration.ManagedFields = []metav1.ManagedFieldsEntry{}
+				newMregistration.ManagedFields = []metav1.ManagedFieldsEntry{}
 
 				update := !cmp.Equal(oldMRegistration, newMregistration)
 				if !update {
