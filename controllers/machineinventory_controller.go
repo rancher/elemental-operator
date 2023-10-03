@@ -521,11 +521,13 @@ func (r *MachineInventoryReconciler) ignoreIncrementalStatusUpdate() predicate.F
 				oldMInventory = oldMInventory.DeepCopy()
 				newMInventory := e.ObjectNew.(*elementalv1.MachineInventory).DeepCopy()
 
+				// Ignore all fields that might be updated on a status update
 				oldMInventory.Status = elementalv1.MachineInventoryStatus{}
 				newMInventory.Status = elementalv1.MachineInventoryStatus{}
-
 				oldMInventory.ObjectMeta.ResourceVersion = ""
 				newMInventory.ObjectMeta.ResourceVersion = ""
+				oldMInventory.ManagedFields = []metav1.ManagedFieldsEntry{}
+				newMInventory.ManagedFields = []metav1.ManagedFieldsEntry{}
 
 				update := !cmp.Equal(oldMInventory, newMInventory)
 				if !update {

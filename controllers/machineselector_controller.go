@@ -572,10 +572,13 @@ func filterSelectorUpdateEvents() predicate.Funcs {
 				oldS = oldS.DeepCopy()
 				newS := e.ObjectNew.(*elementalv1.MachineInventorySelector).DeepCopy()
 
+				// Ignore all fields that might be updated on a status update
 				oldS.Status = elementalv1.MachineInventorySelectorStatus{}
 				newS.Status = elementalv1.MachineInventorySelectorStatus{}
 				oldS.ObjectMeta.ResourceVersion = ""
 				newS.ObjectMeta.ResourceVersion = ""
+				oldS.ManagedFields = []metav1.ManagedFieldsEntry{}
+				newS.ManagedFields = []metav1.ManagedFieldsEntry{}
 
 				update := !cmp.Equal(oldS, newS)
 				if !update {
