@@ -140,7 +140,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.InvalidConfigurationReason,
-			Status:  metav1.ConditionTrue,
+			Status:  metav1.ConditionFalse,
 			Message: msg,
 		})
 		logger.Error(nil, msg)
@@ -153,7 +153,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.InvalidConfigurationReason,
-			Status:  metav1.ConditionTrue,
+			Status:  metav1.ConditionFalse,
 			Message: msg,
 		})
 		logger.Error(nil, msg)
@@ -166,7 +166,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Reason:  elementalv1.InvalidConfigurationReason,
-			Status:  metav1.ConditionTrue,
+			Status:  metav1.ConditionFalse,
 			Message: msg,
 		})
 		logger.Error(nil, msg)
@@ -182,7 +182,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	lastSync := managedOSVersionChannel.Status.LastSyncedTime
 	if lastSync != nil && lastSync.Add(r.minTimeBetweenSyncs).After(time.Now()) {
 		logger.Info("synchronization already done shortly before", "lastSync", lastSync)
-		return ctrl.Result{RequeueAfter: time.Until(lastSync.Add(interval))}, nil
+		return ctrl.Result{}, nil
 	}
 
 	pod := &corev1.Pod{}
@@ -204,18 +204,22 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		return ctrl.Result{}, err
 	}
 
-	return r.handleSyncPod(ctx, pod, managedOSVersionChannel, interval)
+	return r.handleSyncPod(ctx, pod, managedOSVersionChannel, interval), nil
 }
 
 // handleSyncPod is the method responcible to manage the lifecycle of the channel synchronization pod
-func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, pod *corev1.Pod, ch *elementalv1.ManagedOSVersionChannel, interval time.Duration) (result ctrl.Result, err error) {
+func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, pod *corev1.Pod, ch *elementalv1.ManagedOSVersionChannel, interval time.Duration) ctrl.Result {
 	var data []byte
+	var err error
+
 	logger := ctrl.LoggerFrom(ctx)
 
 	defer func() {
-		r.deletePodOnError(ctx, pod, ch, err)
+		r.handleFailedSync(ctx, pod, ch, err)
 	}()
 
+	// Once the Pod already started we do not return error in case of failure so synchronization is not retriggered, we just set
+	// to false readyness condition and schedule a new resynchronization for the next interval
 	switch pod.Status.Phase {
 	case corev1.PodPending, corev1.PodRunning:
 		logger.Info("Waiting until the pod is on succeeded state ", "pod", pod.Name)
@@ -225,15 +229,15 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 			Status:  metav1.ConditionFalse,
 			Message: "ongoing channel synchronization",
 		})
-		return ctrl.Result{RequeueAfter: r.minTimeBetweenSyncs / 2}, nil
+		return ctrl.Result{RequeueAfter: r.minTimeBetweenSyncs / 2}
 	case corev1.PodSucceeded:
 		data, err = r.syncerProvider.ReadPodLogs(ctx, r.kcl, pod, displayContainer)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: interval}
 		}
 		err = r.createManagedOSVersions(ctx, ch, data)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: interval}
 		}
 		if err = r.Delete(ctx, pod); err != nil {
 			logger.Error(err, "could not delete the pod", "pod", pod.Name)
@@ -247,18 +251,20 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 		})
 		now := metav1.Now()
 		ch.Status.LastSyncedTime = &now
-		return ctrl.Result{RequeueAfter: interval}, nil
+		return ctrl.Result{RequeueAfter: interval}
 	default:
 		// Any other phase (failed or unknown) is considered an error
-		return ctrl.Result{}, fmt.Errorf("synchronization pod failed")
+		err = fmt.Errorf("synchronization pod failed")
+		return ctrl.Result{RequeueAfter: interval}
 	}
 }
 
-// deletePodOnError deletes the pod if err is not nil
-func (r *ManagedOSVersionChannelReconciler) deletePodOnError(ctx context.Context, pod *corev1.Pod, ch *elementalv1.ManagedOSVersionChannel, err error) {
-	logger := ctrl.LoggerFrom(ctx)
-
+// handleFailedSync deletes the pod, produces error log traces and sets the failure state if error is not nil, otherwise sets a success state
+func (r *ManagedOSVersionChannelReconciler) handleFailedSync(ctx context.Context, pod *corev1.Pod, ch *elementalv1.ManagedOSVersionChannel, err error) {
 	if err != nil {
+		logger := ctrl.LoggerFrom(ctx)
+		now := metav1.Now()
+		ch.Status.LastSyncedTime = &now
 		logger.Error(err, "failed handling syncer pod", "pod", pod.Name)
 		meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
@@ -272,7 +278,7 @@ func (r *ManagedOSVersionChannelReconciler) deletePodOnError(ctx context.Context
 	}
 }
 
-// createManagedOSVersions unmarshals managedOSVersions from a byte array and creates them
+// createManagedOSVersions unmarshals managedOSVersions from a byte array and creates them.
 func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, data []byte) error {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -289,6 +295,7 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 	})
 
 	var errs []error
+
 	for _, v := range vers {
 		vcpy := v.DeepCopy()
 		vcpy.ObjectMeta.Namespace = ch.Namespace
@@ -321,11 +328,11 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 			}
 		} else if err = r.Create(ctx, vcpy); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				logger.Info("already existing managedOSVersion", "name", vcpy.Name)
+				logger.Error(err, "already existing managedOSVersion", "name", vcpy.Name)
 			} else {
 				logger.Error(err, "failed to create a managedosversion", "name", vcpy.Name)
-				errs = append(errs, err)
 			}
+			errs = append(errs, err)
 		} else {
 			logger.Info("managedOSVersion created", "name", vcpy.Name)
 		}
@@ -457,7 +464,18 @@ func filterChannelEvents() predicate.Funcs {
 				return false
 			}
 			// Return true in case it watches other types
-			logger.V(log.DebugDepth).Info("Processing create event", "Obj", e.Object.GetName())
+			logger.V(log.DebugDepth).Info("Processing delete event", "Obj", e.Object.GetName())
+			return true
+		},
+		// Ignore generic pod events
+		GenericFunc: func(e event.GenericEvent) bool {
+			logger := ctrl.LoggerFrom(context.Background())
+
+			if _, ok := e.Object.(*corev1.Pod); ok {
+				return false
+			}
+			// Return true in case it watches other types
+			logger.V(log.DebugDepth).Info("Processing generic event", "Obj", e.Object.GetName())
 			return true
 		},
 	}
