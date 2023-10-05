@@ -199,8 +199,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		// No re-sync can be triggered before the minium time between syncs
 		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically("<", 60*time.Second))
-		Expect(res.RequeueAfter).To(BeNumerically(">", 55*time.Second))
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 	})
 
 	It("should reconcile managed os version channel object without a type", func() {
@@ -223,7 +222,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		}, managedOSVersionChannel)).To(Succeed())
 
 		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
-		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 	})
 
 	It("should reconcile managed os version channel object with a bad a sync interval", func() {
@@ -247,7 +246,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		}, managedOSVersionChannel)).To(Succeed())
 
 		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
-		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 	})
 
 	It("should reconcile managed os version channel object with a not valid type", func() {
@@ -264,7 +263,6 @@ var _ = Describe("reconcile managed os version channel", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
-		Expect(res.Requeue).To(BeFalse())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -272,7 +270,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		}, managedOSVersionChannel)).To(Succeed())
 
 		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.InvalidConfigurationReason))
-		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 	})
 
 	It("it fails to reconcile a managed os version channel when channel provides invalid JSON", func() {
@@ -285,8 +283,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
 
 		// No error and status updated (no requeue)
-		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(0 * time.Second))
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -303,7 +302,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 
 		setPodPhase(pod, corev1.PodSucceeded)
 		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -330,7 +329,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
 
 		// No error and status updated (no requeue)
-		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
@@ -349,8 +348,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(pod.Status.Phase).To(Equal(corev1.PodPending))
 
 		setPodPhase(pod, corev1.PodSucceeded)
-		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).To(HaveOccurred())
+		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(1 * time.Hour))
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -395,8 +395,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(pod.Status.Phase).To(Equal(corev1.PodPending))
 
 		setPodPhase(pod, corev1.PodFailed)
-		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).To(HaveOccurred())
+		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(1 * time.Hour))
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -582,5 +583,52 @@ var _ = Describe("managed os version channel controller integration tests", func
 			Namespace: ch.Namespace,
 		}, managedOSVersion)).To(Succeed())
 		Expect(managedOSVersion.Spec.Version).To(Equal("v0.1.0-patched"))
+	})
+
+	It("should not reconcile again if it errors during pod lifecycle", func() {
+		ch.Spec.Type = "json"
+
+		Expect(cl.Create(ctx, ch)).To(Succeed())
+
+		// Pod is created
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err == nil
+		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		setPodPhase(pod, corev1.PodFailed)
+
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, ch)
+			return err == nil && ch.Status.Conditions[0].Reason == elementalv1.FailedToSyncReason
+		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+
+		// Pod is deleted
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err != nil && apierrors.IsNotFound(err)
+		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+
+		// Pod is never recreated and and channel stays in failed status
+		Consistently(func() bool {
+			podErr := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			cErr := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, ch)
+			return (podErr != nil && apierrors.IsNotFound(podErr)) &&
+				(cErr == nil && ch.Status.Conditions[0].Reason == elementalv1.FailedToSyncReason)
+		}, minTime, 1*time.Second).Should(BeTrue())
 	})
 })
