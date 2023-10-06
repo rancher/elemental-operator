@@ -89,9 +89,9 @@ jobs:
   e2e-tests:
     strategy:
       matrix:
-        kubernetes: [ "v1.24.6", "v1.25.8"]
+        kubernetes: [ "v1.23.17", "v1.24.15", "v1.25.11", "v1.26.6" ]
         replicas: ["1"]
-        rancherVersion : ["2.7.2"]
+        rancherVersion : ["2.7.8"]
     runs-on: ubuntu-latest
     needs: prepare-build
     name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
@@ -99,6 +99,9 @@ jobs:
       CHART: ${{ github.workspace }}/build/${{ needs.prepare-build.outputs.chart_name }}
       OPERATOR_REPLICAS: ${{ matrix.replicas }}
       RANCHER_VERSION: ${{ matrix.rancherVersion }}
+      NGINX_VERSION: controller-v1.9.1
+      CERT_MANAGER_VERSION: v1.13.1
+      SYSTEM_UPGRADE_CONTROLLER_VERSION: v0.13.1
     steps:
       - uses: actions/checkout@v3
       - name: Download chart

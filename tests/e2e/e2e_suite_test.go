@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	checkver "github.com/hashicorp/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
@@ -64,10 +64,15 @@ const (
 	certManagerCAInjectorName = "cert-manager-cainjector"
 	cattleSystemNamespace     = "cattle-system"
 	rancherName               = "rancher"
+	rancherWebhook            = "rancher-webhook"
 	cattleFleetNamespace      = "cattle-fleet-local-system"
+	fleetAgent                = "fleet-agent"
+	fleetDefaultNamespace     = "fleet-default"
 	fleetNamespace            = "fleet-local"
-	cattleFleetName           = "fleet-agent"
+	cattleCapiNamespace       = "cattle-provisioning-capi-system"
+	capiController            = "capi-controller-manager"
 	sysUpgradeControllerName  = "system-upgrade-controller"
+	password                  = "rancherpassword"
 )
 
 var (
@@ -111,11 +116,6 @@ var _ = BeforeSuite(func() {
 
 	if e2eCfg.NoSetup {
 		By("No setup")
-		return
-	}
-
-	if isOperatorInstalled(k) {
-		By("rancher-os already deployed, skipping setup")
 		return
 	}
 
@@ -165,6 +165,7 @@ var _ = BeforeSuite(func() {
 				By("already installed")
 				return
 			}
+
 			Expect(kubectl.Apply(nginxNamespace, e2eCfg.NginxURL)).To(Succeed())
 
 			Eventually(func() bool {
@@ -177,19 +178,20 @@ var _ = BeforeSuite(func() {
 				By("already installed")
 				return
 			}
+
 			Expect(kubectl.RunHelmBinaryWithCustomErr(
-				"-n",
-				certManagerNamespace,
-				"install",
-				"--set",
-				"installCRDs=true",
-				"--create-namespace",
+				"upgrade", "--install",
 				certManagerNamespace,
 				e2eCfg.CertManagerChartURL,
+				"--set", "installCRDs=true",
+				"--namespace", certManagerNamespace,
+				"--create-namespace",
 			)).To(Succeed())
+
 			Eventually(func() bool {
 				return isDeploymentReady(certManagerNamespace, certManagerName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
 			Eventually(func() bool {
 				return isDeploymentReady(certManagerNamespace, certManagerCAInjectorName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
@@ -200,24 +202,46 @@ var _ = BeforeSuite(func() {
 				By("already installed")
 				return
 			}
+
+			hostname := fmt.Sprintf("%s.%s", e2eCfg.ExternalIP, e2eCfg.MagicDNS)
 			Expect(kubectl.RunHelmBinaryWithCustomErr(
-				"-n",
-				cattleSystemNamespace,
-				"install",
-				"--set",
-				"bootstrapPassword=admin",
+				"upgrade", "--install",
+				rancherName,
+				e2eCfg.RancherChartURL,
 				"--set", "replicas=1",
 				"--set", "global.cattle.psp.enabled=false",
-				"--set", fmt.Sprintf("hostname=%s.%s", e2eCfg.ExternalIP, e2eCfg.MagicDNS),
+				"--set", "hostname="+hostname,
+				"--set", "bootstrapPassword="+password,
+				"--set", "extraEnv[0].name=CATTLE_SERVER_URL",
+				"--set", "extraEnv[0].value=https://"+hostname,
+				"--set", "extraEnv[1].name=CATTLE_BOOTSTRAP_PASSWORD",
+				"--set", "extraEnv[1].value="+password,
+				"--namespace", cattleSystemNamespace,
 				"--create-namespace",
-				rancherName,
-				fmt.Sprintf(e2eCfg.RancherChartURL),
 			)).To(Succeed())
+
 			Eventually(func() bool {
 				return isDeploymentReady(cattleSystemNamespace, rancherName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
 			Eventually(func() bool {
-				return isDeploymentReady(cattleFleetNamespace, cattleFleetName)
+				return isDeploymentReady(cattleFleetNamespace, fleetAgent)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+			// capi-controller exists only since Rancher Manager v2.7.8
+			refVer, err := checkver.NewVersion("2.7.8")
+			Expect(err).ToNot(HaveOccurred())
+			rancherVer, err := checkver.NewVersion(e2eCfg.RancherVersion)
+			Expect(err).ToNot(HaveOccurred())
+
+			if rancherVer.GreaterThanOrEqual(refVer) {
+				Eventually(func() bool {
+					return isDeploymentReady(cattleCapiNamespace, capiController)
+				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			}
+
+			Eventually(func() bool {
+				return isDeploymentReady(cattleSystemNamespace, rancherWebhook)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
@@ -231,13 +255,13 @@ var _ = BeforeSuite(func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// It needs to look over cattle-system ns to be functional
-			toApply := strings.ReplaceAll(data.String(), "namespace: system-upgrade", "namespace: cattle-system")
+			toApply := strings.ReplaceAll(data.String(), "namespace: system-upgrade", "namespace: "+cattleSystemNamespace)
 
-			temp, err := ioutil.TempFile("", "temp")
+			temp, err := os.CreateTemp("", "temp")
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.RemoveAll(temp.Name())
-			Expect(ioutil.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)).To(Succeed())
+			Expect(os.WriteFile(temp.Name(), []byte(toApply), os.ModePerm)).To(Succeed())
 			Expect(kubectl.Apply(cattleSystemNamespace, temp.Name())).To(Succeed())
 
 			Eventually(func() bool {
@@ -268,14 +292,13 @@ func isOperatorInstalled(k *kubectl.Kubectl) bool {
 func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 	By("Deploying elemental-operator chart", func() {
 		Expect(kubectl.RunHelmBinaryWithCustomErr(
-			"-n",
-			operatorNamespace,
-			"install",
-			"--create-namespace",
-			"--set", "debug=true",
-			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			"upgrade", "--install",
 			operatorCRDsName,
 			config.CRDsChart,
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			"--namespace", operatorNamespace,
+			"--create-namespace",
 		)).To(Succeed())
 
 		By("Waiting for CRDs to be created")
@@ -295,35 +318,19 @@ func deployOperator(k *kubectl.Kubectl, config *e2eConfig.E2EConfig) {
 		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 
 		Expect(kubectl.RunHelmBinaryWithCustomErr(
-			"-n",
-			operatorNamespace,
-			"install",
-			"--create-namespace",
-			"--set", "debug=true",
-			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			"upgrade", "--install",
 			operatorName,
 			config.Chart,
+			"--set", "debug=true",
+			"--set", fmt.Sprintf("replicas=%s", config.OperatorReplicas),
+			"--namespace", operatorNamespace,
+			"--create-namespace",
 		)).To(Succeed())
 
 		By("Waiting for elemental-operator deployment to be available")
 		Eventually(func() bool {
 			return isDeploymentReady(operatorNamespace, operatorName)
 		}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-
-		// As we are not bootstrapping rancher in the tests (going to the first login page, setting new password and rancher-url)
-		// We need to manually set this value, which is the same value you would get from doing the bootstrap
-		setting := &managementv3.Setting{}
-		Expect(cl.Get(ctx,
-			runtimeclient.ObjectKey{
-				Name: "server-url",
-			},
-			setting,
-		)).To(Succeed())
-
-		setting.Source = "env"
-		setting.Value = fmt.Sprintf("https://%s.%s", config.ExternalIP, config.MagicDNS)
-
-		Expect(cl.Update(ctx, setting)).To(Succeed())
 	})
 }
 
