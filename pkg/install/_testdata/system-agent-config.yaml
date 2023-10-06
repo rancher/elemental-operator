@@ -13,6 +13,6 @@ stages:
               permissions: 384
               owner: 0
               group: 0
-              content: '{"workDirectory":"/var/lib/elemental/agent/work","localEnabled":true,"localPlanDirectory":"/var/lib/elemental/agent/plans","appliedPlanDirectory":"/var/lib/elemental/agent/applied","remoteEnabled":true,"connectionInfoFile":"/var/lib/elemental/agent/elemental_connection.json"}'
+              content: '{"workDirectory":"/var/lib/elemental/agent/work","localPlanDirectory":"/var/lib/elemental/agent/plans","appliedPlanDirectory":"/var/lib/elemental/agent/applied","remoteEnabled":true,"connectionInfoFile":"/var/lib/elemental/agent/elemental_connection.json"}'
               encoding: ""
               ownerstring: ""

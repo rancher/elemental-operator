@@ -291,7 +291,7 @@ func (i *installer) getAgentConfigBytes() ([]byte, error) {
 		AppliedPlanDir:     filepath.Join(agentStateDir, "applied"),
 		LocalPlanDir:       filepath.Join(agentStateDir, "plans"),
 		RemoteEnabled:      true,
-		LocalEnabled:       true,
+		LocalEnabled:       false,
 		ConnectionInfoFile: filepath.Join(agentStateDir, "elemental_connection.json"),
 		PreserveWorkDir:    false,
 	}
