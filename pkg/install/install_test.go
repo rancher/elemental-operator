@@ -18,7 +18,6 @@ package install
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -148,7 +147,7 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		checkConfigs(fs)
 	})
 	It("should remove reset plan", func() {
-		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(600))).ToNot(HaveOccurred())
+		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(0600))).ToNot(HaveOccurred())
 		cliRunner.EXPECT().Reset(gomock.Any()).Return(nil)
 		Expect(install.ResetElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
 		_, err := fs.Stat(controllers.LocalResetPlanPath)
@@ -176,7 +175,7 @@ func checkConfigs(fs vfs.FS) {
 func compareFiles(fs vfs.FS, got string, want string) {
 	gotFile, err := fs.ReadFile(got)
 	Expect(err).ToNot(HaveOccurred())
-	wantFile, err := ioutil.ReadFile(want)
+	wantFile, err := os.ReadFile(want)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(string(gotFile)).To(Equal(string(wantFile)))
 }
