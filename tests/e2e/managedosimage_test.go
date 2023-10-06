@@ -33,8 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const testnamespace = "fleet-default"
-
 var _ = Describe("ManagedOSImage e2e tests", func() {
 	Context("Using OSImage reference", func() {
 		var ui *elementalv1.ManagedOSImage
@@ -42,7 +40,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		BeforeEach(func() {
 			By("Creating a new ManagedOSImage CRD")
 			ui = catalog.NewManagedOSImage(
-				testnamespace,
+				fleetDefaultNamespace,
 				"update-image",
 				[]elementalv1.BundleTarget{{
 					ClusterName: "dummycluster",
@@ -56,7 +54,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 		AfterEach(func() {
 			ui = catalog.NewManagedOSImage(
-				testnamespace,
+				fleetDefaultNamespace,
 				"update-image",
 				[]elementalv1.BundleTarget{{
 					ClusterName: "dummycluster",
@@ -75,7 +73,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 				if err := cl.Get(ctx, client.ObjectKey{
 					Name:      "mos-update-image",
-					Namespace: testnamespace,
+					Namespace: fleetDefaultNamespace,
 				}, bundle); err != nil {
 					return err.Error()
 				}
@@ -94,14 +92,13 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 		withUpgradeImage := "with-upgrade-image"
 
 		AfterEach(func() {
-
-			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSImage{}, client.InNamespace(testnamespace)))
-			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSVersion{}, client.InNamespace(testnamespace)))
+			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSImage{}, client.InNamespace(fleetDefaultNamespace)))
+			Expect(cl.DeleteAllOf(ctx, &elementalv1.ManagedOSVersion{}, client.InNamespace(fleetDefaultNamespace)))
 		})
 
 		createsCorrectPlan := func(name string, meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
 			ov := catalog.NewManagedOSVersion(
-				testnamespace,
+				fleetDefaultNamespace,
 				name, "v1.0", "0.0.0",
 				meta,
 				c,
@@ -110,7 +107,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			Expect(cl.Create(ctx, ov)).To(Succeed())
 
 			ui := catalog.NewManagedOSImage(
-				testnamespace,
+				fleetDefaultNamespace,
 				name,
 				[]elementalv1.BundleTarget{{
 					ClusterName: "dummycluster",
@@ -126,7 +123,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 
 				if err := cl.Get(ctx, client.ObjectKey{
 					Name:      "mos-" + name,
-					Namespace: testnamespace,
+					Namespace: fleetDefaultNamespace,
 				}, bundle); err != nil {
 					return err.Error()
 				}

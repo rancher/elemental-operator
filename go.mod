@@ -176,6 +176,7 @@ require (
 require (
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/gobuffalo/flect v0.2.4
+	github.com/hashicorp/go-version v1.6.0
 	github.com/jaypipes/ghw v0.9.0
 	github.com/sanity-io/litter v1.5.5
 	github.com/twpayne/go-vfsafero v1.0.0

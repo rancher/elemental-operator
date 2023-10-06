@@ -40,7 +40,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 
 		BeforeEach(func() {
 			mRegistration = catalog.NewMachineRegistration(
-				operatorNamespace,
+				fleetNamespace,
 				"machine-registration",
 				&elementalv1.Config{})
 		})
@@ -75,7 +75,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 			}
 			cconfig, _ := json.Marshal(config)
 			mRegistration = catalog.NewMachineRegistration(
-				operatorNamespace,
+				fleetNamespace,
 				"machine-registration",
 				&elementalv1.Config{
 					Elemental: elementalv1.Elemental{
@@ -85,7 +85,7 @@ var _ = Describe("MachineRegistration e2e tests", func() {
 						},
 					},
 					CloudConfig: map[string]runtime.RawExtension{
-						"write_files": runtime.RawExtension{
+						"write_files": {
 							Raw: cconfig,
 						},
 					},

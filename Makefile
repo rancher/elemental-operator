@@ -156,6 +156,10 @@ e2e-tests: $(GINKGO)
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
 
+# Only setups the kind cluster
+setup-kind:
+	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/setup-kind-cluster.sh
+
 # setup the cluster but not run any test!
 # This will build the image locally, the chart with that image,
 # setup kind, load the local built image into the cluster,
@@ -163,7 +167,7 @@ e2e-tests: $(GINKGO)
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
 setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
-	@export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
+	@export EXTERNAL_IP=$((kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \

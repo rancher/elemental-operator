@@ -78,8 +78,8 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 				},
 			}
 		})
-		It("Reports failure events", func() {
 
+		It("Reports failure events", func() {
 			By("Create an invalid ManagedOSVersionChannel")
 			ch := catalog.NewManagedOSVersionChannel(
 				fleetNamespace, channelName, "", "10m",
@@ -100,7 +100,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 			Eventually(func() string {
 				gCh := &elementalv1.ManagedOSVersionChannel{}
 				_ = cl.Get(ctx, client.ObjectKey{
-					Name:      "testchannel",
+					Name:      channelName,
 					Namespace: fleetNamespace,
 				}, gCh)
 
@@ -134,7 +134,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			gCh := &elementalv1.ManagedOSVersionChannel{}
 			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      "testchannel",
+				Name:      channelName,
 				Namespace: fleetNamespace,
 			}, gCh)).To(Succeed())
 			Expect(gCh.Spec.Type).To(Equal("json"))
@@ -203,7 +203,7 @@ var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
 
 			gCh := &elementalv1.ManagedOSVersionChannel{}
 			Expect(cl.Get(ctx, client.ObjectKey{
-				Name:      "testchannel",
+				Name:      channelName,
 				Namespace: fleetNamespace,
 			}, gCh)).To(Succeed())
 			Expect(gCh.Spec.Type).To(Equal("custom"))
