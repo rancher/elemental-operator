@@ -21,6 +21,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	cleanupcmd "github.com/rancher/elemental-operator/cmd/operator/cleanup"
 	displaycmd "github.com/rancher/elemental-operator/cmd/operator/display"
 	downloadcmd "github.com/rancher/elemental-operator/cmd/operator/download"
 	operatorcmd "github.com/rancher/elemental-operator/cmd/operator/operator"
@@ -41,6 +42,7 @@ func main() {
 		operatorcmd.NewOperatorCommand(),
 		displaycmd.NewDisplayCommand(),
 		downloadcmd.NewDownloadCommand(),
+		cleanupcmd.NewCleanupCommand(),
 		NewVersionCommand(),
 	)
 

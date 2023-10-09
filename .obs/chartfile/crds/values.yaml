@@ -1,0 +1,12 @@
+image:
+  empty: rancher/pause:3.1
+  repository: "rancher/elemental-operator"
+  tag: "%VERSION%"
+  imagePullPolicy: IfNotPresent
+
+global:
+  cattle:
+    systemDefaultRegistry: ""
+
+# used only if systemDefaultRegistry is empty
+registryUrl: "%%IMG_REPO%%"
