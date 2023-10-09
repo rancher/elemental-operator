@@ -134,7 +134,7 @@ chart:
 
 .PHONY: migration-chart
 migration-chart:
-	mkdir -p  $(ROOT_DIR)/build
+	mkdir -p $(ROOT_DIR)/build
 	cp -rf $(ROOT_DIR)/charts/crds-migration $(ROOT_DIR)/build/crds-migration
 	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds-migration
 	rm -Rf $(ROOT_DIR)/build/crds-migration
@@ -146,15 +146,15 @@ validate:
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
 
-e2e-tests: $(GINKGO) setup-kind
-	export EXTERNAL_IP=`kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}'` && \
+e2e-tests: $(GINKGO)
+	kubectl cluster-info --context kind-$(CLUSTER_NAME)
+	kubectl label nodes --all --overwrite ingress-ready=true
+	kubectl label nodes --all --overwrite node-role.kubernetes.io/master=
+	kubectl get nodes -o wide
+	export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
-
-# Only setups the kind cluster
-setup-kind:
-	KUBE_VERSION=${KUBE_VERSION} $(ROOT_DIR)/scripts/setup-kind-cluster.sh
 
 # setup the cluster but not run any test!
 # This will build the image locally, the chart with that image,
@@ -170,11 +170,6 @@ setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart s
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
-
-kind-e2e-tests: build-docker-operator chart setup-kind
-	export CONFIG_PATH=$(E2E_CONF_FILE) && \
-	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
-	$(MAKE) e2e-tests
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
