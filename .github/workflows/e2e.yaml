@@ -97,7 +97,6 @@ jobs:
     name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
     env:
       CHART: ${{ github.workspace }}/build/${{ needs.prepare-build.outputs.chart_name }}
-      KUBE_VERSION: ${{ matrix.kubernetes }}
       OPERATOR_REPLICAS: ${{ matrix.replicas }}
       RANCHER_VERSION: ${{ matrix.rancherVersion }}
     steps:
@@ -119,15 +118,11 @@ jobs:
           key: ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
-      - name: Install KinD
-        uses: jaxxstorm/action-install-gh-release@v1.9.0
+      - name: Install kind
+        uses: helm/kind-action@v1
         with:
-          repo: kubernetes-sigs/kind
-          tag: v0.16.0
-          extension-matching: disable
-          rename-to: kind
-          chmod: 0755
-          cache: enable
+          cluster_name: operator-e2e
+          node_image: kindest/node:${{ matrix.kubernetes }}
       - name: e2e tests
         run: make e2e-tests
       - name: Archive artifacts
