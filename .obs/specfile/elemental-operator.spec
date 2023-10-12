@@ -33,7 +33,7 @@ BuildRequires:  make
 BuildRequires:  grep
 
 %if 0%{?suse_version}
-BuildRequires:  golang(API) >= 1.16
+BuildRequires:  golang(API) >= 1.20
 BuildRequires:  golang-packaging
 %{go_provides}
 %else
@@ -44,7 +44,7 @@ BuildRequires:  golang-packaging
 %if (0%{?centos_version} == 800) || (0%{?rhel_version} == 800)
 BuildRequires:  go1.20
 %else
-BuildRequires:  compiler(go-compiler)
+BuildRequires:  compiler(go-compiler) >= 1.20
 %endif
 %endif
 
