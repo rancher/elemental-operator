@@ -43,13 +43,20 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
-const seedImgVolSize = 4 * 1024 * 1024 * 1024 // 4 GiB
+const seedImgVolSize = 6 * 1024 * 1024 * 1024 // 6 GiB
 
 type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
 	SeedImageImagePullPolicy corev1.PullPolicy
 }
+
+const (
+	ConfigMapKeyDevice          = "device"
+	ConfigMapKeyRegistrationURL = "registration-url"
+	ConfigMapKeyBaseImage       = "base-image"
+	ConfigMapKeyOutputName      = "output-name"
+)
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages/status,verbs=get;update;patch
@@ -198,6 +205,8 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.Info("Reconciling Pod resources")
 
+	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
+
 	seedImgCondition := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady)
 	seedImgConditionMet := false
 	if seedImgCondition != nil && seedImgCondition.Status == metav1.ConditionTrue {
@@ -209,7 +218,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		return nil
 	}
 
-	if err := r.reconcileConfigMapObject(ctx, seedImg, mRegistration); err != nil {
+	if err := r.reconcileConfigMapObject(ctx, isoName, seedImg, mRegistration); err != nil {
 		return err
 	}
 
@@ -250,7 +259,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(seedImg, isoName, r.SeedImageImage, r.SeedImageImagePullPolicy)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -280,7 +289,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	return nil
 }
 
-func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
+func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, isoName string, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling ConfigMap resources")
@@ -326,16 +335,24 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 	// (re)create the configmap
 	logger.V(5).Info("Create ConfigMap", "seedimage", seedImg.Namespace+"/"+seedImg.Name)
 
-	data := map[string][]byte{
+	binaryData := map[string][]byte{
 		"registration": regData,
 		"cloud-config": cloudConfig,
+	}
+
+	data := map[string]string{
+		ConfigMapKeyRegistrationURL: mRegistration.Status.RegistrationURL,
+		ConfigMapKeyDevice:          mRegistration.Spec.Config.Elemental.Install.Device,
+		ConfigMapKeyBaseImage:       seedImg.Spec.BaseImage,
+		ConfigMapKeyOutputName:      isoName,
 	}
 	conf := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
 		},
-		BinaryData: data,
+		BinaryData: binaryData,
+		Data:       data,
 	}
 
 	if err := controllerutil.SetControllerReference(seedImg, conf, r.Scheme()); err != nil {
@@ -521,13 +538,19 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
 	deadline := seedImg.Spec.LifetimeMinutes
 	configMap := name
-	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
+
+	var initContainers []corev1.Container
+	if seedImg.Spec.BuildContainer == nil {
+		initContainers = defaultInitContainers(baseImg, isoName, buildImg, pullPolicy)
+	} else {
+		initContainers = userDefinedInitContainers(seedImg)
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -539,7 +562,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 			},
 		},
 		Spec: corev1.PodSpec{
-			InitContainers: defineInitContainers(baseImg, isoName, buildImg, pullPolicy),
+			InitContainers: initContainers,
 			Containers: []corev1.Container{
 				{
 					Name:            "serve",
@@ -588,7 +611,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 	return pod
 }
 
-func defineInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
+func defaultInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
 	const baseIsoPath = "/iso/base.iso"
 
 	containers := []corev1.Container{}
@@ -648,6 +671,80 @@ func defineInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.P
 	}
 
 	return containers
+}
+
+func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Container {
+	c := seedImg.Spec.BuildContainer
+
+	name := "build"
+	if c.Name != "" {
+		name = c.Name
+	}
+
+	return []corev1.Container{
+		{
+			Name:            name,
+			Image:           c.Image,
+			ImagePullPolicy: c.ImagePullPolicy,
+			Command:         c.Command,
+			Args:            c.Args,
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "iso-storage",
+					MountPath: "/iso",
+				}, {
+					Name:      "config-map",
+					MountPath: "/overlay",
+				},
+			},
+			Env: []corev1.EnvVar{
+				{
+					Name: "ELEMENTAL_DEVICE",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: ConfigMapKeyDevice,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_REGISTRATION_URL",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: ConfigMapKeyRegistrationURL,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_BASE_IMAGE",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: ConfigMapKeyBaseImage,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_OUTPUT_NAME",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: ConfigMapKeyOutputName,
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedImg *elementalv1.SeedImage) error {

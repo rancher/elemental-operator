@@ -28,6 +28,10 @@ type SeedImageSpec struct {
 	BaseImage string `json:"baseImage"`
 	// MachineRegistrationRef a reference to the related MachineRegistration.
 	MachineRegistrationRef *corev1.ObjectReference `json:"registrationRef"`
+	// BuildContainer settings for a custom container used to generate the
+	// downloadable image.
+	// +optional
+	BuildContainer *BuildContainer `json:"buildContainer"`
 	// LifetimeMinutes the time at which the built seed image will be cleaned up.
 	// If when the lifetime elapses the built image is being downloaded, the active
 	// download will be completed before removing the built image.
@@ -43,6 +47,24 @@ type SeedImageSpec struct {
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
+}
+
+type BuildContainer struct {
+	// Name of the spawned container
+	// +optional
+	Name string `json:"name"`
+	// Image container image to run
+	// +optional
+	Image string `json:"image"`
+	// Command same as corev1.Container.Command
+	// +optional
+	Command []string `json:"command"`
+	// Args same as corev1.Container.Args
+	// +optional
+	Args []string `json:"args"`
+	// Args same as corev1.Container.ImagePullPolicy
+	// +optional
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy"`
 }
 
 type SeedImageState string

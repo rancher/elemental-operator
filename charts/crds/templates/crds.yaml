@@ -2561,6 +2561,30 @@ spec:
                 description: BaseImg the base elemental image used to build the seed
                   image.
                 type: string
+              buildContainer:
+                description: BuildContainer settings for a custom container used to
+                  generate the downloadable image.
+                properties:
+                  args:
+                    description: Args same as corev1.Container.Args
+                    items:
+                      type: string
+                    type: array
+                  command:
+                    description: Command same as corev1.Container.Command
+                    items:
+                      type: string
+                    type: array
+                  image:
+                    description: Image container image to run
+                    type: string
+                  imagePullPolicy:
+                    description: Args same as corev1.Container.ImagePullPolicy
+                    type: string
+                  name:
+                    description: Name of the spawned container
+                    type: string
+                type: object
               cleanupAfterMinutes:
                 default: 60
                 description: LifetimeMinutes the time at which the built seed image
