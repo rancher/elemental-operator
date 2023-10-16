@@ -68,6 +68,13 @@ var _ = Describe("reconcile seed image", func() {
 					},
 				},
 			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{},
+					},
+				},
+			},
 		}
 
 		seedImg = &elementalv1.SeedImage{
@@ -205,6 +212,13 @@ var _ = Describe("reconcileBuildImagePod", func() {
 						Reason:             elementalv1.SuccessfullyCreatedReason,
 						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{},
 					},
 				},
 			},
@@ -394,6 +408,13 @@ var _ = Describe("createConfigMapObject", func() {
 						Reason:             elementalv1.SuccessfullyCreatedReason,
 						Status:             metav1.ConditionTrue,
 						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{},
 					},
 				},
 			},
