@@ -183,6 +183,128 @@ var _ = Describe("reconcile seed image", func() {
 
 })
 
+var _ = Describe("reconcile seed image build container", func() {
+	var r *SeedImageReconciler
+	var mRegistration *elementalv1.MachineRegistration
+	var seedImg *elementalv1.SeedImage
+	var setting *managementv3.Setting
+	var pod *corev1.Pod
+	var service *corev1.Service
+
+	BeforeEach(func() {
+		r = &SeedImageReconciler{
+			Client:                   cl,
+			SeedImageImage:           "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
+		}
+
+		mRegistration = &elementalv1.MachineRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Status: elementalv1.MachineRegistrationStatus{
+				RegistrationURL:   "https://example.com/token",
+				RegistrationToken: "token",
+				Conditions: []metav1.Condition{
+					{
+						Type:               elementalv1.ReadyCondition,
+						Reason:             elementalv1.SuccessfullyCreatedReason,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{},
+					},
+				},
+			},
+		}
+
+		seedImg = &elementalv1.SeedImage{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage: "seed-image:latest",
+				MachineRegistrationRef: &corev1.ObjectReference{
+					Name:      mRegistration.Name,
+					Namespace: mRegistration.Namespace,
+				},
+				BuildContainer: &elementalv1.BuildContainer{
+					Image:           "test-seedimage-builder:latest",
+					ImagePullPolicy: corev1.PullNever,
+				},
+			},
+		}
+
+		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "server-url",
+			},
+			Value: "https://example.com",
+		}
+
+		pod = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
+		service = &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		}
+
+		statusCopy := mRegistration.Status.DeepCopy()
+
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+
+		patchBase := client.MergeFrom(mRegistration.DeepCopy())
+		mRegistration.Status = *statusCopy
+		Expect(cl.Status().Patch(ctx, mRegistration, patchBase)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg, setting, pod, service)).To(Succeed())
+	})
+
+	It("should create the initContainer from a user-specified BuildContainer", func() {
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: seedImg.Namespace,
+				Name:      seedImg.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, seedImg)).To(Succeed())
+
+		foundPod := &corev1.Pod{}
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, foundPod)).To(Succeed())
+		Expect(foundPod.Annotations["elemental.cattle.io/base-image"]).To(Equal(seedImg.Spec.BaseImage))
+		Expect(len(foundPod.Spec.InitContainers)).To(Equal(1))
+		Expect(foundPod.Spec.InitContainers[0].Image).To(Equal(seedImg.Spec.BuildContainer.Image))
+		Expect(foundPod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(seedImg.Spec.BuildContainer.ImagePullPolicy))
+		Expect(len(foundPod.Spec.InitContainers[0].Env)).To(Equal(4))
+	})
+})
+
 var _ = Describe("reconcileBuildImagePod", func() {
 	var r *SeedImageReconciler
 	var setting *managementv3.Setting
