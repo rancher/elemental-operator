@@ -9,13 +9,3 @@ spec:
     image: {{ template "registry_url" . }}{{ .Values.channel.repository }}:{{ .Values.channel.tag }}
   type: custom
 {{ end }}
----
-apiVersion: elemental.cattle.io/v1beta1
-kind: ManagedOSVersionChannel
-metadata:
-  name: elemental-teal-channel
-  namespace: fleet-default
-spec:
-  options:
-    image: registry.suse.com/rancher/elemental-teal-channel:1.3.5
-  type: custom
