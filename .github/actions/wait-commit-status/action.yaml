@@ -35,6 +35,6 @@ runs:
         for i in $(seq ${RETRIES}); do
           RESULT=$(curl -s "${QUERY_URL}" | jq "[.[] | ${JQ_SELECTOR}][0]")
           [ "${RESULT}" != "null" ] && break
-          [ "${i}" != "${RETRIES}" ] && echo "Waiting" && sleep ${SLEEP}
+          [ "${i}" != "${RETRIES}" ] && echo "Waiting for ${STATUS} (current: ${RESULT})" && sleep ${SLEEP}
         done
         [ "${RESULT}" != "null" ] || exit 1
