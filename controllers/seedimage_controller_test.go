@@ -47,7 +47,7 @@ var _ = Describe("reconcile seed image", func() {
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
 			Client:                   cl,
-			SeedImageImage:           "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImage:           "registry.suse.com/rancher/seedimage-builder:latest",
 			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
 		}
 
@@ -187,7 +187,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
 			Client:                   cl,
-			SeedImageImage:           "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImage:           "registry.suse.com/rancher/seedimage-builder:latest",
 			SeedImageImagePullPolicy: corev1.PullIfNotPresent,
 		}
 
@@ -496,7 +496,7 @@ var _ = Describe("updateStatusFromPod", func() {
 	BeforeEach(func() {
 		r = &SeedImageReconciler{
 			Client:         cl,
-			SeedImageImage: "quay.io/costoolkit/seedimage-builder:latest",
+			SeedImageImage: "registry.suse.com/rancher/seedimage-builder:latest",
 		}
 		seedImg = &elementalv1.SeedImage{
 			Status: elementalv1.SeedImageStatus{

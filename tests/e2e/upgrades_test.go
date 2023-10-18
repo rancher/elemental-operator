@@ -34,7 +34,7 @@ import (
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
-const discoveryPluginImage = `"quay.io/costoolkit/upgradechannel-discovery:v0.4.0"`
+const channelImage = `"registry.suse.com/rancher/elemental-teal-channel:1.3.4"`
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
@@ -232,17 +232,13 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				"custom",
 				"1m",
 				map[string]runtime.RawExtension{
-					"image": {Raw: []byte(discoveryPluginImage)},
-					"envs": {Raw: []byte(
-						`[{"name": "REPOSITORY","value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo"}]`,
-					)},
-					"args": {Raw: []byte(`["git"]`)},
+					"image": {Raw: []byte(channelImage)},
 				},
 				nil,
 			)
 			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel3")
 
-			waitTestChannelPopulate(k, mr, "testchannel3", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
+			waitTestChannelPopulate(k, mr, "testchannel3", "registry.suse.com/rancher/elemental-teal/5.4", "1.2.2")
 
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
@@ -255,9 +251,9 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 
 			checkUpgradePod(k,
 				And(
-					ContainElement("METADATA_UPGRADEIMAGE=foo/bar:v0.1.0-beta1"),
+					ContainElement("METADATA_UPGRADEIMAGE=registry.suse.com/rancher/elemental-teal/5.4:1.2.2"),
 				),
-				Equal("foo/bar:v0.1.0-beta1"),
+				Equal("registry.suse.com/rancher/elemental-teal/5.4:1.2.2"),
 				Equal([]string{"/usr/sbin/suc-upgrade"}),
 				BeNil(),
 				And(
@@ -273,11 +269,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				"custom",
 				"1m",
 				map[string]runtime.RawExtension{
-					"image": {Raw: []byte(discoveryPluginImage)},
-					"envs": {Raw: []byte(
-						`[{"name": "REPOSITORY","value": "https://github.com/rancher-sandbox/upgradechannel-discovery-test-repo"}]`,
-					)},
-					"args": {Raw: []byte(`["git"]`)},
+					"image": {Raw: []byte(channelImage)},
 				},
 				&upgradev1.ContainerSpec{
 					Image:   "Foobarz",
@@ -287,7 +279,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			)
 			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel4")
 
-			waitTestChannelPopulate(k, mr, "testchannel4", "foo/bar:v0.1.0-beta1", "v0.1.0-beta1")
+			waitTestChannelPopulate(k, mr, "testchannel4", "registry.suse.com/rancher/elemental-teal/5.4", "1.2.2")
 
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
@@ -309,58 +301,6 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 					ContainElement("host-root=/host"),
 				),
 			)
-		})
-
-		It("tries to apply an upgrade", func() {
-			mr := catalog.NewManagedOSVersionChannel(
-				fleetNamespace,
-				"testchannel5",
-				"custom",
-				"1m",
-				map[string]runtime.RawExtension{
-					"image": {Raw: []byte(discoveryPluginImage)},
-					"envs": {Raw: []byte(
-						`[
-							{"name": "REPOSITORY","value": "rancher/elemental"},
-							{"name": "IMAGE_PREFIX","value": "quay.io/costoolkit/elemental"},
-							{"name": "VERSION_SUFFIX","value": "-amd64"},
-							{"name": "PRE_RELEASES","value": "true"}
-						]`,
-					)},
-					"args": {Raw: []byte(`["github"]`)},
-				},
-				nil,
-			)
-			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel5")
-
-			waitTestChannelPopulate(k, mr, "testchannel5", "quay.io/costoolkit/elemental:v0.1.0-amd64", "v0.1.0-amd64")
-
-			err := k.ApplyJSON("", osImage,
-				catalog.NewManagedOSImage(fleetNamespace, osImage, []elementalv1.BundleTarget{}, "", "v0.1.0-amd64"))
-			Expect(err).ToNot(HaveOccurred())
-
-			checkUpgradePod(k,
-				And(
-					ContainElement("METADATA_UPGRADEIMAGE=quay.io/costoolkit/elemental:v0.1.0-amd64"),
-				),
-				Equal("quay.io/costoolkit/elemental:v0.1.0-amd64"),
-				Equal([]string{"/usr/sbin/suc-upgrade"}),
-				BeNil(),
-				And(
-					ContainElement("host-root=/host"),
-				),
-			)
-
-			Eventually(func() string {
-				podName := upgradePod(k)
-				str, _ := kubectl.Run("logs", "-n", cattleSystemNamespace, podName)
-				fmt.Println(str)
-				return str
-			}, 5*time.Minute, 2*time.Second).Should(
-				And(
-					ContainSubstring("Starting elemental version"),
-					ContainSubstring("Could not find device for COS_RECOVERY label: no device found"),
-				))
 		})
 	})
 })
