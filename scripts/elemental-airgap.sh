@@ -17,7 +17,9 @@ IMAGES_TO_SAVE=""
 : ${LOCAL_REGISTRY:=\$LOCAL_REGISTRY}
 : ${CHART_NAME_CRDS:=$ELEMENTAL_OPERATOR_CRDS_CHART_NAME}
 : ${CHART_VERSION:="latest"}
+: ${CHANNEL_ONLY:="false"}
 : ${CHANNEL_IMAGE_NAME:="\$CHANNEL_IMAGE_NAME"}
+: ${SKIP_ARCHIVE_CREATION:="false"}
 
 print_help() {
     cat <<- EOF
@@ -27,6 +29,8 @@ Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
     [-c|--crds-chart] Elemental CRDS chart (if URL, will be downloaded).
     [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
     [-r|--local-registry] registry where to load the images to (used in the next steps).
+    [-co|--channel-only] just extract and rebuild the ManagedOSVersionChannel container image
+    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
     [-d|--debug] enable debug output on screen.
     [-h|--help] Usage message.
 
@@ -41,7 +45,9 @@ Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
     LOCAL_REGISTRY (-r)             : $LOCAL_REGISTRY
     CHART_NAME_CRDS (-c)            : $CHART_NAME_CRDS
     CHART_VERSION (-cv)             : $CHART_VERSION
+    CHANNEL_ONLY (-co)              : $CHANNEL_ONLY
     CHANNEL_IMAGE_NAME              : $CHANNEL_IMAGE_NAME
+    SKIP_ARCHIVE_CREATION (-sa)     : $SKIP_ARCHIVE_CREATION
 
     examples:
 
@@ -84,6 +90,14 @@ parse_parameters() {
             -r|--local-registry)
             LOCAL_REGISTRY="$2"
             shift
+            shift
+            ;;
+            -co|--channel-only)
+            CHANNEL_ONLY=true
+            shift
+            ;;
+            -sa|--skip-archive)
+            SKIP_ARCHIVE_CREATION=true
             shift
             ;;
             -d|--debug)
@@ -255,6 +269,8 @@ fetch_charts() {
 pull_chart_container_images() {
     local oprtimg_repo oprtimg_tag seedimg_repo seedimg_tag registry_url
 
+    [ "$CHANNEL_ONLY" = "true" ] && return
+
     get_chart_val oprtimg_repo "image.repository"
     get_chart_val oprtimg_tag "image.tag"
     get_chart_val seedimg_repo "seedImage.repository"
@@ -348,15 +364,18 @@ build_os_channel() {
 
         log_info "Extract OS image:\n\t$item_name ($item_display)\n\t$item_image"
 
-        # save the OS image
-        if pull_image "${item_image}"; then
-            add_image_to_export_list "${item_image}"
-
-            # prepend the private registry name
-            set_json_val item "$item" "$item_url_field" "${LOCAL_REGISTRY}/${item_image}"
-
-            [ -z "$new_channel" ] && new_channel="[${item}" || new_channel="${new_channel},${item}"
+        if [ "$SKIP_ARCHIVE_CREATION" != "true" ]; then
+            # save the OS image
+            if ! pull_image "${item_image}"; then
+                continue
+            fi
         fi
+        add_image_to_export_list "${item_image}"
+
+        # prepend the private registry name
+        set_json_val item "$item" "$item_url_field" "${LOCAL_REGISTRY}/${item_image}"
+
+        [ -z "$new_channel" ] && new_channel="[${item}" || new_channel="${new_channel},${item}"
     done
     new_channel="${new_channel}]"
 
@@ -382,7 +401,6 @@ EOF
 }
 
 create_container_images_archive() {
-    log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images (may take a while)"
     echo -n "" > "${CONTAINER_IMAGES_FILE}"
     for i in ${IMAGES_TO_SAVE} ; do
         log_debug "* $i"
@@ -390,11 +408,16 @@ create_container_images_archive() {
     done
     sort -u ${CONTAINER_IMAGES_FILE} -o ${CONTAINER_IMAGES_FILE}
 
+    [ "$SKIP_ARCHIVE_CREATION" = "true" ] && return
+
+    log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images (may take a while)"
     docker save $(echo ${IMAGES_TO_SAVE}) | gzip --stdout > ${CONTAINER_IMAGES_ARCHIVE}
 }
 
 print_next_steps() {
     local registry_url
+
+    [ "$SKIP_ARCHIVE_CREATION" = "true" ] && return
 
     get_chart_val registry_url "registryUrl"
 
