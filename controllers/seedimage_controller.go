@@ -743,6 +743,11 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 					},
 				},
 			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceEphemeralStorage: *resource.NewQuantity(seedImgVolSize, resource.BinarySI),
+				},
+			},
 		},
 	}
 }
