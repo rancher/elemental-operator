@@ -34,7 +34,8 @@ import (
 	"github.com/rancher/elemental-operator/tests/catalog"
 )
 
-const channelImage = `"registry.suse.com/rancher/elemental-teal-channel:1.3.4"`
+// We are using the RT channel not to overlap with the default one
+const channelImage = `"registry.suse.com/rancher/elemental-teal-rt-channel:1.3.4"`
 
 func getPlan(s string) (up *upgradev1.Plan, err error) {
 	up = &upgradev1.Plan{}
@@ -238,22 +239,22 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			)
 			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel3")
 
-			waitTestChannelPopulate(k, mr, "testchannel3", "registry.suse.com/rancher/elemental-teal/5.4", "1.2.2")
+			waitTestChannelPopulate(k, mr, "testchannel3", "registry.suse.com/rancher/elemental-teal-rt/5.4:1.2.2", "v1.2.2-rt")
 
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
 				[]elementalv1.BundleTarget{},
 				"",
-				"v0.1.0-beta1",
+				"v1.2.2-rt",
 			))
 			Expect(err).ToNot(HaveOccurred())
 
 			checkUpgradePod(k,
 				And(
-					ContainElement("METADATA_UPGRADEIMAGE=registry.suse.com/rancher/elemental-teal/5.4:1.2.2"),
+					ContainElement("METADATA_UPGRADEIMAGE=registry.suse.com/rancher/elemental-teal-rt/5.4:1.2.2"),
 				),
-				Equal("registry.suse.com/rancher/elemental-teal/5.4:1.2.2"),
+				Equal("registry.suse.com/rancher/elemental-teal-rt/5.4:1.2.2"),
 				Equal([]string{"/usr/sbin/suc-upgrade"}),
 				BeNil(),
 				And(
@@ -279,20 +280,20 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			)
 			defer k.Delete("managedosversionchannel", "-n", fleetNamespace, "testchannel4")
 
-			waitTestChannelPopulate(k, mr, "testchannel4", "registry.suse.com/rancher/elemental-teal/5.4", "1.2.2")
+			waitTestChannelPopulate(k, mr, "testchannel4", "registry.suse.com/rancher/elemental-teal-rt/5.4:1.2.2", "v1.2.2-rt")
 
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
 				[]elementalv1.BundleTarget{},
 				"",
-				"v0.1.0-beta1",
+				"v1.2.2-rt",
 			))
 			Expect(err).ToNot(HaveOccurred())
 
 			checkUpgradePod(k,
 				And(
-					ContainElement("METADATA_UPGRADEIMAGE=foo/bar:v0.1.0-beta1"),
+					ContainElement("METADATA_UPGRADEIMAGE=registry.suse.com/rancher/elemental-teal-rt/5.4:1.2.2"),
 				),
 				Equal("Foobarz"),
 				Equal([]string{"foo"}),
