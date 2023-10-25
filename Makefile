@@ -9,6 +9,7 @@ REPO_SEEDIMAGE?=rancher/seedimage-builder
 TAG_CHANNEL?=${CHART_VERSION}
 REPO_CHANNEL?=rancher/elemental-teal-channel
 REGISTRY_URL?=registry.opensuse.org/isv/rancher/elemental/dev/containers
+DOCKER_ARGS=
 ifneq ($(REGISTRY_URL),)
 	REGISTRY_HEADER := $(REGISTRY_URL)/
 else
@@ -99,6 +100,7 @@ build-docker-operator:
 		--build-arg "TAG=${GIT_TAG}" \
 		--build-arg "COMMIT=${GIT_COMMIT}" \
 		--build-arg "COMMITDATE=${COMMITDATE}" \
+		${DOCKER_ARGS} \
 		-t ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} .
 
 .PHONY: build-docker-seedimage-builder
