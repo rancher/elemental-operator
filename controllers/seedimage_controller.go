@@ -52,10 +52,10 @@ type SeedImageReconciler struct {
 }
 
 const (
-	ConfigMapKeyDevice          = "device"
-	ConfigMapKeyRegistrationURL = "registration-url"
-	ConfigMapKeyBaseImage       = "base-image"
-	ConfigMapKeyOutputName      = "output-name"
+	configMapKeyDevice          = "device"
+	configMapKeyRegistrationURL = "registration-url"
+	configMapKeyBaseImage       = "base-image"
+	configMapKeyOutputName      = "output-name"
 )
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=seedimages,verbs=get;list;watch;create;update;patch;delete
@@ -341,10 +341,10 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, isoN
 	}
 
 	data := map[string]string{
-		ConfigMapKeyRegistrationURL: mRegistration.Status.RegistrationURL,
-		ConfigMapKeyDevice:          mRegistration.Spec.Config.Elemental.Install.Device,
-		ConfigMapKeyBaseImage:       seedImg.Spec.BaseImage,
-		ConfigMapKeyOutputName:      isoName,
+		configMapKeyRegistrationURL: mRegistration.Status.RegistrationURL,
+		configMapKeyDevice:          mRegistration.Spec.Config.Elemental.Install.Device,
+		configMapKeyBaseImage:       seedImg.Spec.BaseImage,
+		configMapKeyOutputName:      isoName,
 	}
 	conf := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -705,7 +705,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: seedImg.Name,
 							},
-							Key: ConfigMapKeyDevice,
+							Key: configMapKeyDevice,
 						},
 					},
 				},
@@ -716,7 +716,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: seedImg.Name,
 							},
-							Key: ConfigMapKeyRegistrationURL,
+							Key: configMapKeyRegistrationURL,
 						},
 					},
 				},
@@ -727,7 +727,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: seedImg.Name,
 							},
-							Key: ConfigMapKeyBaseImage,
+							Key: configMapKeyBaseImage,
 						},
 					},
 				},
@@ -738,7 +738,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: seedImg.Name,
 							},
-							Key: ConfigMapKeyOutputName,
+							Key: configMapKeyOutputName,
 						},
 					},
 				},
