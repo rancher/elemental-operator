@@ -1075,6 +1075,11 @@ func (in *SeedImageSpec) DeepCopyInto(out *SeedImageSpec) {
 		*out = new(BuildContainer)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Size != nil {
+		in, out := &in.Size, &out.Size
+		x := (*in).DeepCopy()
+		*out = &x
+	}
 	if in.CloudConfig != nil {
 		in, out := &in.CloudConfig, &out.CloudConfig
 		*out = make(map[string]runtime.RawExtension, len(*in))

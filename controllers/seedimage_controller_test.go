@@ -28,6 +28,7 @@ import (
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -700,5 +701,44 @@ var _ = Describe("updateStatusFromPod", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(seedImg.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
 		Expect(seedImg.Status.Conditions[0].Reason).To(Equal("should stay untouched"))
+	})
+})
+
+var _ = Describe("fillBuildImagePod", func() {
+	It("should provide default build container", func() {
+		defaultBuildImg := "default-builder:latest"
+		seedImg := &elementalv1.SeedImage{
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage: "http://localhost/default-image.iso",
+			},
+		}
+
+		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever)
+
+		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
+		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
+		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
+	})
+
+	It("should use user-provided build container", func() {
+		buildImg := "custom-image:latest"
+
+		quantity10M := resource.NewQuantity(10*1024*1024, resource.BinarySI)
+
+		seedImg := &elementalv1.SeedImage{
+			Spec: elementalv1.SeedImageSpec{
+				BuildContainer: &elementalv1.BuildContainer{
+					Image:           buildImg,
+					ImagePullPolicy: corev1.PullNever,
+				},
+				Size: quantity10M,
+			},
+		}
+
+		pod := fillBuildImagePod(seedImg, "", corev1.PullNever)
+
+		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
+		Expect(pod.Spec.InitContainers[0].Image).To(Equal(buildImg))
+		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
 	})
 })

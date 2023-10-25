@@ -43,8 +43,6 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
-const seedImgVolSize = 6 * 1024 * 1024 * 1024 // 6 GiB
-
 type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
@@ -52,6 +50,8 @@ type SeedImageReconciler struct {
 }
 
 const (
+	defaultSeedImgVolSize = 6 * 1024 * 1024 * 1024 // 6 GiB
+
 	configMapKeyDevice          = "device"
 	configMapKeyRegistrationURL = "registration-url"
 	configMapKeyBaseImage       = "base-image"
@@ -259,7 +259,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg, isoName, r.SeedImageImage, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -538,16 +538,20 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
 	deadline := seedImg.Spec.LifetimeMinutes
 	configMap := name
 
+	if seedImg.Spec.Size == nil {
+		seedImg.Spec.Size = resource.NewQuantity(defaultSeedImgVolSize, resource.BinarySI)
+	}
+
 	var initContainers []corev1.Container
 	if seedImg.Spec.BuildContainer == nil {
-		initContainers = defaultInitContainers(baseImg, isoName, buildImg, pullPolicy)
+		initContainers = defaultInitContainers(seedImg, buildImg, pullPolicy)
 	} else {
 		initContainers = userDefinedInitContainers(seedImg)
 	}
@@ -574,7 +578,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string,
 							ContainerPort: 80,
 						},
 					},
-					Args: []string{"-d", isoName, "-t", fmt.Sprintf("%d", deadline*60)},
+					Args: []string{"-d", "$(ELEMENTAL_OUTPUT_NAME)", "-t", fmt.Sprintf("%d", deadline*60)},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",
@@ -582,6 +586,19 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string,
 						},
 					},
 					WorkingDir: "/srv",
+					Env: []corev1.EnvVar{
+						{
+							Name: "ELEMENTAL_OUTPUT_NAME",
+							ValueFrom: &corev1.EnvVarSource{
+								ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: seedImg.Name,
+									},
+									Key: configMapKeyOutputName,
+								},
+							},
+						},
+					},
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -590,7 +607,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string,
 					Name: "iso-storage",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{
-							SizeLimit: resource.NewQuantity(seedImgVolSize, resource.BinarySI),
+							SizeLimit: seedImg.Spec.Size,
 						},
 					},
 				}, {
@@ -611,23 +628,23 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, isoName, buildImg string,
 	return pod
 }
 
-func defaultInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
+func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
 	const baseIsoPath = "/iso/base.iso"
 
 	containers := []corev1.Container{}
 	buildCommands := []string{
-		fmt.Sprintf("xorriso -indev %s -outdev /iso/%s -map /overlay/reg/livecd-cloud-config.yaml /livecd-cloud-config.yaml -map /overlay/iso-config/cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay", baseIsoPath, isoName),
+		fmt.Sprintf("xorriso -indev %s -outdev /iso/$(ELEMENTAL_OUTPUT_NAME) -map /overlay/reg/livecd-cloud-config.yaml /livecd-cloud-config.yaml -map /overlay/iso-config/cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay", baseIsoPath),
 		fmt.Sprintf("rm -rf %s", baseIsoPath),
 	}
 
-	if util.IsHTTP(baseImg) {
-		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, baseImg)}, buildCommands...)
+	if util.IsHTTP(seedImg.Spec.BaseImage) {
+		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, seedImg.Spec.BaseImage)}, buildCommands...)
 	} else {
 		// If baseImg is not an HTTP url assume it is an image reference
 		containers = append(
 			containers, corev1.Container{
 				Name:            "baseiso",
-				Image:           baseImg,
+				Image:           seedImg.Spec.BaseImage,
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				Command:         []string{"busybox", "sh", "-c"},
 				Args:            []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)},
@@ -657,6 +674,52 @@ func defaultInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.
 					MountPath: "/overlay",
 				},
 			},
+			Env: []corev1.EnvVar{
+				{
+					Name: "ELEMENTAL_DEVICE",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: configMapKeyDevice,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_REGISTRATION_URL",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: configMapKeyRegistrationURL,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_BASE_IMAGE",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: configMapKeyBaseImage,
+						},
+					},
+				},
+				{
+					Name: "ELEMENTAL_OUTPUT_NAME",
+					ValueFrom: &corev1.EnvVarSource{
+						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: seedImg.Name,
+							},
+							Key: configMapKeyOutputName,
+						},
+					},
+				},
+			},
 		},
 	)
 
@@ -666,7 +729,7 @@ func defaultInitContainers(baseImg, isoName, buildImg string, pullPolicy corev1.
 	// init container of the pod.
 	containers[0].Resources = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceEphemeralStorage: *resource.NewQuantity(seedImgVolSize, resource.BinarySI),
+			corev1.ResourceEphemeralStorage: *seedImg.Spec.Size,
 		},
 	}
 
@@ -745,7 +808,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceEphemeralStorage: *resource.NewQuantity(seedImgVolSize, resource.BinarySI),
+					corev1.ResourceEphemeralStorage: *seedImg.Spec.Size,
 				},
 			},
 		},

@@ -2638,6 +2638,14 @@ spec:
                 description: RetriggerBuild triggers to build again a cleaned up seed
                   image.
                 type: boolean
+              size:
+                anyOf:
+                - type: integer
+                - type: string
+                description: Size specifies the size of the volume used to store the
+                  image. Defaults to 6Gi
+                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                x-kubernetes-int-or-string: true
             required:
             - registrationRef
             type: object

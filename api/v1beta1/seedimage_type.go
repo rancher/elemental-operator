@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -42,6 +43,10 @@ type SeedImageSpec struct {
 	// RetriggerBuild triggers to build again a cleaned up seed image.
 	// +optional
 	RetriggerBuild bool `json:"retriggerBuild"`
+	// Size specifies the size of the volume used to store the image.
+	// Defaults to 6Gi
+	// +optional
+	Size *resource.Quantity `json:"size"`
 	// CloudConfig contains cloud-config data to be put in the generated iso.
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
