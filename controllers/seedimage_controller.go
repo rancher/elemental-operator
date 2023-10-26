@@ -205,8 +205,6 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.Info("Reconciling Pod resources")
 
-	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
-
 	seedImgCondition := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady)
 	seedImgConditionMet := false
 	if seedImgCondition != nil && seedImgCondition.Status == metav1.ConditionTrue {
@@ -218,7 +216,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 		return nil
 	}
 
-	if err := r.reconcileConfigMapObject(ctx, isoName, seedImg, mRegistration); err != nil {
+	if err := r.reconcileConfigMapObject(ctx, seedImg, mRegistration); err != nil {
 		return err
 	}
 
@@ -289,7 +287,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 	return nil
 }
 
-func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, isoName string, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
+func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seedImg *elementalv1.SeedImage, mRegistration *elementalv1.MachineRegistration) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Reconciling ConfigMap resources")
@@ -311,6 +309,8 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, isoN
 		return fmt.Errorf("failed marshalling cloud-config: %w", err)
 	}
 
+	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
+
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      seedImg.Name,
 		Namespace: seedImg.Namespace,
@@ -326,6 +326,9 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, isoN
 			return nil
 		}
 		logger.V(5).Info("ConfigMap is out of date", "configmap", podConfigMap.Namespace+"/"+podConfigMap.Name)
+
+		isoName = podConfigMap.Data[configMapKeyOutputName]
+
 		// ...but values are not up-to-date
 		if err := r.Delete(ctx, podConfigMap); err != nil {
 			return fmt.Errorf("failed to delete old config map: %w", err)

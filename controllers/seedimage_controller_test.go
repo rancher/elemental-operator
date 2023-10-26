@@ -599,7 +599,7 @@ var _ = Describe("createConfigMapObject", func() {
 	})
 
 	It("should create a configmap with empty cloud-config data", func() {
-		Expect(r.reconcileConfigMapObject(ctx, "elemental.iso", seedImg, mRegistration)).To(Succeed())
+		Expect(r.reconcileConfigMapObject(ctx, seedImg, mRegistration)).To(Succeed())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
@@ -616,7 +616,7 @@ var _ = Describe("createConfigMapObject", func() {
 		Expect(err).ToNot(HaveOccurred())
 		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{}
 		seedImg.Spec.CloudConfig["write_files"] = runtime.RawExtension{Raw: rawConf}
-		Expect(r.reconcileConfigMapObject(ctx, "elemental.iso", seedImg, mRegistration)).To(Succeed())
+		Expect(r.reconcileConfigMapObject(ctx, seedImg, mRegistration)).To(Succeed())
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      seedImg.Name,
 			Namespace: seedImg.Namespace,
@@ -628,7 +628,7 @@ var _ = Describe("createConfigMapObject", func() {
 	It("should fail if cloud-config can't be marshalled", func() {
 		seedImg.Spec.CloudConfig = map[string]runtime.RawExtension{}
 		seedImg.Spec.CloudConfig["write_files"] = runtime.RawExtension{Raw: []byte("invalid data")}
-		Expect(r.reconcileConfigMapObject(ctx, "elemental.iso", seedImg, mRegistration)).ToNot(Succeed())
+		Expect(r.reconcileConfigMapObject(ctx, seedImg, mRegistration)).ToNot(Succeed())
 	})
 })
 
