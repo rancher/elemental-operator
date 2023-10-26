@@ -10,7 +10,7 @@ seedImage:
   imagePullPolicy: IfNotPresent
 
 channel:
-  repository: "rancher/elemental-teal-channel"
+  repository: "rancher/elemental-channel"
   tag: latest
 
 # number of operator replicas to deploy

@@ -2,7 +2,7 @@
 apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSVersionChannel
 metadata:
-  name: elemental-teal-channel
+  name: elemental-channel
   namespace: fleet-default
 spec:
   options:
