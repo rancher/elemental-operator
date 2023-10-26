@@ -2642,12 +2642,23 @@ spec:
                 anyOf:
                 - type: integer
                 - type: string
+                default: 6442450944
                 description: Size specifies the size of the volume used to store the
                   image. Defaults to 6Gi
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
+              type:
+                default: iso
+                description: Type specifies the type of seed image to built. Valid
+                  values are iso|raw Defaults to "iso"
+                enum:
+                - iso
+                - raw
+                type: string
             required:
             - registrationRef
+            - size
+            - type
             type: object
           status:
             properties:

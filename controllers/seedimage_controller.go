@@ -306,7 +306,7 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 		return fmt.Errorf("failed marshalling cloud-config: %w", err)
 	}
 
-	isoName := fmt.Sprintf("elemental-%s-%s.iso", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339))
+	outputName := fmt.Sprintf("elemental-%s-%s.%s", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339), seedImg.Spec.Type)
 
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      seedImg.Name,
@@ -324,7 +324,7 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 		}
 		logger.V(5).Info("ConfigMap is out of date", "configmap", podConfigMap.Namespace+"/"+podConfigMap.Name)
 
-		isoName = podConfigMap.Data[configMapKeyOutputName]
+		outputName = podConfigMap.Data[configMapKeyOutputName]
 
 		// ...but values are not up-to-date
 		if err := r.Delete(ctx, podConfigMap); err != nil {
@@ -344,7 +344,7 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 		configMapKeyRegistrationURL: mRegistration.Status.RegistrationURL,
 		configMapKeyDevice:          mRegistration.Spec.Config.Elemental.Install.Device,
 		configMapKeyBaseImage:       seedImg.Spec.BaseImage,
-		configMapKeyOutputName:      isoName,
+		configMapKeyOutputName:      outputName,
 	}
 	conf := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -625,6 +625,38 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 }
 
 func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
+	if seedImg.Spec.Type == elementalv1.TypeRaw {
+		return defaultRawInitContainers(seedImg, buildImg, pullPolicy)
+	}
+
+	return defaultIsoInitContainers(seedImg, buildImg, pullPolicy)
+}
+
+func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
+	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --squash-no-compression  -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
+
+	return []corev1.Container{
+		{
+			Name:            "build",
+			Image:           buildImg,
+			ImagePullPolicy: pullPolicy,
+			Command:         []string{"/bin/bash", "-c"},
+			Args:            []string{strings.Join(buildCommands, " && ")},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "iso-storage",
+					MountPath: "/iso",
+				}, {
+					Name:      "config-map",
+					MountPath: "/overlay",
+				},
+			},
+			Env: defaultEnvVars(seedImg.Name),
+		},
+	}
+}
+
+func defaultIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
 	const baseIsoPath = "/iso/base.iso"
 
 	containers := []corev1.Container{}
@@ -670,52 +702,7 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 					MountPath: "/overlay",
 				},
 			},
-			Env: []corev1.EnvVar{
-				{
-					Name: "ELEMENTAL_DEVICE",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyDevice,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_REGISTRATION_URL",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyRegistrationURL,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_BASE_IMAGE",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyBaseImage,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_OUTPUT_NAME",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyOutputName,
-						},
-					},
-				},
-			},
+			Env: defaultEnvVars(seedImg.Name),
 		},
 	)
 
@@ -756,55 +743,59 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 					MountPath: "/overlay",
 				},
 			},
-			Env: []corev1.EnvVar{
-				{
-					Name: "ELEMENTAL_DEVICE",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyDevice,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_REGISTRATION_URL",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyRegistrationURL,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_BASE_IMAGE",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyBaseImage,
-						},
-					},
-				},
-				{
-					Name: "ELEMENTAL_OUTPUT_NAME",
-					ValueFrom: &corev1.EnvVarSource{
-						ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: seedImg.Name,
-							},
-							Key: configMapKeyOutputName,
-						},
-					},
-				},
-			},
+			Env: defaultEnvVars(seedImg.Name),
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceEphemeralStorage: seedImg.Spec.Size,
+				},
+			},
+		},
+	}
+}
+
+func defaultEnvVars(seedImgName string) []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{
+			Name: "ELEMENTAL_DEVICE",
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: seedImgName,
+					},
+					Key: configMapKeyDevice,
+				},
+			},
+		},
+		{
+			Name: "ELEMENTAL_REGISTRATION_URL",
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: seedImgName,
+					},
+					Key: configMapKeyRegistrationURL,
+				},
+			},
+		},
+		{
+			Name: "ELEMENTAL_BASE_IMAGE",
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: seedImgName,
+					},
+					Key: configMapKeyBaseImage,
+				},
+			},
+		},
+		{
+			Name: "ELEMENTAL_OUTPUT_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: seedImgName,
+					},
+					Key: configMapKeyOutputName,
 				},
 			},
 		},
