@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
@@ -50,8 +49,6 @@ type SeedImageReconciler struct {
 }
 
 const (
-	defaultSeedImgVolSize = 6 * 1024 * 1024 * 1024 // 6 GiB
-
 	configMapKeyDevice          = "device"
 	configMapKeyRegistrationURL = "registration-url"
 	configMapKeyBaseImage       = "base-image"
@@ -548,10 +545,6 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 	deadline := seedImg.Spec.LifetimeMinutes
 	configMap := name
 
-	if seedImg.Spec.Size == nil {
-		seedImg.Spec.Size = resource.NewQuantity(defaultSeedImgVolSize, resource.BinarySI)
-	}
-
 	var initContainers []corev1.Container
 	if seedImg.Spec.BuildContainer == nil {
 		initContainers = defaultInitContainers(seedImg, buildImg, pullPolicy)
@@ -610,7 +603,7 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 					Name: "iso-storage",
 					VolumeSource: corev1.VolumeSource{
 						EmptyDir: &corev1.EmptyDirVolumeSource{
-							SizeLimit: seedImg.Spec.Size,
+							SizeLimit: &seedImg.Spec.Size,
 						},
 					},
 				}, {
@@ -732,7 +725,7 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 	// init container of the pod.
 	containers[0].Resources = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
-			corev1.ResourceEphemeralStorage: *seedImg.Spec.Size,
+			corev1.ResourceEphemeralStorage: seedImg.Spec.Size,
 		},
 	}
 
@@ -811,7 +804,7 @@ func userDefinedInitContainers(seedImg *elementalv1.SeedImage) []corev1.Containe
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceEphemeralStorage: *seedImg.Spec.Size,
+					corev1.ResourceEphemeralStorage: seedImg.Spec.Size,
 				},
 			},
 		},
