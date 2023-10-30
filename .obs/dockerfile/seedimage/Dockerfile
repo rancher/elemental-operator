@@ -10,7 +10,7 @@ ARG SLE_VERSION
 FROM suse/sle15:$SLE_VERSION as BASE
 
 RUN  mkdir -p /installroot && \
-    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends elemental-httpfy xorriso curl coreutils ca-certificates ca-certificates-mozilla
+    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends elemental-toolkit elemental-httpfy xorriso curl coreutils ca-certificates ca-certificates-mozilla gptfdisk squashfs
 
 
 FROM scratch as SEEDIMAGE_BUILDER

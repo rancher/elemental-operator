@@ -133,7 +133,6 @@ spec:
                 type: string
             required:
             - registrationRef
-            - size
             - type
             type: object
           status:

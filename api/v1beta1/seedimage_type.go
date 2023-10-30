@@ -46,6 +46,7 @@ type SeedImageSpec struct {
 	// Size specifies the size of the volume used to store the image.
 	// Defaults to 6Gi
 	// +kubebuilder:default:=6442450944
+	// +optional
 	Size resource.Quantity `json:"size"`
 	// Type specifies the type of seed image to built.
 	// Valid values are iso|raw
