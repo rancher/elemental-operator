@@ -19,6 +19,7 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/mudler/yip/pkg/schema"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/randomtoken"
 
@@ -49,6 +51,9 @@ type SeedImageReconciler struct {
 }
 
 const (
+	configMapKeyRegistration    = "registration"
+	configMapKeyCloudConfig     = "cloud-config"
+	configMapKeyResetConfig     = "reset-config"
 	configMapKeyDevice          = "device"
 	configMapKeyRegistrationURL = "registration-url"
 	configMapKeyBaseImage       = "base-image"
@@ -301,6 +306,11 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 		return fmt.Errorf("failed marshalling registration config: %w", err)
 	}
 
+	resetConfig, err := serializeResetRegistrationYaml(regClientConf)
+	if err != nil {
+		return fmt.Errorf("failed marshalling reset machine registration: %w", err)
+	}
+
 	cloudConfig, err := util.MarshalCloudConfig(seedImg.Spec.CloudConfig)
 	if err != nil {
 		return fmt.Errorf("failed marshalling cloud-config: %w", err)
@@ -318,6 +328,7 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 	} else {
 		// ConfigMap is already there...
 		if bytes.Equal(regData, podConfigMap.BinaryData["registration"]) &&
+			bytes.Equal(resetConfig, podConfigMap.BinaryData["reset-config"]) &&
 			bytes.Equal(cloudConfig, podConfigMap.BinaryData["cloud-config"]) {
 			logger.V(5).Info("ConfigMap is up-to-date")
 			return nil
@@ -336,8 +347,9 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 	logger.V(5).Info("Create ConfigMap", "seedimage", seedImg.Namespace+"/"+seedImg.Name)
 
 	binaryData := map[string][]byte{
-		"registration": regData,
-		"cloud-config": cloudConfig,
+		configMapKeyRegistration: regData,
+		configMapKeyCloudConfig:  cloudConfig,
+		configMapKeyResetConfig:  resetConfig,
 	}
 
 	data := map[string]string{
@@ -612,8 +624,9 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
 							Items: []corev1.KeyToPath{
-								{Key: "registration", Path: "reg/livecd-cloud-config.yaml"},
-								{Key: "cloud-config", Path: "iso-config/cloud-config.yaml"},
+								{Key: configMapKeyRegistration, Path: "reg/livecd-cloud-config.yaml"},
+								{Key: configMapKeyCloudConfig, Path: "iso-config/cloud-config.yaml"},
+								{Key: configMapKeyResetConfig, Path: "reg/reset-config.yaml"},
 							},
 						},
 					},
@@ -633,7 +646,7 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 }
 
 func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
-	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --squash-no-compression  -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
+	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --squash-no-compression --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
 
 	return []corev1.Container{
 		{
@@ -864,4 +877,36 @@ func fillBuildImageService(name, namespace string) *corev1.Service {
 	}
 
 	return service
+}
+
+func serializeResetRegistrationYaml(config *elementalv1.Config) ([]byte, error) {
+	regConf, err := yaml.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &schema.YipConfig{
+		Name: "Post-reset machine registration",
+		Stages: map[string][]schema.Stage{
+			"post-reset": {
+				schema.Stage{
+					If:   `[ -f "/run/cos/recovery_mode" ]`,
+					Name: "Run registration",
+					Files: []schema.File{
+						{
+							Path:        "/oem/registration/config.yaml",
+							Content:     base64.StdEncoding.EncodeToString(regConf),
+							Encoding:    "b64",
+							Permissions: 0666,
+						},
+					},
+					Commands: []string{
+						"systemctl start elemental-register-install",
+					},
+				},
+			},
+		},
+	}
+
+	return yaml.Marshal(conf)
 }
