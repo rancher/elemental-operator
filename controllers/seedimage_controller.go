@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -646,7 +647,7 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 }
 
 func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
-	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --squash-no-compression --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
+	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --deploy-command elemental-register,--debug,--reset --squash-no-compression --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
 
 	return []corev1.Container{
 		{
@@ -886,12 +887,18 @@ func serializeResetRegistrationYaml(config *elementalv1.Config) ([]byte, error) 
 	}
 
 	conf := &schema.YipConfig{
-		Name: "Post-reset machine registration",
+		Name: "Write registration config",
 		Stages: map[string][]schema.Stage{
-			"post-reset": {
+			"initramfs": {
 				schema.Stage{
 					If:   `[ -f "/run/cos/recovery_mode" ]`,
-					Name: "Run registration",
+					Name: "Save registration config",
+					Directories: []schema.Directory{
+						{
+							Path:        filepath.Dir("/oem/registration"),
+							Permissions: 0700,
+						},
+					},
 					Files: []schema.File{
 						{
 							Path:        "/oem/registration/config.yaml",
@@ -899,9 +906,6 @@ func serializeResetRegistrationYaml(config *elementalv1.Config) ([]byte, error) 
 							Encoding:    "b64",
 							Permissions: 0666,
 						},
-					},
-					Commands: []string{
-						"systemctl start elemental-register-install",
 					},
 				},
 			},

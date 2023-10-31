@@ -9,7 +9,7 @@ RUN go build \
 FROM registry.opensuse.org/opensuse/leap:15.5 AS base
 RUN mkdir -p /installroot/etc/products.d && \
     cp /etc/products.d/baseproduct /installroot/etc/products.d/ && \
-    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates ca-certificates-mozilla gptfdisk squashfs
+    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates ca-certificates-mozilla gptfdisk squashfs util-linux grub2 dosfstools mtools e2fsprogs
 
 FROM scratch AS seedimage-builder 
 COPY --from=toolkit /usr/bin/elemental /usr/bin/elemental
