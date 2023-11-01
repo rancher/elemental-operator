@@ -669,6 +669,22 @@ spec:
                             type: boolean
                           device:
                             type: string
+                          device-selector:
+                            items:
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  type: string
+                                values:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                            type: array
                           disable-boot-entry:
                             type: boolean
                           eject-cd:

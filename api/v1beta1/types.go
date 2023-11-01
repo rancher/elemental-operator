@@ -26,6 +26,8 @@ type Install struct {
 	// +optional
 	Device string `json:"device,omitempty" yaml:"device,omitempty"`
 	// +optional
+	DeviceSelector DeviceSelector `json:"device-selector,omitempty" yaml:"device-selector,omitempty"`
+	// +optional
 	NoFormat bool `json:"no-format,omitempty" yaml:"no-format,omitempty"`
 	// +optional
 	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty"`
@@ -120,3 +122,31 @@ type Config struct {
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
 }
+
+type DeviceSelector []DeviceSelectorRequirement
+
+type DeviceSelectorRequirement struct {
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=Name;Size
+	Key DeviceSelectorKey `json:"key"`
+	// +required
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=In;NotIn;Gt;Lt
+	Operator DeviceSelectorOperator `json:"operator"`
+	// +optional
+	Values []string `json:"values,omitempty"`
+}
+
+type DeviceSelectorKey string
+type DeviceSelectorOperator string
+
+const (
+	DeviceSelectorOpIn    DeviceSelectorOperator = "In"
+	DeviceSelectorOpNotIn DeviceSelectorOperator = "NotIn"
+	DeviceSelectorOpGt    DeviceSelectorOperator = "Gt"
+	DeviceSelectorOpLt    DeviceSelectorOperator = "Lt"
+
+	DeviceSelectorKeyName DeviceSelectorKey = "Name"
+	DeviceSelectorKeySize DeviceSelectorKey = "Size"
+)
