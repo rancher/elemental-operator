@@ -673,8 +673,16 @@ spec:
                             items:
                               properties:
                                 key:
+                                  enum:
+                                  - Name
+                                  - Size
                                   type: string
                                 operator:
+                                  enum:
+                                  - In
+                                  - NotIn
+                                  - Gt
+                                  - Lt
                                   type: string
                                 values:
                                   items:
