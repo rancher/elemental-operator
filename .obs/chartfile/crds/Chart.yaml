@@ -3,7 +3,7 @@
 #!BuildTag: rancher/elemental-operator-crds-chart:%VERSION%
 #!BuildTag: rancher/elemental-operator-crds-chart:%VERSION%-%RELEASE%
 apiVersion: v2
-name: elemental-operator-crds
+name: elemental-crd
 description: A Helm chart for deploying Rancher Elemental Operator CRDs
 version: "%VERSION%"
 appVersion: "%VERSION%"
