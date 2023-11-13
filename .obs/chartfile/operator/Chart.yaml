@@ -3,13 +3,13 @@
 #!BuildTag: rancher/elemental-operator-chart:%VERSION%
 #!BuildTag: rancher/elemental-operator-chart:%VERSION%-%RELEASE%
 apiVersion: v2
-name: elemental
-description: Elemental provides Cloud Native OS Management for Cluster Nodes.
+name: elemental-operator
+description: Rancher Elemental Operator
 icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
 version: "%VERSION%"
 appVersion: "%VERSION%"
 annotations:
-  catalog.cattle.io/auto-install: elemental-crd=match
+  catalog.cattle.io/auto-install: elemental-operator-crd=match
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/display-name: Elemental
   catalog.cattle.io/kube-version: '>= 1.23.0-0'
