@@ -45,14 +45,28 @@ type SeedImageSpec struct {
 	RetriggerBuild bool `json:"retriggerBuild"`
 	// Size specifies the size of the volume used to store the image.
 	// Defaults to 6Gi
+	// +kubebuilder:default:=6442450944
 	// +optional
-	Size *resource.Quantity `json:"size"`
+	Size resource.Quantity `json:"size"`
+	// Type specifies the type of seed image to built.
+	// Valid values are iso|raw
+	// Defaults to "iso"
+	// +kubebuilder:validation:Enum=iso;raw
+	// +kubebuilder:default:=iso
+	Type SeedImageType `json:"type"`
 	// CloudConfig contains cloud-config data to be put in the generated iso.
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
 }
+
+type SeedImageType string
+
+const (
+	TypeIso SeedImageType = "iso"
+	TypeRaw SeedImageType = "raw"
+)
 
 type BuildContainer struct {
 	// Name of the spawned container

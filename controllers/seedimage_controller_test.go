@@ -89,6 +89,7 @@ var _ = Describe("reconcile seed image", func() {
 					Name:      mRegistration.Name,
 					Namespace: mRegistration.Namespace,
 				},
+				Type: elementalv1.TypeIso,
 			},
 		}
 
@@ -240,6 +241,7 @@ var _ = Describe("reconcile seed image build container", func() {
 					Image:           "test-seedimage-builder:latest",
 					ImagePullPolicy: corev1.PullNever,
 				},
+				Type: elementalv1.TypeIso,
 			},
 		}
 
@@ -358,6 +360,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 					Name:      mRegistration.Name,
 					Namespace: mRegistration.Namespace,
 				},
+				Type: elementalv1.TypeIso,
 			},
 		}
 
@@ -554,6 +557,7 @@ var _ = Describe("createConfigMapObject", func() {
 					Name:      mRegistration.Name,
 					Namespace: mRegistration.Namespace,
 				},
+				Type: elementalv1.TypeIso,
 			},
 		}
 		pod = &corev1.Pod{
@@ -723,7 +727,7 @@ var _ = Describe("fillBuildImagePod", func() {
 	It("should use user-provided build container", func() {
 		buildImg := "custom-image:latest"
 
-		quantity10M := resource.NewQuantity(10*1024*1024, resource.BinarySI)
+		quantity10M := *resource.NewQuantity(10*1024*1024, resource.BinarySI)
 
 		seedImg := &elementalv1.SeedImage{
 			Spec: elementalv1.SeedImageSpec{
