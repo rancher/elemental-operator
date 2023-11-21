@@ -22,19 +22,23 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jaypipes/ghw"
+	"github.com/jaypipes/ghw/pkg/block"
 	"github.com/mudler/yip/pkg/schema"
+	agent "github.com/rancher/system-agent/pkg/config"
+	"github.com/twpayne/go-vfs"
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
+
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/controllers"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/util"
-	agent "github.com/rancher/system-agent/pkg/config"
-	"github.com/twpayne/go-vfs"
-	"gopkg.in/yaml.v3"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 const (
@@ -59,9 +63,10 @@ type Installer interface {
 	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
 }
 
-func NewInstaller(fs vfs.FS) Installer {
+func NewInstaller(fs vfs.FS, disks []*block.Disk) Installer {
 	return &installer{
 		fs:     fs,
+		disks:  disks,
 		runner: elementalcli.NewRunner(),
 	}
 }
@@ -70,12 +75,22 @@ var _ Installer = (*installer)(nil)
 
 type installer struct {
 	fs     vfs.FS
+	disks  []*block.Disk
 	runner elementalcli.Runner
 }
 
 func (i *installer) InstallElemental(config elementalv1.Config, state register.State) error {
 	if config.Elemental.Install.ConfigURLs == nil {
 		config.Elemental.Install.ConfigURLs = []string{}
+	}
+
+	if config.Elemental.Install.Device == "" {
+		deviceName, err := i.findInstallationDevice(config.Elemental.Install.DeviceSelector)
+		if err != nil {
+			return fmt.Errorf("failed picking installation device: %w", err)
+		}
+
+		config.Elemental.Install.Device = deviceName
 	}
 
 	additionalConfigs, err := i.getCloudInitConfigs(config, state)
@@ -114,6 +129,99 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 
 	log.Info("Elemental reset completed, please reboot")
 	return nil
+}
+
+func (i *installer) findInstallationDevice(selector elementalv1.DeviceSelector) (string, error) {
+	devices := map[string]*ghw.Disk{}
+
+	for _, disk := range i.disks {
+		devices[disk.Name] = disk
+	}
+
+	for _, disk := range i.disks {
+		for _, sel := range selector {
+			matches, err := matches(disk, sel)
+			if err != nil {
+				return "", err
+			}
+
+			if !matches {
+				log.Debug("%s does not match selector %s", disk.Name, sel.Key)
+				delete(devices, disk.Name)
+				break
+			}
+		}
+	}
+
+	log.Debug("%s disks matching selector", len(devices))
+
+	for _, dev := range devices {
+		return dev.Name, nil
+	}
+
+	return "", fmt.Errorf("no device found matching selector")
+}
+
+func matches(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (bool, error) {
+	switch req.Operator {
+	case elementalv1.DeviceSelectorOpIn:
+		return matchesIn(disk, req)
+	case elementalv1.DeviceSelectorOpNotIn:
+		return matchesNotIn(disk, req)
+	case elementalv1.DeviceSelectorOpLt:
+		return matchesLt(disk, req)
+	case elementalv1.DeviceSelectorOpGt:
+		return matchesGt(disk, req)
+	default:
+		return false, fmt.Errorf("unknown operator: %s", req.Operator)
+	}
+}
+
+func matchesIn(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (bool, error) {
+	if req.Key != elementalv1.DeviceSelectorKeyName {
+		return false, fmt.Errorf("cannot use In operator on numerical values %s", req.Key)
+	}
+
+	for _, val := range req.Values {
+		if val == disk.Name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+func matchesNotIn(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (bool, error) {
+	matches, err := matchesIn(disk, req)
+	return !matches, err
+}
+func matchesLt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (bool, error) {
+	if req.Key != elementalv1.DeviceSelectorKeySize {
+		return false, fmt.Errorf("cannot use Lt operator on string values %s", req.Key)
+
+	}
+
+	keySize, err := resource.ParseQuantity(req.Values[0])
+	if err != nil {
+		return false, fmt.Errorf("failed to parse quantity %s", req.Values[0])
+	}
+
+	diskSize := resource.NewQuantity(int64(disk.SizeBytes), resource.BinarySI)
+
+	return diskSize.Cmp(keySize) == -1, nil
+}
+func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (bool, error) {
+	if req.Key != elementalv1.DeviceSelectorKeySize {
+		return false, fmt.Errorf("cannot use Gt operator on string values %s", req.Key)
+	}
+
+	keySize, err := resource.ParseQuantity(req.Values[0])
+	if err != nil {
+		return false, fmt.Errorf("failed to parse quantity %s", req.Values[0])
+	}
+
+	diskSize := resource.NewQuantity(int64(disk.SizeBytes), resource.BinarySI)
+
+	return diskSize.Cmp(keySize) == 1, nil
 }
 
 // getCloudInitConfigs creates cloud-init configuration files that can be passed as additional `config-urls`

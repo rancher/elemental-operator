@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jaypipes/ghw"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/twpayne/go-vfs"
@@ -57,7 +58,12 @@ var (
 
 func main() {
 	fs := vfs.OSFS
-	installer := install.NewInstaller(fs)
+	blockInfo, err := ghw.Block(ghw.WithDisableWarnings())
+	if err != nil {
+		log.Warningf("error probing disks: %s", err)
+	}
+
+	installer := install.NewInstaller(fs, blockInfo.Disks)
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
