@@ -53,6 +53,30 @@ spec:
                             type: boolean
                           device:
                             type: string
+                          device-selector:
+                            items:
+                              properties:
+                                key:
+                                  enum:
+                                  - Name
+                                  - Size
+                                  type: string
+                                operator:
+                                  enum:
+                                  - In
+                                  - NotIn
+                                  - Gt
+                                  - Lt
+                                  type: string
+                                values:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - key
+                              - operator
+                              type: object
+                            type: array
                           disable-boot-entry:
                             type: boolean
                           eject-cd:

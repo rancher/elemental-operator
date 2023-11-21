@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaypipes/ghw"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/twpayne/go-vfs"
@@ -119,6 +120,129 @@ var _ = Describe("installer install elemental", Label("installer", "install"), f
 		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
 		Expect(install.InstallElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
 		checkConfigs(fs)
+	})
+})
+
+var _ = Describe("installer pick device", Label("installer", "install", "device", "disk"), func() {
+	var fs *vfst.TestFS
+	var err error
+	var fsCleanup func()
+	var cliRunner *climocks.MockRunner
+	var install *installer
+	BeforeEach(func() {
+		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": ""})
+		Expect(err).ToNot(HaveOccurred())
+		mockCtrl := gomock.NewController(GinkgoT())
+		cliRunner = climocks.NewMockRunner(mockCtrl)
+		DeferCleanup(fsCleanup)
+	})
+	It("should pick single device no selectors", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks:  []*ghw.Disk{{Name: "/dev/pickme"}},
+		}
+		actualDevice, err := install.findInstallationDevice(elementalv1.DeviceSelector{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDevice).To(Equal("/dev/pickme"))
+	})
+	It("should pick device based on selector name", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks: []*ghw.Disk{
+				{Name: "/dev/sda"},
+				{Name: "/dev/sdb"},
+				{Name: "/dev/sdc"},
+				{Name: "/dev/sdd"},
+				{Name: "/dev/sde"},
+				{Name: "/dev/sdf"},
+				{Name: "/dev/sdg"},
+			},
+		}
+		selector := elementalv1.DeviceSelector{
+			{
+				Key:      elementalv1.DeviceSelectorKeyName,
+				Operator: elementalv1.DeviceSelectorOpIn,
+				Values:   []string{"/dev/sdd"},
+			},
+		}
+
+		actualDevice, err := install.findInstallationDevice(selector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDevice).To(Equal("/dev/sdd"))
+	})
+	It("should pick device less than 100Gi", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks: []*ghw.Disk{
+				{Name: "/dev/sda", SizeBytes: 85899345920},
+				{Name: "/dev/sdb", SizeBytes: 214748364800},
+			},
+		}
+		selector := elementalv1.DeviceSelector{
+			{
+				Key:      elementalv1.DeviceSelectorKeySize,
+				Operator: elementalv1.DeviceSelectorOpLt,
+				Values:   []string{"100Gi"},
+			},
+		}
+
+		actualDevice, err := install.findInstallationDevice(selector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDevice).To(Equal("/dev/sda"))
+	})
+	It("should pick device greater than 100Gi", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks: []*ghw.Disk{
+				{Name: "/dev/sda", SizeBytes: 85899345920},
+				{Name: "/dev/sdb", SizeBytes: 214748364800},
+			},
+		}
+		selector := elementalv1.DeviceSelector{
+			{
+				Key:      elementalv1.DeviceSelectorKeySize,
+				Operator: elementalv1.DeviceSelectorOpGt,
+				Values:   []string{"100Gi"},
+			},
+		}
+
+		actualDevice, err := install.findInstallationDevice(selector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDevice).To(Equal("/dev/sdb"))
+	})
+	It("should not error out for 2 matching devices", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks: []*ghw.Disk{
+				{Name: "/dev/sda"},
+				{Name: "/dev/sdb"},
+			},
+		}
+		selector := elementalv1.DeviceSelector{
+			{
+				Key:      elementalv1.DeviceSelectorKeyName,
+				Operator: elementalv1.DeviceSelectorOpIn,
+				Values:   []string{"/dev/sda", "/dev/sdb"},
+			},
+		}
+		actualDevice, err := install.findInstallationDevice(selector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(actualDevice).ToNot(BeEmpty())
+	})
+	It("should error out for no devices", func() {
+		install = &installer{
+			fs:     fs,
+			runner: cliRunner,
+			disks:  []*ghw.Disk{},
+		}
+		actualDevice, err := install.findInstallationDevice(elementalv1.DeviceSelector{})
+		Expect(err).To(HaveOccurred())
+		Expect(actualDevice).To(BeEmpty())
 	})
 })
 
