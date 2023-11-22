@@ -120,10 +120,17 @@ build-docker-push-seedimage-builder: build-docker-seedimage-builder
 .PHONY: chart
 chart:
 	mkdir -p  $(ROOT_DIR)/build
-	cp -rf $(ROOT_DIR)/charts/crds $(ROOT_DIR)/build/crds
-	helm package --version ${CHART_VERSION} --app-version ${GIT_TAG} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds
+	cp -rf $(ROOT_DIR)/.obs/chartfile/crds $(ROOT_DIR)/build/crds
+	mv $(ROOT_DIR)/build/crds/_helmignore $(ROOT_DIR)/build/crds/.helmignore
+	yq -i '.version = "${CHART_VERSION}"' $(ROOT_DIR)/build/crds/Chart.yaml
+	yq -i '.appVersion = "${GIT_TAG}"' $(ROOT_DIR)/build/crds/Chart.yaml
+	ls -R $(ROOT_DIR)/build/crds
+	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds
 	rm -Rf $(ROOT_DIR)/build/crds
-	cp -rf $(ROOT_DIR)/charts/operator $(ROOT_DIR)/build/operator
+	cp -rf $(ROOT_DIR)/.obs/chartfile/operator $(ROOT_DIR)/build/operator
+	mv $(ROOT_DIR)/build/operator/_helmignore $(ROOT_DIR)/build/operator/.helmignore
+	yq -i '.version = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/Chart.yaml
+	yq -i '.appVersion = "${GIT_TAG}"' $(ROOT_DIR)/build/operator/Chart.yaml
 	yq -i '.image.tag = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.tag = "${TAG_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
@@ -131,15 +138,8 @@ chart:
 	yq -i '.channel.tag = "${TAG_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.channel.repository = "${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.registryUrl = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
-	helm package --version ${CHART_VERSION} --app-version ${CHART_VERSION} -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
+	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator
-
-.PHONY: migration-chart
-migration-chart:
-	mkdir -p $(ROOT_DIR)/build
-	cp -rf $(ROOT_DIR)/charts/crds-migration $(ROOT_DIR)/build/crds-migration
-	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds-migration
-	rm -Rf $(ROOT_DIR)/build/crds-migration
 
 validate:
 	scripts/validate
@@ -218,10 +218,10 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/crd > charts/crds/templates/crds.yaml
+	$(KUSTOMIZE) build config/crd > .obs/chartfile/crds/templates/crds.yaml
 
 build-rbac: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/rbac > charts/operator/templates/cluster_role.yaml
+	$(KUSTOMIZE) build config/rbac > .obs/chartfile/operator/templates/cluster_role.yaml
 
 build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
