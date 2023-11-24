@@ -140,7 +140,7 @@ var _ = Describe("installer pick device", Label("installer", "install", "device"
 		install = &installer{
 			fs:     fs,
 			runner: cliRunner,
-			disks:  []*ghw.Disk{{Name: "/dev/pickme"}},
+			disks:  []*ghw.Disk{{Name: "pickme"}},
 		}
 		actualDevice, err := install.findInstallationDevice(elementalv1.DeviceSelector{})
 		Expect(err).ToNot(HaveOccurred())
@@ -151,13 +151,13 @@ var _ = Describe("installer pick device", Label("installer", "install", "device"
 			fs:     fs,
 			runner: cliRunner,
 			disks: []*ghw.Disk{
-				{Name: "/dev/sda"},
-				{Name: "/dev/sdb"},
-				{Name: "/dev/sdc"},
-				{Name: "/dev/sdd"},
-				{Name: "/dev/sde"},
-				{Name: "/dev/sdf"},
-				{Name: "/dev/sdg"},
+				{Name: "sda"},
+				{Name: "sdb"},
+				{Name: "sdc"},
+				{Name: "sdd"},
+				{Name: "sde"},
+				{Name: "sdf"},
+				{Name: "sdg"},
 			},
 		}
 		selector := elementalv1.DeviceSelector{
@@ -177,8 +177,8 @@ var _ = Describe("installer pick device", Label("installer", "install", "device"
 			fs:     fs,
 			runner: cliRunner,
 			disks: []*ghw.Disk{
-				{Name: "/dev/sda", SizeBytes: 85899345920},
-				{Name: "/dev/sdb", SizeBytes: 214748364800},
+				{Name: "sda", SizeBytes: 85899345920},
+				{Name: "sdb", SizeBytes: 214748364800},
 			},
 		}
 		selector := elementalv1.DeviceSelector{
@@ -198,8 +198,8 @@ var _ = Describe("installer pick device", Label("installer", "install", "device"
 			fs:     fs,
 			runner: cliRunner,
 			disks: []*ghw.Disk{
-				{Name: "/dev/sda", SizeBytes: 85899345920},
-				{Name: "/dev/sdb", SizeBytes: 214748364800},
+				{Name: "sda", SizeBytes: 85899345920},
+				{Name: "sdb", SizeBytes: 214748364800},
 			},
 		}
 		selector := elementalv1.DeviceSelector{
@@ -219,8 +219,8 @@ var _ = Describe("installer pick device", Label("installer", "install", "device"
 			fs:     fs,
 			runner: cliRunner,
 			disks: []*ghw.Disk{
-				{Name: "/dev/sda"},
-				{Name: "/dev/sdb"},
+				{Name: "sda"},
+				{Name: "sdb"},
 			},
 		}
 		selector := elementalv1.DeviceSelector{
