@@ -146,17 +146,17 @@ func (i *installer) findInstallationDevice(selector elementalv1.DeviceSelector) 
 			}
 
 			if !matches {
-				log.Debug("%s does not match selector %s", disk.Name, sel.Key)
+				log.Debugf("%s does not match selector %s", disk.Name, sel.Key)
 				delete(devices, disk.Name)
 				break
 			}
 		}
 	}
 
-	log.Debug("%s disks matching selector", len(devices))
+	log.Debugf("%s disks matching selector", len(devices))
 
 	for _, dev := range devices {
-		return dev.Name, nil
+		return fmt.Sprintf("/dev/%s", dev.Name), nil
 	}
 
 	return "", fmt.Errorf("no device found matching selector")
@@ -183,7 +183,7 @@ func matchesIn(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 	}
 
 	for _, val := range req.Values {
-		if val == disk.Name {
+		if val == disk.Name || val == fmt.Sprintf("/dev/%s", disk.Name) {
 			return true, nil
 		}
 	}
