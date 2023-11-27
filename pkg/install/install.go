@@ -91,6 +91,8 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		}
 
 		config.Elemental.Install.Device = deviceName
+	} else if len(config.Elemental.Install.DeviceSelector) > 0 {
+		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
 	additionalConfigs, err := i.getCloudInitConfigs(config, state)
