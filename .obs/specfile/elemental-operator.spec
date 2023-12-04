@@ -51,7 +51,7 @@ BuildRequires:  compiler(go-compiler) >= 1.20
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
 %package -n elemental-register
-Summary: The elemental-register client
+Summary: The registration client
 
 %description
 The Elemental operator is responsible for managing the OS
