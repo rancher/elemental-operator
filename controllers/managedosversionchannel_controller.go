@@ -22,10 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/log"
-	"github.com/rancher/elemental-operator/pkg/syncer"
-	"github.com/rancher/elemental-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -40,6 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/syncer"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 const (
@@ -202,6 +203,13 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 			Message: "failed channel synchronization",
 		})
 		return ctrl.Result{}, err
+	}
+
+	// Sometimes during upgrade the new elemental-channel will be created using
+	// the old logic. This checks if this happened we recreate the syncer pod.
+	if pod.Spec.Containers[0].Image != r.OperatorImage {
+		_ = r.Delete(ctx, pod)
+		return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 	}
 
 	return r.handleSyncPod(ctx, pod, managedOSVersionChannel, interval), nil
