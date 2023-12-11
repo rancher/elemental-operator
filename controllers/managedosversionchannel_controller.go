@@ -22,10 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/log"
-	"github.com/rancher/elemental-operator/pkg/syncer"
-	"github.com/rancher/elemental-operator/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -40,6 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/syncer"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 const (
@@ -207,7 +208,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	return r.handleSyncPod(ctx, pod, managedOSVersionChannel, interval), nil
 }
 
-// handleSyncPod is the method responcible to manage the lifecycle of the channel synchronization pod
+// handleSyncPod is the method responsible to manage the lifecycle of the channel synchronization pod
 func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, pod *corev1.Pod, ch *elementalv1.ManagedOSVersionChannel, interval time.Duration) ctrl.Result {
 	var data []byte
 	var err error
@@ -402,8 +403,8 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 				}},
 				Name:    displayContainer,
 				Image:   r.OperatorImage,
-				Command: []string{},
-				Args:    []string{"display", "--file", sync.GetOutputFile()},
+				Command: []string{"cat"},
+				Args:    []string{sync.GetOutputFile()},
 			}},
 		},
 	}
