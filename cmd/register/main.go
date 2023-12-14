@@ -44,12 +44,13 @@ const (
 )
 
 var (
-	cfg          elementalv1.Config
-	debug        bool
-	reset        bool
-	installation bool
-	configPath   string
-	statePath    string
+	cfg              elementalv1.Config
+	debug            bool
+	reset            bool
+	installation     bool
+	disableBootEntry bool
+	configPath       string
+	statePath        string
 )
 
 var (
@@ -175,6 +176,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
+	cmd.Flags().BoolVar(&disableBootEntry, "disable-boot-entry", false, "Don't create an EFI entry for the system during install/reset")
 	return cmd
 }
 
@@ -203,6 +205,12 @@ func initConfig(fs vfs.FS) error {
 		configPath = defaultLiveConfigPath
 		statePath = defaultLiveStatePath
 	}
+
+	if disableBootEntry {
+		cfg.Elemental.Install.DisableBootEntry = true
+		cfg.Elemental.Reset.DisableBootEntry = true
+	}
+
 	// Use go-vfs afero compatibility layer (required by Viper)
 	afs := vfsafero.NewAferoFS(fs)
 	viper.SetFs(afs)
