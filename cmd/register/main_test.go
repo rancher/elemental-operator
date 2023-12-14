@@ -25,15 +25,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	imocks "github.com/rancher/elemental-operator/pkg/install/mocks"
-	"github.com/rancher/elemental-operator/pkg/register"
-	rmocks "github.com/rancher/elemental-operator/pkg/register/mocks"
 	"github.com/spf13/cobra"
 	"github.com/twpayne/go-vfs"
 	"github.com/twpayne/go-vfs/vfst"
 	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	imocks "github.com/rancher/elemental-operator/pkg/install/mocks"
+	"github.com/rancher/elemental-operator/pkg/register"
+	rmocks "github.com/rancher/elemental-operator/pkg/register/mocks"
 )
 
 func TestRegister(t *testing.T) {
@@ -93,13 +94,14 @@ var (
 				ConfigDir:        "a test config dir",
 			},
 			Reset: elementalv1.Reset{
-				Enabled:         true,
-				ResetPersistent: false,
-				ResetOEM:        false,
-				ConfigURLs:      []string{"foo", "bar"},
-				SystemURI:       "a system uri",
-				PowerOff:        true,
-				Reboot:          true,
+				Enabled:          true,
+				ResetPersistent:  false,
+				ResetOEM:         false,
+				ConfigURLs:       []string{"foo", "bar"},
+				SystemURI:        "a system uri",
+				PowerOff:         true,
+				Reboot:           true,
+				DisableBootEntry: true,
 			},
 		},
 	}

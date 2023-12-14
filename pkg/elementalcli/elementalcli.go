@@ -109,6 +109,7 @@ func mapToResetEnv(conf elementalv1.Reset) []string {
 	variables = append(variables, formatEV("ELEMENTAL_RESET_SYSTEM", conf.SystemURI))
 	variables = append(variables, formatEV("ELEMENTAL_RESET_PERSISTENT", strconv.FormatBool(conf.ResetOEM)))
 	variables = append(variables, formatEV("ELEMENTAL_RESET_OEM", strconv.FormatBool(conf.ResetPersistent)))
+	variables = append(variables, formatEV("ELEMENTAL_RESET_DISABLE_BOOT_ENTRY", strconv.FormatBool(conf.DisableBootEntry)))
 	// See GetRunKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
 	variables = append(variables, formatEV("ELEMENTAL_POWEROFF", strconv.FormatBool(conf.PowerOff)))
 	variables = append(variables, formatEV("ELEMENTAL_REBOOT", strconv.FormatBool(conf.Reboot)))

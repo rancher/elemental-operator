@@ -743,6 +743,8 @@ spec:
                             type: array
                           debug:
                             type: boolean
+                          disable-boot-entry:
+                            type: boolean
                           enabled:
                             type: boolean
                           poweroff:

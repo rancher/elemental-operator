@@ -71,6 +71,8 @@ type Reset struct {
 	// +optional
 	// +kubebuilder:default:=true
 	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty" mapstructure:"reboot"`
+	// +optional
+	DisableBootEntry bool `json:"disable-boot-entry,omitempty" yaml:"disable-boot-entry,omitempty"`
 }
 
 type Registration struct {
