@@ -123,6 +123,10 @@ spec:
                   image. Defaults to 6Gi
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
+              targetPlatform:
+                description: Platform specifies the target platform to build the seedimage
+                  for.
+                type: string
               type:
                 default: iso
                 description: Type specifies the type of seed image to built. Valid
