@@ -659,7 +659,7 @@ func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
         %s \
         --unprivileged \
         --expandable \
-        --deploy-command elemental-register,--debug,--reset \
+        --deploy-command systemctl,start,elemental-register-reset.service \
         --squash-no-compression \
         --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml \
         -n elemental \
