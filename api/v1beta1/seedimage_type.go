@@ -54,12 +54,17 @@ type SeedImageSpec struct {
 	// +kubebuilder:validation:Enum=iso;raw
 	// +kubebuilder:default:=iso
 	Type SeedImageType `json:"type"`
+	// Platform specifies the target platform to build the seedimage for.
+	// +optional
+	TargetPlatform Platform `json:"targetPlatform"`
 	// CloudConfig contains cloud-config data to be put in the generated iso.
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
 }
+
+type Platform string
 
 type SeedImageType string
 

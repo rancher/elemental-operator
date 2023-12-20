@@ -647,7 +647,26 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 }
 
 func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
-	buildCommands := []string{"/usr/bin/elemental --debug build-disk --unprivileged --expandable --deploy-command elemental-register,--debug,--reset --squash-no-compression --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml -n elemental -o /iso $(ELEMENTAL_BASE_IMAGE)", "mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)"}
+	platformArg := ""
+	if seedImg.Spec.TargetPlatform != "" {
+		platformArg = fmt.Sprintf("--platform %s", seedImg.Spec.TargetPlatform)
+	}
+
+	buildCommands := []string{
+		fmt.Sprintf(`/usr/bin/elemental \
+        --debug \
+        build-disk \
+        %s \
+        --unprivileged \
+        --expandable \
+        --deploy-command elemental-register,--debug,--reset \
+        --squash-no-compression \
+        --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml \
+        -n elemental \
+        -o /iso $(ELEMENTAL_BASE_IMAGE)`, platformArg),
+
+		"mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)",
+	}
 
 	return []corev1.Container{
 		{
