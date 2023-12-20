@@ -8,13 +8,13 @@ questions:
   group: "Elemental OS Channel"
   subquestions:
   - variable: channel.repository
-    default: registry.suse.com/rancher/elemental-teal-channel
+    default: rancher/elemental-channel
     description: "Specify Elemental OS channel repository"
     type: string
     label: Elemental OS Channel Repository
     group: "Elemental OS Channel"
   - variable: channel.tag
-    default: "1.3.4"
+    default: "%VERSION%"
     description: "Specify Elemental OS channel tag"
     type: string
     label: "Elemental OS Channel Tag"
