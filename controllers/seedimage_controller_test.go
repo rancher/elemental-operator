@@ -185,6 +185,90 @@ var _ = Describe("reconcile seed image", func() {
 
 })
 
+var _ = Describe("validate seed image", func() {
+	var mRegistration *elementalv1.MachineRegistration
+	var seedImg *elementalv1.SeedImage
+
+	BeforeEach(func() {
+		mRegistration = &elementalv1.MachineRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name2",
+				Namespace: "default",
+			},
+			Status: elementalv1.MachineRegistrationStatus{
+				RegistrationURL:   "https://example.com/token",
+				RegistrationToken: "token",
+				Conditions: []metav1.Condition{
+					{
+						Type:               elementalv1.ReadyCondition,
+						Reason:             elementalv1.SuccessfullyCreatedReason,
+						Status:             metav1.ConditionTrue,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Config: &elementalv1.Config{
+					Elemental: elementalv1.Elemental{
+						Install: elementalv1.Install{},
+					},
+				},
+			},
+		}
+
+	})
+
+	It("should fail validation on unknown platform format", func() {
+		seedImg = &elementalv1.SeedImage{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Spec: elementalv1.SeedImageSpec{
+				TargetPlatform: "test-platform",
+				BaseImage:      "missing-image",
+				MachineRegistrationRef: &corev1.ObjectReference{
+					Name:      mRegistration.Name,
+					Namespace: mRegistration.Namespace,
+				},
+				Type: elementalv1.TypeIso,
+			},
+		}
+
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		err := cl.Create(ctx, seedImg)
+		Expect(err).ToNot(Succeed())
+		Expect(err.Error()).To(ContainSubstring("Invalid value: \"test-platform\": spec.targetPlatform in body should match '^$|^\\S+\\/\\S+$'"))
+
+	})
+
+	It("should pass validation on linux/amd64", func() {
+		seedImg = &elementalv1.SeedImage{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name",
+				Namespace: "default",
+			},
+			Spec: elementalv1.SeedImageSpec{
+				TargetPlatform: "linux/amd64",
+				BaseImage:      "missing-image",
+				MachineRegistrationRef: &corev1.ObjectReference{
+					Name:      mRegistration.Name,
+					Namespace: mRegistration.Namespace,
+				},
+				Type: elementalv1.TypeIso,
+			},
+		}
+
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		Expect(cl.Create(ctx, seedImg)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, seedImg)).To(Succeed())
+	})
+
+})
+
 var _ = Describe("reconcile seed image build container", func() {
 	var r *SeedImageReconciler
 	var mRegistration *elementalv1.MachineRegistration
@@ -232,7 +316,8 @@ var _ = Describe("reconcile seed image build container", func() {
 				Namespace: "default",
 			},
 			Spec: elementalv1.SeedImageSpec{
-				BaseImage: "seed-image:latest",
+				TargetPlatform: "linux/amd64",
+				BaseImage:      "seed-image:latest",
 				MachineRegistrationRef: &corev1.ObjectReference{
 					Name:      mRegistration.Name,
 					Namespace: mRegistration.Namespace,
