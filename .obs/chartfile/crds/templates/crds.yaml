@@ -2674,8 +2674,9 @@ spec:
                 pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                 x-kubernetes-int-or-string: true
               targetPlatform:
-                description: Platform specifies the target platform to build the seedimage
-                  for.
+                description: 'Platform specifies the target platform for the built
+                  image. Example: linux/amd64'
+                pattern: ^$|^\S+\/\S+$
                 type: string
               type:
                 default: iso
