@@ -54,7 +54,10 @@ type SeedImageSpec struct {
 	// +kubebuilder:validation:Enum=iso;raw
 	// +kubebuilder:default:=iso
 	Type SeedImageType `json:"type"`
-	// Platform specifies the target platform to build the seedimage for.
+	// Platform specifies the target platform for the built image. Example: linux/amd64
+	// +kubebuilder:example=linux/amd64
+	// +kubebuilder:validation:Pattern=`^$|^\S+\/\S+$`
+	// +kubebuilder:validation:Type=string
 	// +optional
 	TargetPlatform Platform `json:"targetPlatform"`
 	// CloudConfig contains cloud-config data to be put in the generated iso.
