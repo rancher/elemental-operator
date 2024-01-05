@@ -26,6 +26,9 @@ URL:            https://github.com/rancher/%{name}
 Source:         %{name}-%{version}.tar
 Source1:        %{name}.obsinfo
 
+# go-tpm-tools aren't _that_ portable :-(
+ExclusiveArch:  x86_64 aarch64
+
 BuildRequires:  gcc-c++
 BuildRequires:  glibc-devel
 BuildRequires:  openssl-devel
