@@ -50,6 +50,9 @@ BuildRequires:  compiler(go-compiler) >= 1.20
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
+%define systemdir /system
+%define oemdir %{systemdir}/oem
+
 %package -n elemental-register
 Summary: The registration client
 
@@ -74,6 +77,12 @@ Summary: Simple http server
 
 %description -n elemental-httpfy
 httpfy starts a simple http server, serving files from the current dir.
+
+%package -n elemental-seedimage-hooks
+Summary: Hooks used in SeedImage builder
+
+%description -n elemental-seedimage-hooks
+Hooks used in SeedImage builder to copy firmware when building disk-images.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -116,6 +125,9 @@ make httpfy
 %{__install} -m 755 build/elemental-support %{buildroot}%{_sbindir}
 %{__install} -m 755 build/elemental-httpfy %{buildroot}%{_sbindir}
 
+# hooks
+%{__install} -m 755 hooks/*.yaml %{buildroot}%{oemdir}
+
 %files
 %defattr(-,root,root,-)
 %license LICENSE
@@ -136,5 +148,12 @@ make httpfy
 %defattr(-,root,root,-)
 %license LICENSE
 %{_sbindir}/elemental-httpfy
+
+%files -n elemental-seedimage-hooks
+%defattr(-,root,root,-)
+%license LICENSE
+%dir %{systemdir}
+%dir %{oemdir}
+%{oemdir}/*
 
 %changelog
