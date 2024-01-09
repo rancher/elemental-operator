@@ -32,6 +32,8 @@ import (
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/ghw/pkg/product"
 	"github.com/jaypipes/ghw/pkg/topology"
+
+	"github.com/rancher/elemental-operator/pkg/runtime"
 )
 
 // HostInfo represents all the host info minus the PCI devices
@@ -51,6 +53,7 @@ type HostInfo struct {
 	BIOS      *bios.Info      `json:"bios"`
 	Baseboard *baseboard.Info `json:"baseboard"`
 	Product   *product.Info   `json:"product"`
+	Runtime   *runtime.Info   `json:"runtime"`
 }
 
 // Host returns a pointer to a HostInfo struct that contains fields with
@@ -102,6 +105,11 @@ func host(opts ...*ghw.WithOption) (*HostInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	runtimeInfo, err := runtime.New()
+	if err != nil {
+		return nil, err
+	}
+
 	return &HostInfo{
 		ctx:       ctx,
 		CPU:       cpuInfo,
@@ -114,6 +122,7 @@ func host(opts ...*ghw.WithOption) (*HostInfo, error) {
 		BIOS:      biosInfo,
 		Baseboard: baseboardInfo,
 		Product:   productInfo,
+		Runtime:   runtimeInfo,
 	}, nil
 }
 
@@ -187,6 +196,11 @@ func FillData(data []byte) (map[string]interface{}, error) {
 		}
 	}
 
+	runtime := map[string]interface{}{}
+	if systemData.Runtime != nil {
+		runtime["Hostname"] = systemData.Runtime.Hostname
+	}
+
 	labels := map[string]interface{}{}
 	labels["System Data"] = map[string]interface{}{
 		"Memory":        memory,
@@ -194,6 +208,7 @@ func FillData(data []byte) (map[string]interface{}, error) {
 		"GPU":           gpu,
 		"Network":       network,
 		"Block Devices": block,
+		"Runtime":       runtime,
 	}
 
 	// Also available but not used:

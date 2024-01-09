@@ -47,6 +47,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/register"
+	elementalruntime "github.com/rancher/elemental-operator/pkg/runtime"
 )
 
 func TestUnauthenticatedResponse(t *testing.T) {
@@ -264,6 +265,7 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 	registration := &elementalv1.MachineRegistration{
 		Spec: elementalv1.MachineRegistrationSpec{
 			MachineInventoryLabels: map[string]string{
+				"elemental.cattle.io/Hostname":               "${System Data/Runtime/Hostname}",
 				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
 				"elemental.cattle.io/AvailableMemory":        "${System Data/Memory/Total Usable Bytes}",
 				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
@@ -321,12 +323,16 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 				},
 			},
 		},
+		Runtime: &elementalruntime.Info{
+			Hostname: "machine-1",
+		},
 	}
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
 	err = updateInventoryFromSystemData(encodedData, inventory, registration)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/Hostname"], "machine-1")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
@@ -347,6 +353,8 @@ func TestUpdateInventoryFromSystemData(t *testing.T) {
 
 func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
+	inventory.Name = "${System Data/Runtime/Hostname}"
+
 	registration := &elementalv1.MachineRegistration{
 		Spec: elementalv1.MachineRegistrationSpec{
 			MachineInventoryLabels: map[string]string{
@@ -408,12 +416,16 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 				},
 			},
 		},
+		Runtime: &elementalruntime.Info{
+			Hostname: "machine-1",
+		},
 	}
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
 	err = updateInventoryFromSystemData(encodedData, inventory, registration)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
+	assert.Equal(t, inventory.Name, "machine-1")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalThreads"], "300")
