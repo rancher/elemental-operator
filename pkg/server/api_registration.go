@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 - 2023 SUSE LLC
+Copyright © 2022 - 2024 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -441,16 +441,17 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
 	// to set the machine hostname. Also set it to lowercase
 	name, err := replaceStringData(smbiosData, mInventory.Name)
-	if err != nil {
+	if err == nil {
+		mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
+	} else {
 		if errors.Is(err, errValueNotFound) {
-			log.Warningf("Value not found: %v", mInventory.Name)
-			name = "m"
+			// value not found, will be set in updateInventoryFromSystemData
+			log.Warningf("SMBIOS Value not found: %v", mInventory.Name)
 		} else {
 			return err
 		}
 	}
 
-	mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 	log.Debugf("Adding labels from registration")
 	// Add extra label info from data coming from smbios and based on the registration data
 	if mInventory.Labels == nil {
@@ -488,6 +489,18 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
 	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
+	name, err := replaceStringData(labels, inv.Name)
+	if err != nil {
+		if errors.Is(err, errValueNotFound) {
+			log.Warningf("System data value not found: %v", inv.Name)
+			name = "m"
+		} else {
+			return err
+		}
+	}
+
+	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 
 	log.Debugf("Parsing labels from System Data")
 
