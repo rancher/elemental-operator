@@ -7,7 +7,7 @@ REPO?=rancher/elemental-operator
 TAG_SEEDIMAGE?=${CHART_VERSION}
 REPO_SEEDIMAGE?=rancher/seedimage-builder
 TAG_CHANNEL?=${CHART_VERSION}
-REPO_CHANNEL?=rancher/elemental-teal-channel
+REPO_CHANNEL?=rancher/elemental-channel
 REGISTRY_URL?=registry.opensuse.org/isv/rancher/elemental/dev/containers
 DOCKER_ARGS=
 ifneq ($(REGISTRY_URL),)
