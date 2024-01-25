@@ -1,7 +1,7 @@
 #
 # spec file for package elemental-operator
 #
-# Copyright (c) 2022 SUSE LLC
+# Copyright (c) 2024 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -33,7 +33,7 @@ BuildRequires:  make
 BuildRequires:  grep
 
 %if 0%{?suse_version}
-BuildRequires:  golang(API) >= 1.16
+BuildRequires:  golang(API) >= 1.20
 BuildRequires:  golang-packaging
 %{go_provides}
 %else
