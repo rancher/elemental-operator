@@ -451,6 +451,11 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				Path:        "/usr/local/etc/hostname",
 				Permissions: "0644",
 			},
+			{
+				Content:     base64.StdEncoding.EncodeToString([]byte(mInventory.Name)),
+				Path:        "/run/elemental/persistent/etc/hostname",
+				Permissions: "0644",
+			},
 		},
 		OneTimeInstructions: []applyinator.OneTimeInstruction{
 			{
