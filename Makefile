@@ -170,7 +170,7 @@ setup-kind:
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
 setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
-	@export EXTERNAL_IP=$((kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
+	@export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \

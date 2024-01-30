@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	goruntime "runtime"
 	"time"
 
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
@@ -111,7 +112,7 @@ func NewOperatorCommand() *cobra.Command {
 				log.EnableDebugLogging()
 			}
 
-			log.Infof("Operator version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)
+			log.Infof("Operator version %s, architecture %s, commit %s, commit date %s", version.Version, goruntime.GOARCH, version.Commit, version.CommitDate)
 			operatorRun(&config)
 		},
 	}
