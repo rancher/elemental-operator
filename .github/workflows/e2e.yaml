@@ -14,7 +14,7 @@ jobs:
       chart_name: ${{ steps.chart.outputs.chart_name }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Wait for OBS crds chart
@@ -81,10 +81,11 @@ jobs:
           CHART=$(basename $FILE)
           echo "chart_name=$CHART" >> $GITHUB_OUTPUT
       - name: Upload chart
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: chart
           path: build/*.tgz
+          overwrite: true
 
   e2e-tests:
     strategy:
@@ -103,17 +104,17 @@ jobs:
       CERT_MANAGER_VERSION: v1.13.1
       SYSTEM_UPGRADE_CONTROLLER_VERSION: v0.13.1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download chart
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: chart
           path: build
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
@@ -130,8 +131,9 @@ jobs:
         run: make e2e-tests
       - name: Archive artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ci-artifacts
           path: _artifacts
           if-no-files-found: ignore
+          overwrite: true
