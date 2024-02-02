@@ -656,8 +656,7 @@ func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 		fmt.Sprintf(`/usr/bin/elemental \
         --debug \
         build-disk \
-        %s \
-        --unprivileged \
+        --system %s \
         --expandable \
         --deploy-command systemctl,start,elemental-register-reset.service \
         --squash-no-compression \
