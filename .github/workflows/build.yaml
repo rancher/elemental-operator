@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
@@ -25,17 +25,20 @@ jobs:
       - name: Build
         run: make build
       - name: Store operator binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: elemental-operator
           path: build/elemental-operator
+          overwrite: true
       - name: Store register binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: elemental-register
           path: build/elemental-register
+          overwrite: true
       - name: Store support binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: elemental-support
           path: build/elemental-support
+          overwrite: true
