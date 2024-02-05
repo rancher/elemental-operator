@@ -206,6 +206,10 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	}
 
 	for i := range machineInventories.Items {
+		// Skip machines up for deletion/reset
+		if machineInventories.Items[i].DeletionTimestamp != nil {
+			continue
+		}
 		if !isAlreadyOwned(&machineInventories.Items[i]) {
 			mInventory = &machineInventories.Items[i]
 			break
