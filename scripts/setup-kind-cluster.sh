@@ -16,6 +16,10 @@ nodes:
         nodeRegistration:
           kubeletExtraArgs:
             node-labels: "ingress-ready=true"
+    extraPortMappings:
+    - containerPort: 30000
+      hostPort: 30000
+      protocol: TCP
 EOF
     kind create cluster --name $CLUSTER_NAME --config kind.config
     rm -rf kind.config

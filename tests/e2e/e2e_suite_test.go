@@ -71,6 +71,8 @@ const (
 	fleetNamespace            = "fleet-local"
 	cattleCapiNamespace       = "cattle-provisioning-capi-system"
 	capiController            = "capi-controller-manager"
+	testRegistryNamespace     = "test-registry"
+	testRegistryName          = "test-registry"
 	sysUpgradeControllerName  = "system-upgrade-controller"
 	password                  = "rancherpassword"
 )
@@ -266,6 +268,14 @@ var _ = BeforeSuite(func() {
 
 			Eventually(func() bool {
 				return isDeploymentReady(cattleSystemNamespace, sysUpgradeControllerName)
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+		})
+
+		By("installing a test registry", func() {
+			Expect(kubectl.Apply(testRegistryNamespace, "../manifests/test-registry.yaml")).To(Succeed())
+
+			Eventually(func() bool {
+				return isDeploymentReady(testRegistryNamespace, testRegistryName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
