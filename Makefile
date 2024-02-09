@@ -98,6 +98,17 @@ build-docker-operator:
 		${DOCKER_ARGS} \
 		-t ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} .
 
+.PHONY: build-docker-register
+build-docker-register:
+	DOCKER_BUILDKIT=1 docker build \
+		-f Dockerfile \
+		--target elemental-register \
+		--build-arg "TAG=${GIT_TAG}" \
+		--build-arg "COMMIT=${GIT_COMMIT}" \
+		--build-arg "COMMITDATE=${COMMITDATE}" \
+		${DOCKER_ARGS} \
+		-t docker.io/local/elemental-register:dev .
+
 .PHONY: build-docker-seedimage-builder
 build-docker-seedimage-builder:
 	DOCKER_BUILDKIT=1 docker build \
@@ -165,14 +176,18 @@ setup-kind:
 # and run a test that does nothing but installs everything for
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
-setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
+setup-full-cluster: build-docker-operator chart setup-kind
 	@export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
-	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
+	kind load docker-image registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/seedimage-builder:1.5.0 --name operator-e2e && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
+
+#  FIXME: Locally built seedimage builder image uses too old version of xorriso
+#  See: build-docker-seedimage-builder
+#  kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
