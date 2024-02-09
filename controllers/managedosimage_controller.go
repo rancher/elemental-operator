@@ -213,7 +213,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	}
 
 	if upgradeContainerSpec.Image == "" {
-		upgradeContainerSpec.Image = prefixPrivateRegistry(image[0], r.DefaultRegistry)
+		upgradeContainerSpec.Image = prefixPrivateRegistry(image, r.DefaultRegistry)
 	}
 
 	if len(upgradeContainerSpec.Command) == 0 {
@@ -472,20 +472,36 @@ func getCloudConfig(managedOSImage *elementalv1.ManagedOSImage) ([]byte, error) 
 	return append([]byte("#cloud-config\n"), data...), nil
 }
 
-func getImageVersion(managedOSImage *elementalv1.ManagedOSImage, managedOSVersion *elementalv1.ManagedOSVersion) ([]string, string, error) {
+func getImageVersion(managedOSImage *elementalv1.ManagedOSImage, managedOSVersion *elementalv1.ManagedOSVersion) (string, string, error) {
 	baseImage := managedOSImage.Spec.OSImage
 	if baseImage == "" && managedOSVersion != nil {
 		osImg, err := managedOSVersion.ContainerImage()
 		if err != nil {
-			return []string{}, "", err
+			return "", "", err
 		}
 		baseImage = osImg.ImageURI
 	}
 
-	image := strings.SplitN(baseImage, ":", 2)
+	// Get the registry prefix
+	parts := strings.Split(baseImage, "/")
+	registry := ""
+	if len(parts) > 1 {
+		registry = parts[0]
+		parts = parts[1:]
+	}
+
+	// Now get the version
+	remainder := strings.Join(parts, "/")
+	imageParts := strings.SplitN(remainder, ":", 2)
 	version := "latest"
-	if len(image) == 2 {
-		version = image[1]
+	if len(imageParts) == 2 {
+		version = imageParts[1]
+	}
+	image := imageParts[0]
+
+	// Add the registry back if needed
+	if len(registry) > 0 {
+		image = fmt.Sprintf("%s/%s", registry, imageParts[0])
 	}
 
 	return image, version, nil

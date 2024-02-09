@@ -398,3 +398,61 @@ var _ = Describe("metadataEnv", func() {
 		Expect(env[0].Value).To(Equal("{\"Foo\":\"foostruct\"}"))
 	})
 })
+
+var _ = Describe("getImageVersion", func() {
+	It("should format images with no registry and no version", func() {
+		osImage := &elementalv1.ManagedOSImage{
+			Spec: elementalv1.ManagedOSImageSpec{
+				OSImage: "a-test-image",
+			},
+		}
+		image, version, err := getImageVersion(osImage, nil)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(version).Should(Equal("latest"))
+		Expect(image).Should(Equal(osImage.Spec.OSImage))
+	})
+	It("should format images with no version", func() {
+		osImage := &elementalv1.ManagedOSImage{
+			Spec: elementalv1.ManagedOSImageSpec{
+				OSImage: "a-test-registry/a-test-image",
+			},
+		}
+		image, version, err := getImageVersion(osImage, nil)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(version).Should(Equal("latest"))
+		Expect(image).Should(Equal(osImage.Spec.OSImage))
+	})
+	It("should format images with fully qualified name", func() {
+		osImage := &elementalv1.ManagedOSImage{
+			Spec: elementalv1.ManagedOSImageSpec{
+				OSImage: "a-test-registry/a-test-image:my-version",
+			},
+		}
+		image, version, err := getImageVersion(osImage, nil)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(version).Should(Equal("my-version"))
+		Expect(image).Should(Equal("a-test-registry/a-test-image"))
+	})
+	It("should format images with non standard registry ports", func() {
+		osImage := &elementalv1.ManagedOSImage{
+			Spec: elementalv1.ManagedOSImageSpec{
+				OSImage: "a-test-registry:30000/a-test-image:my-version",
+			},
+		}
+		image, version, err := getImageVersion(osImage, nil)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(version).Should(Equal("my-version"))
+		Expect(image).Should(Equal("a-test-registry:30000/a-test-image"))
+	})
+	It("should format images with non standard registry ports and no version", func() {
+		osImage := &elementalv1.ManagedOSImage{
+			Spec: elementalv1.ManagedOSImageSpec{
+				OSImage: "a-test-registry:30000/a-test-image",
+			},
+		}
+		image, version, err := getImageVersion(osImage, nil)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(version).Should(Equal("latest"))
+		Expect(image).Should(Equal(osImage.Spec.OSImage))
+	})
+})
