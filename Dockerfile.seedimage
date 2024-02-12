@@ -6,10 +6,10 @@ ENV CGO_ENABLED=0
 RUN go build \
     -o /usr/bin/httpfy httpfy.go
 
-FROM registry.opensuse.org/opensuse/leap:15.5 AS base
+FROM registry.opensuse.org/opensuse/tumbleweed:latest AS base
 RUN mkdir -p /installroot/etc/products.d && \
     cp /etc/products.d/baseproduct /installroot/etc/products.d/ && \
-    zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends xorriso curl ca-certificates ca-certificates-mozilla gptfdisk squashfs util-linux grub2 dosfstools mtools e2fsprogs
+    zypper --gpg-auto-import-keys --non-interactive --installroot /installroot in --no-recommends xorriso curl ca-certificates ca-certificates-mozilla gptfdisk squashfs grub2 dosfstools mtools e2fsprogs
 
 FROM scratch AS seedimage-builder 
 COPY --from=toolkit /usr/bin/elemental /usr/bin/elemental
