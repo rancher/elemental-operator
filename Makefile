@@ -107,6 +107,7 @@ build-docker-operator:
 build-docker-seedimage-builder:
 	DOCKER_BUILDKIT=1 docker build \
 		-f Dockerfile.seedimage \
+		${DOCKER_ARGS} \
 		-t ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} .
 
 .PHONY: build-docker-push-operator
