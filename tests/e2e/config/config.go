@@ -147,7 +147,7 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 }
 
 func substituteVersions(config *E2EConfig) error {
-	nginxURL, err := envsubst.Eval(config.NginxURL, func(s string) string {
+	nginxURL, err := envsubst.Eval(config.NginxURL, func(_ string) string {
 		return config.NginxVersion
 	})
 	if err != nil {
@@ -155,7 +155,7 @@ func substituteVersions(config *E2EConfig) error {
 	}
 	config.NginxURL = nginxURL
 
-	certManagerURL, err := envsubst.Eval(config.CertManagerChartURL, func(s string) string {
+	certManagerURL, err := envsubst.Eval(config.CertManagerChartURL, func(_ string) string {
 		return config.CertManagerVersion
 	})
 	if err != nil {
@@ -163,7 +163,7 @@ func substituteVersions(config *E2EConfig) error {
 	}
 	config.CertManagerChartURL = certManagerURL
 
-	rancherURL, err := envsubst.Eval(config.RancherChartURL, func(s string) string {
+	rancherURL, err := envsubst.Eval(config.RancherChartURL, func(_ string) string {
 		return config.RancherVersion
 	})
 	if err != nil {
@@ -171,7 +171,7 @@ func substituteVersions(config *E2EConfig) error {
 	}
 	config.RancherChartURL = rancherURL
 
-	sysUpgradeControllerURL, err := envsubst.Eval(config.SystemUpgradeControllerURL, func(s string) string {
+	sysUpgradeControllerURL, err := envsubst.Eval(config.SystemUpgradeControllerURL, func(_ string) string {
 		return config.SystemUpgradeControllerVersion
 	})
 	if err != nil {

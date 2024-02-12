@@ -97,7 +97,7 @@ func NewOperatorCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operator",
 		Short: "Run the Kubernetes operator using kubebuilder.",
-		Args: func(cmd *cobra.Command, args []string) error {
+		Args: func(_ *cobra.Command, _ []string) error {
 			if config.seedimageImagePullPolicy != string(corev1.PullAlways) &&
 				config.seedimageImagePullPolicy != string(corev1.PullIfNotPresent) &&
 				config.seedimageImagePullPolicy != string(corev1.PullNever) {
