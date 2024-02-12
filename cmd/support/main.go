@@ -83,7 +83,7 @@ func main() {
 		Use:   "elemental-support",
 		Short: "Gathers logs about the running system",
 		Long:  "elemental-support tries to gather as much info as possible with logs about the running system for troubleshooting purposes",
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			if viper.GetBool("debug") {
 				log.EnableDebugLogging()
 			}
@@ -247,7 +247,7 @@ func compress(src string, buf io.Writer) error {
 			return err
 		}
 	} else if mode.IsDir() {
-		_ = filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+		_ = filepath.Walk(src, func(file string, fi os.FileInfo, _ error) error {
 			// generate tar header
 			var header, _ = tar.FileInfoHeader(fi, file)
 			header.Name = strings.Replace(filepath.ToSlash(file), "/tmp/", "elemental-support-", 1)
