@@ -182,13 +182,8 @@ setup-full-cluster: build-docker-operator chart setup-kind
 	export CHART=$(CHART) && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
-	kind load docker-image registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/seedimage-builder:1.5.0 --name operator-e2e && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
-
-#  FIXME: Locally built seedimage builder image uses too old version of xorriso
-#  See: make build-docker-seedimage-builder
-#  See: https://github.com/rancher/elemental-operator/issues/623
-#  kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
