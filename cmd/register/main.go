@@ -81,7 +81,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 		Use:   "elemental-register",
 		Short: "Elemental register command",
 		Long:  "elemental-register registers a node with the elemental-operator via a config file or flags",
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			// Version subcommand
 			if viper.GetBool("version") {
 				log.Infof("Register version %s, commit %s, commit date %s", version.Version, version.Commit, version.CommitDate)

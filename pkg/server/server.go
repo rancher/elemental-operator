@@ -104,7 +104,7 @@ func sanitizeUserInput(data string) string {
 func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, error) {
 	upgrader := websocket.Upgrader{
 		HandshakeTimeout: 5 * time.Second,
-		CheckOrigin:      func(r *http.Request) bool { return true },
+		CheckOrigin:      func(_ *http.Request) bool { return true },
 	}
 
 	conn, err := upgrader.Upgrade(resp, req, nil)
