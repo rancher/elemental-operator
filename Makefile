@@ -186,7 +186,8 @@ setup-full-cluster: build-docker-operator chart setup-kind
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
 
 #  FIXME: Locally built seedimage builder image uses too old version of xorriso
-#  See: build-docker-seedimage-builder
+#  See: make build-docker-seedimage-builder
+#  See: https://github.com/rancher/elemental-operator/issues/623
 #  kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 
 # This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
