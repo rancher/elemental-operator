@@ -656,13 +656,14 @@ func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 		fmt.Sprintf(`/usr/bin/elemental \
         --debug \
         build-disk \
-        --system %s \
+        %s \
         --expandable \
         --deploy-command systemctl,start,elemental-register-reset.service \
         --squash-no-compression \
         --cloud-init /overlay/reg/reset-config.yaml,/overlay/iso-config/cloud-config.yaml \
         -n elemental \
-        -o /iso $(ELEMENTAL_BASE_IMAGE)`, platformArg),
+        -o /iso \
+        --system $(ELEMENTAL_BASE_IMAGE)`, platformArg),
 
 		"mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)",
 	}
