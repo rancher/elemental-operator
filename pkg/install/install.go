@@ -24,8 +24,8 @@ import (
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/block"
-	"github.com/mudler/yip/pkg/schema"
 	agent "github.com/rancher/system-agent/pkg/config"
+	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/api/resource"
