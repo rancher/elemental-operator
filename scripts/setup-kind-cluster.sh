@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KUBE_VERSION=${KUBE_VERSION:-v1.24.6}
+KUBE_VERSION=${KUBE_VERSION:-v1.27.10}
 CLUSTER_NAME="${CLUSTER_NAME:-operator-e2e}"
 
 if ! kind get clusters | grep "$CLUSTER_NAME"; then
