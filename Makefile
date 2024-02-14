@@ -24,16 +24,6 @@ RAWCOMMITDATE=$(shell git log -n1 --format="%at")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
 E2E_CONF_FILE ?= $(ROOT_DIR)/tests/e2e/config/config.yaml
 
-
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION=1.27.1
-# ifeq ($(shell go env GOOS),darwin) # Use the darwin/amd64 binary until an arm64 version is available
-# 	KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path --arch amd64 $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
-# 	COMMITDATE?=$(shell gdate -d @"${RAWCOMMITDATE}" "+%FT%TZ")
-# else
-# 	KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
-# 	COMMITDATE?=$(shell date -d @"${RAWCOMMITDATE}" "+%FT%TZ")
-# endif
-
 LDFLAGS := -w -s
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Version=${GIT_TAG}"
 LDFLAGS += -X "github.com/rancher/elemental-operator/pkg/version.Commit=${GIT_COMMIT}"
