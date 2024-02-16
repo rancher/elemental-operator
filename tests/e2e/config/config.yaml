@@ -15,5 +15,5 @@ certManagerChartURL: https://charts.jetstack.io/charts/cert-manager-${CERT_MANAG
 rancherVersion: 2.8.2
 rancherChartURL: https://releases.rancher.com/server-charts/latest/rancher-${RANCHER_VERSION}.tgz
 
-systemUpgradeControllerVersion: v0.13.1
+systemUpgradeControllerVersion: v0.13.2
 systemUpgradeControllerURL: https://github.com/rancher/system-upgrade-controller/releases/download/${SYSTEM_UPGRADE_CONTROLLER_VERSION}/system-upgrade-controller.yaml
