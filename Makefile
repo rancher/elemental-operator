@@ -98,6 +98,17 @@ build-docker-operator:
 		${DOCKER_ARGS} \
 		-t ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} .
 
+.PHONY: build-docker-register
+build-docker-register:
+	DOCKER_BUILDKIT=1 docker build \
+		-f Dockerfile \
+		--target elemental-register \
+		--build-arg "TAG=${GIT_TAG}" \
+		--build-arg "COMMIT=${GIT_COMMIT}" \
+		--build-arg "COMMITDATE=${COMMITDATE}" \
+		${DOCKER_ARGS} \
+		-t docker.io/local/elemental-register:dev .
+
 .PHONY: build-docker-seedimage-builder
 build-docker-seedimage-builder:
 	DOCKER_BUILDKIT=1 docker build \
@@ -165,7 +176,7 @@ setup-kind:
 # and run a test that does nothing but installs everything for
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
-setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
+setup-full-cluster: build-docker-operator chart setup-kind
 	@export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
