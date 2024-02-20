@@ -54,6 +54,9 @@ type ManagedOSVersionChannelStatus struct {
 	// LastSyncedTime is the timestamp of the last synchronization
 	// +optional
 	LastSyncedTime *metav1.Time `json:"lastSyncedTime,omitempty"`
+	// FailedSynchronizationAttempts counts the number of consecutive synchronization failures
+	// +optional
+	FailedSynchronizationAttempts int `json:"failedSynchronizationAttempts,omitempty"`
 }
 
 // +kubebuilder:object:root=true

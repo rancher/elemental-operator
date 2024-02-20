@@ -290,6 +290,10 @@ spec:
                   - type
                   type: object
                 type: array
+              failedSynchronizationAttempts:
+                description: FailedSynchronizationAttempts counts the number of consecutive
+                  synchronization failures
+                type: integer
               lastSyncedTime:
                 description: LastSyncedTime is the timestamp of the last synchronization
                 format: date-time
