@@ -181,7 +181,8 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	}
 
 	lastSync := managedOSVersionChannel.Status.LastSyncedTime
-	if lastSync != nil && lastSync.Add(r.minTimeBetweenSyncs).After(time.Now()) {
+	failedPodCreation := readyCondition.Reason == elementalv1.FailedToCreatePodReason
+	if lastSync != nil && !failedPodCreation && lastSync.Add(r.minTimeBetweenSyncs).After(time.Now()) {
 		logger.Info("synchronization already done shortly before", "lastSync", lastSync)
 		return ctrl.Result{}, nil
 	}
