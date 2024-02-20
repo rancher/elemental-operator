@@ -177,10 +177,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	readyCondition := meta.FindStatusCondition(managedOSVersionChannel.Status.Conditions, elementalv1.ReadyCondition)
 	if readyCondition == nil {
 		// First reconcile loop does not have a ready condition
-		if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-			return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 	}
 
 	lastSync := managedOSVersionChannel.Status.LastSyncedTime
@@ -196,10 +193,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	}, pod)
 	if err != nil {
 		if apierrors.IsNotFound(err) && readyCondition.Reason != elementalv1.SyncingReason {
-			if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-				return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
-			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 		}
 		logger.Error(err, "failed getting pod resource", "pod", pod.Name)
 		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
@@ -215,10 +209,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	// the old logic. This checks if this happened we recreate the syncer pod.
 	if pod.Spec.Containers[0].Image != r.OperatorImage {
 		_ = r.Delete(ctx, pod)
-		if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-			return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 	}
 
 	return r.handleSyncPod(ctx, pod, managedOSVersionChannel, interval), nil
