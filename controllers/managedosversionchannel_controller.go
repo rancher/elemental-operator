@@ -178,7 +178,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	if readyCondition == nil {
 		// First reconcile loop does not have a ready condition
 		if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-			return ctrl.Result{RequeueAfter: time.Second}, fmt.Errorf("creating syncer pod: %w", err)
+			return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -197,7 +197,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	if err != nil {
 		if apierrors.IsNotFound(err) && readyCondition.Reason != elementalv1.SyncingReason {
 			if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-				return ctrl.Result{RequeueAfter: time.Second}, fmt.Errorf("creating syncer pod: %w", err)
+				return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
 			}
 			return ctrl.Result{}, nil
 		}
@@ -216,7 +216,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	if pod.Spec.Containers[0].Image != r.OperatorImage {
 		_ = r.Delete(ctx, pod)
 		if err := r.createSyncerPod(ctx, managedOSVersionChannel, sync); err != nil {
-			return ctrl.Result{RequeueAfter: time.Second}, fmt.Errorf("creating syncer pod: %w", err)
+			return ctrl.Result{RequeueAfter: interval}, fmt.Errorf("creating syncer pod: %w", err)
 		}
 		return ctrl.Result{}, nil
 	}
