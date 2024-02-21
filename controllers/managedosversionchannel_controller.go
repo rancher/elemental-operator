@@ -44,11 +44,10 @@ import (
 )
 
 const (
-	baseRateTime               = 4 * time.Second
-	maxDelayTime               = 512 * time.Second
-	displayContainer           = "display"
-	defaultMinTimeBetweenSyncs = 60 * time.Second
-	maxConscutiveFailures      = 4
+	baseRateTime          = 4 * time.Second
+	maxDelayTime          = 512 * time.Second
+	displayContainer      = "display"
+	maxConscutiveFailures = 4
 )
 
 // ManagedOSVersionChannelReconciler reconciles a ManagedOSVersionChannel object.
@@ -58,8 +57,6 @@ type ManagedOSVersionChannelReconciler struct {
 	OperatorImage string
 	// syncerProvider is mostly an interface to facilitate unit tests
 	syncerProvider syncer.Provider
-	// minTimeBetweenSyncs is mostly added here to be configurable in tests
-	minTimeBetweenSyncs time.Duration
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversionchannels,verbs=get;list;watch;create;update;patch;delete
@@ -72,9 +69,6 @@ func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) e
 
 	if r.syncerProvider == nil {
 		r.syncerProvider = syncer.DefaultProvider{}
-	}
-	if r.minTimeBetweenSyncs == 0 {
-		r.minTimeBetweenSyncs = defaultMinTimeBetweenSyncs
 	}
 	r.kcl, err = kubernetes.NewForConfig(mgr.GetConfig())
 	if err != nil {
@@ -175,26 +169,28 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		return ctrl.Result{}, nil
 	}
 
+	reachedNextInterval := false
+	lastSync := managedOSVersionChannel.Status.LastSyncedTime
+	if lastSync != nil && lastSync.Add(interval).Before(time.Now()) {
+		reachedNextInterval = true
+	}
+
+	newGeneration := managedOSVersionChannel.Status.SyncedGeneration != managedOSVersionChannel.Generation
 	readyCondition := meta.FindStatusCondition(managedOSVersionChannel.Status.Conditions, elementalv1.ReadyCondition)
-	if readyCondition == nil {
-		// First reconcile loop does not have a ready condition
+	if readyCondition == nil || newGeneration || reachedNextInterval {
+		// First reconcile loop for the given generation or reached the next interval
+		managedOSVersionChannel.Status.FailedSynchronizationAttempts = 0
+		managedOSVersionChannel.Status.SyncedGeneration = managedOSVersionChannel.Generation
 		return ctrl.Result{}, r.createSyncerPod(ctx, managedOSVersionChannel, sync)
 	}
 
-	lastSync := managedOSVersionChannel.Status.LastSyncedTime
-	ready := readyCondition.Status == metav1.ConditionTrue
-	if ready && lastSync != nil && lastSync.Add(r.minTimeBetweenSyncs).After(time.Now()) {
-		logger.Info("synchronization already done shortly before", "lastSync", lastSync)
+	if readyCondition.Status == metav1.ConditionTrue {
+		logger.Info("synchronization already done", "lastSync", lastSync)
 		return ctrl.Result{}, nil
 	}
 
-	if lastSync != nil && lastSync.Add(interval).Before(time.Now()) {
-		// Reset failed attempts on every interval
-		managedOSVersionChannel.Status.FailedSynchronizationAttempts = 0
-	}
-
 	if managedOSVersionChannel.Status.FailedSynchronizationAttempts > maxConscutiveFailures {
-		logger.Info("already failed too many consecutive times", "failed attempts", managedOSVersionChannel.Status.FailedSynchronizationAttempts)
+		logger.Info("sychronization failed consecutively too many times", "failed attempts", managedOSVersionChannel.Status.FailedSynchronizationAttempts)
 		return ctrl.Result{}, nil
 	}
 

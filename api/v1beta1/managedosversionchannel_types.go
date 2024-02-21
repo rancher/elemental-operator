@@ -57,6 +57,9 @@ type ManagedOSVersionChannelStatus struct {
 	// FailedSynchronizationAttempts counts the number of consecutive synchronization failures
 	// +optional
 	FailedSynchronizationAttempts int `json:"failedSynchronizationAttempts,omitempty"`
+	// SyncedGeneration tracks the spec generation of the last synchronization
+	// +optional
+	SyncedGeneration int64 `json:"syncedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
