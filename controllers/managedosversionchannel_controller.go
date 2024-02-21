@@ -190,7 +190,7 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 	}
 
 	if managedOSVersionChannel.Status.FailedSynchronizationAttempts > maxConscutiveFailures {
-		logger.Info("sychronization failed consecutively too many times", "failed attempts", managedOSVersionChannel.Status.FailedSynchronizationAttempts)
+		logger.Error(fmt.Errorf("stop retrying"), "sychronization failed consecutively too many times", "failed attempts", managedOSVersionChannel.Status.FailedSynchronizationAttempts)
 		return ctrl.Result{}, nil
 	}
 
