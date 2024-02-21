@@ -104,10 +104,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 		syncerProvider = &ctrlHelpers.FakeSyncerProvider{}
 		syncerProvider.SetJSON(syncJSON)
 		r = &ManagedOSVersionChannelReconciler{
-			Client:              cl,
-			syncerProvider:      syncerProvider,
-			minTimeBetweenSyncs: defaultMinTimeBetweenSyncs,
-			OperatorImage:       "test/image:latest",
+			Client:         cl,
+			syncerProvider: syncerProvider,
+			OperatorImage:  "test/image:latest",
 		}
 
 		managedOSVersionChannel = &elementalv1.ManagedOSVersionChannel{
@@ -164,12 +163,10 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(pod.Status.Phase).To(Equal(corev1.PodPending))
 		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.RequeueAfter).To(Equal(defaultMinTimeBetweenSyncs / 2))
 
 		setPodPhase(pod, corev1.PodRunning)
 		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.RequeueAfter).To(Equal(defaultMinTimeBetweenSyncs / 2))
 
 		setPodPhase(pod, corev1.PodSucceeded)
 		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
@@ -302,7 +299,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 
 		setPodPhase(pod, corev1.PodSucceeded)
 		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -329,7 +326,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
 
 		// No error and status updated (no requeue)
-		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
@@ -348,9 +345,8 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(pod.Status.Phase).To(Equal(corev1.PodPending))
 
 		setPodPhase(pod, corev1.PodSucceeded)
-		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(Equal(1 * time.Hour))
+		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).To(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -395,9 +391,8 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(pod.Status.Phase).To(Equal(corev1.PodPending))
 
 		setPodPhase(pod, corev1.PodFailed)
-		res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.RequeueAfter).To(Equal(1 * time.Hour))
+		_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).To(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSVersionChannel.Name,
@@ -447,11 +442,9 @@ var _ = Describe("managed os version channel controller integration tests", func
 	var mgrCancel context.CancelFunc
 	var pod *corev1.Pod
 	var setPodPhase func(pod *corev1.Pod, phase corev1.PodPhase)
-	var minTime time.Duration
 
 	BeforeEach(func() {
 		var err error
-		minTime = 6 * time.Second
 		managedOSVersion = &elementalv1.ManagedOSVersion{}
 
 		mgr, err = ctrl.NewManager(cfg, ctrl.Options{
@@ -462,10 +455,9 @@ var _ = Describe("managed os version channel controller integration tests", func
 		syncerProvider = &ctrlHelpers.FakeSyncerProvider{}
 		syncerProvider.SetJSON(syncJSON)
 		r = &ManagedOSVersionChannelReconciler{
-			Client:              cl,
-			syncerProvider:      syncerProvider,
-			minTimeBetweenSyncs: minTime,
-			OperatorImage:       "test/image:latest",
+			Client:         cl,
+			syncerProvider: syncerProvider,
+			OperatorImage:  "test/image:latest",
 		}
 		Expect(r.SetupWithManager(mgr)).To(Succeed())
 
@@ -517,7 +509,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, pod)
 			return err == nil
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 		setPodPhase(pod, corev1.PodSucceeded)
 
 		Eventually(func() bool {
@@ -526,7 +518,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, ch)
 			return err == nil && ch.Status.Conditions[0].Status == metav1.ConditionTrue
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      "v0.1.0",
@@ -541,20 +533,13 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, pod)
 			return err != nil && apierrors.IsNotFound(err)
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 
 		// Simulate a channel content change
 		syncerProvider.SetJSON(updatedJSON)
 
-		// Updating before the minimum time between updates happened does nothing
-		time.Sleep(time.Until(ch.Status.LastSyncedTime.Add(minTime / 2)))
-		patchBase := client.MergeFrom(ch.DeepCopy())
-		ch.Spec.SyncInterval = "15m"
-		Expect(cl.Patch(ctx, ch, patchBase)).To(Succeed())
-
 		// Updating the channel after the minimum time between syncs causes an automatic update
-		time.Sleep(minTime / 2)
-		patchBase = client.MergeFrom(ch.DeepCopy())
+		patchBase := client.MergeFrom(ch.DeepCopy())
 		ch.Spec.SyncInterval = "10m"
 		Expect(cl.Patch(ctx, ch, patchBase)).To(Succeed())
 
@@ -565,7 +550,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, pod)
 			return err == nil
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 		setPodPhase(pod, corev1.PodSucceeded)
 
 		// New added versions are synced
@@ -575,7 +560,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, managedOSVersion)
 			return err == nil
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 
 		// After channel update already existing versions were patched
 		Expect(cl.Get(ctx, client.ObjectKey{
@@ -606,7 +591,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, ch)
 			return err == nil && ch.Status.Conditions[0].Reason == elementalv1.FailedToSyncReason
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 
 		// Pod is deleted
 		Eventually(func() bool {
@@ -615,20 +600,6 @@ var _ = Describe("managed os version channel controller integration tests", func
 				Namespace: ch.Namespace,
 			}, pod)
 			return err != nil && apierrors.IsNotFound(err)
-		}, 4*time.Second, 1*time.Second).Should(BeTrue())
-
-		// Pod is never recreated and and channel stays in failed status
-		Consistently(func() bool {
-			podErr := cl.Get(ctx, client.ObjectKey{
-				Name:      ch.Name,
-				Namespace: ch.Namespace,
-			}, pod)
-			cErr := cl.Get(ctx, client.ObjectKey{
-				Name:      ch.Name,
-				Namespace: ch.Namespace,
-			}, ch)
-			return (podErr != nil && apierrors.IsNotFound(podErr)) &&
-				(cErr == nil && ch.Status.Conditions[0].Reason == elementalv1.FailedToSyncReason)
-		}, minTime, 1*time.Second).Should(BeTrue())
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
 	})
 })
