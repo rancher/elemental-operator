@@ -317,7 +317,7 @@ func getLocalIPAddress(conn *websocket.Conn) (string, error) {
 	tcpAddr := conn.LocalAddr().String()
 	idxPortNumStart := strings.LastIndexAny(tcpAddr, ":")
 	if idxPortNumStart < 0 {
-		return "", fmt.Errorf("Cannot understand local IP address format [%s]", tcpAddr)
+		return "", fmt.Errorf("cannot understand local IP address format [%s]", tcpAddr)
 	}
 	return tcpAddr[0:idxPortNumStart], nil
 }
