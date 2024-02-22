@@ -17,11 +17,13 @@ limitations under the License.
 package register
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -283,12 +285,23 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 	if reg.NoToolkit {
 		data["os.unmanaged"] = "true"
 	}
+	if osAnnotations, err := getOsReleaseInfo(); err != nil {
+		log.Errorf("retrieving os info: %w", err)
+	} else {
+		if len(osAnnotations) == 0 {
+			log.Warning("no OS info found")
+		}
+		for key, val := range osAnnotations {
+			data["os."+key] = val
+		}
+	}
 	if ipAddress, err := getLocalIPAddress(conn); err != nil {
 		log.Errorf("retrieving the local IP address: %w", err)
 	} else {
 		data["registration-ip"] = ipAddress
 		log.Debugf("sending local IP: %s", data["registration-ip"])
 	}
+
 	err := SendJSONData(conn, MsgAnnotations, data)
 	if err != nil {
 		log.Debugf("annotation data:\n%s", litter.Sdump(data))
@@ -304,6 +317,41 @@ func getLocalIPAddress(conn *websocket.Conn) (string, error) {
 		return "", fmt.Errorf("Cannot understand local IP address format [%s]", tcpAddr)
 	}
 	return tcpAddr[0:idxPortNumStart], nil
+}
+
+func getOsReleaseInfo() (map[string]string, error) {
+	data := map[string]string{}
+
+	file, err := os.Open("/etc/os-release")
+	if err != nil {
+		return data, fmt.Errorf("cannot open /etc/os-release: %w", err)
+	}
+	defer file.Close()
+
+	envToLabel := map[string]string{
+		"NAME":        "name",
+		"VERSION":     "version",
+		"VERSION_ID":  "version-id",
+		"ID":          "id",
+		"PRETTY_NAME": "pretty-name",
+		"IMAGE":       "image",
+		"CPE_NAME":    "cpe-name",
+	}
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		buf := strings.SplitN(scanner.Text(), "=", 2)
+		if len(buf) < 2 {
+			continue
+		}
+		env := buf[0]
+		val := buf[1]
+
+		if label, ok := envToLabel[env]; ok {
+			data[label] = val
+		}
+	}
+	return data, nil
 }
 
 func sendUpdateData(conn *websocket.Conn) error {
