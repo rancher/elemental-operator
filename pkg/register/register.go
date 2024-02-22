@@ -38,6 +38,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/plainauth"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 type Client interface {
@@ -275,7 +276,9 @@ func sendSystemData(conn *websocket.Conn) error {
 }
 
 func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
-	data := map[string]string{}
+	data := map[string]string{
+		"reg-version": version.Version,
+	}
 
 	if reg.EmulateTPM {
 		data["auth"] = "emulated-tpm"
