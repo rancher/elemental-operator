@@ -46,6 +46,7 @@ import (
 const (
 	baseRateTime          = 4 * time.Second
 	maxDelayTime          = 512 * time.Second
+	pollingTime           = 20 * time.Second
 	displayContainer      = "display"
 	maxConscutiveFailures = 4
 )
@@ -240,7 +241,10 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 			Status:  metav1.ConditionFalse,
 			Message: "ongoing channel synchronization",
 		})
-		return ctrl.Result{}, nil
+		// Always requeue to prevent being stuck on this stage in case a pod phase change
+		// is missed due to a race condition. This ensures we always check for the
+		// synchronization finalization.
+		return ctrl.Result{RequeueAfter: pollingTime}, nil
 	case corev1.PodSucceeded:
 		data, err = r.syncerProvider.ReadPodLogs(ctx, r.kcl, pod, displayContainer)
 		if err != nil {
