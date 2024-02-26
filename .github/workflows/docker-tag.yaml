@@ -35,7 +35,7 @@ jobs:
           echo "commit_date=$COMMITDATE" >> $GITHUB_OUTPUT
       - name: Docker meta for operator tag
         id: meta-operator
-        uses: docker/metadata-action@v4.1.1
+        uses: docker/metadata-action@v5.5.1
         with:
           images: |
             ${{ env.OPERATOR_REPO }}
@@ -43,7 +43,7 @@ jobs:
             type=semver,pattern={{raw}}
       - name: Docker meta for register tag
         id: meta-register
-        uses: docker/metadata-action@v4.1.1
+        uses: docker/metadata-action@v5.5.1
         with:
           images: |
             ${{ env.REGISTER_REPO }}
@@ -51,7 +51,7 @@ jobs:
             type=semver,pattern={{raw}}
       - name: Docker meta for seedimage tag
         id: meta-seedimage
-        uses: docker/metadata-action@v4.1.1
+        uses: docker/metadata-action@v5.5.1
         with:
           images: |
             ${{ env.SEEDIMAGE_REPO }}

@@ -34,7 +34,7 @@ jobs:
           echo "commit_date=$COMMITDATE" >> $GITHUB_OUTPUT
       - name: Docker meta for operator master
         id: meta-operator
-        uses: docker/metadata-action@v4.1.1
+        uses: docker/metadata-action@v5.5.1
         with:
           images: |
             ${{ env.OPERATOR_REPO }}
@@ -43,7 +43,7 @@ jobs:
             type=raw,value=latest
       - name: Docker meta for register master
         id: meta-register
-        uses: docker/metadata-action@v4.1.1
+        uses: docker/metadata-action@v5.5.1
         with:
           images: |
             ${{ env.REGISTER_REPO }}
