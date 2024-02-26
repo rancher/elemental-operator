@@ -24,15 +24,15 @@ IMAGES_TO_SAVE=""
 print_help() {
     cat <<- EOF
 Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
-    [-l|--image-list path] generated text file with the list of saved images (one image per line).
-    [-i|--images path] tar.gz gernerated by docker save.
     [-c|--crds-chart] Elemental CRDS chart (if URL, will be downloaded).
-    [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
-    [-r|--local-registry] registry where to load the images to (used in the next steps).
     [-co|--channel-only] just extract and rebuild the ManagedOSVersionChannel container image
-    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
+    [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
     [-d|--debug] enable debug output on screen.
+    [-i|--images path] tar.gz gernerated by docker save.
     [-h|--help] Usage message.
+    [-l|--image-list path] generated text file with the list of saved images (one image per line).
+    [-r|--local-registry] registry where to load the images to (used in the next steps).
+    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
 
     ELEMENTAL_OPERATOR_CHART could be either a chart tgz file or an url (in that case will be downloaded first)
     it could even be 'dev', 'staging' or 'stable' to allow automatic download of the charts.
