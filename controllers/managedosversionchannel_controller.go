@@ -372,7 +372,7 @@ func (r *ManagedOSVersionChannelReconciler) getAllOwnedManagedOSVersions(ctx con
 	}
 
 	for _, ver := range versions.Items {
-		result[ver.Name] = &ver
+		result[ver.Name] = ver.DeepCopy()
 	}
 
 	return result
