@@ -9,11 +9,16 @@ CHART_NAME_OPERATOR=""
 ELEMENTAL_OPERATOR_CRDS_CHART_NAME="\$ELEMENTAL_CRDS_CHART"
 CHANNEL_IMAGE_URL=""
 IMAGES_TO_SAVE=""
+HAULER_REG_DIR=$(mktemp -d)
+HAULER_REG_PID=""
+HAULER_REG_DUMMY_FILE="hauler-registry.txt"
 
 : ${CONTAINER_IMAGES_NAME:="elemental-images"}
 : ${CONTAINER_IMAGES_FILE:=$CONTAINER_IMAGES_NAME".txt"}
 : ${CONTAINER_IMAGES_ARCHIVE:=$CONTAINER_IMAGES_NAME".tar.gz"}
 : ${DEBUG:="false"}
+: ${HAULER:="false"}
+: ${HAULER_STORE:=$(pwd)"/elemental-collection"}
 : ${LOCAL_REGISTRY:=\$LOCAL_REGISTRY}
 : ${CHART_NAME_CRDS:=$ELEMENTAL_OPERATOR_CRDS_CHART_NAME}
 : ${CHART_VERSION:="latest"}
@@ -24,15 +29,16 @@ IMAGES_TO_SAVE=""
 print_help() {
     cat <<- EOF
 Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
-    [-l|--image-list path] generated text file with the list of saved images (one image per line).
-    [-i|--images path] tar.gz gernerated by docker save.
     [-c|--crds-chart] Elemental CRDS chart (if URL, will be downloaded).
-    [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
-    [-r|--local-registry] registry where to load the images to (used in the next steps).
     [-co|--channel-only] just extract and rebuild the ManagedOSVersionChannel container image
-    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
+    [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
     [-d|--debug] enable debug output on screen.
+    [-i|--images path] tar.gz gernerated by docker save.
     [-h|--help] Usage message.
+    [-ha|--hauler] Use hauler to generate the archive (an "Haul") of the Elemental "Collection".
+    [-l|--image-list path] generated text file with the list of saved images (one image per line).
+    [-r|--local-registry] registry where to load the images to (used in the next steps).
+    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
 
     ELEMENTAL_OPERATOR_CHART could be either a chart tgz file or an url (in that case will be downloaded first)
     it could even be 'dev', 'staging' or 'stable' to allow automatic download of the charts.
@@ -56,12 +62,16 @@ Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
     $0 oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart \\
       -c oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-crds-chart \\
       -r $LOCAL_REGISTRY
+
+    # For creating an Hauler haul
+    $0 -ha -r $LOCAL_REGISTRY stable
 EOF
 }
 
 parse_parameters() {
 
     local help="false"
+    local container_images_archive="false"
 
     POSITIONAL=()
     while [[ $# -gt 0 ]]; do
@@ -69,6 +79,7 @@ parse_parameters() {
         case $key in
             -i|--images)
             CONTAINER_IMAGES_ARCHIVE="$2"
+            container_images_archive="true"
             shift # past argument
             shift # past value
             ;;
@@ -106,6 +117,13 @@ parse_parameters() {
             ;;
             -h|--help)
             help="true"
+            shift
+            ;;
+            -ha|--hauler)
+            HAULER="true"
+            if [ "${container_images_archive}" = "false" ]; then
+                CONTAINER_IMAGES_ARCHIVE="elemental-haul.tar.zst"
+            fi
             shift
             ;;
             *)
@@ -152,6 +170,7 @@ parse_parameters() {
 exit_error() {
     eval msg=\"$1\"
     echo -e "ERR: $msg"
+    hauler_stop_local_registry
     exit 1   
 }
 
@@ -164,6 +183,10 @@ log_debug() {
 log_info() {
     eval msg=\"$1\"
     echo -e "$msg"
+}
+
+is_hauler() {
+    "${HAULER}" != "false" && return 0 || return 1
 }
 
 get_chart_val() {
@@ -208,6 +231,7 @@ set_json_val() {
 # this just adds the passed image to the list of the images to be saved in the images list text file and
 # in the tar.gz archive containing the saved images to be loaded in the local registry.
 add_image_to_export_list() {
+    is_hauler && return
     local img="${1}"
     if [ -z "${img}" ]; then
         log_debug "cannot add image to export list: empty image passed"
@@ -226,7 +250,9 @@ add_image_to_export_list() {
 
 prereq_checks() {
     log_debug "Check required binaries availability"
-    for cmd in helm yq jq sed docker; do
+    local cmd_list="helm yq jq sed docker"
+    is_hauler && cmd_list="${cmd_list} hauler"
+    for cmd in $cmd_list; do
         if ! command -v "$cmd" > /dev/null; then
             exit_error "'$cmd' not found."
         fi
@@ -257,6 +283,7 @@ fetch_charts() {
             fi
             eval $c=$(ls -t1 | head -n 1)
             log_info "Downloaded Elemental Operator chart: \$$c"
+            eval hauler_store_add_file "\$$c"
             ;;
             *)
             [ ! -f "$chart" ] && exit_error "chart file $chart not found"
@@ -280,7 +307,10 @@ pull_chart_container_images() {
     for img in "${oprtimg_repo}:${oprtimg_tag}" "${seedimg_repo}:${seedimg_tag}"; do
         [ -z "$img" ] && continue
 
-        if pull_image "${source_registry}/${img}"; then
+        if is_hauler; then
+            hauler_store_add_image "${source_registry}/${img}"
+            continue
+        elif pull_image "${source_registry}/${img}"; then
             docker tag "${source_registry}/${img}" "${img}"
             add_image_to_export_list "${img}"
         fi
@@ -323,7 +353,7 @@ build_os_channel() {
 
     TEMPDIR=$(mktemp -d)
     log_debug "build channel image in $TEMPDIR"
-    pushd $TEMPDIR
+    pushd $TEMPDIR > /dev/null
     # extract the channel.json
     if ! docker run --entrypoint cat ${channel_repo}/${channel_img}:${channel_tag} channel.json > channel.json; then
         exit_error "cannot extract OS images"
@@ -366,7 +396,11 @@ build_os_channel() {
 
         if [ "$SKIP_ARCHIVE_CREATION" != "true" ]; then
             # save the OS image
-            if ! pull_image "${item_image}"; then
+            if is_hauler; then
+                if ! hauler_store_add_image "${item_image}" "neverquit"; then
+                    continue
+                fi
+            elif ! pull_image "${item_image}"; then
                 continue
             fi
         fi
@@ -384,6 +418,7 @@ build_os_channel() {
         CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY%:*}"
     fi
     CHANNEL_IMAGE_URL="${CHANNEL_IMAGE_NAME}:${channel_tag}"
+    is_hauler && CHANNEL_IMAGE_URL=localhost:5000/${CHANNEL_IMAGE_URL}
     log_info "Create new channel image for the private registry: ${CHANNEL_IMAGE_URL}"
     jq -n "$new_channel" > channel.json
     cat << EOF > Dockerfile
@@ -394,13 +429,72 @@ ENTRYPOINT ["busybox", "cp"]
 CMD ["/channel.json", "/data/output"]
 EOF
     docker build . -t ${CHANNEL_IMAGE_URL}
-    popd
+    if is_hauler; then
+        hauler_start_local_registry
+        docker push ${CHANNEL_IMAGE_URL}
+        hauler_store_add_image ${CHANNEL_IMAGE_URL}
+        hauler_stop_local_registry
+    fi
+
+    popd /dev/null
     [ "$DEBUG" = "false" ] && rm -rf $TEMPDIR
 
     add_image_to_export_list "${CHANNEL_IMAGE_URL}"
 }
 
+hauler_start_local_registry() {
+    # hauler needs something in the store to start the registry
+    log_debug "start Hauler registry in $HAULER_REG_DIR"
+    pushd ${HAULER_REG_DIR} > /dev/null
+    touch ${HAULER_REG_DUMMY_FILE}
+    hauler store add file ${HAULER_REG_DUMMY_FILE}
+    hauler store serve registry > /dev/null 2>&1 &
+    if [ $? -ne 0 ]; then
+        hauler_stop_local_registry
+        exit_error "hauler: cannot start registry"
+    fi
+    HAULER_REGISTRY_PID=$!
+    # wait the hauler registry to be up and running
+    sleep 1
+    popd > /dev/null
+}
+
+hauler_stop_local_registry() {
+    if [ -n "{HAULER_REGISTRY_PID}" ]; then
+        kill ${HAULER_REGISTRY_PID} > /dev/null 2>&1
+    fi
+    rm -rf ${HAULER_REG_DIR}
+}
+
+hauler_store_add_file() {
+    local file="$1"
+    local neverquit=${2:-""}
+
+    hauler store -s ${HAULER_STORE} add file ${file}
+    # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
+    if [ -z "$neverquit" -a $? -ne 0 ]; then
+        exit_error "hauler: cannot add file ${file}"
+    fi
+}
+
+hauler_store_add_image() {
+    local img="$1"
+    local neverquit=${2:-""}
+
+    hauler store -s ${HAULER_STORE} add image ${img}
+    # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
+    if [ -z "$neverquit" -a $? -ne 0 ]; then
+        exit_error "hauler: cannot add image ${img}"
+    fi
+}
+
 create_container_images_archive() {
+    if is_hauler; then
+        log_info "Creating haul ${CONTAINER_IMAGES_ARCHIVE}"
+        hauler store -s ${HAULER_STORE} save -f ${CONTAINER_IMAGES_ARCHIVE}
+        return
+    fi
+
     echo -n "" > "${CONTAINER_IMAGES_FILE}"
     for i in ${IMAGES_TO_SAVE} ; do
         log_debug "* $i"
@@ -421,6 +515,14 @@ print_next_steps() {
 
     get_chart_val registry_url "registryUrl"
 
+    if is_hauler; then
+        print_next_steps_hauler
+    else
+        print_next_steps_docker
+    fi
+}
+
+print_next_steps_docker() {
     cat <<- EOF
 
 
@@ -445,6 +547,47 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 EOF
 }
 
+print_next_steps_hauler() {
+    cat <<- EOF
+
+
+NEXT STEPS:
+
+1) Load the '$CONTAINER_IMAGES_ARCHIVE' Haul archive in the Hauler instance in the airgapped infrastructure:
+
+hauler store load '$CONTAINER_IMAGES_ARCHIVE'
+
+2) If the local registry is not served by Hauler, copy the content of the Haul archive to the local registry:
+
+hauler store copy registry://$LOCAL_REGISTRY
+
+   for more options and information on Hauler, check the official docs:
+   https://rancherfederal.github.io/hauler-docs/
+
+3) Extract the elemental charts from the Hauler store in the airgapped infrastructure:
+
+hauler store extract $CHART_NAME_CRDS
+
+hauler store extract $CHART_NAME_OPERATOR
+
+   and install them passing the local registry and the newly created channel image:
+
+helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator-crds $CHART_NAME_CRDS
+
+helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
+  --set registryUrl=$LOCAL_REGISTRY \\
+  --set channel.repository=$CHANNEL_IMAGE_NAME
+EOF
+}
+
+clean_up() {
+    is_hauler || return
+
+    if [ "$DEBUG" = "false" ]; then
+        rm -rf ${HAULER_STORE} ${CHART_NAME_CRDS} ${CHART_NAME_OPERATOR}
+    fi
+}
+
 parse_parameters "$@"
 
 prereq_checks
@@ -459,3 +602,4 @@ create_container_images_archive
 
 print_next_steps
 
+clean_up
