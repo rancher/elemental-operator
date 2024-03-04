@@ -49,6 +49,9 @@ type Install struct {
 	DisableBootEntry bool `json:"disable-boot-entry,omitempty" yaml:"disable-boot-entry,omitempty"`
 	// +optional
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
+	// +optional
+	// +kubebuilder:default:="btrfs"
+	SnapshotterType string `json:"snapshotter-type,omitempty" yaml:"snapshotter-type,omitempty"`
 }
 
 type Reset struct {
