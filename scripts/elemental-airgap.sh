@@ -170,7 +170,7 @@ parse_parameters() {
 exit_error() {
     eval msg=\"$1\"
     echo -e "ERR: $msg"
-    hauler_stop_local_registry
+    is_hauler && hauler_stop_local_registry
     exit 1   
 }
 
@@ -283,7 +283,9 @@ fetch_charts() {
             fi
             eval $c=$(ls -t1 | head -n 1)
             log_info "Downloaded Elemental Operator chart: \$$c"
-            eval hauler_store_add_file "\$$c"
+            if is_hauler; then
+                eval hauler_store_add_file "\$$c"
+            fi
             ;;
             *)
             [ ! -f "$chart" ] && exit_error "chart file $chart not found"
@@ -436,7 +438,7 @@ EOF
         hauler_stop_local_registry
     fi
 
-    popd /dev/null
+    popd > /dev/null
     [ "$DEBUG" = "false" ] && rm -rf $TEMPDIR
 
     add_image_to_export_list "${CHANNEL_IMAGE_URL}"
