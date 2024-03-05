@@ -50,8 +50,12 @@ type Install struct {
 	// +optional
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 	// +optional
-	// +kubebuilder:default:="btrfs"
-	SnapshotterType string `json:"snapshotter-type,omitempty" yaml:"snapshotter-type,omitempty"`
+	Snapshotter SnapshotterConfig `json:"snapshotter,omitempty" yaml:"snapshotter,omitempty"`
+}
+
+type SnapshotterConfig struct {
+	// +optional
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 }
 
 type Reset struct {
