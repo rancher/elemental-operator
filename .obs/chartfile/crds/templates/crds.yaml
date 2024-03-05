@@ -752,9 +752,11 @@ spec:
                             type: boolean
                           reboot:
                             type: boolean
-                          snapshotter-type:
-                            default: btrfs
-                            type: string
+                          snapshotter:
+                            properties:
+                              type:
+                                type: string
+                            type: object
                           system-uri:
                             type: string
                           tty:
