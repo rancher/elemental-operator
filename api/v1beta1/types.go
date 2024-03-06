@@ -50,6 +50,7 @@ type Install struct {
 	// +optional
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 	// +optional
+	// +kubebuilder:default:={"type": "loopdevice"}
 	Snapshotter SnapshotterConfig `json:"snapshotter,omitempty" yaml:"snapshotter,omitempty"`
 }
 
