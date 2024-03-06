@@ -227,7 +227,7 @@ var _ = Describe("createFleetBundle", func() {
 	})
 
 	It("should change target when namespace is fleet-local", func() {
-		managedOSImage.Namespace = "fleet-local"
+		managedOSImage.Namespace = fleetLocalNamespace
 		err := r.createFleetBundle(ctx, managedOSImage, []fleetv1.BundleResource{
 			{
 				Name: "test",

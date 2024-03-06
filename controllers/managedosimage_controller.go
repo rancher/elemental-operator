@@ -49,6 +49,7 @@ import (
 
 const (
 	rancherSystemNamespace = "cattle-system"
+	fleetLocalNamespace    = "fleet-local"
 )
 
 // ManagedOSImageReconciler reconciles a ManagedOSImage object.
@@ -121,7 +122,7 @@ func (r *ManagedOSImageReconciler) reconcile(ctx context.Context, managedOSImage
 
 	logger.Info("Reconciling managed OS image object")
 
-	if managedOSImage.Namespace == "fleet-local" && len(managedOSImage.Spec.Targets) > 0 { // TODO: this should be a part of validation webhook
+	if managedOSImage.Namespace == fleetLocalNamespace && len(managedOSImage.Spec.Targets) > 0 { // TODO: this should be a part of validation webhook
 		return ctrl.Result{}, errors.New("spec.targets should be empty if in the fleet-local namespace")
 	}
 
@@ -333,7 +334,7 @@ func (r *ManagedOSImageReconciler) createFleetBundle(ctx context.Context, manage
 	bundle := &fleetv1.Bundle{}
 	r.mapImageToBundle(*managedOSImage, bundleResources, bundle)
 
-	if managedOSImage.Namespace == "fleet-local" {
+	if managedOSImage.Namespace == fleetLocalNamespace {
 		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
 	}
 
@@ -367,7 +368,7 @@ func (r *ManagedOSImageReconciler) updateFleetBundle(ctx context.Context, manage
 	}
 	r.mapImageToBundle(*managedOSImage, bundleResources, bundle)
 
-	if managedOSImage.Namespace == "fleet-local" {
+	if managedOSImage.Namespace == fleetLocalNamespace {
 		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
 	}
 
@@ -399,7 +400,7 @@ func (r *ManagedOSImageReconciler) mapImageToBundle(managedOSImage elementalv1.M
 	bundle.Spec.Resources = bundleResources
 	bundle.Spec.RolloutStrategy = managedOSImage.Spec.ClusterRolloutStrategy
 
-	if managedOSImage.Namespace == "fleet-local" {
+	if managedOSImage.Namespace == fleetLocalNamespace {
 		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
 	} else {
 		bundle.Spec.Targets = convertBundleTargets(managedOSImage.Spec.Targets)
