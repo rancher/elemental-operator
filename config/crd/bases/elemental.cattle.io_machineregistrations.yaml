@@ -95,6 +95,17 @@ spec:
                             type: boolean
                           reboot:
                             type: boolean
+                          snapshotter:
+                            default:
+                              type: loopdevice
+                            properties:
+                              type:
+                                default: loopdevice
+                                description: Type sets the snapshotter type a new
+                                  installation, available options are 'loopdevice'
+                                  and 'btrfs'
+                                type: string
+                            type: object
                           system-uri:
                             type: string
                           tty:

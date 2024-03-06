@@ -351,7 +351,7 @@ func getOsReleaseInfo() (map[string]string, error) {
 		val := buf[1]
 
 		if label, ok := envToLabel[env]; ok {
-			data[label] = val
+			data[label] = strings.Trim(val, "\"")
 		}
 	}
 	return data, nil
