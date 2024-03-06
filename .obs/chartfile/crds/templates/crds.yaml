@@ -755,6 +755,10 @@ spec:
                           snapshotter:
                             properties:
                               type:
+                                default: loopdevice
+                                description: Type sets the snapshotter type a new
+                                  installation, available options are 'loopdevice'
+                                  and 'btrfs'
                                 type: string
                             type: object
                           system-uri:

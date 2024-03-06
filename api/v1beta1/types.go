@@ -55,8 +55,8 @@ type Install struct {
 
 type SnapshotterConfig struct {
 	// Type sets the snapshotter type a new installation, available options are 'loopdevice' and 'btrfs'
-	// Empty value defaults to 'loopdevice'
 	// +optional
+	// +kubebuilder:default:=loopdevice
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 }
 
