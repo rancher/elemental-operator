@@ -20,7 +20,7 @@ COPY --from=BASE /installroot /
 RUN /usr/sbin/update-ca-certificates
 
 ARG BUILD_REPO=%%IMG_REPO%%
-ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-seedimage-builder-image
+ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-seedimage-builder-image:latest
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.suse.elemental
