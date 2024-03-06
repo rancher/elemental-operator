@@ -63,7 +63,7 @@ type SnapshotterConfig struct {
 
 type Reset struct {
 	// +optional
-	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty" mapstructure:"enabled"`
+	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	// +optional
 	// +kubebuilder:default:=true
 	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty" mapstructure:"reset-persistent"`
