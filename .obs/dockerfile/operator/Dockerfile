@@ -7,7 +7,7 @@
 
 ARG SLE_VERSION
 
-FROM suse/sle15:$SLE_VERSION as BASE
+FROM suse/sle-micro/$SLE_VERSION/toolbox as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
@@ -23,7 +23,7 @@ ARG BUILD_REPO=%%IMG_REPO%%
 ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-operator
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
-# labelprefix=com.rancher.elemental
+# labelprefix=com.suse.elemental
 LABEL org.opencontainers.image.title="Rancher Elemental Operator"
 LABEL org.opencontainers.image.description="Implements the Elemental endpoint on the management cluster"
 LABEL org.opencontainers.image.version="%OPERATOR_VERSION%"
