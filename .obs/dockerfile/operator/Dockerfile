@@ -5,9 +5,9 @@
 #!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%-%RELEASE%
 #
 
-ARG SLE_VERSION
+ARG SLEMICRO_VERSION
 
-FROM suse/sle-micro/$SLE_VERSION/toolbox as BASE
+FROM suse/sle-micro/$SLEMICRO_VERSION/toolbox as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
