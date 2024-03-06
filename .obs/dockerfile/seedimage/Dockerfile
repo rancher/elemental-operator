@@ -5,9 +5,9 @@
 #!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%-%RELEASE%
 #
 
-ARG SLE_VERSION
+ARG SLEMICRO_VERSION
 
-FROM suse/sle15:$SLE_VERSION as BASE
+FROM suse/sle-micro/$SLEMICRO_VERSION/toolbox as BASE
 
 RUN  mkdir -p /installroot && \
     zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends elemental-toolkit elemental-httpfy elemental-seedimage-hooks xorriso curl coreutils ca-certificates ca-certificates-mozilla gptfdisk squashfs util-linux dosfstools mtools e2fsprogs grub2
