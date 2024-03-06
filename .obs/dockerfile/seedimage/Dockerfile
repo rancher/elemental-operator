@@ -23,7 +23,7 @@ ARG BUILD_REPO=%%IMG_REPO%%
 ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-seedimage-builder-image
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
-# labelprefix=com.rancher.elemental
+# labelprefix=com.suse.elemental
 LABEL org.opencontainers.image.title="Rancher Elemental Seed Image Builder"
 LABEL org.opencontainers.image.description="Provides the tools needed to build Elemental Seed Images"
 LABEL org.opencontainers.image.version="%OPERATOR_VERSION%"
