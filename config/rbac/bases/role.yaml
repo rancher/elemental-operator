@@ -246,6 +246,7 @@ rules:
   - create
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - management.cattle.io
