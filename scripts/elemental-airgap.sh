@@ -343,9 +343,12 @@ build_os_channel() {
     local channel_repo
 
     log_info "Creating OS channel"
-    get_chart_val channel_img "channel.repository"
+    get_chart_val channel_img "channel.image"
     get_chart_val channel_tag "channel.tag"
     get_chart_val channel_repo "registryUrl"
+
+    # some images could already have the registry URL, remove it to avoid duplication
+    channel_img=${channel_img#${channel_repo}/}
 
     if [ -z "$channel_img" -o -z "$channel_tag" ]; then
         log_info "\nWARNING: channel image not found: you will need to provide your own Elemental OS images\n"
@@ -545,7 +548,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set channel.repository=$CHANNEL_IMAGE_NAME
+  --set channel.image=$CHANNEL_IMAGE_NAME
 EOF
 }
 
@@ -578,13 +581,11 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set channel.repository=$CHANNEL_IMAGE_NAME
+  --set channel.image=$CHANNEL_IMAGE_NAME
 EOF
 }
 
 clean_up() {
-    is_hauler || return
-
     if [ "$DEBUG" = "false" ]; then
         rm -rf ${HAULER_STORE} ${CHART_NAME_CRDS} ${CHART_NAME_OPERATOR}
     fi
