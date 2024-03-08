@@ -263,6 +263,16 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 					APIGroups: []string{""},
 					Resources: []string{"pods"},
 				},
+				{
+					Verbs:     []string{"get"},
+					APIGroups: []string{"apps"},
+					Resources: []string{"daemonsets"},
+				},
+				{
+					Verbs:     []string{"create"},
+					APIGroups: []string{""},
+					Resources: []string{"pods/eviction"},
+				},
 			},
 		},
 		&rbacv1.ClusterRoleBinding{
