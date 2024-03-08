@@ -176,7 +176,7 @@ exit_error() {
 }
 
 log_debug() {
-    [[ "$DEBUG" == "false" ]] && return
+    [[ "$DEBUG" == "false" ]] && return 0
     eval msg=\'${1}\'
     echo -e "$msg"
 }
@@ -205,7 +205,7 @@ get_chart_val() {
         if [[ "$local_fail" == "false" ]]; then
             log_debug "cannot find \$local_val in $CHART_NAME_OPERATOR"
             eval $local_var=""
-            return
+            return 0
         fi
         exit_error "cannot find \$local_val in $CHART_NAME_OPERATOR (likely not an elemental-operator chart with airgap support)"
     fi
@@ -242,11 +242,11 @@ set_json_val() {
 # this just adds the passed image to the list of the images to be saved in the images list text file and
 # in the tar.gz archive containing the saved images to be loaded in the local registry.
 add_image_to_export_list() {
-    is_hauler && return
+    is_hauler && return 0
     local img="${1}"
     if [[ -z "${img}" ]]; then
         log_debug "cannot add image to export list: empty image passed"
-        return
+        return 0
     fi
     case "${IMAGES_TO_SAVE} " in
         *" ${img} "*)
@@ -309,7 +309,7 @@ fetch_charts() {
 pull_chart_container_images() {
     local oprtimg_repo oprtimg_tag seedimg_repo seedimg_tag registry_url
 
-    [[ "$CHANNEL_ONLY" == "true" ]] && return
+    [[ "$CHANNEL_ONLY" == "true" ]] && return 0
 
     get_chart_val oprtimg_repo "image.repository"
     get_chart_val oprtimg_tag "image.tag"
@@ -370,7 +370,7 @@ build_os_channel() {
 
     if [[ -z "$channel_img" || -z "$channel_tag" ]]; then
         log_info "\nWARNING: channel image not found: you will need to provide your own Elemental OS images\n"
-        return
+        return 0
     fi
     log_info "Found channel image: ${channel_repo}/${channel_img}:${channel_tag}"
 
@@ -517,7 +517,7 @@ create_container_images_archive() {
     if is_hauler; then
         log_info "Creating haul ${CONTAINER_IMAGES_ARCHIVE}"
         hauler store -s ${HAULER_STORE} save -f ${CONTAINER_IMAGES_ARCHIVE}
-        return
+        return 0
     fi
 
     echo -n "" > "${CONTAINER_IMAGES_FILE}"
@@ -527,7 +527,7 @@ create_container_images_archive() {
     done
     sort -u ${CONTAINER_IMAGES_FILE} -o ${CONTAINER_IMAGES_FILE}
 
-    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return
+    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return 0
 
     log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images (may take a while)"
     docker save $(echo ${IMAGES_TO_SAVE}) | gzip --stdout > ${CONTAINER_IMAGES_ARCHIVE}
@@ -536,7 +536,7 @@ create_container_images_archive() {
 print_next_steps() {
     local registry_url
 
-    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return
+    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return 0
 
     get_chart_val registry_url "registryUrl"
 
@@ -606,7 +606,7 @@ EOF
 }
 
 clean_up() {
-    is_hauler || return
+    is_hauler || return 0
 
     # only hauler stuffs need to be cleaned at the end
     [[ "$DEBUG" == "false" ]] && \
