@@ -122,28 +122,28 @@ parse_parameters() {
             ;;
             -ha|--hauler)
             HAULER="true"
-            if [ "${container_images_archive}" = "false" ]; then
+            if [[ "${container_images_archive}" == "false" ]]; then
                 CONTAINER_IMAGES_ARCHIVE="elemental-haul.tar.zst"
             fi
             shift
             ;;
             *)
-            [ -n "$CHART_NAME_OPERATOR" ] && exit_error "unrecognized command: $1"
+            [[ -n "$CHART_NAME_OPERATOR" ]] && exit_error "unrecognized command: $1"
             CHART_NAME_OPERATOR="$1"
             shift
             ;;
         esac
     done
-    if [ "$help" = "true" ]; then
+    if [[ "$help" = "true" ]]; then
         print_help
         exit 0
     fi
-    if [ -z "$CHART_NAME_OPERATOR" ]; then
+    if [[ -z "$CHART_NAME_OPERATOR" ]]; then
         print_help
         echo ""
         exit_error "ELEMENTAL_OPERATOR_CHART is a required argument"
     fi
-    if [ "$LOCAL_REGISTRY" = "\$LOCAL_REGISTRY" ]; then
+    if [[ "$LOCAL_REGISTRY" == "\$LOCAL_REGISTRY" ]]; then
         print_help
         echo ""
         exit_error "LOCAL_REGISTRY is required"
@@ -151,17 +151,17 @@ parse_parameters() {
     case "$CHART_NAME_OPERATOR" in
         Dev|dev|DEV)
         CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-chart"
-        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
             CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-crds-chart"
         ;;
         Staging|staging|STAGING)
         CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart"
-        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
             CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-crds-chart"
         ;;
         Stable|stable|STABLE)
         CHART_NAME_OPERATOR="oci://registry.suse.com/rancher/elemental-operator-chart"
-        [ "$CHART_NAME_CRDS" = "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] &&\
+        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
             CHART_NAME_CRDS="oci://registry.suse.com/rancher/elemental-operator-crds-chart"
         ;;
     esac
@@ -176,7 +176,7 @@ exit_error() {
 }
 
 log_debug() {
-    [ "$DEBUG" = "false" ] && return
+    [[ "$DEBUG" == "false" ]] && return
     eval msg=\'${1}\'
     echo -e "$msg"
 }
@@ -187,7 +187,7 @@ log_info() {
 }
 
 is_hauler() {
-    "${HAULER}" != "false" && return 0 || return 1
+    [[ "${HAULER}" != "false" ]] && return 0 || return 1
 }
 
 # get_chart_val "VARNAME" "CHARTVAR" ["false"]
@@ -198,11 +198,11 @@ get_chart_val() {
     local local_var="$1"
     local local_val="$2"
     local local_fail=${3:-"true"}
-    local local_condition="[ \"\$$local_var\" = \"null\" ]"
+    local local_condition="[[ \"\$$local_var\" == \"null\" ]]"
 
     eval $local_var=$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)
-    if eval $local_condition ; then
-        if [ "$local_fail" == "false" ]; then
+    if eval $local_condition; then
+        if [[ "$local_fail" == "false" ]]; then
             log_debug "cannot find \$local_val in $CHART_NAME_OPERATOR"
             eval $local_var=""
             return
@@ -244,7 +244,7 @@ set_json_val() {
 add_image_to_export_list() {
     is_hauler && return
     local img="${1}"
-    if [ -z "${img}" ]; then
+    if [[ -z "${img}" ]]; then
         log_debug "cannot add image to export list: empty image passed"
         return
     fi
@@ -274,14 +274,14 @@ prereq_checks() {
 fetch_charts() {
     local outstr charts="CHART_NAME_OPERATOR"
 
-    [ "$CHART_NAME_CRDS" != "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ] && charts="${charts} CHART_NAME_CRDS"
+    [[ "$CHART_NAME_CRDS" != "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && charts="${charts} CHART_NAME_CRDS"
 
     for c in $charts; do
         local chart=""
         local chart_ver=""
 
         # helm pull only supports semver tags: for the "latest" tag just don't put the version.
-        [ "$CHART_VERSION" != "latest" ] && chart_ver="--version $CHART_VERSION"
+        [[ "$CHART_VERSION" != "latest" ]] && chart_ver="--version $CHART_VERSION"
 
         # 'c' var holds the name (e.g., CHART_NAME_OPERATOR),
         # 'chart' var holds the value (e.g., elemental-operator-chart-1.4.tgz)
@@ -299,7 +299,7 @@ fetch_charts() {
             fi
             ;;
             *)
-            [ ! -f "$chart" ] && exit_error "chart file $chart not found"
+            [[ ! -f "$chart" ]] && exit_error "chart file $chart not found"
             log_debug "using chart $chart"
             ;;
         esac
@@ -309,7 +309,7 @@ fetch_charts() {
 pull_chart_container_images() {
     local oprtimg_repo oprtimg_tag seedimg_repo seedimg_tag registry_url
 
-    [ "$CHANNEL_ONLY" = "true" ] && return
+    [[ "$CHANNEL_ONLY" == "true" ]] && return
 
     get_chart_val oprtimg_repo "image.repository"
     get_chart_val oprtimg_tag "image.tag"
@@ -318,7 +318,7 @@ pull_chart_container_images() {
     get_chart_val source_registry "registryUrl"
 
     for img in "${oprtimg_repo}:${oprtimg_tag}" "${seedimg_repo}:${seedimg_tag}"; do
-        [ -z "$img" ] && continue
+        [[ -z "$img" ]] && continue
 
         if is_hauler; then
             hauler_store_add_image "${source_registry}/${img}"
@@ -333,7 +333,7 @@ pull_chart_container_images() {
 pull_image() {
     local image_url="$1"
 
-    [ -z "$image_url" ] && return 1
+    [[ -z "$image_url" ]] && return 1
     if docker pull "$image_url" > /dev/null 2>&1; then
         log_info "Image pull success: ${image_url}"
     else
@@ -356,7 +356,7 @@ build_os_channel() {
     log_info "Creating OS channel"
     ### channel.repository was changed to channel.image around 1.4 - 1.5 versions
     get_chart_val channel_img "channel.image" "false"
-    if [ -z "$channel_img" ]; then
+    if [[ -z "$channel_img" ]]; then
         # legacy chart
         get_chart_val channel_img "channel.repository"
         CHANNEL_IMAGE_VAR="channel.repository"
@@ -368,7 +368,7 @@ build_os_channel() {
     # some images could already have the registry URL, remove it to avoid duplication
     channel_img=${channel_img#${channel_repo}/}
 
-    if [ -z "$channel_img" -o -z "$channel_tag" ]; then
+    if [[ -z "$channel_img" || -z "$channel_tag" ]]; then
         log_info "\nWARNING: channel image not found: you will need to provide your own Elemental OS images\n"
         return
     fi
@@ -387,7 +387,7 @@ build_os_channel() {
     for i in $(seq 0 20); do
         local item item_type item_image item_name item_url_field
         item=$(jq .[$i] channel.json)
-        [ "$item" = "null" ] && break
+        [[ "$item" == "null" ]] && break
 
         get_json_val item_name "$item" ".metadata.name"
         get_json_val item_type "$item" ".spec.type"
@@ -417,7 +417,7 @@ build_os_channel() {
 
         log_info "Extract OS image:\n\t$item_name ($item_display)\n\t$item_image"
 
-        if [ "$SKIP_ARCHIVE_CREATION" != "true" ]; then
+        if [[ "$SKIP_ARCHIVE_CREATION" != "true" ]]; then
             # save the OS image
             if is_hauler; then
                 if ! hauler_store_add_image "${item_image}" "neverquit"; then
@@ -432,13 +432,12 @@ build_os_channel() {
         # prepend the private registry name
         set_json_val item "$item" "$item_url_field" "${LOCAL_REGISTRY}/${item_image}"
 
-        [ -z "$new_channel" ] && new_channel="[${item}" || new_channel="${new_channel},${item}"
+        [[ -z "$new_channel" ]] && new_channel="[${item}" || new_channel="${new_channel},${item}"
     done
     new_channel="${new_channel}]"
 
-    # create the new channel container image targeting the private registriwlwifi: No config found for PCI dev 54f0/0244, rev=0x370, rfid=0x10c000
-
-    if [ "${CHANNEL_IMAGE_NAME}" = "\$CHANNEL_IMAGE_NAME" ]; then
+    # create the new channel container image targeting the private registry
+    if [[ "${CHANNEL_IMAGE_NAME}" == "\$CHANNEL_IMAGE_NAME" ]]; then
         CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY%:*}"
     fi
     CHANNEL_IMAGE_URL="${CHANNEL_IMAGE_NAME}:${channel_tag}"
@@ -461,7 +460,7 @@ EOF
     fi
 
     popd > /dev/null
-    [ "$DEBUG" = "false" ] && rm -rf $TEMPDIR
+    [[ "$DEBUG" == "false" ]] && rm -rf $TEMPDIR
 
     add_image_to_export_list "${CHANNEL_IMAGE_URL}"
 }
@@ -473,7 +472,7 @@ hauler_start_local_registry() {
     touch ${HAULER_REG_DUMMY_FILE}
     hauler store add file ${HAULER_REG_DUMMY_FILE}
     hauler store serve registry > /dev/null 2>&1 &
-    if [ $? -ne 0 ]; then
+    if (( $? )); then
         hauler_stop_local_registry
         exit_error "hauler: cannot start registry"
     fi
@@ -484,7 +483,7 @@ hauler_start_local_registry() {
 }
 
 hauler_stop_local_registry() {
-    if [ -n "{HAULER_REGISTRY_PID}" ]; then
+    if [[ -n "{HAULER_REGISTRY_PID}" ]]; then
         kill ${HAULER_REGISTRY_PID} > /dev/null 2>&1
     fi
     rm -rf ${HAULER_REG_DIR}
@@ -494,10 +493,11 @@ hauler_store_add_file() {
     local file="$1"
     local neverquit=${2:-""}
 
-    hauler store -s ${HAULER_STORE} add file ${file}
-    # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
-    if [ -z "$neverquit" -a $? -ne 0 ]; then
-        exit_error "hauler: cannot add file ${file}"
+    if ! hauler store -s ${HAULER_STORE} add file ${file}; then
+      # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
+      if [[ -z "$neverquit" ]]; then
+          exit_error "hauler: cannot add file ${file}"
+      fi
     fi
 }
 
@@ -505,10 +505,11 @@ hauler_store_add_image() {
     local img="$1"
     local neverquit=${2:-""}
 
-    hauler store -s ${HAULER_STORE} add image ${img}
-    # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
-    if [ -z "$neverquit" -a $? -ne 0 ]; then
-        exit_error "hauler: cannot add image ${img}"
+    if ! hauler store -s ${HAULER_STORE} add image ${img}; then
+      # !hauler does not return error (yet): https://github.com/rancherfederal/hauler/issues/185
+      if [[ -z "$neverquit" ]]; then
+          exit_error "hauler: cannot add image ${img}"
+      fi
     fi
 }
 
@@ -526,7 +527,7 @@ create_container_images_archive() {
     done
     sort -u ${CONTAINER_IMAGES_FILE} -o ${CONTAINER_IMAGES_FILE}
 
-    [ "$SKIP_ARCHIVE_CREATION" = "true" ] && return
+    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return
 
     log_info "Creating ${CONTAINER_IMAGES_ARCHIVE} with $(echo ${IMAGES_TO_SAVE} | wc -w | tr -d '[:space:]') images (may take a while)"
     docker save $(echo ${IMAGES_TO_SAVE}) | gzip --stdout > ${CONTAINER_IMAGES_ARCHIVE}
@@ -535,7 +536,7 @@ create_container_images_archive() {
 print_next_steps() {
     local registry_url
 
-    [ "$SKIP_ARCHIVE_CREATION" = "true" ] && return
+    [[ "$SKIP_ARCHIVE_CREATION" == "true" ]] && return
 
     get_chart_val registry_url "registryUrl"
 
@@ -605,9 +606,11 @@ EOF
 }
 
 clean_up() {
-    if [ "$DEBUG" = "false" ]; then
+    is_hauler || return
+
+    # only hauler stuffs need to be cleaned at the end
+    [[ "$DEBUG" == "false" ]] && \
         rm -rf ${HAULER_STORE} ${CHART_NAME_CRDS} ${CHART_NAME_OPERATOR}
-    fi
 }
 
 parse_parameters "$@"
