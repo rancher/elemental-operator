@@ -388,6 +388,9 @@ spec:
               cordon:
                 type: boolean
               drain:
+                default:
+                  force: true
+                  skipWaitForDeleteTimeout: 60
                 description: DrainSpec encapsulates `kubectl drain` parameters minus
                   node/pod selectors.
                 properties:
