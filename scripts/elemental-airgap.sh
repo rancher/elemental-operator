@@ -8,6 +8,7 @@ set -o nounset
 CHART_NAME_OPERATOR=""
 ELEMENTAL_OPERATOR_CRDS_CHART_NAME="\$ELEMENTAL_CRDS_CHART"
 CHANNEL_IMAGE_URL=""
+CHANNEL_IMAGE_VAR="channel.image"
 IMAGES_TO_SAVE=""
 HAULER_REG_DIR=$(mktemp -d)
 HAULER_REG_PID=""
@@ -189,13 +190,23 @@ is_hauler() {
     "${HAULER}" != "false" && return 0 || return 1
 }
 
+# get_chart_val "VARNAME" "CHARTVAR" ["false"]
+# Retrieves CHARTVAR from the chart and puts the value in VARNAME.
+# If CHARTVAR is not found in the chart, it will error and exit, BUT if the optional third parameter
+# is passed and is == "false" would just log the missing value and not terminate the script.
 get_chart_val() {
     local local_var="$1"
     local local_val="$2"
+    local local_fail=${3:-"true"}
     local local_condition="[ \"\$$local_var\" = \"null\" ]"
 
     eval $local_var=$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)
     if eval $local_condition ; then
+        if [ "$local_fail" == "false" ]; then
+            log_debug "cannot find \$local_val in $CHART_NAME_OPERATOR"
+            eval $local_var=""
+            return
+        fi
         exit_error "cannot find \$local_val in $CHART_NAME_OPERATOR (likely not an elemental-operator chart with airgap support)"
     fi
     eval log_debug \"extracted $local_var\\t: \$$local_var\ \($local_val\)\"
@@ -343,7 +354,14 @@ build_os_channel() {
     local channel_repo
 
     log_info "Creating OS channel"
-    get_chart_val channel_img "channel.image"
+    ### channel.repository was changed to channel.image around 1.4 - 1.5 versions
+    get_chart_val channel_img "channel.image" "false"
+    if [ -z "$channel_img" ]; then
+        # legacy chart
+        get_chart_val channel_img "channel.repository"
+        CHANNEL_IMAGE_VAR="channel.repository"
+    fi
+
     get_chart_val channel_tag "channel.tag"
     get_chart_val channel_repo "registryUrl"
 
@@ -418,7 +436,8 @@ build_os_channel() {
     done
     new_channel="${new_channel}]"
 
-    # create the new channel container image targeting the private registry
+    # create the new channel container image targeting the private registriwlwifi: No config found for PCI dev 54f0/0244, rev=0x370, rfid=0x10c000
+
     if [ "${CHANNEL_IMAGE_NAME}" = "\$CHANNEL_IMAGE_NAME" ]; then
         CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY%:*}"
     fi
@@ -548,7 +567,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set channel.image=$CHANNEL_IMAGE_NAME
+  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_NAME
 EOF
 }
 
@@ -581,7 +600,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set channel.image=$CHANNEL_IMAGE_NAME
+  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_NAME
 EOF
 }
 
