@@ -38,6 +38,7 @@ func NewManagedOSImage(namespace string, name string, targets []elementalv1.Bund
 			OSImage:              mosImage,
 			ManagedOSVersionName: mosVersionName,
 			Cordon:               &cordon,
+			Drain:                nil,
 			Targets:              targets,
 		},
 	}
