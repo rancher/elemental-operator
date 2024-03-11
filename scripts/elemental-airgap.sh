@@ -7,8 +7,8 @@ set -o nounset
 # global vars
 CHART_NAME_OPERATOR=""
 ELEMENTAL_OPERATOR_CRDS_CHART_NAME="\$ELEMENTAL_CRDS_CHART"
-CHANNEL_IMAGE_URL=""
-CHANNEL_IMAGE_VAR="channel.image"
+CHANNEL_IMAGE_VAR=""
+CHANNEL_IMAGE_VAL=""
 IMAGES_TO_SAVE=""
 HAULER_REG_DIR=$(mktemp -d)
 HAULER_REG_PID=""
@@ -354,31 +354,48 @@ build_os_channel() {
     local channel_repo
 
     log_info "Creating OS channel"
-    ### channel.repository was changed to channel.image around 1.4 - 1.5 versions
+     # name of the new channel container image we are going to create
+    if [[ "${CHANNEL_IMAGE_NAME}" == "\$CHANNEL_IMAGE_NAME" ]]; then
+        CHANNEL_IMAGE_NAME="rancher/elemental-channel-${LOCAL_REGISTRY%:*}"
+    fi
+
+    # channel.repository was changed to channel.image around 1.4 - 1.5 versions
+    # channel.image contains the full URL (with registry) while channel.repository not (full URL by prepending with registryUrl)
+    # example, full image URL: registry.suse.com/rancher/elemental-channel
+    # - operator < v1.4
+    #   . channel.repository = "rancher/elemental-channel"
+    #   . registryUrl        = "registry.suse.com"
+    # - operator > v1.4
+    #   . channel.image = "registry.suse.com/rancher/elemental-channel"
+    #
+    # we want in channel_img the full image URL for both cases
     get_chart_val channel_img "channel.image" "false"
+
     if [[ -z "$channel_img" ]]; then
         # legacy chart
         get_chart_val channel_img "channel.repository"
+        get_chart_val channel_repo "registryUrl"
+        channel_img=${channel_repo}/${channel_img}
         CHANNEL_IMAGE_VAR="channel.repository"
+        CHANNEL_IMAGE_VAL=${CHANNEL_IMAGE_NAME}
+    else
+        CHANNEL_IMAGE_VAR="channel.image"
+        CHANNEL_IMAGE_VAL=${LOCAL_REGISTRY}/${CHANNEL_IMAGE_NAME}
     fi
 
     get_chart_val channel_tag "channel.tag"
-    get_chart_val channel_repo "registryUrl"
-
-    # some images could already have the registry URL, remove it to avoid duplication
-    channel_img=${channel_img#${channel_repo}/}
 
     if [[ -z "$channel_img" || -z "$channel_tag" ]]; then
         log_info "\nWARNING: channel image not found: you will need to provide your own Elemental OS images\n"
         return 0
     fi
-    log_info "Found channel image: ${channel_repo}/${channel_img}:${channel_tag}"
+    log_info "Found channel image: ${channel_img}:${channel_tag}"
 
     TEMPDIR=$(mktemp -d)
     log_debug "build channel image in $TEMPDIR"
     pushd $TEMPDIR > /dev/null
     # extract the channel.json
-    if ! docker run --entrypoint cat ${channel_repo}/${channel_img}:${channel_tag} channel.json > channel.json; then
+    if ! docker run --entrypoint cat ${channel_img}:${channel_tag} channel.json > channel.json; then
         exit_error "cannot extract OS images"
     fi
 
@@ -436,13 +453,9 @@ build_os_channel() {
     done
     new_channel="${new_channel}]"
 
-    # create the new channel container image targeting the private registry
-    if [[ "${CHANNEL_IMAGE_NAME}" == "\$CHANNEL_IMAGE_NAME" ]]; then
-        CHANNEL_IMAGE_NAME="${channel_img}-${LOCAL_REGISTRY%:*}"
-    fi
-    CHANNEL_IMAGE_URL="${CHANNEL_IMAGE_NAME}:${channel_tag}"
-    is_hauler && CHANNEL_IMAGE_URL=localhost:5000/${CHANNEL_IMAGE_URL}
-    log_info "Create new channel image for the private registry: ${CHANNEL_IMAGE_URL}"
+    local channel_full_url="${CHANNEL_IMAGE_NAME}:${channel_tag}"
+    is_hauler && channel_full_url=localhost:5000/${channel_full_url}
+    log_info "Create new channel image for the private registry: ${channel_full_url}"
     jq -n "$new_channel" > channel.json
     cat << EOF > Dockerfile
 FROM registry.suse.com/bci/bci-busybox:latest
@@ -451,18 +464,18 @@ USER 10010:10010
 ENTRYPOINT ["busybox", "cp"]
 CMD ["/channel.json", "/data/output"]
 EOF
-    docker build . -t ${CHANNEL_IMAGE_URL}
+    docker build . -t ${channel_full_url}
     if is_hauler; then
         hauler_start_local_registry
-        docker push ${CHANNEL_IMAGE_URL}
-        hauler_store_add_image ${CHANNEL_IMAGE_URL}
+        docker push ${channel_full_url}
+        hauler_store_add_image ${channel_full_url}
         hauler_stop_local_registry
     fi
 
     popd > /dev/null
     [[ "$DEBUG" == "false" ]] && rm -rf $TEMPDIR
 
-    add_image_to_export_list "${CHANNEL_IMAGE_URL}"
+    add_image_to_export_list "${channel_full_url}"
 }
 
 hauler_start_local_registry() {
@@ -568,7 +581,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_NAME
+  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_VAL
 EOF
 }
 
@@ -601,7 +614,7 @@ helm upgrade --create-namespace -n cattle-elemental-system --install elemental-o
 
 helm upgrade --create-namespace -n cattle-elemental-system --install elemental-operator $CHART_NAME_OPERATOR \\
   --set registryUrl=$LOCAL_REGISTRY \\
-  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_NAME
+  --set $CHANNEL_IMAGE_VAR=$CHANNEL_IMAGE_VAL
 EOF
 }
 
