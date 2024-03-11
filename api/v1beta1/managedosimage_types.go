@@ -48,8 +48,9 @@ type ManagedOSImageSpec struct {
 	Prepare *upgradev1.ContainerSpec `json:"prepare,omitempty"`
 	// +optional
 	Cordon *bool `json:"cordon,omitempty"`
-	// +optional
-	Drain *upgradev1.DrainSpec `json:"drain,omitempty"`
+	// +nullable
+	// +kubebuilder:default:={"force":true,"skipWaitForDeleteTimeout":60}
+	Drain *upgradev1.DrainSpec `json:"drain"`
 	// +optional
 	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
 	// +optional

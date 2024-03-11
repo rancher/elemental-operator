@@ -125,7 +125,7 @@ build-docker-push-seedimage-builder: build-docker-seedimage-builder
 	docker push ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE}
 
 .PHONY: chart
-chart:
+chart: build-manifests
 	mkdir -p  $(ROOT_DIR)/build
 	cp -rf $(ROOT_DIR)/.obs/chartfile/crds $(ROOT_DIR)/build/crds
 	mv $(ROOT_DIR)/build/crds/_helmignore $(ROOT_DIR)/build/crds/.helmignore
