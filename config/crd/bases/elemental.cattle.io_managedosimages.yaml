@@ -393,6 +393,7 @@ spec:
                   skipWaitForDeleteTimeout: 60
                 description: DrainSpec encapsulates `kubectl drain` parameters minus
                   node/pod selectors.
+                nullable: true
                 properties:
                   deleteLocalData:
                     type: boolean
@@ -798,6 +799,8 @@ spec:
                   image:
                     type: string
                 type: object
+            required:
+            - drain
             type: object
           status:
             properties:
