@@ -1,6 +1,6 @@
 module github.com/rancher/elemental-operator
 
-go 1.22.0
+go 1.22
 
 replace (
 	k8s.io/api => k8s.io/api v0.28.6
