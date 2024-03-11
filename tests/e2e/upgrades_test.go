@@ -112,9 +112,8 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 		osImage := "update-osversion"
 		osVersion := "osversion"
 		AfterEach(func() {
-			k.Delete("managedosversion", "-n", fleetNamespace, "--all")
-			k.Delete("managedosimage", "-n", fleetNamespace, "--all")
-			k.Delete("managedosversionchannel", "--all", "--wait", "-n", fleetNamespace)
+			k.Delete("managedosimage", "-n", fleetNamespace, osImage)
+			k.Delete("managedosversion", "-n", fleetNamespace, osVersion)
 
 			// Plans do not successfully apply, so nodes stays in cordoned state.
 			// uncordon them so tests will keep running
@@ -125,6 +124,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			k.Delete("jobs", "--all", "--wait", "-n", fleetNamespace)
 			k.Delete("plans", "--all", "--wait", "-n", fleetNamespace)
 			k.Delete("bundles", "--all", "--wait", "-n", fleetNamespace)
+			k.Delete("managedosversionchannel", "--all", "--wait", "-n", fleetNamespace)
 
 			// delete dangling upgrade pods
 			EventuallyWithOffset(1, func() []string {
