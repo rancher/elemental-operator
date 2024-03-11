@@ -10,7 +10,7 @@ seedImage:
   imagePullPolicy: IfNotPresent
 
 channel:
-  repository: "rancher/elemental-channel"
+  image: "%%IMG_REPO%%/rancher/elemental-channel"
   tag: "%VERSION%"
 
 # number of operator replicas to deploy

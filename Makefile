@@ -138,13 +138,15 @@ chart:
 	mv $(ROOT_DIR)/build/operator/_helmignore $(ROOT_DIR)/build/operator/.helmignore
 	yq -i '.version = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/Chart.yaml
 	yq -i '.appVersion = "${GIT_TAG}"' $(ROOT_DIR)/build/operator/Chart.yaml
+	yq -i '.annotations."catalog.cattle.io/upstream-version" = "${GIT_TAG}"' $(ROOT_DIR)/build/operator/Chart.yaml
 	yq -i '.image.tag = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.image.repository = "${REPO}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.tag = "${TAG_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.seedImage.repository = "${REPO_SEEDIMAGE}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.channel.tag = "${TAG_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.channel.image = "${REGISTRY_URL}/${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
+	yq -i '.questions[0].subquestions[0].default = "${REGISTRY_URL}/${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/questions.yaml
 	yq -i '.questions[0].subquestions[1].default = "${TAG_CHANNEL}"' $(ROOT_DIR)/build/operator/questions.yaml
-	yq -i '.channel.repository = "${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/values.yaml
 	yq -i '.registryUrl = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
 	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator

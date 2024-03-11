@@ -49,6 +49,7 @@ import (
 
 const (
 	rancherSystemNamespace = "cattle-system"
+	fleetLocalNamespace    = "fleet-local"
 )
 
 // ManagedOSImageReconciler reconciles a ManagedOSImage object.
@@ -61,7 +62,7 @@ type ManagedOSImageReconciler struct {
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosimages,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosimages/status,verbs=get;update;patch;list
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosversions,verbs=get;list;watch
-// +kubebuilder:rbac:groups="fleet.cattle.io",resources=bundles,verbs=create;get;list;watch
+// +kubebuilder:rbac:groups="fleet.cattle.io",resources=bundles,verbs=create;get;update;list;watch
 
 func (r *ManagedOSImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -121,7 +122,7 @@ func (r *ManagedOSImageReconciler) reconcile(ctx context.Context, managedOSImage
 
 	logger.Info("Reconciling managed OS image object")
 
-	if managedOSImage.Namespace == "fleet-local" && len(managedOSImage.Spec.Targets) > 0 { // TODO: this should be a part of validation webhook
+	if managedOSImage.Namespace == fleetLocalNamespace && len(managedOSImage.Spec.Targets) > 0 { // TODO: this should be a part of validation webhook
 		return ctrl.Result{}, errors.New("spec.targets should be empty if in the fleet-local namespace")
 	}
 
@@ -130,14 +131,22 @@ func (r *ManagedOSImageReconciler) reconcile(ctx context.Context, managedOSImage
 		return ctrl.Result{}, fmt.Errorf("failed to create fleet bundle resources: %w", err)
 	}
 
-	if err := r.createFleetBundle(ctx, managedOSImage, bundleResources); err != nil {
-		meta.SetStatusCondition(&managedOSImage.Status.Conditions, metav1.Condition{
-			Type:    elementalv1.FleetBundleCreation,
-			Reason:  elementalv1.FleetBundleCreateFailureReason,
-			Status:  metav1.ConditionFalse,
-			Message: err.Error(),
-		})
-		return ctrl.Result{}, fmt.Errorf("failed to create fleet bundle: %w", err)
+	// Create a new Fleet bundle if we didn't do it before. Otherwise update it.
+	if meta.IsStatusConditionTrue(managedOSImage.Status.Conditions, elementalv1.FleetBundleCreation) {
+		logger.Info("Fleet bundle already exists")
+		if err := r.updateFleetBundle(ctx, managedOSImage, bundleResources); err != nil {
+			return ctrl.Result{}, fmt.Errorf("updating Bundle from ManagedOSImage: %w", err)
+		}
+	} else {
+		if err := r.createFleetBundle(ctx, managedOSImage, bundleResources); err != nil {
+			meta.SetStatusCondition(&managedOSImage.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.FleetBundleCreation,
+				Reason:  elementalv1.FleetBundleCreateFailureReason,
+				Status:  metav1.ConditionFalse,
+				Message: err.Error(),
+			})
+			return ctrl.Result{}, fmt.Errorf("creating Bundle from ManagedOSImage: %w", err)
+		}
 	}
 
 	if err := r.updateManagedOSImageStatus(ctx, managedOSImage); err != nil {
@@ -148,13 +157,6 @@ func (r *ManagedOSImageReconciler) reconcile(ctx context.Context, managedOSImage
 }
 
 func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, managedOSImage *elementalv1.ManagedOSImage) ([]fleetv1.BundleResource, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	if meta.IsStatusConditionTrue(managedOSImage.Status.Conditions, elementalv1.FleetBundleCreation) {
-		logger.Info("Fleet bundle already exists, skipping bundle resource creation")
-		return nil, nil
-	}
-
 	cloudConfig, err := getCloudConfig(managedOSImage)
 	if err != nil {
 		return nil, err
@@ -327,35 +329,12 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 
 func (r *ManagedOSImageReconciler) createFleetBundle(ctx context.Context, managedOSImage *elementalv1.ManagedOSImage, bundleResources []fleetv1.BundleResource) error {
 	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Creating new fleet bundle")
 
-	if meta.IsStatusConditionTrue(managedOSImage.Status.Conditions, elementalv1.FleetBundleCreation) {
-		logger.Info("Fleet bundle already exists, skipping bundle resource creation")
-		return nil
-	}
+	bundle := &fleetv1.Bundle{}
+	r.mapImageToBundle(*managedOSImage, bundleResources, bundle)
 
-	bundle := &fleetv1.Bundle{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name.SafeConcatName("mos", managedOSImage.Name),
-			Namespace: managedOSImage.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: elementalv1.GroupVersion.String(),
-					Kind:       "ManagedOSImage",
-					Name:       managedOSImage.Name,
-					UID:        managedOSImage.UID,
-					Controller: pointer.Bool(true),
-				},
-			},
-		},
-		Spec: fleetv1.BundleSpec{
-			Resources:               bundleResources,
-			BundleDeploymentOptions: fleetv1.BundleDeploymentOptions{},
-			RolloutStrategy:         managedOSImage.Spec.ClusterRolloutStrategy,
-			Targets:                 convertBundleTargets(managedOSImage.Spec.Targets),
-		},
-	}
-
-	if managedOSImage.Namespace == "fleet-local" {
+	if managedOSImage.Namespace == fleetLocalNamespace {
 		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
 	}
 
@@ -370,6 +349,62 @@ func (r *ManagedOSImageReconciler) createFleetBundle(ctx context.Context, manage
 	})
 
 	return nil
+}
+
+func (r *ManagedOSImageReconciler) updateFleetBundle(ctx context.Context, managedOSImage *elementalv1.ManagedOSImage, bundleResources []fleetv1.BundleResource) error {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Updating existing bundle")
+
+	bundleName := r.formatBundleName(*managedOSImage)
+	bundleNamespace := managedOSImage.Namespace
+
+	bundle := &fleetv1.Bundle{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: bundleNamespace,
+		Name:      bundleName,
+	}, bundle); err != nil {
+		logger.Error(err, "Could not get expected Bundle")
+		return fmt.Errorf("getting bundle '%s/%s': %w", bundleNamespace, bundleName, err)
+	}
+	r.mapImageToBundle(*managedOSImage, bundleResources, bundle)
+
+	if managedOSImage.Namespace == fleetLocalNamespace {
+		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
+	}
+
+	if err := r.Update(ctx, bundle); err != nil {
+		logger.Error(err, "Could not update Bundle")
+		return fmt.Errorf("updating bundle: %w", err)
+	}
+
+	return nil
+}
+
+func (r *ManagedOSImageReconciler) formatBundleName(managedOSImage elementalv1.ManagedOSImage) string {
+	return name.SafeConcatName("mos", managedOSImage.Name)
+}
+
+func (r *ManagedOSImageReconciler) mapImageToBundle(managedOSImage elementalv1.ManagedOSImage, bundleResources []fleetv1.BundleResource, bundle *fleetv1.Bundle) {
+	bundle.ObjectMeta.Name = r.formatBundleName(managedOSImage)
+	bundle.ObjectMeta.Namespace = managedOSImage.Namespace
+	bundle.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: elementalv1.GroupVersion.String(),
+			Kind:       "ManagedOSImage",
+			Name:       managedOSImage.Name,
+			UID:        managedOSImage.UID,
+			Controller: pointer.Bool(true),
+		},
+	}
+
+	bundle.Spec.Resources = bundleResources
+	bundle.Spec.RolloutStrategy = managedOSImage.Spec.ClusterRolloutStrategy
+
+	if managedOSImage.Namespace == fleetLocalNamespace {
+		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
+	} else {
+		bundle.Spec.Targets = convertBundleTargets(managedOSImage.Spec.Targets)
+	}
 }
 
 func (r *ManagedOSImageReconciler) updateManagedOSImageStatus(ctx context.Context, managedOSImage *elementalv1.ManagedOSImage) error {

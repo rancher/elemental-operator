@@ -160,18 +160,6 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(bundleResources).To(BeNil())
 	})
-
-	It("return early if fleet bundle already exists", func() {
-		meta.SetStatusCondition(&managedOSImage.Status.Conditions, metav1.Condition{
-			Type:   elementalv1.FleetBundleCreation,
-			Reason: elementalv1.FleetBundleCreateSuccessReason,
-			Status: metav1.ConditionTrue,
-		})
-
-		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(bundleResources).To(BeNil())
-	})
 })
 
 var _ = Describe("createFleetBundle", func() {
@@ -239,7 +227,7 @@ var _ = Describe("createFleetBundle", func() {
 	})
 
 	It("should change target when namespace is fleet-local", func() {
-		managedOSImage.Namespace = "fleet-local"
+		managedOSImage.Namespace = fleetLocalNamespace
 		err := r.createFleetBundle(ctx, managedOSImage, []fleetv1.BundleResource{
 			{
 				Name: "test",
@@ -248,7 +236,7 @@ var _ = Describe("createFleetBundle", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
-			Name:      name.SafeConcatName("mos", managedOSImage.Name),
+			Name:      r.formatBundleName(*managedOSImage),
 			Namespace: managedOSImage.Namespace,
 		}, bundle)).To(Succeed())
 
@@ -260,15 +248,22 @@ var _ = Describe("createFleetBundle", func() {
 		Expect(bundle.Spec.Targets[0].ClusterName).To(Equal("local"))
 	})
 
-	It("return early if fleet bundle already exists", func() {
+	It("update fleet bundle if already exists", func() {
+		Expect(r.createFleetBundle(ctx, managedOSImage, []fleetv1.BundleResource{})).Should(Succeed())
 		meta.SetStatusCondition(&managedOSImage.Status.Conditions, metav1.Condition{
 			Type:   elementalv1.FleetBundleCreation,
 			Reason: elementalv1.FleetBundleCreateSuccessReason,
 			Status: metav1.ConditionTrue,
 		})
 
-		err := r.createFleetBundle(ctx, managedOSImage, []fleetv1.BundleResource{})
-		Expect(err).ToNot(HaveOccurred())
+		wantResource := []fleetv1.BundleResource{{Name: "test", Content: "test-content"}}
+		Expect(r.updateFleetBundle(ctx, managedOSImage, wantResource)).Should(Succeed())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      r.formatBundleName(*managedOSImage),
+			Namespace: managedOSImage.Namespace,
+		}, bundle)).To(Succeed())
+		Expect(bundle.Spec.Resources).To(Equal(wantResource))
 	})
 })
 

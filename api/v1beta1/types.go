@@ -49,11 +49,21 @@ type Install struct {
 	DisableBootEntry bool `json:"disable-boot-entry,omitempty" yaml:"disable-boot-entry,omitempty"`
 	// +optional
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
+	// +optional
+	// +kubebuilder:default:={"type": "loopdevice"}
+	Snapshotter SnapshotterConfig `json:"snapshotter,omitempty" yaml:"snapshotter,omitempty"`
+}
+
+type SnapshotterConfig struct {
+	// Type sets the snapshotter type a new installation, available options are 'loopdevice' and 'btrfs'
+	// +optional
+	// +kubebuilder:default:=loopdevice
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 }
 
 type Reset struct {
 	// +optional
-	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty" mapstructure:"enabled"`
+	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	// +optional
 	// +kubebuilder:default:=true
 	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty" mapstructure:"reset-persistent"`
