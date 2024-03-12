@@ -1376,7 +1376,9 @@ spec:
                 type: boolean
               drain:
                 default:
+                  deleteLocalData: true
                   force: true
+                  ignoreDaemonSets: true
                   skipWaitForDeleteTimeout: 60
                 description: DrainSpec encapsulates `kubectl drain` parameters minus
                   node/pod selectors.
