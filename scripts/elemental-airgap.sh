@@ -395,7 +395,7 @@ build_os_channel() {
     log_debug "build channel image in $TEMPDIR"
     pushd $TEMPDIR > /dev/null
     # extract the channel.json
-    if ! docker run --entrypoint cat ${channel_img}:${channel_tag} channel.json > channel.json; then
+    if ! docker run --entrypoint busybox ${channel_img}:${channel_tag} cat channel.json > channel.json; then
         exit_error "cannot extract OS images"
     fi
 
