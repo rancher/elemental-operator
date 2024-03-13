@@ -1,0 +1,25 @@
+name: Airgap script test
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+concurrency:
+  group: airgap-${{ github.head_ref || github.ref }}-${{ github.repository }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install docker
+      uses: docker-practice/actions-setup-docker@master
+      timeout-minutes: 12
+    - name: Install Helm
+      run: sudo snap install helm --classic
+    - name: Install yq
+      uses: mikefarah/yq@v4.28.2
+    - name: Install jq
+      run: sudo apt install jq -y
+    - name: Run test
+      run: make airgap-script-test
