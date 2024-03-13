@@ -158,6 +158,10 @@ validate:
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
 	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ABS_TOOLS_DIR) -p path)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
 
+.PHONY: airgap-script-test
+airgap-script-test:
+	scripts/elemental-airgap-test.sh
+
 e2e-tests: $(GINKGO)
 	kubectl cluster-info --context kind-$(CLUSTER_NAME)
 	kubectl label nodes --all --overwrite ingress-ready=true
