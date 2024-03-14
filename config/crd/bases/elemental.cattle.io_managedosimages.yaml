@@ -38,7 +38,7 @@ spec:
           spec:
             properties:
               cloudConfig:
-                type: object
+                x-kubernetes-preserve-unknown-fields: true
               clusterRolloutStrategy:
                 properties:
                   autoPartitionSize:

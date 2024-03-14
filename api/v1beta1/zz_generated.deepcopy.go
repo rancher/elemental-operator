@@ -704,7 +704,10 @@ func (in *ManagedOSImageSpec) DeepCopyInto(out *ManagedOSImageSpec) {
 	*out = *in
 	if in.CloudConfig != nil {
 		in, out := &in.CloudConfig, &out.CloudConfig
-		*out = (*in).DeepCopy()
+		*out = make(map[string]runtime.RawExtension, len(*in))
+		for key, val := range *in {
+			(*out)[key] = *val.DeepCopy()
+		}
 	}
 	if in.NodeSelector != nil {
 		in, out := &in.NodeSelector, &out.NodeSelector
