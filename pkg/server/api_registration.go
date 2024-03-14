@@ -252,8 +252,7 @@ func replaceStringData(data map[string]interface{}, name string) (string, error)
 		str = str[j+i+1:]
 	}
 
-	resultStr := sanitizeString(result.String())
-	return resultStr, nil
+	return result.String(), nil
 }
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
@@ -436,6 +435,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	// to set the machine hostname. Also set it to lowercase
 	name, err := replaceStringData(smbiosData, mInventory.Name)
 	if err == nil {
+		name = sanitizeString(name)
 		mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 	} else {
 		if errors.Is(err, errValueNotFound) {
@@ -461,6 +461,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 			log.Errorf("Failed parsing smbios data: %v", err.Error())
 			return err
 		}
+		parsedData = sanitizeString(parsedData)
 
 		log.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
 		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
@@ -493,6 +494,7 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 			return err
 		}
 	}
+	name = sanitizeString(name)
 
 	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 
@@ -514,6 +516,7 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 			log.Errorf("Failed parsing system data: %v", err.Error())
 			return err
 		}
+		parsedData = sanitizeString(parsedData)
 
 		log.Debugf("Parsed %s into %s with system data, setting it to label %s", v, parsedData, k)
 		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")

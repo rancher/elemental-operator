@@ -159,6 +159,7 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	inventory.Labels = map[string]string{}
 	for k, v := range registration.Spec.MachineInventoryLabels {
 		value, _ := replaceStringData(map[string]interface{}{}, v)
+		value = sanitizeString(value)
 		inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(value, "-"), "-")
 	}
 
