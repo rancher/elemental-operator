@@ -46,7 +46,7 @@ type LegacyConfig struct {
 
 var (
 	sanitize             = regexp.MustCompile("[^0-9a-zA-Z_]")
-	sanitizeHostname     = regexp.MustCompile("[^0-9a-zA-Z]")
+	sanitizeHostname     = regexp.MustCompile("[^0-9a-zA-Z.]")
 	doubleDash           = regexp.MustCompile("--+")
 	start                = regexp.MustCompile("^[a-zA-Z0-9]")
 	errValueNotFound     = errors.New("value not found")
@@ -435,7 +435,7 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	// to set the machine hostname. Also set it to lowercase
 	name, err := replaceStringData(smbiosData, mInventory.Name)
 	if err == nil {
-		name = sanitizeString(name)
+		name = sanitizeStringHostname(name)
 		mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 	} else {
 		if errors.Is(err, errValueNotFound) {
@@ -494,7 +494,7 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 			return err
 		}
 	}
-	name = sanitizeString(name)
+	name = sanitizeStringHostname(name)
 
 	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
 
@@ -532,6 +532,19 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 func sanitizeString(s string) string {
 	s1 := sanitize.ReplaceAllString(s, "-")
 	s2 := doubleDash.ReplaceAllString(s1, "-")
+	if !start.MatchString(s2) {
+		s2 = "m" + s2
+	}
+	if len(s2) > 58 {
+		s2 = s2[:58]
+	}
+	return s2
+}
+
+// like sanitizeString but allows also '.' inside "s"
+func sanitizeStringHostname(s string) string {
+	s1 := sanitizeHostname.ReplaceAllString(s, "-")
+	s2 := doubleDash.ReplaceAllLiteralString(s1, "-")
 	if !start.MatchString(s2) {
 		s2 = "m" + s2
 	}
