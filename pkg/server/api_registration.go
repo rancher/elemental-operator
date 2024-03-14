@@ -253,12 +253,6 @@ func replaceStringData(data map[string]interface{}, name string) (string, error)
 	}
 
 	resultStr := sanitizeString(result.String())
-	if !start.MatchString(resultStr) {
-		resultStr = "m" + resultStr
-	}
-	if len(resultStr) > 58 {
-		resultStr = resultStr[:58]
-	}
 	return resultStr, nil
 }
 
@@ -535,6 +529,12 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 func sanitizeString(s string) string {
 	s1 := sanitize.ReplaceAllString(s, "-")
 	s2 := doubleDash.ReplaceAllString(s1, "-")
+	if !start.MatchString(s2) {
+		s2 = "m" + s2
+	}
+	if len(s2) > 58 {
+		s2 = s2[:58]
+	}
 	return s2
 }
 
