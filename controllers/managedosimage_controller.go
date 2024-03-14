@@ -32,7 +32,6 @@ import (
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/name"
-	"gopkg.in/yaml.v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -505,16 +504,16 @@ func (r *ManagedOSImageReconciler) objToFleetBundleResources(objs []runtime.Obje
 }
 
 func getCloudConfig(managedOSImage *elementalv1.ManagedOSImage) ([]byte, error) {
-	if managedOSImage.Spec.CloudConfig == nil || len(managedOSImage.Spec.CloudConfig.Data) == 0 {
+	if len(managedOSImage.Spec.CloudConfig) == 0 {
 		return []byte{}, nil
 	}
 
-	data, err := yaml.Marshal(managedOSImage.Spec.CloudConfig.Data)
+	data, err := util.MarshalCloudConfig(managedOSImage.Spec.CloudConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal cloud config: %w", err)
+		return nil, fmt.Errorf("mashalling cloud config: %w", err)
 	}
 
-	return append([]byte("#cloud-config\n"), data...), nil
+	return data, nil
 }
 
 func getImageVersion(managedOSImage *elementalv1.ManagedOSImage, managedOSVersion *elementalv1.ManagedOSVersion) (string, string, error) {
