@@ -67,7 +67,17 @@ func getServices() []string {
 		"cos-setup-reconcile",
 		"cos-setup-rootfs",
 		"cos-immutable-rootfs",
+		"elemental-setup-boot",
+		"elemental-setup-fs",
+		"elemental-setup-initramfs",
+		"elemental-setup-network",
+		"elemental-setup-reconcile",
+		"elemental-setup-rootfs",
+		"elemental-immutable-rootfs",
 		"elemental",
+		"elemental-register",
+		"elemental-register-install",
+		"elemental-register-reset",
 		"NetworkManager",
 	}
 }
