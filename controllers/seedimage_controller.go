@@ -910,7 +910,7 @@ func serializeResetRegistrationYaml(config *elementalv1.Config) ([]byte, error) 
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
 				schema.Stage{
-					If:   `[ -f "/run/cos/recovery_mode" ]`,
+					If:   `[ -f "/run/cos/recovery_mode" ] || [ -f "/run/elemental/recovery_mode" ]`,
 					Name: "Save registration config",
 					Directories: []schema.Directory{
 						{
