@@ -73,7 +73,7 @@ func getServices() []string {
 		"elemental-setup-network",
 		"elemental-setup-reconcile",
 		"elemental-setup-rootfs",
-		"elemental-immutable-rootfs",
+		"elemental-rootfs",
 		"elemental",
 		"elemental-register",
 		"elemental-register-install",
