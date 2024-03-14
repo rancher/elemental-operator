@@ -203,7 +203,7 @@ get_chart_val() {
     eval $local_var=$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)
     if eval $local_condition; then
         if [[ "$local_fail" == "false" ]]; then
-            log_debug "cannot find \$local_val in $CHART_NAME_OPERATOR"
+            log_debug "cannot find $local_val in $CHART_NAME_OPERATOR"
             eval $local_var=""
             return 0
         fi
