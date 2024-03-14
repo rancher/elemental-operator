@@ -193,6 +193,7 @@ func TestBuildName(t *testing.T) {
 		t.Run(testCase.Format, func(t *testing.T) {
 			str, err := replaceStringData(data, testCase.Format)
 			if testCase.Error == "" {
+				str = sanitizeString(str)
 				assert.NilError(t, err)
 				assert.Equal(t, testCase.Output, str, "'%s' not equal to '%s'", testCase.Output, str)
 			} else {
