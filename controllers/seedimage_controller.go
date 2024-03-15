@@ -447,8 +447,14 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 			})
 			return errMsg
 		}
+
+		// Use the registration name or else default to "elemental" for the image file name
+		imageName := "elemental"
+		if seedImg.Spec.MachineRegistrationRef != nil && len(seedImg.Spec.MachineRegistrationRef.Name) > 0 {
+			imageName = seedImg.Spec.MachineRegistrationRef.Name
+		}
 		seedImg.Status.DownloadToken = token
-		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s", rancherURL, token)
+		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s/%s.%s", rancherURL, token, imageName, seedImg.Spec.Type)
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
 			Status:  metav1.ConditionTrue,
