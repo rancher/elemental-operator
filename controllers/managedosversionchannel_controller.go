@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 - 2023 SUSE LLC
+Copyright © 2022 - 2024 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -365,7 +365,7 @@ func (r *ManagedOSVersionChannelReconciler) getAllOwnedManagedOSVersions(ctx con
 	}
 
 	for _, ver := range versions.Items {
-		result[ver.Name] = &ver
+		result[ver.Name] = ver.DeepCopy()
 	}
 
 	return result

@@ -153,6 +153,7 @@ e2e-tests: $(GINKGO)
 	kubectl label nodes --all --overwrite node-role.kubernetes.io/master=
 	kubectl get nodes -o wide
 	export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
+	export CHART=$(CHART) && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
