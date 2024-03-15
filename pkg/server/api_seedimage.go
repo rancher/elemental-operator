@@ -34,9 +34,9 @@ func (i *InventoryServer) apiSeedImage(resp http.ResponseWriter, req *http.Reque
 	var err error
 	var seedImg *elementalv1.SeedImage
 
-	// expected splittedPath = {"seedimage", {token}}
-	if len(splittedPath) != 2 {
-		err = fmt.Errorf("seedimage not found")
+	// expected splittedPath = {"seedimage", {token}, {imgName.imgType}}
+	if len(splittedPath) < 2 {
+		err = fmt.Errorf("unexpected path: %v", splittedPath)
 		http.Error(resp, err.Error(), http.StatusNotFound)
 		return err
 	}
