@@ -3,11 +3,11 @@
 #!BuildTag: rancher/seedimage-builder:latest
 #!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%
 #!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%-%RELEASE%
-#
+#!UseOBSRepositories
 
-ARG SLEMICRO_VERSION
+ARG SLMICRO_VERSION
 
-FROM suse/sle-micro/$SLEMICRO_VERSION/toolbox as BASE
+FROM suse/sl-micro/$SLMICRO_VERSION/toolbox as BASE
 
 RUN  mkdir -p /installroot && \
     zypper --gpg-auto-import-keys --installroot /installroot in -y --no-recommends elemental-toolkit elemental-httpfy elemental-seedimage-hooks xorriso curl coreutils ca-certificates ca-certificates-mozilla gptfdisk squashfs util-linux dosfstools mtools e2fsprogs grub2
