@@ -412,8 +412,8 @@ github.com/rancher/system-agent/pkg/applyinator
 github.com/rancher/system-agent/pkg/config
 github.com/rancher/system-agent/pkg/image
 github.com/rancher/system-agent/pkg/prober
-# github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20220321230925-79da9f058209
-## explicit; go 1.16
+# github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240308073002-4a643535e6ea
+## explicit; go 1.20
 github.com/rancher/system-upgrade-controller/pkg/apis/condition
 github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io
 github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1
