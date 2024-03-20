@@ -20,8 +20,8 @@ import (
 	"context"
 
 	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/clients"
-	corecontrollers "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
+	"github.com/rancher/wrangler/v2/pkg/clients"
+	corecontrollers "github.com/rancher/wrangler/v2/pkg/generated/controllers/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"

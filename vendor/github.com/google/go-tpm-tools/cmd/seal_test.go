@@ -3,20 +3,19 @@ package cmd
 import (
 	"bytes"
 	"crypto/sha256"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"testing"
 
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal/test"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
 func makeTempFile(tb testing.TB, content []byte) string {
 	tb.Helper()
-	file, err := ioutil.TempFile("", "gotpm_test_*.txt")
+	file, err := os.CreateTemp("", "gotpm_test_*.txt")
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -80,7 +79,7 @@ func TestSealPlain(t *testing.T) {
 			if err := RootCmd.Execute(); err != nil {
 				t.Error(err)
 			}
-			secretOut, err := ioutil.ReadFile(secretFile2)
+			secretOut, err := os.ReadFile(secretFile2)
 			if err != nil {
 				t.Fatal(err)
 			}

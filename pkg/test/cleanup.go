@@ -18,9 +18,9 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -67,7 +67,10 @@ func CleanupAndWait(ctx context.Context, cl client.Client, objs ...client.Object
 				}
 				return false, nil
 			})
-		errs = append(errs, errors.Wrapf(err, "key %s, %s is not being deleted from the testenv client cache", o.GetObjectKind().GroupVersionKind().String(), key))
+		if err != nil {
+			formattedError := fmt.Errorf("key %s, %s is not being deleted from the testenv client cache: %w", o.GetObjectKind().GroupVersionKind().String(), key, err)
+			errs = append(errs, formattedError)
+		}
 	}
 	return kerrors.NewAggregate(errs)
 }

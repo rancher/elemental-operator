@@ -36,8 +36,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"gopkg.in/yaml.v2"
-	"gotest.tools/assert"
+	"gopkg.in/yaml.v3"
+	"gotest.tools/v3/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

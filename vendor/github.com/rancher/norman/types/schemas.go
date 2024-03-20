@@ -9,7 +9,7 @@ import (
 
 	"github.com/rancher/norman/types/convert"
 	"github.com/rancher/norman/types/definition"
-	"github.com/rancher/wrangler/pkg/name"
+	"github.com/rancher/wrangler/v2/pkg/name"
 )
 
 type SchemaCollection struct {
@@ -327,11 +327,9 @@ func (s *Schemas) doSchema(version *APIVersion, name string, lock bool) *Schema 
 
 	if lock {
 		s.Lock()
+		defer s.Unlock()
 	}
 	schemas, ok := s.schemasByPath[path]
-	if lock {
-		s.Unlock()
-	}
 	if !ok {
 		return nil
 	}

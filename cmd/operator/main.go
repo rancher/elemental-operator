@@ -18,7 +18,7 @@ package main
 
 import (
 	"github.com/spf13/cobra"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	displaycmd "github.com/rancher/elemental-operator/cmd/operator/display"
@@ -29,7 +29,7 @@ import (
 )
 
 func main() {
-	logger := klogr.New()
+	logger := textlogger.NewLogger(textlogger.NewConfig())
 	ctrl.SetLogger(logger)
 
 	cmd := &cobra.Command{

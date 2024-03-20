@@ -18,42 +18,59 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
+	"encoding/asn1"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
 
-	"github.com/google/certificate-transparency-go/asn1"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
 // wrappedTPM20 interfaces with a TPM 2.0 command channel.
 type wrappedTPM20 struct {
-	interf        TPMInterface
-	rwc           CommandChannelTPM20
-	tpmEkTemplate *tpm2.Public
+	interf           TPMInterface
+	rwc              CommandChannelTPM20
+	tpmRSAEkTemplate *tpm2.Public
+	tpmECCEkTemplate *tpm2.Public
 }
 
-func (t *wrappedTPM20) ekTemplate() (tpm2.Public, error) {
-	if t.tpmEkTemplate != nil {
-		return *t.tpmEkTemplate, nil
+func (t *wrappedTPM20) rsaEkTemplate() tpm2.Public {
+	if t.tpmRSAEkTemplate != nil {
+		return *t.tpmRSAEkTemplate
 	}
 
-	nonce, err := tpm2.NVReadEx(t.rwc, nvramEkNonceIndex, tpm2.HandleOwner, "", 0)
+	nonce, err := tpm2.NVReadEx(t.rwc, nvramRSAEkNonceIndex, tpm2.HandleOwner, "", 0)
 	if err != nil {
-		t.tpmEkTemplate = &defaultEKTemplate // No nonce, use the default template
+		t.tpmRSAEkTemplate = &defaultRSAEKTemplate // No nonce, use the default template
 	} else {
-		template := defaultEKTemplate
+		template := defaultRSAEKTemplate
 		copy(template.RSAParameters.ModulusRaw, nonce)
-		t.tpmEkTemplate = &template
+		t.tpmRSAEkTemplate = &template
 	}
 
-	return *t.tpmEkTemplate, nil
+	return *t.tpmRSAEkTemplate
 }
 
-func (*wrappedTPM20) isTPMBase() {}
+func (t *wrappedTPM20) eccEkTemplate() tpm2.Public {
+	if t.tpmECCEkTemplate != nil {
+		return *t.tpmECCEkTemplate
+	}
+
+	nonce, err := tpm2.NVReadEx(t.rwc, nvramECCEkNonceIndex, tpm2.HandleOwner, "", 0)
+	if err != nil {
+		t.tpmECCEkTemplate = &defaultECCEKTemplate // No nonce, use the default template
+	} else {
+		template := defaultECCEKTemplate
+		copy(template.ECCParameters.Point.XRaw, nonce)
+		t.tpmECCEkTemplate = &template
+	}
+
+	return *t.tpmECCEkTemplate
+}
 
 func (t *wrappedTPM20) tpmVersion() TPMVersion {
 	return TPMVersion20
@@ -84,52 +101,105 @@ func (t *wrappedTPM20) info() (*TPMInfo, error) {
 	return &tInfo, nil
 }
 
-// Return value: handle, whether we generated a new one, error
-func (t *wrappedTPM20) getPrimaryKeyHandle(pHnd tpmutil.Handle) (tpmutil.Handle, bool, error) {
-	_, _, _, err := tpm2.ReadPublic(t.rwc, pHnd)
-	if err == nil {
-		// Found the persistent handle, assume it's the key we want.
-		return pHnd, false, nil
+// Return value: handle, whether we generated a new one, error.
+func (t *wrappedTPM20) getEndorsementKeyHandle(ek *EK) (tpmutil.Handle, bool, error) {
+	var ekHandle tpmutil.Handle
+	var ekTemplate tpm2.Public
+
+	if ek == nil {
+		// The default is RSA for backward compatibility.
+		ekHandle = commonRSAEkEquivalentHandle
+		ekTemplate = t.rsaEkTemplate()
+	} else {
+		ekHandle = ek.handle
+		if ekHandle == 0 {
+			// Assume RSA EK handle if it was not provided.
+			ekHandle = commonRSAEkEquivalentHandle
+		}
+		switch pub := ek.Public.(type) {
+		case *rsa.PublicKey:
+			ekTemplate = t.rsaEkTemplate()
+		case *ecdsa.PublicKey:
+			ekTemplate = t.eccEkTemplate()
+		default:
+			return 0, false, fmt.Errorf("unsupported public key type %T", pub)
+		}
 	}
 
-	var keyHnd tpmutil.Handle
-	switch pHnd {
-	case commonSrkEquivalentHandle:
-		keyHnd, _, err = tpm2.CreatePrimary(t.rwc, tpm2.HandleOwner, tpm2.PCRSelection{}, "", "", defaultSRKTemplate)
-	case commonEkEquivalentHandle:
-		var tmpl tpm2.Public
-		if tmpl, err = t.ekTemplate(); err != nil {
-			return 0, false, fmt.Errorf("ek template: %v", err)
-		}
-		keyHnd, _, err = tpm2.CreatePrimary(t.rwc, tpm2.HandleEndorsement, tpm2.PCRSelection{}, "", "", tmpl)
+	_, _, _, err := tpm2.ReadPublic(t.rwc, ekHandle)
+	if err == nil {
+		// Found the persistent handle, assume it's the key we want.
+		return ekHandle, false, nil
 	}
+	rerr := err // Preserve this failure for later logging, if needed
+
+	keyHnd, _, err := tpm2.CreatePrimary(t.rwc, tpm2.HandleEndorsement, tpm2.PCRSelection{}, "", "", ekTemplate)
 	if err != nil {
-		return 0, false, fmt.Errorf("CreatePrimary failed: %v", err)
+		return 0, false, fmt.Errorf("ReadPublic failed (%v), and then CreatePrimary failed: %v", rerr, err)
 	}
 	defer tpm2.FlushContext(t.rwc, keyHnd)
 
-	err = tpm2.EvictControl(t.rwc, "", tpm2.HandleOwner, keyHnd, pHnd)
+	err = tpm2.EvictControl(t.rwc, "", tpm2.HandleOwner, keyHnd, ekHandle)
 	if err != nil {
 		return 0, false, fmt.Errorf("EvictControl failed: %v", err)
 	}
 
-	return pHnd, true, nil
+	return ekHandle, true, nil
+}
+
+// Return value: handle, whether we generated a new one, error
+func (t *wrappedTPM20) getStorageRootKeyHandle(parent ParentKeyConfig) (tpmutil.Handle, bool, error) {
+	srkHandle := parent.Handle
+	_, _, _, err := tpm2.ReadPublic(t.rwc, srkHandle)
+	if err == nil {
+		// Found the persistent handle, assume it's the key we want.
+		return srkHandle, false, nil
+	}
+	rerr := err // Preserve this failure for later logging, if needed
+
+	var srkTemplate tpm2.Public
+	switch parent.Algorithm {
+	case RSA:
+		srkTemplate = defaultRSASRKTemplate
+	case ECDSA:
+		srkTemplate = defaultECCSRKTemplate
+	default:
+		return 0, false, fmt.Errorf("unsupported SRK algorithm: %v", parent.Algorithm)
+	}
+	keyHnd, _, err := tpm2.CreatePrimary(t.rwc, tpm2.HandleOwner, tpm2.PCRSelection{}, "", "", srkTemplate)
+	if err != nil {
+		return 0, false, fmt.Errorf("ReadPublic failed (%v), and then CreatePrimary failed: %v", rerr, err)
+	}
+	defer tpm2.FlushContext(t.rwc, keyHnd)
+
+	err = tpm2.EvictControl(t.rwc, "", tpm2.HandleOwner, keyHnd, srkHandle)
+	if err != nil {
+		return 0, false, fmt.Errorf("EvictControl failed: %v", err)
+	}
+
+	return srkHandle, true, nil
+}
+
+func (t *wrappedTPM20) ekCertificates() ([]EK, error) {
+	var res []EK
+	if rsaCert, err := readEKCertFromNVRAM20(t.rwc, nvramRSACertIndex); err == nil {
+		res = append(res, EK{Public: crypto.PublicKey(rsaCert.PublicKey), Certificate: rsaCert, handle: commonRSAEkEquivalentHandle})
+	}
+	if eccCert, err := readEKCertFromNVRAM20(t.rwc, nvramECCCertIndex); err == nil {
+		res = append(res, EK{Public: crypto.PublicKey(eccCert.PublicKey), Certificate: eccCert, handle: commonECCEkEquivalentHandle})
+	}
+	return res, nil
 }
 
 func (t *wrappedTPM20) eks() ([]EK, error) {
-	if cert, err := readEKCertFromNVRAM20(t.rwc); err == nil {
+	if cert, err := readEKCertFromNVRAM20(t.rwc, nvramRSACertIndex); err == nil {
 		return []EK{
-			{Public: crypto.PublicKey(cert.PublicKey), Certificate: cert},
+			{Public: crypto.PublicKey(cert.PublicKey), Certificate: cert, handle: commonRSAEkEquivalentHandle},
 		}, nil
 	}
 
 	// Attempt to create an EK.
-	tmpl, err := t.ekTemplate()
-	if err != nil {
-		return nil, fmt.Errorf("ek template: %v", err)
-	}
-
-	ekHnd, _, err := tpm2.CreatePrimary(t.rwc, tpm2.HandleEndorsement, tpm2.PCRSelection{}, "", "", tmpl)
+	ekHnd, _, err := tpm2.CreatePrimary(t.rwc, tpm2.HandleEndorsement, tpm2.PCRSelection{}, "", "", t.rsaEkTemplate())
 	if err != nil {
 		return nil, fmt.Errorf("EK CreatePrimary failed: %v", err)
 	}
@@ -142,19 +212,36 @@ func (t *wrappedTPM20) eks() ([]EK, error) {
 	if pub.RSAParameters == nil {
 		return nil, errors.New("ECC EK not yet supported")
 	}
+
+	i, err := t.info()
+	if err != nil {
+		return nil, fmt.Errorf("Retrieving TPM info failed: %v", err)
+	}
+	ekPub := &rsa.PublicKey{
+		E: int(pub.RSAParameters.Exponent()),
+		N: pub.RSAParameters.Modulus(),
+	}
+	var certificateURL string
+	if i.Manufacturer.String() == manufacturerIntel {
+		certificateURL = intelEKURL(ekPub)
+	}
 	return []EK{
 		{
-			Public: &rsa.PublicKey{
-				E: int(pub.RSAParameters.Exponent()),
-				N: pub.RSAParameters.Modulus(),
-			},
+			Public:         ekPub,
+			CertificateURL: certificateURL,
+			handle:         commonRSAEkEquivalentHandle,
 		},
 	}, nil
 }
 
 func (t *wrappedTPM20) newAK(opts *AKConfig) (*AK, error) {
-	// TODO(jsonp): Abstract choice of hierarchy & parent.
-	srk, _, err := t.getPrimaryKeyHandle(commonSrkEquivalentHandle)
+	var parent ParentKeyConfig
+	if opts != nil && opts.Parent != nil {
+		parent = *opts.Parent
+	} else {
+		parent = defaultParentConfig
+	}
+	srk, _, err := t.getStorageRootKeyHandle(parent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SRK handle: %v", err)
 	}
@@ -175,7 +262,7 @@ func (t *wrappedTPM20) newAK(opts *AKConfig) (*AK, error) {
 	}()
 
 	// We can only certify the creation immediately afterwards, so we cache the result.
-	attestation, sig, err := tpm2.CertifyCreation(t.rwc, "", keyHandle, keyHandle, nil, creationHash, tpm2.SigScheme{tpm2.AlgRSASSA, tpm2.AlgSHA256, 0}, tix)
+	attestation, sig, err := tpm2.CertifyCreation(t.rwc, "", keyHandle, keyHandle, nil, creationHash, tpm2.SigScheme{Alg: tpm2.AlgRSASSA, Hash: tpm2.AlgSHA256, Count: 0}, tix)
 	if err != nil {
 		return nil, fmt.Errorf("CertifyCreation failed: %v", err)
 	}
@@ -226,7 +313,13 @@ func (t *wrappedTPM20) newKey(ak *AK, opts *KeyConfig) (*Key, error) {
 }
 
 func createKey(t *wrappedTPM20, opts *KeyConfig) (tpmutil.Handle, []byte, []byte, []byte, error) {
-	srk, _, err := t.getPrimaryKeyHandle(commonSrkEquivalentHandle)
+	var parent ParentKeyConfig
+	if opts != nil && opts.Parent != nil {
+		parent = *opts.Parent
+	} else {
+		parent = defaultParentConfig
+	}
+	srk, _, err := t.getStorageRootKeyHandle(parent)
 	if err != nil {
 		return 0, nil, nil, nil, fmt.Errorf("failed to get SRK handle: %v", err)
 	}
@@ -291,7 +384,7 @@ func templateFromConfig(opts *KeyConfig) (tpm2.Public, error) {
 	return tmpl, nil
 }
 
-func (t *wrappedTPM20) deserializeAndLoad(opaqueBlob []byte) (tpmutil.Handle, *serializedKey, error) {
+func (t *wrappedTPM20) deserializeAndLoad(opaqueBlob []byte, parent ParentKeyConfig) (tpmutil.Handle, *serializedKey, error) {
 	sKey, err := deserializeKey(opaqueBlob, TPMVersion20)
 	if err != nil {
 		return 0, nil, fmt.Errorf("deserializeKey() failed: %v", err)
@@ -300,7 +393,7 @@ func (t *wrappedTPM20) deserializeAndLoad(opaqueBlob []byte) (tpmutil.Handle, *s
 		return 0, nil, fmt.Errorf("unsupported key encoding: %x", sKey.Encoding)
 	}
 
-	srk, _, err := t.getPrimaryKeyHandle(commonSrkEquivalentHandle)
+	srk, _, err := t.getStorageRootKeyHandle(parent)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to get SRK handle: %v", err)
 	}
@@ -312,7 +405,11 @@ func (t *wrappedTPM20) deserializeAndLoad(opaqueBlob []byte) (tpmutil.Handle, *s
 }
 
 func (t *wrappedTPM20) loadAK(opaqueBlob []byte) (*AK, error) {
-	hnd, sKey, err := t.deserializeAndLoad(opaqueBlob)
+	return t.loadAKWithParent(opaqueBlob, defaultParentConfig)
+}
+
+func (t *wrappedTPM20) loadAKWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*AK, error) {
+	hnd, sKey, err := t.deserializeAndLoad(opaqueBlob, parent)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load attestation key: %v", err)
 	}
@@ -320,7 +417,11 @@ func (t *wrappedTPM20) loadAK(opaqueBlob []byte) (*AK, error) {
 }
 
 func (t *wrappedTPM20) loadKey(opaqueBlob []byte) (*Key, error) {
-	hnd, sKey, err := t.deserializeAndLoad(opaqueBlob)
+	return t.loadKeyWithParent(opaqueBlob, defaultParentConfig)
+}
+
+func (t *wrappedTPM20) loadKeyWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*Key, error) {
+	hnd, sKey, err := t.deserializeAndLoad(opaqueBlob, parent)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load signing key: %v", err)
 	}
@@ -411,7 +512,7 @@ func (k *wrappedKey20) close(t tpmBase) error {
 	return tpm2.FlushContext(tpm.rwc, k.hnd)
 }
 
-func (k *wrappedKey20) activateCredential(tb tpmBase, in EncryptedCredential) ([]byte, error) {
+func (k *wrappedKey20) activateCredential(tb tpmBase, in EncryptedCredential, ek *EK) ([]byte, error) {
 	t, ok := tb.(*wrappedTPM20)
 	if !ok {
 		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
@@ -426,7 +527,7 @@ func (k *wrappedKey20) activateCredential(tb tpmBase, in EncryptedCredential) ([
 	}
 	secret := in.Secret[2:]
 
-	ekHnd, _, err := t.getPrimaryKeyHandle(commonEkEquivalentHandle)
+	ekHnd, _, err := t.getEndorsementKeyHandle(ek)
 	if err != nil {
 		return nil, err
 	}
@@ -471,12 +572,12 @@ func (k *wrappedKey20) certify(tb tpmBase, handle interface{}) (*CertificationPa
 	return certify(t.rwc, hnd, k.hnd, scheme)
 }
 
-func (k *wrappedKey20) quote(tb tpmBase, nonce []byte, alg HashAlg) (*Quote, error) {
+func (k *wrappedKey20) quote(tb tpmBase, nonce []byte, alg HashAlg, selectedPCRs []int) (*Quote, error) {
 	t, ok := tb.(*wrappedTPM20)
 	if !ok {
 		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
 	}
-	return quote20(t.rwc, k.hnd, tpm2.Algorithm(alg), nonce)
+	return quote20(t.rwc, k.hnd, tpm2.Algorithm(alg), nonce, selectedPCRs)
 }
 
 func (k *wrappedKey20) attestationParameters() AttestationParameters {
@@ -501,16 +602,31 @@ func (k *wrappedKey20) sign(tb tpmBase, digest []byte, pub crypto.PublicKey, opt
 	if !ok {
 		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
 	}
-	switch pub.(type) {
+	switch p := pub.(type) {
 	case *ecdsa.PublicKey:
-		return signECDSA(t.rwc, k.hnd, digest)
+		return signECDSA(t.rwc, k.hnd, digest, p.Curve)
 	case *rsa.PublicKey:
 		return signRSA(t.rwc, k.hnd, digest, opts)
 	}
 	return nil, fmt.Errorf("unsupported signing key type: %T", pub)
 }
 
-func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte) ([]byte, error) {
+func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, curve elliptic.Curve) ([]byte, error) {
+	// https://cs.opensource.google/go/go/+/refs/tags/go1.19.2:src/crypto/ecdsa/ecdsa.go;l=181
+	orderBits := curve.Params().N.BitLen()
+	orderBytes := (orderBits + 7) / 8
+	if len(digest) > orderBytes {
+		digest = digest[:orderBytes]
+	}
+	ret := new(big.Int).SetBytes(digest)
+	excess := len(digest)*8 - orderBits
+	if excess > 0 {
+		ret.Rsh(ret, uint(excess))
+	}
+	// call ret.FillBytes() here instead of ret.Bytes() to preserve leading zeroes
+	// that may have been dropped when converting the digest to an integer
+	digest = ret.FillBytes(digest)
+
 	sig, err := tpm2.Sign(rw, key, "", digest, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot sign: %v", err)

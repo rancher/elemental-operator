@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm-tools/simulator"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
@@ -83,6 +83,14 @@ func GetTPM(tb testing.TB) io.ReadWriteCloser {
 		}
 	}
 	return noClose{tpm}
+}
+
+// SkipForRealTPM causes a test or benchmark to be skipped if we are not using
+// a test TPM. This lets us avoid clobbering important PCRs on a real machine.
+func SkipForRealTPM(tb testing.TB) {
+	if useRealTPM() {
+		tb.Skip("Running against a real TPM, Skipping Test")
+	}
 }
 
 // GetSimulatorWithLog returns a simulated TPM with PCRs that match the events

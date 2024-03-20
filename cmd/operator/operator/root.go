@@ -38,9 +38,12 @@ import (
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/controllers"
@@ -185,21 +188,31 @@ func operatorRun(config *rootConfig) {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: config.metricsBindAddr,
-		LeaderElection:     config.enableLeaderElection,
-		LeaderElectionID:   "controller-leader-election-elemental-operator",
-		LeaseDuration:      &config.leaderElectionLeaseDuration,
-		RenewDeadline:      &config.leaderElectionRenewDeadline,
-		RetryPeriod:        &config.leaderElectionRetryPeriod,
-		SyncPeriod:         &config.syncPeriod,
-		ClientDisableCacheFor: []client.Object{
-			&corev1.ConfigMap{},
-			&corev1.Secret{},
-			&elementalv1.ManagedOSVersion{},
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: config.metricsBindAddr,
 		},
-		Port:                   config.webhookPort,
-		CertDir:                config.webhookCertDir,
+		LeaderElection:   config.enableLeaderElection,
+		LeaderElectionID: "controller-leader-election-elemental-operator",
+		LeaseDuration:    &config.leaderElectionLeaseDuration,
+		RenewDeadline:    &config.leaderElectionRenewDeadline,
+		RetryPeriod:      &config.leaderElectionRetryPeriod,
+		Cache: cache.Options{
+			SyncPeriod: &config.syncPeriod,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    config.webhookPort,
+			CertDir: config.webhookCertDir,
+		}),
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{
+					&corev1.ConfigMap{},
+					&corev1.Secret{},
+					&elementalv1.ManagedOSVersion{},
+				},
+			},
+		},
 		HealthProbeBindAddress: config.healthAddr,
 	})
 	if err != nil {

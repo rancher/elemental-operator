@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 SUSE LLC
+Copyright © 2022 - 2024 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"net/http"
 )
 
+//nolint:all
 func Server(ctx context.Context, listenAddr string, content string) {
 	srv := http.Server{
 		Addr: listenAddr,
@@ -36,6 +37,7 @@ func Server(ctx context.Context, listenAddr string, content string) {
 			fmt.Printf("Server failed: %s\n", err)
 		}
 	}()
+
 	go func() {
 		<-ctx.Done()
 		srv.Close()

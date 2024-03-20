@@ -1,10 +1,12 @@
 run:
   timeout: 5m
-  skip-files:
-    - "zz_generated_*"
   tests: false
+issues:
+  exclude-files:
+    - "zz_generated_*"
 output:
-  format: github-actions
+  formats: 
+    - format: github-actions
 linters:
   enable:
     - revive # replacement for golint

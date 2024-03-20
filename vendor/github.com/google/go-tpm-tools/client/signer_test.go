@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal/test"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 func templateSSA(hash tpm2.Algorithm) tpm2.Public {
@@ -262,7 +262,7 @@ func TestSignPSS(t *testing.T) {
 	}
 }
 
-/// Make sure signing fails when using PSS params with a non-PSS key
+// Make sure signing fails when using PSS params with a non-PSS key
 func TestFailSignPSS(t *testing.T) {
 	rwc := test.GetTPM(t)
 	defer client.CheckedClose(t, rwc)

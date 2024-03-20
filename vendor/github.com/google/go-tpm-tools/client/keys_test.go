@@ -1,11 +1,17 @@
 package client_test
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"io"
+	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 
 	"github.com/google/go-tpm-tools/client"
@@ -180,6 +186,116 @@ func BenchmarkKeyCreation(b *testing.B) {
 					b.Fatal(err)
 				}
 				key.Close()
+			}
+		})
+	}
+}
+
+// Returns an x509 Certificate for the provided pubkey, signed with the provided parent certificate and key.
+// If the provided fields are nil, will create a self-signed certificate.
+func getTestCert(t *testing.T, pubKey crypto.PublicKey, parentCert *x509.Certificate, parentKey *rsa.PrivateKey) (*x509.Certificate, *rsa.PrivateKey) {
+	t.Helper()
+
+	certKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLenZero:        true,
+	}
+
+	if pubKey == nil && parentCert == nil && parentKey == nil {
+		pubKey = certKey.Public()
+		parentCert = template
+		parentKey = certKey
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, parentCert, pubKey, parentKey)
+	if err != nil {
+		t.Fatalf("Unable to create test certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certBytes)
+	if err != nil {
+		t.Fatalf("Unable to parse test certificate: %v", err)
+	}
+
+	return cert, certKey
+}
+
+func TestSetCert(t *testing.T) {
+	rwc := test.GetTPM(t)
+	defer client.CheckedClose(t, rwc)
+
+	key, err := client.AttestationKeyECC(rwc)
+	if err != nil {
+		t.Fatalf("Unable to create key: %v", err)
+	}
+
+	ca, caKey := getTestCert(t, nil, nil, nil)
+	akCert, _ := getTestCert(t, key.PublicKey(), ca, caKey)
+
+	if err = key.SetCert(akCert); err != nil {
+		t.Errorf("SetCert() returned error: %v", err)
+	}
+}
+
+func TestSetCertFailsIfCertificateIsNotForKey(t *testing.T) {
+	rwc := test.GetTPM(t)
+	defer client.CheckedClose(t, rwc)
+	key, err := client.AttestationKeyECC(rwc)
+	if err != nil {
+		t.Fatalf("Unable to create key: %v", err)
+	}
+
+	otherKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	ca, caKey := getTestCert(t, nil, nil, nil)
+	akCert, _ := getTestCert(t, otherKey.Public(), ca, caKey)
+
+	if err = key.SetCert(akCert); err == nil {
+		t.Error("SetCert() returned successfully, expected error")
+	}
+}
+
+func TestLoadCachedKey(t *testing.T) {
+	rwc := test.GetTPM(t)
+	defer client.CheckedClose(t, rwc)
+
+	createdKey, err := client.NewKey(rwc, tpm2.HandleNull, client.SRKTemplateRSA())
+	if err != nil {
+		t.Fatalf("NewKey() returned error: %v", err)
+	}
+	defer createdKey.Close()
+
+	handles := []struct {
+		name        string
+		handle      tpmutil.Handle
+		errExpected bool
+	}{
+		{"successful retrieval with handle", createdKey.Handle(), false},
+		{"error for bad handle", tpmutil.Handle(0x0), true},
+	}
+
+	for _, k := range handles {
+		t.Run(k.name, func(t *testing.T) {
+			loadedKey, err := client.LoadCachedKey(rwc, createdKey.Handle(), client.NullSession{})
+			if k.errExpected && err == nil {
+				t.Fatal("LoadCachedKey() returned successfully, expected error")
+			} else if !k.errExpected && err != nil {
+				t.Fatalf("LoadCachedKey() returned error: %v", err)
+			} else if k.errExpected {
+				return
+			}
+			defer loadedKey.Close()
+
+			if !reflect.DeepEqual(createdKey, loadedKey) {
+				t.Errorf("Loaded key does not match created key")
 			}
 		})
 	}
