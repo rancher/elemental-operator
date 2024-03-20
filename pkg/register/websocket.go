@@ -33,7 +33,7 @@ const (
 	MsgReady
 	MsgSmbios
 	MsgLabels
-	MsgGet
+	MsgGet                     // v0.5.0
 	MsgVersion                 // v1.1.0
 	MsgSystemData              // v1.1.1
 	MsgConfig                  // v1.1.1
