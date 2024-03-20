@@ -33,7 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -354,7 +354,7 @@ func (r *MachineInventoryReconciler) createPlanSecret(ctx context.Context, mInve
 					Kind:       "MachineInventory",
 					Name:       mInventory.Name,
 					UID:        mInventory.UID,
-					Controller: pointer.Bool(true),
+					Controller: ptr.To(true),
 				},
 			},
 			Labels: map[string]string{

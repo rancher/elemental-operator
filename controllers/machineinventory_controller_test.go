@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -190,7 +190,7 @@ var _ = Describe("createPlanSecret", func() {
 		Expect(planSecret.OwnerReferences[0].Kind).To(Equal("MachineInventory"))
 		Expect(planSecret.OwnerReferences[0].Name).To(Equal(mInventory.Name))
 		Expect(planSecret.OwnerReferences[0].UID).To(Equal(mInventory.UID))
-		Expect(planSecret.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(planSecret.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 		Expect(planSecret.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 		Expect(planSecret.Type).To(Equal(elementalv1.PlanSecretType))
 		Expect(planSecret.Data).To(HaveKey("plan"))

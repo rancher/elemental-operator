@@ -35,7 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -228,7 +228,7 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 			Kind:       "MachineInventorySelector",
 			Name:       miSelector.Name,
 			UID:        miSelector.UID,
-			Controller: pointer.Bool(true),
+			Controller: ptr.To(true),
 		},
 	}
 

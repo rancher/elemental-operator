@@ -40,7 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -402,7 +402,7 @@ func (r *ManagedOSImageReconciler) mapImageToBundle(managedOSImage elementalv1.M
 			Kind:       "ManagedOSImage",
 			Name:       managedOSImage.Name,
 			UID:        managedOSImage.UID,
-			Controller: pointer.Bool(true),
+			Controller: ptr.To(true),
 		},
 	}
 

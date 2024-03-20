@@ -29,7 +29,7 @@ import (
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -320,7 +320,7 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 				Kind:       "ManagedOSVersionChannel",
 				Name:       ch.Name,
 				UID:        ch.UID,
-				Controller: pointer.Bool(true),
+				Controller: ptr.To(true),
 			},
 		}
 		vcpy.ObjectMeta.Labels = map[string]string{
@@ -398,7 +398,7 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 					Kind:       "ManagedOSVersionChannel",
 					Name:       ch.Name,
 					UID:        ch.UID,
-					Controller: pointer.Bool(true),
+					Controller: ptr.To(true),
 				},
 			},
 		},

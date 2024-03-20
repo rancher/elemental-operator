@@ -17,11 +17,11 @@ limitations under the License.
 package tpm
 
 import (
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"crypto/x509"
 
 	"github.com/google/go-attestation/attest"
 

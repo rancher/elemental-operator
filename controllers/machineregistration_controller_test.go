@@ -27,7 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -244,7 +244,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(role.OwnerReferences[0].Kind).To(Equal("MachineRegistration"))
 		Expect(role.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(role.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
-		Expect(role.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(role.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 		Expect(role.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		Expect(role.Rules).To(HaveLen(2))
@@ -262,7 +262,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(sa.OwnerReferences[0].Kind).To(Equal("MachineRegistration"))
 		Expect(sa.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(sa.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
-		Expect(sa.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(sa.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 		Expect(sa.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		secret := &corev1.Secret{}
@@ -272,7 +272,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(secret.OwnerReferences[0].Kind).To(Equal("MachineRegistration"))
 		Expect(secret.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(secret.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
-		Expect(secret.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(secret.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 		Expect(secret.Annotations).To(HaveKeyWithValue("kubernetes.io/service-account.name", mRegistration.Name))
 		Expect(secret.Type).To(Equal(corev1.SecretTypeServiceAccountToken))
 
@@ -283,7 +283,7 @@ var _ = Describe("createRBACObjects", func() {
 		Expect(roleBinding.OwnerReferences[0].Kind).To(Equal("MachineRegistration"))
 		Expect(roleBinding.OwnerReferences[0].Name).To(Equal(mRegistration.Name))
 		Expect(roleBinding.OwnerReferences[0].UID).To(Equal(mRegistration.UID))
-		Expect(roleBinding.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(roleBinding.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 		Expect(roleBinding.Labels).To(HaveKey(elementalv1.ElementalManagedLabel))
 
 		Expect(roleBinding.Subjects).To(HaveLen(1))
