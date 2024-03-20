@@ -67,8 +67,10 @@ func CleanupAndWait(ctx context.Context, cl client.Client, objs ...client.Object
 				}
 				return false, nil
 			})
-		formattedError := fmt.Errorf("key %s, %s is not being deleted from the testenv client cache: %w", o.GetObjectKind().GroupVersionKind().String(), key, err)
-		errs = append(errs, formattedError)
+		if err != nil {
+			formattedError := fmt.Errorf("key %s, %s is not being deleted from the testenv client cache: %w", o.GetObjectKind().GroupVersionKind().String(), key, err)
+			errs = append(errs, formattedError)
+		}
 	}
 	return kerrors.NewAggregate(errs)
 }
