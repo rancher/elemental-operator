@@ -66,7 +66,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	if !websocket.IsWebSocketUpgrade(req) {
 		log.Debugf("got a plain HTTP request: send unauthenticated registration")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
-			log.Errorf("error sending unauthenticated response: %w", err)
+			log.Errorf("error sending unauthenticated response: %s", err)
 		}
 		return err
 	}
@@ -74,7 +74,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	// upgrade to websocket
 	conn, err := upgrade(resp, req)
 	if err != nil {
-		log.Errorf("failed to upgrade connection to websocket: %w", err)
+		log.Errorf("failed to upgrade connection to websocket: %s", err)
 		return err
 	}
 	defer conn.Close()
@@ -83,7 +83,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	// attempt to authenticate the machine, if err, authentication has failed
 	inventory, err := i.authMachine(conn, req, registration.Namespace)
 	if err != nil {
-		log.Errorf("authentication failed: ", err)
+		log.Errorf("authentication failed: %s", err)
 		http.Error(resp, "authentication failure", http.StatusUnauthorized)
 		return err
 	}
@@ -98,7 +98,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 
 		log.Warning("unauthenticated websocket connection")
 		if err = i.unauthenticatedResponse(registration, resp); err != nil {
-			log.Errorf("error sending unauthenticated response: %w", err)
+			log.Errorf("error sending unauthenticated response: %s", err)
 			return err
 		}
 		return nil
@@ -106,7 +106,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	log.Debugf("authentication completed")
 
 	if err = register.WriteMessage(conn, register.MsgReady, []byte{}); err != nil {
-		log.Errorf("cannot finalize the authentication process: %w", err)
+		log.Errorf("cannot finalize the authentication process: %s", err)
 		return err
 	}
 
@@ -115,7 +115,7 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 	}
 
 	if err = i.serveLoop(conn, inventory, registration); err != nil {
-		log.Errorf("Error during serve-loop: %w", err)
+		log.Errorf("Error during serve-loop: %s", err)
 		return err
 	}
 

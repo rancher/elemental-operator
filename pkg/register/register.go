@@ -289,7 +289,7 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 		data["os.unmanaged"] = "true"
 	}
 	if osAnnotations, err := getOsReleaseInfo(); err != nil {
-		log.Errorf("retrieving os info: %w", err)
+		log.Errorf("retrieving os info: %s", err)
 	} else {
 		if len(osAnnotations) == 0 {
 			log.Warning("no OS info found")
@@ -299,7 +299,7 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 		}
 	}
 	if ipAddress, err := getLocalIPAddress(conn); err != nil {
-		log.Errorf("retrieving the local IP address: %w", err)
+		log.Errorf("retrieving the local IP address: %s", err)
 	} else {
 		data["registration-ip"] = ipAddress
 		log.Debugf("sending local IP: %s", data["registration-ip"])

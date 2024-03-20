@@ -155,7 +155,7 @@ func (i *installer) findInstallationDevice(selector elementalv1.DeviceSelector) 
 		}
 	}
 
-	log.Debugf("%s disks matching selector", len(devices))
+	log.Debugf("%d disks matching selector", len(devices))
 
 	for _, dev := range devices {
 		return fmt.Sprintf("/dev/%s", dev.Name), nil
