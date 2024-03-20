@@ -40,6 +40,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -62,12 +63,10 @@ type MachineInventorySelectorReconciler struct {
 func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineInventorySelector{}).
-		// Watches(
-		// 	&source.Kind{
-		// 		Type: &elementalv1.MachineInventory{},
-		// 	},
-		// 	handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
-		// ).
+		Watches(
+			&elementalv1.MachineInventory{},
+			handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
+		).
 		WithEventFilter(filterSelectorUpdateEvents()).
 		Complete(r)
 }
@@ -611,7 +610,7 @@ func filterSelectorUpdateEvents() predicate.Funcs {
 
 // MachineInventoryToSelector is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
 // for MachineInventoryToSelector that might adopt a MachineInventory.
-func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client.Object) []reconcile.Request {
+func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(ctx context.Context, o client.Object) []ctrl.Request {
 	result := []reconcile.Request{}
 
 	mInventory, ok := o.(*elementalv1.MachineInventory)
@@ -620,7 +619,6 @@ func (r *MachineInventorySelectorReconciler) MachineInventoryToSelector(o client
 	}
 
 	// This won't log unless the global logger is set
-	ctx := context.Background()
 	logger := ctrl.LoggerFrom(ctx, "MachineInventory", klog.KObj(mInventory))
 
 	// If machine inventory is already owned reconcile its owner
