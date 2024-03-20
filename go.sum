@@ -731,8 +731,6 @@ github.com/rancher-sandbox/go-tpm v0.0.0-20230111102523-ee25b94d1912 h1:XcxZmGLO
 github.com/rancher-sandbox/go-tpm v0.0.0-20230111102523-ee25b94d1912/go.mod h1:knpgv9J5TouY2g4C3AqhDn7x8kCcyIUUjFFxgPolJys=
 github.com/rancher/aks-operator v1.3.0-rc5 h1:4yiTDMmPVZbp+Uy8WQprwElJ6R8yKA0aZema5VDMQo4=
 github.com/rancher/aks-operator v1.3.0-rc5/go.mod h1:ZWFl+bqxOXOJhVsSZybXwt3wxEEtPM/ujQjrtQZaRiQ=
-github.com/rancher/client-go v1.28.6-rancher1 h1:nSoGKs12BuPviZtzemO7wTX8jxABaLqfYKFLRBV8MI0=
-github.com/rancher/client-go v1.28.6-rancher1/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
 github.com/rancher/eks-operator v1.4.0-rc5 h1:He12OY6v++rI+jzfeNLWtLjGdAGt8WTMH1nfrAmegmo=
 github.com/rancher/eks-operator v1.4.0-rc5/go.mod h1:JcgTuV9BVxAQO9pJrWFTmj8ypgGFIrgeJvhxAoVWr2U=
 github.com/rancher/fleet/pkg/apis v0.10.0-rc.4 h1:vh6APynj/DvmTrZYIWWvdi+O2uz2yTr7w0amrseDWX8=
@@ -1537,6 +1535,8 @@ k8s.io/apimachinery v0.29.2 h1:EWGpfJ856oj11C52NRCHuU7rFDwxev48z+6DSlGNsV8=
 k8s.io/apimachinery v0.29.2/go.mod h1:6HVkd1FwxIagpYrHSwJlQqZI3G9LfYWRPAkUvLnXTKU=
 k8s.io/apiserver v0.29.0 h1:Y1xEMjJkP+BIi0GSEv1BBrf1jLU9UPfAnnGGbbDdp7o=
 k8s.io/apiserver v0.29.0/go.mod h1:31n78PsRKPmfpee7/l9NYEv67u6hOL6AfcE761HapDM=
+k8s.io/client-go v0.28.6 h1:Gge6ziyIdafRchfoBKcpaARuz7jfrK1R1azuwORIsQI=
+k8s.io/client-go v0.28.6/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
 k8s.io/component-base v0.29.0 h1:T7rjd5wvLnPBV1vC4zWd/iWRbV8Mdxs+nGaoaFzGw3s=
 k8s.io/component-base v0.29.0/go.mod h1:sADonFTQ9Zc9yFLghpDpmNXEdHyQmFIGbiuZbqAXQ1M=
 k8s.io/klog v1.0.0 h1:Pt+yjF5aB1xDSVbau4VsWe+dQNzA0qv1LlXdC2dF6Q8=

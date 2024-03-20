@@ -270,11 +270,6 @@ func (c *threadSafeMap) Replace(items map[string]interface{}, resourceVersion st
 	c.items = items
 
 	// rebuild any index
-	c.rebuildIndices()
-}
-
-// rebuildIndices rebuilds all indices for the current set c.items. Assumes that c.lock is held by caller
-func (c *threadSafeMap) rebuildIndices() {
 	c.index.reset()
 	for key, item := range c.items {
 		c.index.updateIndices(nil, item, key)
@@ -344,16 +339,11 @@ func (c *threadSafeMap) AddIndexers(newIndexers Indexers) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	err := c.index.addIndexers(newIndexers)
-	if err != nil {
-		return err
-	}
-
 	if len(c.items) > 0 {
-		c.rebuildIndices()
+		return fmt.Errorf("cannot add indexers to running index")
 	}
 
-	return nil
+	return c.index.addIndexers(newIndexers)
 }
 
 func (c *threadSafeMap) Resync() error {

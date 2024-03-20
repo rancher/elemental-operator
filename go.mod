@@ -4,7 +4,7 @@ go 1.22.0
 
 replace (
 	k8s.io/api => k8s.io/api v0.28.6
-	k8s.io/client-go => github.com/rancher/client-go v1.28.6-rancher1
+	k8s.io/client-go => k8s.io/client-go v0.28.6
 )
 
 require (

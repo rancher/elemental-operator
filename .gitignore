@@ -1,6 +1,9 @@
-build/
-coverage.out
-.idea/*
-_artifacts/
-tools/
-.vscode/
+/build/
+/coverage.out
+/.idea/*
+/_artifacts/
+/tools/
+/.vscode/
+
+# Always exclude vendor
+!/vendor/**
