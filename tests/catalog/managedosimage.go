@@ -18,11 +18,12 @@ package catalog
 
 import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewManagedOSImage(namespace string, name string, targets []elementalv1.BundleTarget, mosImage string, mosVersionName string) *elementalv1.ManagedOSImage {
+func NewManagedOSImage(namespace string, name string, targets []fleetv1.BundleTarget, mosImage string, mosVersionName string) *elementalv1.ManagedOSImage {
 	cordon := false
 
 	return &elementalv1.ManagedOSImage{

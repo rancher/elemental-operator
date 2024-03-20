@@ -29,6 +29,7 @@ import (
 	"github.com/onsi/gomega/types"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 
 	"github.com/rancher/elemental-operator/tests/catalog"
@@ -166,7 +167,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			ui := catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
-				[]elementalv1.BundleTarget{},
+				[]fleetv1.BundleTarget{},
 				"",
 				osVersion,
 			)
@@ -244,7 +245,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
-				[]elementalv1.BundleTarget{},
+				[]fleetv1.BundleTarget{},
 				"",
 				"v1.2.2-rt",
 			))
@@ -285,7 +286,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			err := k.ApplyJSON("", osImage, catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
-				[]elementalv1.BundleTarget{},
+				[]fleetv1.BundleTarget{},
 				"",
 				"v1.2.2-rt",
 			))

@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal"
 	"github.com/google/go-tpm-tools/internal/test"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
@@ -53,7 +53,7 @@ func TestReadPCRs(t *testing.T) {
 	}{
 		{"SHA1", tpm2.AlgSHA1},
 		{"SHA256", tpm2.AlgSHA256},
-		{"SHA384", tpm2.AlgSHA512},
+		{"SHA384", tpm2.AlgSHA384},
 	}
 
 	for _, c := range cases {

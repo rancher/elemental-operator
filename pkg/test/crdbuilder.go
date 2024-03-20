@@ -24,7 +24,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -78,15 +78,15 @@ func generateCRD(gvk schema.GroupVersionKind, scope apiextensionsv1.ResourceScop
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"spec": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.Bool(true),
+									XPreserveUnknownFields: ptr.To(true),
 								},
 								"value": {
 									Type:                   "string",
-									XPreserveUnknownFields: pointer.Bool(true),
+									XPreserveUnknownFields: ptr.To(true),
 								},
 								"status": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.Bool(true),
+									XPreserveUnknownFields: ptr.To(true),
 								},
 							},
 						},

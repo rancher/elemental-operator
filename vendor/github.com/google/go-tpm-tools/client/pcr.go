@@ -7,7 +7,7 @@ import (
 	"math"
 
 	pb "github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 // NumPCRs is set to the spec minimum of 24, as that's all go-tpm supports.
@@ -16,7 +16,7 @@ const NumPCRs = 24
 // We hard-code SHA256 as the policy session hash algorithms. Note that this
 // differs from the PCR hash algorithm (which selects the bank of PCRs to use)
 // and the Public area Name algorithm. We also chose this for compatibility with
-// github.com/google/go-tpm/tpm2, as it hardcodes the nameAlg as SHA256 in
+// github.com/google/go-tpm/legacy/tpm2, as it hardcodes the nameAlg as SHA256 in
 // several places. Two constants are used to avoid repeated conversions.
 const (
 	SessionHashAlg    = crypto.SHA256
@@ -33,8 +33,8 @@ func min(a, b int) int {
 	return b
 }
 
-// Get a list of selections corresponding to the TPM's implemented PCRs
-func implementedPCRs(rw io.ReadWriter) ([]tpm2.PCRSelection, error) {
+// allocatedPCRs returns a list of selections corresponding to the TPM's implemented PCRs.
+func allocatedPCRs(rw io.ReadWriter) ([]tpm2.PCRSelection, error) {
 	caps, moreData, err := tpm2.GetCapability(rw, tpm2.CapabilityPCRs, math.MaxUint32, 0)
 	if err != nil {
 		return nil, fmt.Errorf("listing implemented PCR banks: %w", err)
@@ -42,13 +42,17 @@ func implementedPCRs(rw io.ReadWriter) ([]tpm2.PCRSelection, error) {
 	if moreData {
 		return nil, fmt.Errorf("extra data from GetCapability")
 	}
-	sels := make([]tpm2.PCRSelection, len(caps))
-	for i, cap := range caps {
+	var sels []tpm2.PCRSelection
+	for _, cap := range caps {
 		sel, ok := cap.(tpm2.PCRSelection)
 		if !ok {
 			return nil, fmt.Errorf("unexpected data from GetCapability")
 		}
-		sels[i] = sel
+		// skip empty (unallocated) PCR selections
+		if len(sel.PCRs) == 0 {
+			continue
+		}
+		sels = append(sels, sel)
 	}
 	return sels, nil
 }
@@ -83,7 +87,7 @@ func ReadPCRs(rw io.ReadWriter, sel tpm2.PCRSelection) (*pb.PCRs, error) {
 
 // ReadAllPCRs fetches all the PCR values from all implemented PCR banks.
 func ReadAllPCRs(rw io.ReadWriter) ([]*pb.PCRs, error) {
-	sels, err := implementedPCRs(rw)
+	sels, err := allocatedPCRs(rw)
 	if err != nil {
 		return nil, err
 	}

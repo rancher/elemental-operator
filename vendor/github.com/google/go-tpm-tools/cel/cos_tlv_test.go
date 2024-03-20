@@ -2,7 +2,6 @@ package cel
 
 import (
 	"bytes"
-	"crypto"
 	"strings"
 	"testing"
 
@@ -16,7 +15,6 @@ func TestCosEventlog(t *testing.T) {
 	tpm := test.GetTPM(t)
 	defer client.CheckedClose(t, tpm)
 
-	hashAlgoList := []crypto.Hash{crypto.SHA256, crypto.SHA1, crypto.SHA512}
 	cel := &CEL{}
 
 	testEvents := []struct {
@@ -29,16 +27,22 @@ func TestCosEventlog(t *testing.T) {
 		{RestartPolicyType, test.DebugPCR, []byte(pb.RestartPolicy_Never.String())},
 		{ImageIDType, test.DebugPCR, []byte("sha256:5DF4A1AC347DCF8CF5E9D0ABC04B04DB847D1B88D3B1CC1006F0ACB68E5A1F4B")},
 		{EnvVarType, test.DebugPCR, []byte("foo=bar")},
-		{EnvVarType, test.DebugPCR, []byte("bar=baz")},
+		{EnvVarType, test.DebugPCR, []byte("override-env-1=foo")},
 		{EnvVarType, test.DebugPCR, []byte("baz=foo=bar")},
 		{EnvVarType, test.DebugPCR, []byte("empty=")},
+		{EnvVarType, test.DebugPCR, []byte("override-env-2=foo")},
+		{OverrideEnvType, test.DebugPCR, []byte("override-env-1=foo")},
+		{OverrideEnvType, test.DebugPCR, []byte("override-env-2=foo")},
 		{ArgType, test.DebugPCR, []byte("--x")},
-		{ArgType, test.DebugPCR, []byte("--y")},
+		{ArgType, test.DebugPCR, []byte("--override-arg-1")},
+		{ArgType, test.DebugPCR, []byte("--override-arg-2")},
+		{OverrideArgType, test.DebugPCR, []byte("--override-arg1")},
+		{OverrideArgType, test.DebugPCR, []byte("--override-arg2")},
 	}
 
 	for _, testEvent := range testEvents {
 		cos := CosTlv{testEvent.cosNestedEventType, testEvent.eventPayload}
-		if err := cel.AppendEvent(tpm, testEvent.pcr, hashAlgoList, cos); err != nil {
+		if err := cel.AppendEvent(tpm, testEvent.pcr, measuredHashes, cos); err != nil {
 			t.Fatal(err.Error())
 		}
 	}
@@ -52,8 +56,8 @@ func TestCosEventlog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(decodedcel.Records) != 10 {
-		t.Errorf("should have ten records")
+	if len(decodedcel.Records) != len(testEvents) {
+		t.Errorf("should have %d records, but got %d", len(testEvents), len(decodedcel.Records))
 	}
 
 	for i, testEvent := range testEvents {

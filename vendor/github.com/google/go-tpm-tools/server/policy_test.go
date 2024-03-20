@@ -65,7 +65,7 @@ func TestEvaluatePolicy(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			machineState, err := parsePCClientEventLog(test.log.RawLog, test.log.Banks[0])
+			machineState, err := parsePCClientEventLog(test.log.RawLog, test.log.Banks[0], UnsupportedLoader)
 			if err != nil {
 				t.Fatalf("failed to get machine state: %v", err)
 			}
@@ -83,10 +83,10 @@ func TestEvaluatePolicySCRTM(t *testing.T) {
 				0x4e, 0xf4, 0xbf, 0x17, 0xb8, 0x3a}},
 		},
 	}
-	machineState, err := parsePCClientEventLog(ArchLinuxWorkstation.RawLog, ArchLinuxWorkstation.Banks[0])
+	machineState, err := parsePCClientEventLog(ArchLinuxWorkstation.RawLog, ArchLinuxWorkstation.Banks[0], UnsupportedLoader)
 	if err != nil {
 		gErr := err.(*GroupedError)
-		if !gErr.containsOnlySubstring(archLinuxBadSecureBoot) {
+		if !gErr.containsKnownSubstrings(archLinuxKnownParsingFailures) {
 			t.Fatalf("failed to get machine state: %v", err)
 		}
 	}
@@ -125,23 +125,23 @@ func TestEvaluatePolicyFailure(t *testing.T) {
 		policy *pb.Policy
 		// This field handles known issues with event log parsing or bad event
 		// logs.
-		// An empty string will not attempt to pattern match the error result.
-		errorSubstr string
+		// Set to nil when the event log has no known issues.
+		errorSubstrs []string
 	}{
-		{"Debian10-SHA1", Debian10GCE, &badGcePolicyVersion, ""},
-		{"Debian10-SHA1", Debian10GCE, &badGcePolicySEV, ""},
+		{"Debian10-SHA1", Debian10GCE, &badGcePolicyVersion, nil},
+		{"Debian10-SHA1", Debian10GCE, &badGcePolicySEV, nil},
 		{"Ubuntu1804AmdSev-CryptoAgile", UbuntuAmdSevGCE, &badGcePolicySEVES,
-			""},
+			nil},
 		{"ArchLinuxWorkstation-CryptoAgile", ArchLinuxWorkstation,
-			&badPhysicalPolicy, archLinuxBadSecureBoot},
+			&badPhysicalPolicy, archLinuxKnownParsingFailures},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			machineState, err := parsePCClientEventLog(test.log.RawLog, test.log.Banks[0])
+			machineState, err := parsePCClientEventLog(test.log.RawLog, test.log.Banks[0], UnsupportedLoader)
 			if err != nil {
 				gErr := err.(*GroupedError)
-				if test.errorSubstr != "" && !gErr.containsOnlySubstring(test.errorSubstr) {
+				if len(test.errorSubstrs) == 0 || !gErr.containsKnownSubstrings(test.errorSubstrs) {
 					t.Fatalf("failed to get machine state: %v", err)
 				}
 			}

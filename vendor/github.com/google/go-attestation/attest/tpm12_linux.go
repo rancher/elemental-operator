@@ -19,11 +19,11 @@ package attest
 
 import (
 	"crypto"
+	"crypto/x509"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/go-tspi/attestation"
 	"github.com/google/go-tspi/tspi"
 	"github.com/google/go-tspi/tspiconst"
@@ -94,7 +94,7 @@ func readEKCertFromNVRAM12(ctx *tspi.Context) (*x509.Certificate, error) {
 	return ParseEKCertificate(ekCert)
 }
 
-func (t *trousersTPM) eks() ([]EK, error) {
+func (t *trousersTPM) ekCertificates() ([]EK, error) {
 	cert, err := readEKCertFromNVRAM12(t.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("readEKCertFromNVRAM failed: %v", err)
@@ -104,11 +104,19 @@ func (t *trousersTPM) eks() ([]EK, error) {
 	}, nil
 }
 
+func (t *trousersTPM) eks() ([]EK, error) {
+	return t.ekCertificates()
+}
+
 func (t *trousersTPM) newKey(*AK, *KeyConfig) (*Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 func (t *trousersTPM) loadKey(opaqueBlob []byte) (*Key, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (t *trousersTPM) loadKeyWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -130,6 +138,10 @@ func (t *trousersTPM) loadAK(opaqueBlob []byte) (*AK, error) {
 	}
 
 	return &AK{ak: newTrousersKey12(sKey.Blob, sKey.Public)}, nil
+}
+
+func (t *trousersTPM) loadAKWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*AK, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 // allPCRs12 returns a map of all the PCR values on the TPM
@@ -169,5 +181,5 @@ func (t *trousersTPM) pcrs(alg HashAlg) ([]PCR, error) {
 }
 
 func (t *trousersTPM) measurementLog() ([]byte, error) {
-	return ioutil.ReadFile("/sys/kernel/security/tpm0/binary_bios_measurements")
+	return os.ReadFile("/sys/kernel/security/tpm0/binary_bios_measurements")
 }

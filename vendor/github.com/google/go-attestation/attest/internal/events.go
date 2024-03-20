@@ -2,14 +2,12 @@ package internal
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"unicode/utf16"
-
-	"github.com/google/certificate-transparency-go/asn1"
-	"github.com/google/certificate-transparency-go/x509"
 )
 
 const (
@@ -43,12 +41,14 @@ var (
 	shimLockGUID = efiGUID{0x605dab50, 0xe046, 0x4300, [8]byte{0xab, 0xb6, 0x3d, 0xd8, 0x10, 0xdd, 0x8b, 0x23}}
 	// "SbatLevel" encoded as UCS-2.
 	shimSbatVarName = []uint16{0x53, 0x62, 0x61, 0x74, 0x4c, 0x65, 0x76, 0x65, 0x6c}
+	// "MokListTrusted" encoded as UCS-2.
+	shimMokListTrustedVarName = []uint16{0x4d, 0x6f, 0x6b, 0x4c, 0x69, 0x73, 0x74, 0x54, 0x72, 0x75, 0x73, 0x74, 0x65, 0x64}
 )
 
 // EventType describes the type of event signalled in the event log.
 type EventType uint32
 
-// 	BIOS Events (TCG PC Client Specific Implementation Specification for Conventional BIOS 1.21)
+// BIOS Events (TCG PC Client Specific Implementation Specification for Conventional BIOS 1.21)
 const (
 	PrebootCert          EventType = 0x00000000
 	PostCode             EventType = 0x00000001
@@ -188,7 +188,7 @@ func (e EventType) String() string {
 func UntrustedParseEventType(et uint32) (EventType, error) {
 	// "The value associated with a UEFI specific platform event type MUST be in
 	// the range between 0x80000000 and 0x800000FF, inclusive."
-	if (et < 0x80000000 && et > 0x800000FF) || (et < 0x0 && et > 0x12) {
+	if (et < 0x80000000 && et > 0x800000FF) || (et <= 0x0 && et > 0x12) {
 		return EventType(0), fmt.Errorf("event type not between [0x0, 0x12] or [0x80000000, 0x800000FF]: got %#x", et)
 	}
 	if _, ok := eventTypeNames[EventType(et)]; !ok {
@@ -276,10 +276,13 @@ type UEFIVariableAuthority struct {
 //
 // https://uefi.org/sites/default/files/resources/UEFI_Spec_2_8_final.pdf#page=1789
 func ParseUEFIVariableAuthority(v UEFIVariableData) (UEFIVariableAuthority, error) {
+	if v.Header.VariableName == shimLockGUID && (
 	// Skip parsing new SBAT section logged by shim.
 	// See https://github.com/rhboot/shim/blob/main/SBAT.md for more.
-	if v.Header.VariableName == shimLockGUID && unicodeNameEquals(v, shimSbatVarName) {
-		//https://github.com/rhboot/shim/blob/20e4d9486fcae54ee44d2323ae342ffe68c920e6/include/sbat.h#L9-L12
+	unicodeNameEquals(v, shimSbatVarName) || //https://github.com/rhboot/shim/blob/20e4d9486fcae54ee44d2323ae342ffe68c920e6/include/sbat.h#L9-L12
+		// Skip parsing new MokListTrusted section logged by shim.
+		// See https://github.com/rhboot/shim/blob/main/MokVars.txt for more.
+		unicodeNameEquals(v, shimMokListTrustedVarName)) { //https://github.com/rhboot/shim/blob/4e513405b4f1641710115780d19dcec130c5208f/mok.c#L169-L182
 		return UEFIVariableAuthority{}, nil
 	}
 	certs, err := parseEfiSignature(v.VariableData)
@@ -444,13 +447,11 @@ func parseEfiSignature(b []byte) ([]x509.Certificate, error) {
 	} else {
 		// A bug in shim may cause an event to be missing the SignatureOwner GUID.
 		// We handle this, but signal back to the caller using ErrSigMissingGUID.
-		if _, isStructuralErr := err.(asn1.StructuralError); isStructuralErr {
-			var err2 error
-			cert, err2 = x509.ParseCertificate(b)
-			if err2 == nil {
-				certificates = append(certificates, *cert)
-				err = ErrSigMissingGUID
-			}
+		var err2 error
+		cert, err2 = x509.ParseCertificate(b)
+		if err2 == nil {
+			certificates = append(certificates, *cert)
+			err = ErrSigMissingGUID
 		}
 	}
 	return certificates, err

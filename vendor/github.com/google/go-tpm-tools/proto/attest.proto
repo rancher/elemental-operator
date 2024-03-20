@@ -1,9 +1,12 @@
 syntax = "proto3";
 
 package attest;
-option go_package = "github.com/google/go-tpm-tools/proto/attest";
 
+import "proto/sevsnp.proto";
+import "proto/tdx.proto";
 import "tpm.proto";
+
+option go_package = "github.com/google/go-tpm-tools/proto/attest";
 
 // Information uniquely identifying a GCE instance. Can be used to create an
 // instance URL, which can then be used with GCE APIs. Formatted like:
@@ -31,6 +34,16 @@ message Attestation {
   // Attestation Key (AK) Certificate, encoded as ASN.1 DER.
   // Optional.
   bytes ak_cert = 6;
+  // Intermediate Certificates for verifying the AK Certificate, encoded as
+  // ASN.1 DER. Optional.
+  repeated bytes intermediate_certs = 7;
+  // Trusted execution environment attestation is a secondary platform
+  // attestation that the machine is running within a particular confidential
+  // environment.
+  oneof tee_attestation {
+    sevsnp.Attestation sev_snp_attestation = 8;
+    tdx.QuoteV4 tdx_attestation = 9;
+  }
 }
 
 // Type of hardware technology used to protect this instance
@@ -38,6 +51,8 @@ enum GCEConfidentialTechnology {
   NONE = 0;
   AMD_SEV = 1;
   AMD_SEV_ES = 2;
+  INTEL_TDX = 3;
+  AMD_SEV_SNP = 4;
 }
 
 // The platform/firmware state for this instance
@@ -52,6 +67,29 @@ message PlatformState {
   GCEConfidentialTechnology technology = 3;
   // Only set for GCE instances
   GCEInstanceInfo instance_info = 4;
+}
+
+message GrubFile {
+  // The digest of the file (pulled from the raw event digest).
+  bytes digest = 1;
+  // The event data. This is not measured, so it is untrusted.
+  bytes untrusted_filename = 2;
+}
+
+message GrubState {
+  // All GRUB-read and measured files, including grub.cfg.
+  repeated GrubFile files = 1;
+  // A list of executed GRUB commands and command lines passed to the kernel
+  // and kernel modules.
+  repeated string commands = 2;
+}
+
+// The state of the Linux kernel.
+// At the moment, parsing LinuxKernelState relies on parsing the GrubState.
+// To do so, use ParseOpts{Loader: GRUB} when calling ParseMachineState.
+message LinuxKernelState {
+  // The kernel command line.
+  string command_line = 1;
 }
 
 // A parsed event from the TCG event log
@@ -83,9 +121,8 @@ enum WellKnownCertificate {
 }
 
 message Certificate {
-
   // The representation of the certificate. If the certificate matches a
-  // well-known certificate above, representation should contain the value in 
+  // well-known certificate above, representation should contain the value in
   // the enum. Otherwise, it will contain the raw DER.
   oneof representation {
     // DER representation of the certificate.
@@ -137,6 +174,10 @@ message ContainerState {
   string image_id = 4;
   repeated string args = 5;
   map<string, string> env_vars = 6;
+  // Record operator input Env Vars and Args, should be subsets of the above
+  // Env Vars and Args.
+  repeated string overridden_args = 7;
+  map<string, string> overridden_env_vars = 8;
 }
 
 message SemanticVersion {
@@ -149,6 +190,21 @@ message AttestedCosState {
   ContainerState container = 1;
   SemanticVersion cos_version = 2;
   SemanticVersion launcher_version = 3;
+}
+
+message EfiApp {
+  // The PE/COFF digest of the EFI application (pulled from the raw event digest).
+  bytes digest = 1;
+}
+
+// The verified state of EFI Applications. Policy usage on this machine state
+// should check the entire set of EFI App digests matches, not a subset.
+message EfiState {
+  // UEFI's OS Loader code is required to measure attempts to load and execute
+  // UEFI applications.
+  // UEFI applications are typically bootloaders such as shim and GRUB.
+  // These run and are measured using the UEFI LoadImage() service.
+  repeated EfiApp apps = 1;
 }
 
 // The verified state of a booted machine, obtained from an Attestation
@@ -165,11 +221,13 @@ message MachineState {
   //   - the hash algorithm used to calculate event digests
   tpm.HashAlgo hash = 4;
 
-  // GrubState grub = 5;
+  GrubState grub = 5;
 
-  // LinuxKernelState linux_kernel = 6;
+  LinuxKernelState linux_kernel = 6;
 
   AttestedCosState cos = 7;
+
+  EfiState efi = 8;
 }
 
 // A policy dictating which values of PlatformState to allow

@@ -19,13 +19,12 @@ package attest
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"syscall"
 	"unsafe"
-
-	"github.com/google/certificate-transparency-go/x509"
 
 	"github.com/google/go-tpm/tpmutil"
 	tpmtbs "github.com/google/go-tpm/tpmutil/tbs"
@@ -370,8 +369,8 @@ func (h *winPCP) Close() error {
 	return closeNCryptObject(h.hProv)
 }
 
-// DeleteKey permanently removes the key with the given handle
-//  from the system, and frees its handle.
+// DeleteKey permanently removes the key with the given handle from the system,
+// and frees its handle.
 func (h *winPCP) DeleteKey(kh uintptr) error {
 	r, _, msg := nCryptDeleteKey.Call(kh, 0)
 	if r != 0 {

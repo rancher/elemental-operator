@@ -1,7 +1,8 @@
+launcher/launcher/launcher
 *.test
 *.test.exe
+cmd/gotpm/gotpm
 gotpm
-!gotpm/
 gotpm.exe
 files/pkg
 files/src
@@ -9,4 +10,4 @@ files/go-tpm-tools
 *.pkg.tar.xz
 .vscode*
 *.code-workspace
-
+main

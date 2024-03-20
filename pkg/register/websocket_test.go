@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"gotest.tools/assert"
+	"gotest.tools/v3/assert"
 )
 
 var upgrader = websocket.Upgrader{}

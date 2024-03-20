@@ -17,12 +17,12 @@ limitations under the License.
 package tpm
 
 import (
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/go-attestation/attest"
 
 	gotpm "github.com/rancher-sandbox/go-tpm"

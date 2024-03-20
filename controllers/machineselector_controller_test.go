@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -107,7 +107,7 @@ var _ = Describe("reconcile machine inventory selector", func() {
 			},
 			Spec: clusterv1.MachineSpec{
 				Bootstrap: clusterv1.Bootstrap{
-					DataSecretName: pointer.String(boostrapSecret.Name),
+					DataSecretName: ptr.To(boostrapSecret.Name),
 				},
 			},
 		}
@@ -237,7 +237,7 @@ var _ = Describe("findAndAdoptInventory", func() {
 		Expect(mInventory.OwnerReferences[0].Kind).To(Equal("MachineInventorySelector"))
 		Expect(mInventory.OwnerReferences[0].Name).To(Equal(miSelector.Name))
 		Expect(mInventory.OwnerReferences[0].UID).To(Equal(miSelector.UID))
-		Expect(mInventory.OwnerReferences[0].Controller).To(Equal(pointer.Bool(true)))
+		Expect(mInventory.OwnerReferences[0].Controller).To(Equal(ptr.To(true)))
 	})
 
 	It("return early if no matching inventories found", func() {
@@ -489,7 +489,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			},
 			Spec: clusterv1.MachineSpec{
 				Bootstrap: clusterv1.Bootstrap{
-					DataSecretName: pointer.String(boostrapSecret.Name),
+					DataSecretName: ptr.To(boostrapSecret.Name),
 				},
 			},
 		}
@@ -696,7 +696,7 @@ var _ = Describe("newBootstrapPlan", func() {
 	It("should return an error if failed to get bootstrap secret", func() {
 		machine.Spec = clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
-				DataSecretName: pointer.String(boostrapSecret.Name),
+				DataSecretName: ptr.To(boostrapSecret.Name),
 			},
 		}
 		Expect(r.Create(ctx, machine)).To(Succeed())
@@ -709,7 +709,7 @@ var _ = Describe("newBootstrapPlan", func() {
 	It("should succesfully return new boostrap plan", func() {
 		machine.Spec = clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
-				DataSecretName: pointer.String(boostrapSecret.Name),
+				DataSecretName: ptr.To(boostrapSecret.Name),
 			},
 		}
 		Expect(r.Create(ctx, machine)).To(Succeed())

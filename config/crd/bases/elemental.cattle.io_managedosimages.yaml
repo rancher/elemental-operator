@@ -40,32 +40,56 @@ spec:
               cloudConfig:
                 x-kubernetes-preserve-unknown-fields: true
               clusterRolloutStrategy:
+                description: RolloverStrategy controls the rollout of the bundle across
+                  clusters.
                 properties:
                   autoPartitionSize:
                     anyOf:
                     - type: integer
                     - type: string
+                    description: |-
+                      A number or percentage of how to automatically partition clusters if no
+                      specific partitioning strategy is configured.
+                      default: 25%
+                    nullable: true
                     x-kubernetes-int-or-string: true
                   maxUnavailable:
                     anyOf:
                     - type: integer
                     - type: string
+                    description: |-
+                      A number or percentage of clusters that can be unavailable during an update
+                      of a bundle. This follows the same basic approach as a deployment rollout
+                      strategy. Once the number of clusters meets unavailable state update will be
+                      paused. Default value is 100% which doesn't take effect on update.
+                      default: 100%
+                    nullable: true
                     x-kubernetes-int-or-string: true
                   maxUnavailablePartitions:
                     anyOf:
                     - type: integer
                     - type: string
+                    description: |-
+                      A number or percentage of cluster partitions that can be unavailable during
+                      an update of a bundle.
+                      default: 0
+                    nullable: true
                     x-kubernetes-int-or-string: true
                   partitions:
+                    description: |-
+                      A list of definitions of partitions.  If any target clusters do not match
+                      the configuration they are added to partitions at the end following the
+                      autoPartitionSize.
                     items:
+                      description: Partition defines a separate rollout strategy for
+                        a set of clusters.
                       properties:
                         clusterGroup:
+                          description: A cluster group name to include in this partition
                           type: string
                         clusterGroupSelector:
-                          description: |-
-                            A label selector is a label query over a set of resources. The result of matchLabels and
-                            matchExpressions are ANDed. An empty label selector matches all objects. A null
-                            label selector matches no objects.
+                          description: Selector matching cluster group labels to include
+                            in this partition
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
@@ -109,12 +133,12 @@ spec:
                           type: object
                           x-kubernetes-map-type: atomic
                         clusterName:
+                          description: ClusterName is the name of a cluster to include
+                            in this partition
                           type: string
                         clusterSelector:
-                          description: |-
-                            A label selector is a label query over a set of resources. The result of matchLabels and
-                            matchExpressions are ANDed. An empty label selector matches all objects. A null
-                            label selector matches no objects.
+                          description: Selector matching cluster labels to include
+                            in this partition
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
@@ -161,22 +185,34 @@ spec:
                           anyOf:
                           - type: integer
                           - type: string
+                          description: |-
+                            A number or percentage of clusters that can be unavailable in this
+                            partition before this partition is treated as done.
+                            default: 10%
                           x-kubernetes-int-or-string: true
                         name:
+                          description: A user-friendly name given to the partition
+                            used for Display (optional).
                           type: string
                       type: object
+                    nullable: true
                     type: array
                 type: object
               clusterTargets:
                 items:
+                  description: |-
+                    BundleTarget declares clusters to deploy to. Fleet will merge the
+                    BundleDeploymentOptions from customizations into this struct.
                   properties:
                     clusterGroup:
+                      description: ClusterGroup to match a specific cluster group
+                        by name.
+                      nullable: true
                       type: string
                     clusterGroupSelector:
-                      description: |-
-                        A label selector is a label query over a set of resources. The result of matchLabels and
-                        matchExpressions are ANDed. An empty label selector matches all objects. A null
-                        label selector matches no objects.
+                      description: ClusterGroupSelector is a selector to match cluster
+                        groups.
+                      nullable: true
                       properties:
                         matchExpressions:
                           description: matchExpressions is a list of label selector
@@ -220,12 +256,19 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     clusterName:
+                      description: |-
+                        ClusterName to match a specific cluster by name that will be
+                        selected
+                      nullable: true
                       type: string
                     clusterSelector:
                       description: |-
-                        A label selector is a label query over a set of resources. The result of matchLabels and
-                        matchExpressions are ANDed. An empty label selector matches all objects. A null
-                        label selector matches no objects.
+                        ClusterSelector is a selector to match clusters. The structure is
+                        the standard metav1.LabelSelector format. If clusterGroupSelector or
+                        clusterGroup is specified, clusterSelector will be used only to
+                        further refine the selection after clusterGroupSelector and
+                        clusterGroup is evaluated.
+                      nullable: true
                       properties:
                         matchExpressions:
                           description: matchExpressions is a list of label selector
@@ -268,65 +311,183 @@ spec:
                           type: object
                       type: object
                       x-kubernetes-map-type: atomic
+                    correctDrift:
+                      description: CorrectDrift specifies how drift correction should
+                        work.
+                      properties:
+                        enabled:
+                          description: Enabled correct drift if true.
+                          type: boolean
+                        force:
+                          description: Force helm rollback with --force option will
+                            be used if true. This will try to recreate all resources
+                            in the release.
+                          type: boolean
+                        keepFailHistory:
+                          description: KeepFailHistory keeps track of failed rollbacks
+                            in the helm history.
+                          type: boolean
+                      type: object
                     defaultNamespace:
+                      description: |-
+                        DefaultNamespace is the namespace to use for resources that do not
+                        specify a namespace. This field is not used to enforce or lock down
+                        the deployment to a specific namespace.
+                      nullable: true
                       type: string
+                    deleteCRDResources:
+                      description: DeleteCRDResources deletes CRDs. Warning! this
+                        will also delete all your Custom Resources.
+                      type: boolean
                     diff:
+                      description: Diff can be used to ignore the modified state of
+                        objects which are amended at runtime.
+                      nullable: true
                       properties:
                         comparePatches:
+                          description: ComparePatches match a resource and remove
+                            fields from the check for modifications.
                           items:
+                            description: ComparePatch matches a resource and removes
+                              fields from the check for modifications.
                             properties:
                               apiVersion:
+                                description: APIVersion is the apiVersion of the resource
+                                  to match.
+                                nullable: true
                                 type: string
                               jsonPointers:
+                                description: JSONPointers ignore diffs at a certain
+                                  JSON path.
                                 items:
                                   type: string
+                                nullable: true
                                 type: array
                               kind:
+                                description: Kind is the kind of the resource to match.
+                                nullable: true
                                 type: string
                               name:
+                                description: Name is the name of the resource to match.
+                                nullable: true
                                 type: string
                               namespace:
+                                description: Namespace is the namespace of the resource
+                                  to match.
+                                nullable: true
                                 type: string
                               operations:
+                                description: Operations remove a JSON path from the
+                                  resource.
                                 items:
+                                  description: Operation of a ComparePatch, usually
+                                    "remove".
                                   properties:
                                     op:
+                                      description: Op is usually "remove"
+                                      nullable: true
                                       type: string
                                     path:
+                                      description: Path is the JSON path to remove.
+                                      nullable: true
                                       type: string
                                     value:
+                                      description: Value is usually empty.
+                                      nullable: true
                                       type: string
                                   type: object
+                                nullable: true
                                 type: array
                             type: object
+                          nullable: true
                           type: array
                       type: object
+                    doNotDeploy:
+                      description: DoNotDeploy if set to true, will not deploy to
+                        this target.
+                      type: boolean
                     forceSyncGeneration:
+                      description: ForceSyncGeneration is used to force a redeployment
                       format: int64
                       type: integer
                     helm:
+                      description: Helm options for the deployment, like the chart
+                        name, repo and values.
+                      nullable: true
                       properties:
+                        atomic:
+                          description: Atomic sets the --atomic flag when Helm is
+                            performing an upgrade
+                          type: boolean
                         chart:
+                          description: |-
+                            Chart can refer to any go-getter URL or OCI registry based helm
+                            chart URL. The chart will be downloaded.
+                          nullable: true
                           type: string
+                        disableDNS:
+                          description: DisableDNS can be used to customize Helm's
+                            EnableDNS option, which Fleet sets to `true` by default.
+                          type: boolean
+                        disableDependencyUpdate:
+                          description: DisableDependencyUpdate allows skipping chart
+                            dependencies update
+                          type: boolean
+                        disablePreProcess:
+                          description: DisablePreProcess disables template processing
+                            in values
+                          type: boolean
                         force:
+                          description: Force allows to override immutable resources.
+                            This could be dangerous.
                           type: boolean
                         maxHistory:
+                          description: MaxHistory limits the maximum number of revisions
+                            saved per release by Helm.
                           type: integer
                         releaseName:
+                          description: |-
+                            ReleaseName sets a custom release name to deploy the chart as. If
+                            not specified a release name will be generated by combining the
+                            invoking GitRepo.name + GitRepo.path.
+                          maxLength: 53
+                          nullable: true
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                         repo:
+                          description: Repo is the name of the HTTPS helm repo to
+                            download the chart from.
+                          nullable: true
                           type: string
+                        skipSchemaValidation:
+                          description: SkipSchemaValidation allows skipping schema
+                            validation against the chart values
+                          type: boolean
                         takeOwnership:
+                          description: TakeOwnership makes helm skip the check for
+                            its own annotations
                           type: boolean
                         timeoutSeconds:
+                          description: TimeoutSeconds is the time to wait for Helm
+                            operations.
                           type: integer
                         values:
+                          description: |-
+                            Values passed to Helm. It is possible to specify the keys and values
+                            as go template strings.
+                          nullable: true
                           type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         valuesFiles:
+                          description: ValuesFiles is a list of files to load values
+                            from.
                           items:
                             type: string
+                          nullable: true
                           type: array
                         valuesFrom:
+                          description: ValuesFrom loads the values from configmaps
+                            and secrets.
                           items:
                             description: 'Define helm values that can come from configmap,
                               secret or external. Credit: https://github.com/fluxcd/helm-operator/blob/0cfea875b5d44bea995abe7324819432070dfbdc/pkg/apis/helm.fluxcd.io/v1/types_helmrelease.go#L439'
@@ -334,50 +495,129 @@ spec:
                               configMapKeyRef:
                                 description: The reference to a config map with release
                                   values.
+                                nullable: true
                                 properties:
                                   key:
+                                    nullable: true
                                     type: string
                                   name:
+                                    description: Name of a resource in the same namespace
+                                      as the referent.
+                                    nullable: true
                                     type: string
                                   namespace:
+                                    nullable: true
                                     type: string
-                                required:
-                                - name
                                 type: object
                               secretKeyRef:
                                 description: The reference to a secret with release
                                   values.
+                                nullable: true
                                 properties:
                                   key:
+                                    nullable: true
                                     type: string
                                   name:
+                                    description: Name of a resource in the same namespace
+                                      as the referent.
+                                    nullable: true
                                     type: string
                                   namespace:
+                                    nullable: true
                                     type: string
-                                required:
-                                - name
                                 type: object
                             type: object
+                          nullable: true
                           type: array
                         version:
+                          description: Version of the chart to download
+                          nullable: true
                           type: string
+                        waitForJobs:
+                          description: |-
+                            WaitForJobs if set and timeoutSeconds provided, will wait until all
+                            Jobs have been completed before marking the GitRepo as ready. It
+                            will wait for as long as timeoutSeconds
+                          type: boolean
                       type: object
+                    ignore:
+                      description: IgnoreOptions can be used to ignore fields when
+                        monitoring the bundle.
+                      properties:
+                        conditions:
+                          description: Conditions is a list of conditions to be ignored
+                            when monitoring the Bundle.
+                          items:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          nullable: true
+                          type: array
+                      type: object
+                    keepResources:
+                      description: KeepResources can be used to keep the deployed
+                        resources when removing the bundle
+                      type: boolean
                     kustomize:
+                      description: |-
+                        Kustomize options for the deployment, like the dir containing the
+                        kustomization.yaml file.
+                      nullable: true
                       properties:
                         dir:
+                          description: |-
+                            Dir points to a custom folder for kustomize resources. This folder must contain
+                            a kustomization.yaml file.
+                          nullable: true
                           type: string
                       type: object
                     name:
+                      description: |-
+                        Name of target. This value is largely for display and logging. If
+                        not specified a default name of the format "target000" will be used
                       type: string
                     namespace:
+                      description: |-
+                        TargetNamespace if present will assign all resource to this
+                        namespace and if any cluster scoped resource exists the deployment
+                        will fail.
+                      nullable: true
                       type: string
+                    namespaceAnnotations:
+                      additionalProperties:
+                        type: string
+                      description: NamespaceAnnotations are annotations that will
+                        be appended to the namespace created by Fleet.
+                      nullable: true
+                      type: object
+                    namespaceLabels:
+                      additionalProperties:
+                        type: string
+                      description: NamespaceLabels are labels that will be appended
+                        to the namespace created by Fleet.
+                      nullable: true
+                      type: object
                     serviceAccount:
+                      description: ServiceAccount which will be used to perform this
+                        deployment.
+                      nullable: true
                       type: string
                     yaml:
+                      description: |-
+                        YAML options, if using raw YAML these are names that map to
+                        overlays/{name} files that will be used to replace or patch a resource.
+                      nullable: true
                       properties:
                         overlays:
+                          description: |-
+                            Overlays is a list of names that maps to folders in "overlays/".
+                            If you wish to customize the file ./subdir/resource.yaml then a file
+                            ./overlays/myoverlay/subdir/resource.yaml will replace the base
+                            file.
+                            A file named ./overlays/myoverlay/subdir/resource_patch.yaml will patch the base file.
                           items:
                             type: string
+                          nullable: true
                           type: array
                       type: object
                   type: object
@@ -397,6 +637,8 @@ spec:
                   node/pod selectors.
                 nullable: true
                 properties:
+                  deleteEmptydirData:
+                    type: boolean
                   deleteLocalData:
                     type: boolean
                   disableEviction:
@@ -408,6 +650,53 @@ spec:
                     type: integer
                   ignoreDaemonSets:
                     type: boolean
+                  podSelector:
+                    description: |-
+                      A label selector is a label query over a set of resources. The result of matchLabels and
+                      matchExpressions are ANDed. An empty label selector matches all objects. A null
+                      label selector matches no objects.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
                   skipWaitForDeleteTimeout:
                     type: integer
                   timeout:
@@ -634,6 +923,187 @@ spec:
                     type: array
                   image:
                     type: string
+                  securityContext:
+                    description: |-
+                      SecurityContext holds security configuration that will be applied to a container.
+                      Some fields are present in both SecurityContext and PodSecurityContext.  When both
+                      are set, the values in SecurityContext take precedence.
+                    properties:
+                      allowPrivilegeEscalation:
+                        description: |-
+                          AllowPrivilegeEscalation controls whether a process can gain more
+                          privileges than its parent process. This bool directly controls if
+                          the no_new_privs flag will be set on the container process.
+                          AllowPrivilegeEscalation is true always when the container is:
+                          1) run as Privileged
+                          2) has CAP_SYS_ADMIN
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      capabilities:
+                        description: |-
+                          The capabilities to add/drop when running containers.
+                          Defaults to the default set of capabilities granted by the container runtime.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          add:
+                            description: Added capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                          drop:
+                            description: Removed capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                        type: object
+                      privileged:
+                        description: |-
+                          Run container in privileged mode.
+                          Processes in privileged containers are essentially equivalent to root on the host.
+                          Defaults to false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      procMount:
+                        description: |-
+                          procMount denotes the type of proc mount to use for the containers.
+                          The default is DefaultProcMount which uses the container runtime defaults for
+                          readonly paths and masked paths.
+                          This requires the ProcMountType feature flag to be enabled.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: string
+                      readOnlyRootFilesystem:
+                        description: |-
+                          Whether this container has a read-only root filesystem.
+                          Default is false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      runAsGroup:
+                        description: |-
+                          The GID to run the entrypoint of the container process.
+                          Uses runtime default if unset.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      runAsNonRoot:
+                        description: |-
+                          Indicates that the container must run as a non-root user.
+                          If true, the Kubelet will validate the image at runtime to ensure that it
+                          does not run as UID 0 (root) and fail to start the container if it does.
+                          If unset or false, no such validation will be performed.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                        type: boolean
+                      runAsUser:
+                        description: |-
+                          The UID to run the entrypoint of the container process.
+                          Defaults to user specified in image metadata if unspecified.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      seLinuxOptions:
+                        description: |-
+                          The SELinux context to be applied to the container.
+                          If unspecified, the container runtime will allocate a random SELinux context for each
+                          container.  May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          level:
+                            description: Level is SELinux level label that applies
+                              to the container.
+                            type: string
+                          role:
+                            description: Role is a SELinux role label that applies
+                              to the container.
+                            type: string
+                          type:
+                            description: Type is a SELinux type label that applies
+                              to the container.
+                            type: string
+                          user:
+                            description: User is a SELinux user label that applies
+                              to the container.
+                            type: string
+                        type: object
+                      seccompProfile:
+                        description: |-
+                          The seccomp options to use by this container. If seccomp options are
+                          provided at both the pod & container level, the container options
+                          override the pod options.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile defined in a file on the node should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must be a descending path, relative to the kubelet's configured seccomp profile location.
+                              Must be set if type is "Localhost". Must NOT be set for any other type.
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of seccomp profile will be applied.
+                              Valid options are:
+
+
+                              Localhost - a profile defined in a file on the node should be used.
+                              RuntimeDefault - the container runtime default profile should be used.
+                              Unconfined - no profile should be applied.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      windowsOptions:
+                        description: |-
+                          The Windows specific settings applied to all containers.
+                          If unspecified, the options from the PodSecurityContext will be used.
+                          If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is linux.
+                        properties:
+                          gmsaCredentialSpec:
+                            description: |-
+                              GMSACredentialSpec is where the GMSA admission webhook
+                              (https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the
+                              GMSA credential spec named by the GMSACredentialSpecName field.
+                            type: string
+                          gmsaCredentialSpecName:
+                            description: GMSACredentialSpecName is the name of the
+                              GMSA credential spec to use.
+                            type: string
+                          hostProcess:
+                            description: |-
+                              HostProcess determines if a container should be run as a 'Host Process' container.
+                              All of a Pod's containers must have the same effective HostProcess value
+                              (it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).
+                              In addition, if HostProcess is true then HostNetwork must also be set to true.
+                            type: boolean
+                          runAsUserName:
+                            description: |-
+                              The UserName in Windows to run the entrypoint of the container process.
+                              Defaults to the user specified in image metadata if unspecified.
+                              May also be set in PodSecurityContext. If set in both SecurityContext and
+                              PodSecurityContext, the value specified in SecurityContext takes precedence.
+                            type: string
+                        type: object
+                    type: object
+                  volumes:
+                    items:
+                      properties:
+                        destination:
+                          type: string
+                        name:
+                          type: string
+                        source:
+                          type: string
+                      type: object
+                    type: array
                 type: object
               upgradeContainer:
                 description: ContainerSpec is a simplified container template.
@@ -800,6 +1270,187 @@ spec:
                     type: array
                   image:
                     type: string
+                  securityContext:
+                    description: |-
+                      SecurityContext holds security configuration that will be applied to a container.
+                      Some fields are present in both SecurityContext and PodSecurityContext.  When both
+                      are set, the values in SecurityContext take precedence.
+                    properties:
+                      allowPrivilegeEscalation:
+                        description: |-
+                          AllowPrivilegeEscalation controls whether a process can gain more
+                          privileges than its parent process. This bool directly controls if
+                          the no_new_privs flag will be set on the container process.
+                          AllowPrivilegeEscalation is true always when the container is:
+                          1) run as Privileged
+                          2) has CAP_SYS_ADMIN
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      capabilities:
+                        description: |-
+                          The capabilities to add/drop when running containers.
+                          Defaults to the default set of capabilities granted by the container runtime.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          add:
+                            description: Added capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                          drop:
+                            description: Removed capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                        type: object
+                      privileged:
+                        description: |-
+                          Run container in privileged mode.
+                          Processes in privileged containers are essentially equivalent to root on the host.
+                          Defaults to false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      procMount:
+                        description: |-
+                          procMount denotes the type of proc mount to use for the containers.
+                          The default is DefaultProcMount which uses the container runtime defaults for
+                          readonly paths and masked paths.
+                          This requires the ProcMountType feature flag to be enabled.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: string
+                      readOnlyRootFilesystem:
+                        description: |-
+                          Whether this container has a read-only root filesystem.
+                          Default is false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      runAsGroup:
+                        description: |-
+                          The GID to run the entrypoint of the container process.
+                          Uses runtime default if unset.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      runAsNonRoot:
+                        description: |-
+                          Indicates that the container must run as a non-root user.
+                          If true, the Kubelet will validate the image at runtime to ensure that it
+                          does not run as UID 0 (root) and fail to start the container if it does.
+                          If unset or false, no such validation will be performed.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                        type: boolean
+                      runAsUser:
+                        description: |-
+                          The UID to run the entrypoint of the container process.
+                          Defaults to user specified in image metadata if unspecified.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      seLinuxOptions:
+                        description: |-
+                          The SELinux context to be applied to the container.
+                          If unspecified, the container runtime will allocate a random SELinux context for each
+                          container.  May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          level:
+                            description: Level is SELinux level label that applies
+                              to the container.
+                            type: string
+                          role:
+                            description: Role is a SELinux role label that applies
+                              to the container.
+                            type: string
+                          type:
+                            description: Type is a SELinux type label that applies
+                              to the container.
+                            type: string
+                          user:
+                            description: User is a SELinux user label that applies
+                              to the container.
+                            type: string
+                        type: object
+                      seccompProfile:
+                        description: |-
+                          The seccomp options to use by this container. If seccomp options are
+                          provided at both the pod & container level, the container options
+                          override the pod options.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile defined in a file on the node should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must be a descending path, relative to the kubelet's configured seccomp profile location.
+                              Must be set if type is "Localhost". Must NOT be set for any other type.
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of seccomp profile will be applied.
+                              Valid options are:
+
+
+                              Localhost - a profile defined in a file on the node should be used.
+                              RuntimeDefault - the container runtime default profile should be used.
+                              Unconfined - no profile should be applied.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      windowsOptions:
+                        description: |-
+                          The Windows specific settings applied to all containers.
+                          If unspecified, the options from the PodSecurityContext will be used.
+                          If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is linux.
+                        properties:
+                          gmsaCredentialSpec:
+                            description: |-
+                              GMSACredentialSpec is where the GMSA admission webhook
+                              (https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the
+                              GMSA credential spec named by the GMSACredentialSpecName field.
+                            type: string
+                          gmsaCredentialSpecName:
+                            description: GMSACredentialSpecName is the name of the
+                              GMSA credential spec to use.
+                            type: string
+                          hostProcess:
+                            description: |-
+                              HostProcess determines if a container should be run as a 'Host Process' container.
+                              All of a Pod's containers must have the same effective HostProcess value
+                              (it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).
+                              In addition, if HostProcess is true then HostNetwork must also be set to true.
+                            type: boolean
+                          runAsUserName:
+                            description: |-
+                              The UserName in Windows to run the entrypoint of the container process.
+                              Defaults to the user specified in image metadata if unspecified.
+                              May also be set in PodSecurityContext. If set in both SecurityContext and
+                              PodSecurityContext, the value specified in SecurityContext takes precedence.
+                            type: string
+                        type: object
+                    type: object
+                  volumes:
+                    items:
+                      properties:
+                        destination:
+                          type: string
+                        name:
+                          type: string
+                        source:
+                          type: string
+                      type: object
+                    type: array
                 type: object
             required:
             - drain
@@ -808,22 +1459,16 @@ spec:
             properties:
               conditions:
                 items:
-                  description: |-
-                    Condition contains details for one aspect of the current state of this API Resource.
-                    ---
-                    This struct is intended for direct use as an array at the field path .status.conditions.  For example,
-                    type FooStatus struct{
-                        // Represents the observations of a foo's current state.
-                        // Known .status.conditions.type are: "Available", "Progressing", and "Degraded"
-                        // +patchMergeKey=type
-                        // +patchStrategy=merge
-                        // +listType=map
-                        // +listMapKey=type
-                        Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
-
-
-                        // other fields
-                    }
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
                   properties:
                     lastTransitionTime:
                       description: |-

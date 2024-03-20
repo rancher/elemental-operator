@@ -1,7 +1,7 @@
 //nolint:goheader
 /*
 Copyright © 2021 Cloudfoundry (https://github.com/cloudfoundry-incubator/quarks-utils)
-Copyright © 2022 SUSE LLC
+Copyright © 2022 - 2024 SUSE LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"runtime/debug"
@@ -32,9 +31,10 @@ import (
 	"github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
-	wait "github.com/rancher-sandbox/ele-testhelpers/helpers"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
+
+	wait "github.com/rancher-sandbox/ele-testhelpers/helpers"
 )
 
 const (
@@ -548,7 +548,7 @@ func (k *Kubectl) WaitForData(namespace string, resourceName string, name string
 }
 
 func writeTemporaryYAML(v interface{}) (string, error) {
-	tmpfile, err := ioutil.TempFile(os.TempDir(), "yaml-")
+	tmpfile, err := os.CreateTemp(os.TempDir(), "yaml-")
 	if err != nil {
 		return "", err
 	}
@@ -568,7 +568,7 @@ func writeTemporaryYAML(v interface{}) (string, error) {
 }
 
 func writeTemporaryJSON(v interface{}) (string, error) {
-	tmpfile, err := ioutil.TempFile(os.TempDir(), "json-")
+	tmpfile, err := os.CreateTemp(os.TempDir(), "json-")
 	if err != nil {
 		return "", err
 	}
@@ -708,6 +708,13 @@ func Run(s ...string) (string, error) {
 	return msg, err
 }
 
+// RunWithoutErr allow to control kubectl directly but without any StdErr
+func RunWithoutErr(s ...string) (string, error) {
+	out, err := runBinaryWithoutErr(kubeCtlCmd, s...)
+	msg := string(out)
+	return msg, err
+}
+
 // GetCRDs returns all CRDs
 func GetCRDs() (*ClusterCrd, error) {
 	customResource := &ClusterCrd{}
@@ -770,12 +777,32 @@ func RunHelmBinaryWithCustomErr(args ...string) error {
 	return nil
 }
 
-// runBinary executes a binary cmd and returns the stdOutput
+// RunHelmBinaryWithOutput executes a desired binary and returns the output
+func RunHelmBinaryWithOutput(args ...string) (string, error) {
+	out, err := runBinary(helmCmd, args...)
+	if err != nil {
+		return string(out), &CustomError{strings.Join(append([]string{helmCmd}, args...), " "), string(out), err}
+	}
+	return string(out), nil
+}
+
+// runBinary executes a binary cmd and returns the stdOutput and stdError combined
 func runBinary(binaryName string, args ...string) ([]byte, error) {
 	cmd := exec.Command(binaryName, args...)
 	stdOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		return stdOutput, errors.Wrapf(err, "%s cmd, failed with the following error: %s", cmd.Args, string(stdOutput))
+	}
+	return stdOutput, nil
+}
+
+// runBinaryWithoutErr executes a binary cmd and only returns the stdOutput
+func runBinaryWithoutErr(binaryName string, args ...string) ([]byte, error) {
+	cmd := exec.Command(binaryName, args...)
+	stdOutput, err := cmd.Output()
+	var execErr *exec.ExitError
+	if errors.As(err, &execErr) {
+		return stdOutput, errors.Wrapf(err, "%s cmd, failed with the following error: %s", cmd.Args, string(execErr.Stderr))
 	}
 	return stdOutput, nil
 }

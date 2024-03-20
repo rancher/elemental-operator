@@ -11,6 +11,7 @@ import (
 )
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NodeTemplate struct {
@@ -55,6 +56,7 @@ type NodeTemplateSpec struct {
 }
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type Node struct {
@@ -157,6 +159,7 @@ var (
 )
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type NodePool struct {
@@ -255,6 +258,8 @@ type NodeCommonParams struct {
 	EngineInstallURL         string            `json:"engineInstallURL,omitempty"`
 	DockerVersion            string            `json:"dockerVersion,omitempty"`
 	EngineOpt                map[string]string `json:"engineOpt,omitempty"`
+	StorageOpt               map[string]string `json:"storageOpt,omitempty"`
+	LogOpt                   map[string]string `json:"logOpt,omitempty"`
 	EngineInsecureRegistry   []string          `json:"engineInsecureRegistry,omitempty"`
 	EngineRegistryMirror     []string          `json:"engineRegistryMirror,omitempty"`
 	EngineLabel              map[string]string `json:"engineLabel,omitempty"`
@@ -264,6 +269,7 @@ type NodeCommonParams struct {
 }
 
 // +genclient
+// +kubebuilder:skipversion
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -345,6 +351,7 @@ type PublicEndpoint struct {
 type NodeDrainInput = rketypes.NodeDrainInput
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type CloudCredential struct {
