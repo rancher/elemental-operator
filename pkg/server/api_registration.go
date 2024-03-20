@@ -272,7 +272,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgVersion:
 			protoVersion, err = decodeProtocolVersion(data)
 			if err != nil {
-				return fmt.Errorf("failed to negotiate protol version: %w", err)
+				return fmt.Errorf("failed to negotiate protocol version: %w", err)
 			}
 			log.Infof("Negotiated protocol version: %d", protoVersion)
 			replyMsgType = register.MsgVersion
