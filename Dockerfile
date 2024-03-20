@@ -6,6 +6,7 @@ RUN go mod download
 COPY cmd/operator/main.go /src/
 COPY api /src/api
 COPY controllers /src/controllers
+COPY internal /src/internal
 COPY pkg /src/pkg
 COPY cmd /src/cmd
 # Set arg/env after go mod download, otherwise we invalidate the cached layers due to the commit changing easily
