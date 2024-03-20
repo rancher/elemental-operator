@@ -4,11 +4,12 @@ package internal
 import (
 	"bytes"
 	"crypto"
+	"encoding/hex"
 	"fmt"
 	"io"
 
 	pb "github.com/google/go-tpm-tools/proto/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
 
@@ -50,7 +51,8 @@ func CheckSubset(subset, superset *pb.PCRs) error {
 	for pcrNum, pcrVal := range subset.GetPcrs() {
 		if expectedVal, ok := superset.GetPcrs()[pcrNum]; ok {
 			if !bytes.Equal(expectedVal, pcrVal) {
-				return fmt.Errorf("PCR %d mismatch: expected %v, got %v", pcrNum, expectedVal, pcrVal)
+				return fmt.Errorf("PCR %d mismatch: expected %v, got %v",
+					pcrNum, hex.EncodeToString(expectedVal), hex.EncodeToString(pcrVal))
 			}
 		} else {
 			return fmt.Errorf("PCR %d mismatch: value missing from the superset PCRs", pcrNum)

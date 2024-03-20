@@ -152,6 +152,18 @@ func (t *windowsTPM) info() (*TPMInfo, error) {
 	return &tInfo, nil
 }
 
+func (t *windowsTPM) ekCertificates() ([]EK, error) {
+	ekCerts, err := t.pcp.EKCerts()
+	if err != nil {
+		return nil, fmt.Errorf("could not read EKCerts: %v", err)
+	}
+	var eks []EK
+	for _, cert := range ekCerts {
+		eks = append(eks, EK{Certificate: cert, Public: cert.PublicKey})
+	}
+	return eks, nil
+}
+
 func (t *windowsTPM) eks() ([]EK, error) {
 	ekCerts, err := t.pcp.EKCerts()
 	if err != nil {
@@ -325,11 +337,19 @@ func (t *windowsTPM) loadAK(opaqueBlob []byte) (*AK, error) {
 	}
 }
 
+func (t *windowsTPM) loadAKWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*AK, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
 func (t *windowsTPM) newKey(*AK, *KeyConfig) (*Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
 func (t *windowsTPM) loadKey(opaqueBlob []byte) (*Key, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (t *windowsTPM) loadKeyWithParent(opaqueBlob []byte, parent ParentKeyConfig) (*Key, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 

@@ -31,7 +31,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	"github.com/rancher/wrangler/pkg/name"
+	"github.com/rancher/wrangler/v2/pkg/name"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -412,7 +412,7 @@ func (r *ManagedOSImageReconciler) mapImageToBundle(managedOSImage elementalv1.M
 	if managedOSImage.Namespace == fleetLocalNamespace {
 		bundle.Spec.Targets = []fleetv1.BundleTarget{{ClusterName: "local"}}
 	} else {
-		bundle.Spec.Targets = convertBundleTargets(managedOSImage.Spec.Targets)
+		bundle.Spec.Targets = managedOSImage.Spec.Targets
 	}
 }
 
@@ -566,30 +566,4 @@ func metadataEnv(m map[string]runtime.RawExtension) []corev1.EnvVar {
 		envs = append(envs, corev1.EnvVar{Name: strings.ToUpper(fmt.Sprintf("METADATA_%s", k)), Value: value})
 	}
 	return envs
-}
-
-func convertBundleTargets(elementalBundleTargets []elementalv1.BundleTarget) []fleetv1.BundleTarget {
-	result := []fleetv1.BundleTarget{}
-
-	for _, elementalBundleTarget := range elementalBundleTargets {
-		result = append(result, fleetv1.BundleTarget{
-			Name:                 elementalBundleTarget.Name,
-			ClusterName:          elementalBundleTarget.ClusterName,
-			ClusterSelector:      elementalBundleTarget.ClusterSelector,
-			ClusterGroup:         elementalBundleTarget.ClusterGroup,
-			ClusterGroupSelector: elementalBundleTarget.ClusterGroupSelector,
-			BundleDeploymentOptions: fleetv1.BundleDeploymentOptions{
-				DefaultNamespace:    elementalBundleTarget.DefaultNamespace,
-				TargetNamespace:     elementalBundleTarget.TargetNamespace,
-				Kustomize:           elementalBundleTarget.Kustomize,
-				Helm:                elementalBundleTarget.Helm,
-				ServiceAccount:      elementalBundleTarget.ServiceAccount,
-				ForceSyncGeneration: elementalBundleTarget.ForceSyncGeneration,
-				YAML:                elementalBundleTarget.YAML,
-				Diff:                elementalBundleTarget.Diff,
-			},
-		})
-	}
-
-	return result
 }

@@ -27,8 +27,8 @@ import (
 	"strings"
 
 	"github.com/gorilla/websocket"
-	values "github.com/rancher/wrangler/pkg/data"
-	"gopkg.in/yaml.v2"
+	values "github.com/rancher/wrangler/v2/pkg/data"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"

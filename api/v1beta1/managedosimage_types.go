@@ -62,21 +62,7 @@ type ManagedOSImageSpec struct {
 	// +optional
 	ClusterRolloutStrategy *fleet.RolloutStrategy `json:"clusterRolloutStrategy,omitempty"`
 	// +optional
-	Targets []BundleTarget `json:"clusterTargets,omitempty"`
-}
-
-type BundleTarget struct {
-	fleet.BundleDeploymentOptions `json:""` //nolint
-	// +optional
-	Name string `json:"name,omitempty"`
-	// +optional
-	ClusterName string `json:"clusterName,omitempty"`
-	// +optional
-	ClusterSelector *metav1.LabelSelector `json:"clusterSelector,omitempty"`
-	// +optional
-	ClusterGroup string `json:"clusterGroup,omitempty"`
-	// +optional
-	ClusterGroupSelector *metav1.LabelSelector `json:"clusterGroupSelector,omitempty"`
+	Targets []fleet.BundleTarget `json:"clusterTargets,omitempty"`
 }
 
 type ManagedOSImageStatus struct {

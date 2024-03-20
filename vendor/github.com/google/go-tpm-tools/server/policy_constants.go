@@ -2,25 +2,36 @@ package server
 
 import (
 	"bytes"
+	"crypto/x509"
 	_ "embed" // Necessary to use go:embed
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 
-	"github.com/google/certificate-transparency-go/x509"
 	pb "github.com/google/go-tpm-tools/proto/attest"
 )
 
-// Expected Firmware/PCR0 Event Types.
+// Expected TCG Event Log Event Types.
 //
 // Taken from TCG PC Client Platform Firmware Profile Specification,
 // Table 14 Events.
 const (
-	NoAction     uint32 = 0x00000003
-	Separator    uint32 = 0x00000004
-	SCRTMVersion uint32 = 0x00000008
-	NonhostInfo  uint32 = 0x00000011
+	NoAction                   uint32 = 0x00000003
+	Separator                  uint32 = 0x00000004
+	SCRTMVersion               uint32 = 0x00000008
+	IPL                        uint32 = 0x0000000D
+	NonhostInfo                uint32 = 0x00000011
+	EFIBootServicesApplication uint32 = 0x80000003
+	EFIAction                  uint32 = 0x80000007
+)
+
+// Constant events used with type "EV_EFI_ACTION".
+// Taken from TCG PC Client Platform Firmware Profile Specification,
+// Table 17 EV_EFI_ACTION Strings.
+const (
+	// Measured when Boot Manager attempts to execute code from a Boot Option.
+	CallingEFIApplication      string = "Calling EFI Application from Boot Option"
+	ExitBootServicesInvocation string = "Exit Boot Services Invocation"
 )
 
 var (
@@ -70,33 +81,34 @@ var (
 	gceEKIntermediateCA2 []byte
 )
 
-// CertPools corresponding to the known CA certs for GCE.
+// Certificates corresponding to the known CA certs for GCE.
 var (
-	GceEKRoots         *x509.CertPool
-	GceEKIntermediates *x509.CertPool
+	GceEKRoots         []*x509.Certificate
+	GceEKIntermediates []*x509.Certificate
 )
 
 func init() {
 	var err error
-	GceEKRoots, err = getPool([][]byte{gceEKRootCA})
+	GceEKRoots, err = parseCerts([][]byte{gceEKRootCA})
 	if err != nil {
-		log.Panicf("failed to create the root cert pool: %v", err)
+		panic(fmt.Sprintf("failed to create the root cert pool: %v", err))
 	}
-	GceEKIntermediates, err = getPool([][]byte{gceEKIntermediateCA2})
+	GceEKIntermediates, err = parseCerts([][]byte{gceEKIntermediateCA2})
 	if err != nil {
-		log.Panicf("failed to create the intermediate cert pool: %v", err)
+		panic(fmt.Sprintf("failed to create the intermediate cert pool: %v", err))
 	}
 }
-func getPool(certs [][]byte) (*x509.CertPool, error) {
-	pool := x509.NewCertPool()
-	for _, certBytes := range certs {
+
+func parseCerts(rawCerts [][]byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, len(rawCerts))
+	for i, certBytes := range rawCerts {
 		cert, err := x509.ParseCertificate(certBytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse cert: %w", err)
 		}
-		pool.AddCert(cert)
+		certs[i] = cert
 	}
-	return pool, nil
+	return certs, nil
 }
 
 // ConvertSCRTMVersionToGCEFirmwareVersion attempts to parse the Firmware
@@ -160,7 +172,7 @@ func ParseGCENonHostInfo(nonHostInfo []byte) (pb.GCEConfidentialTechnology, erro
 		return pb.GCEConfidentialTechnology_NONE, errors.New("prefix for GCE Non-Host info is missing")
 	}
 	tech := nonHostInfo[prefixLen]
-	if tech > byte(pb.GCEConfidentialTechnology_AMD_SEV_ES) {
+	if tech > byte(pb.GCEConfidentialTechnology_AMD_SEV_SNP) {
 		return pb.GCEConfidentialTechnology_NONE, fmt.Errorf("unknown GCE Confidential Technology: %d", tech)
 	}
 	return pb.GCEConfidentialTechnology(tech), nil

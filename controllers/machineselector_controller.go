@@ -26,8 +26,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/rancher/system-agent/pkg/applyinator"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -41,12 +40,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
@@ -64,12 +62,12 @@ type MachineInventorySelectorReconciler struct {
 func (r *MachineInventorySelectorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&elementalv1.MachineInventorySelector{}).
-		Watches(
-			&source.Kind{
-				Type: &elementalv1.MachineInventory{},
-			},
-			handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
-		).
+		// Watches(
+		// 	&source.Kind{
+		// 		Type: &elementalv1.MachineInventory{},
+		// 	},
+		// 	handler.EnqueueRequestsFromMapFunc(r.MachineInventoryToSelector),
+		// ).
 		WithEventFilter(filterSelectorUpdateEvents()).
 		Complete(r)
 }
@@ -423,8 +421,8 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 		return "", nil, fmt.Errorf("failed to marshal node labels from inventory: %w", err)
 	}
 
-	p := applyinator.Plan{
-		Files: []applyinator.File{
+	p := systemagent.Plan{
+		Files: []systemagent.File{
 			{
 				Content:     base64.StdEncoding.EncodeToString(bootstrapSecret.Data["value"]),
 				Path:        "/var/lib/rancher/bootstrap.sh",
@@ -461,9 +459,9 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				Permissions: "0644",
 			},
 		},
-		OneTimeInstructions: []applyinator.OneTimeInstruction{
+		OneTimeInstructions: []systemagent.OneTimeInstruction{
 			{
-				CommonInstruction: applyinator.CommonInstruction{
+				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "configure hostname",
 					Command: "hostnamectl",
 					Args: []string{
@@ -474,7 +472,7 @@ func (r *MachineInventorySelectorReconciler) newBootstrapPlan(ctx context.Contex
 				},
 			},
 			{
-				CommonInstruction: applyinator.CommonInstruction{
+				CommonInstruction: systemagent.CommonInstruction{
 					Command: "bash",
 					Args: []string{
 						"-c", "[ -f /var/lib/rancher/bootstrap_done ] || /var/lib/rancher/bootstrap.sh && touch /var/lib/rancher/bootstrap_done",

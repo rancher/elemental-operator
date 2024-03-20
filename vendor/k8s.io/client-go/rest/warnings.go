@@ -40,9 +40,9 @@ var (
 
 // SetDefaultWarningHandler sets the default handler clients use when warning headers are encountered.
 // By default, warnings are logged. Several built-in implementations are provided:
-//  - NoWarnings suppresses warnings.
-//  - WarningLogger logs warnings.
-//  - NewWarningWriter() outputs warnings to the provided writer.
+//   - NoWarnings suppresses warnings.
+//   - WarningLogger logs warnings.
+//   - NewWarningWriter() outputs warnings to the provided writer.
 func SetDefaultWarningHandler(l WarningHandler) {
 	defaultWarningHandlerLock.Lock()
 	defer defaultWarningHandlerLock.Unlock()
@@ -64,6 +64,16 @@ func (NoWarnings) HandleWarningHeader(code int, agent string, message string) {}
 type WarningLogger struct{}
 
 func (WarningLogger) HandleWarningHeader(code int, agent string, message string) {
+	BannedWarnings := []string{
+		"v1 ComponentStatus is deprecated in v1.19+",
+	}
+
+	for i := range BannedWarnings {
+		if BannedWarnings[i] == message {
+			return
+		}
+	}
+
 	if code != 299 || len(message) == 0 {
 		return
 	}

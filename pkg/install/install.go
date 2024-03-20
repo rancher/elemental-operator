@@ -24,7 +24,6 @@ import (
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/block"
-	agent "github.com/rancher/system-agent/pkg/config"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
 	"gopkg.in/yaml.v3"
@@ -35,6 +34,7 @@ import (
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/controllers"
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
@@ -382,7 +382,7 @@ func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte
 
 	kubeconfigBytes, _ := clientcmd.Write(kubeConfig)
 
-	connectionInfo := agent.ConnectionInfo{
+	connectionInfo := systemagent.ConnectionInfo{
 		KubeConfig: string(kubeconfigBytes),
 		Namespace:  config.SystemAgent.SecretNamespace,
 		SecretName: config.SystemAgent.SecretName,
@@ -396,7 +396,7 @@ func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte
 }
 
 func (i *installer) getAgentConfigBytes() ([]byte, error) {
-	agentConfig := agent.AgentConfig{
+	agentConfig := systemagent.AgentConfig{
 		WorkDir:            filepath.Join(agentStateDir, "work"),
 		AppliedPlanDir:     filepath.Join(agentStateDir, "applied"),
 		LocalPlanDir:       filepath.Join(agentStateDir, "plans"),

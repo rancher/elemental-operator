@@ -25,9 +25,9 @@ import (
 	"github.com/rancher/elemental-operator/pkg/test"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
-	"github.com/rancher/wrangler/pkg/genericcondition"
-	"github.com/rancher/wrangler/pkg/name"
-	"gopkg.in/yaml.v1"
+	"github.com/rancher/wrangler/v2/pkg/genericcondition"
+	"github.com/rancher/wrangler/v2/pkg/name"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -185,7 +185,7 @@ var _ = Describe("createFleetBundle", func() {
 						IntVal: 3,
 					},
 				},
-				Targets: []elementalv1.BundleTarget{
+				Targets: []fleetv1.BundleTarget{
 					{
 						Name: "test",
 					},
@@ -289,7 +289,7 @@ var _ = Describe("updateManagedOSImageStatus", func() {
 						IntVal: 3,
 					},
 				},
-				Targets: []elementalv1.BundleTarget{
+				Targets: []fleetv1.BundleTarget{
 					{
 						Name: "test",
 					},

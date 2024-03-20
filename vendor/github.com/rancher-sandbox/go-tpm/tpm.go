@@ -9,11 +9,10 @@ import (
 	"fmt"
 	"strings"
 
-	certx509 "github.com/google/certificate-transparency-go/x509"
-
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm-tools/simulator"
 	"github.com/pkg/errors"
+
 	"github.com/rancher-sandbox/go-tpm/backend"
 )
 
@@ -178,7 +177,7 @@ func DecodeEK(pemBytes []byte) (*attest.EK, error) {
 
 	switch block.Type {
 	case "CERTIFICATE":
-		cert, err := certx509.ParseCertificate(block.Bytes)
+		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing certificate: %v", err)
 		}

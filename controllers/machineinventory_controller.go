@@ -43,9 +43,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/rancher/system-agent/pkg/applyinator"
-
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
@@ -290,17 +289,17 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 	}
 
 	// This is the remote plan that should trigger the reboot into recovery and reset
-	resetPlan := applyinator.Plan{
-		Files: []applyinator.File{
+	resetPlan := systemagent.Plan{
+		Files: []systemagent.File{
 			{
 				Content:     base64.StdEncoding.EncodeToString(resetCloudConfigBytes),
 				Path:        LocalResetPlanPath,
 				Permissions: "0600",
 			},
 		},
-		OneTimeInstructions: []applyinator.OneTimeInstruction{
+		OneTimeInstructions: []systemagent.OneTimeInstruction{
 			{
-				CommonInstruction: applyinator.CommonInstruction{
+				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "configure next boot to recovery mode",
 					Command: "grub2-editenv",
 					Args: []string{
@@ -311,7 +310,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 				},
 			},
 			{
-				CommonInstruction: applyinator.CommonInstruction{
+				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "schedule reboot",
 					Command: "shutdown",
 					Args: []string{

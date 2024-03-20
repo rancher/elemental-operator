@@ -17,13 +17,13 @@ limitations under the License.
 package register
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/twpayne/go-vfs"
 	"gopkg.in/yaml.v3"

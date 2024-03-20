@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,9 +29,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/pkg/errors"
 	"github.com/sanity-io/litter"
-	"gopkg.in/yaml.v1"
+	"gopkg.in/yaml.v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/dmidecode"
@@ -252,7 +252,7 @@ func negotiateProtoVersion(conn *websocket.Conn) (MessageType, error) {
 func sendSMBIOSData(conn *websocket.Conn) error {
 	data, err := dmidecode.Decode()
 	if err != nil {
-		return errors.Wrap(err, "failed to read dmidecode data")
+		return fmt.Errorf("reading dmidecode data: %w", err)
 	}
 	err = SendJSONData(conn, MsgSmbios, data)
 	if err != nil {
@@ -265,7 +265,7 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 func sendSystemData(conn *websocket.Conn) error {
 	data, err := hostinfo.Host()
 	if err != nil {
-		return errors.Wrap(err, "failed to read system data")
+		return fmt.Errorf("reading system data: %w", err)
 	}
 	err = SendJSONData(conn, MsgSystemData, data)
 	if err != nil {
@@ -391,9 +391,8 @@ func getConfig(conn *websocket.Conn) ([]byte, error) {
 	case MsgError:
 		msg := &ErrorMessage{}
 		if err = yaml.Unmarshal(data, &msg); err != nil {
-			return nil, errors.Wrap(err, "unable to unmarshal error-message")
+			return nil, fmt.Errorf("unmarshalling error message: %w", err)
 		}
-
 		return nil, errors.New(msg.Message)
 	case MsgConfig:
 		return data, nil

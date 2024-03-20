@@ -24,8 +24,8 @@ import (
 	"os/exec"
 	"strings"
 
-	values "github.com/rancher/wrangler/pkg/data"
-	"github.com/rancher/wrangler/pkg/kv"
+	values "github.com/rancher/wrangler/v2/pkg/data"
+	"github.com/rancher/wrangler/v2/pkg/kv"
 )
 
 var smbiosTypes = []string{

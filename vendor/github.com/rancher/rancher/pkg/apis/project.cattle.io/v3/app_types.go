@@ -10,6 +10,7 @@ import (
 )
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type App struct {
@@ -39,6 +40,7 @@ type AppSpec struct {
 	Prune               bool              `json:"prune,omitempty"`
 	MultiClusterAppName string            `json:"multiClusterAppName,omitempty" norman:"type=reference[/v3/schemas/multiclusterapp]"`
 	ValuesYaml          string            `json:"valuesYaml,omitempty"`
+	MaxRevisionCount    int               `json:"maxRevisionCount,omitempty"`
 }
 
 func (a *AppSpec) ObjClusterName() string {
@@ -49,12 +51,11 @@ func (a *AppSpec) ObjClusterName() string {
 }
 
 var (
-	AppConditionInstalled                  condition.Cond = "Installed"
-	AppConditionMigrated                   condition.Cond = "Migrated"
-	AppConditionDeployed                   condition.Cond = "Deployed"
-	AppConditionForceUpgrade               condition.Cond = "ForceUpgrade"
-	AppConditionUserTriggeredAction        condition.Cond = "UserTriggeredAction"
-	IstioConditionMetricExpressionDeployed condition.Cond = "MetricExpressionDeployed"
+	AppConditionInstalled           condition.Cond = "Installed"
+	AppConditionMigrated            condition.Cond = "Migrated"
+	AppConditionDeployed            condition.Cond = "Deployed"
+	AppConditionForceUpgrade        condition.Cond = "ForceUpgrade"
+	AppConditionUserTriggeredAction condition.Cond = "UserTriggeredAction"
 )
 
 type AppStatus struct {
@@ -81,6 +82,7 @@ type AppCondition struct {
 }
 
 // +genclient
+// +kubebuilder:skipversion
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 type AppRevision struct {

@@ -2,14 +2,10 @@ package controller
 
 import (
 	"context"
-	"strings"
 	"time"
 
-	errors2 "github.com/pkg/errors"
 	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/norman/metrics"
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -58,12 +54,8 @@ func (g *genericController) AddHandler(ctx context.Context, name string, handler
 			return obj, nil
 		}
 		logrus.Tracef("%s calling handler %s %s", g.name, name, key)
-		metrics.IncTotalHandlerExecution(g.name, name)
 		result, err := handler(key, obj)
 		runtimeObject, _ := result.(runtime.Object)
-		if err != nil && !ignoreError(err, false) {
-			metrics.IncTotalHandlerFailure(g.name, name, key)
-		}
 		if _, ok := err.(*ForgetError); ok {
 			logrus.Tracef("%v %v completed with dropped err: %v", g.name, key, err)
 			return runtimeObject, controller.ErrIgnore
@@ -82,21 +74,4 @@ func isNamespace(namespace string, obj runtime.Object) bool {
 		return true
 	}
 	return meta.GetNamespace() == namespace
-}
-
-func ignoreError(err error, checkString bool) bool {
-	err = errors2.Cause(err)
-	if errors.IsConflict(err) {
-		return true
-	}
-	if err == controller.ErrIgnore {
-		return true
-	}
-	if _, ok := err.(*ForgetError); ok {
-		return true
-	}
-	if checkString {
-		return strings.HasSuffix(err.Error(), "please apply your changes to the latest version and try again")
-	}
-	return false
 }

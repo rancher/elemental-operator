@@ -21,8 +21,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"crypto/x509"
 
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/go-attestation/attest"
 
 	gotpm "github.com/rancher-sandbox/go-tpm"

@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"gotest.tools/assert"
+	"gotest.tools/v3/assert"
 )
 
 func TestInitNewInventory(t *testing.T) {

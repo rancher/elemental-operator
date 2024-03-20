@@ -42,7 +42,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			ui = catalog.NewManagedOSImage(
 				fleetDefaultNamespace,
 				"update-image",
-				[]elementalv1.BundleTarget{{
+				[]fleetv1.BundleTarget{{
 					ClusterName: "dummycluster",
 				}},
 				"my.registry.com/image/repository:v1.0",
@@ -56,7 +56,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			ui = catalog.NewManagedOSImage(
 				fleetDefaultNamespace,
 				"update-image",
-				[]elementalv1.BundleTarget{{
+				[]fleetv1.BundleTarget{{
 					ClusterName: "dummycluster",
 				}},
 				"my.registry.com/image/repository:v1.0",
@@ -109,7 +109,7 @@ var _ = Describe("ManagedOSImage e2e tests", func() {
 			ui := catalog.NewManagedOSImage(
 				fleetDefaultNamespace,
 				name,
-				[]elementalv1.BundleTarget{{
+				[]fleetv1.BundleTarget{{
 					ClusterName: "dummycluster",
 				}},
 				"",
