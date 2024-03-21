@@ -30,7 +30,6 @@ import (
 	values "github.com/rancher/wrangler/v2/pkg/data"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -175,16 +174,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	}
 	config.Elemental.Install = registration.Spec.Config.Elemental.Install
 	config.Elemental.Reset = registration.Spec.Config.Elemental.Reset
-
-	cloudConf := registration.Spec.Config.CloudConfig
-
-	// legacy register client (old ISO): we should send serialization of legacy (pre-kubebuilder) config.
-	if protoVersion == register.MsgUndefined {
-		log.Debugf("Detected old register client: sending legacy CloudConfig serialization.")
-		return sendLegacyConfig(conn, config.Elemental, cloudConf)
-	}
-
-	config.CloudConfig = cloudConf
+	config.CloudConfig = registration.Spec.Config.CloudConfig
 
 	// If client does not support MsgConfig we send back the config as a
 	// byte-stream without a message-type to keep backwards-compatibility.
@@ -272,7 +262,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgVersion:
 			protoVersion, err = decodeProtocolVersion(data)
 			if err != nil {
-				return fmt.Errorf("failed to negotiate protol version: %w", err)
+				return fmt.Errorf("failed to negotiate protocol version: %w", err)
 			}
 			log.Infof("Negotiated protocol version: %d", protoVersion)
 			replyMsgType = register.MsgVersion
@@ -350,32 +340,6 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 	return nil
 }
 
-func sendLegacyConfig(conn *websocket.Conn, elementalConf elementalv1.Elemental, cloudConf map[string]runtime.RawExtension) (err error) {
-	legacyCloudConf := make(map[string]interface{})
-	for cloudKey, cloudData := range cloudConf {
-		var data interface{}
-		if err := json.Unmarshal(cloudData.Raw, &data); err != nil {
-			log.Warningf("Error unmarshalling key %s: %s", cloudKey, err.Error())
-			log.Debugf("Unmarshalling of '%s' failed", &cloudData.Raw)
-			continue
-		}
-		legacyCloudConf[cloudKey] = data
-	}
-
-	config := LegacyConfig{
-		Elemental:   elementalConf,
-		CloudConfig: legacyCloudConf,
-	}
-
-	writer, err := conn.NextWriter(websocket.BinaryMessage)
-	if err != nil {
-		return err
-	}
-	defer writer.Close()
-
-	return yaml.NewEncoder(writer).Encode(config)
-}
-
 // writeError reports back an error to the client if the negotiated protocol
 // version supports it.
 func writeError(conn *websocket.Conn, protoVersion register.MessageType, errorMessage register.ErrorMessage) error {
@@ -402,6 +366,9 @@ func decodeProtocolVersion(data []byte) (register.MessageType, error) {
 	protoVersion = clientVersion
 	if clientVersion != register.MsgLast {
 		log.Debugf("elemental-register (%d) and elemental-operator (%d) protocol versions differ", clientVersion, register.MsgLast)
+		if clientVersion <= register.MsgGet {
+			return protoVersion, fmt.Errorf("elemental-register protocol version is deprecated (elemental-register client too old, protocol version = %d)", clientVersion)
+		}
 		if clientVersion > register.MsgLast {
 			protoVersion = register.MsgLast
 		}
