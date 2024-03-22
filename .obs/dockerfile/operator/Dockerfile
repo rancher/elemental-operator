@@ -3,11 +3,11 @@
 #!BuildTag: rancher/elemental-operator:latest
 #!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%
 #!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%-%RELEASE%
-#
+#!UseOBSRepositories
 
-ARG SLEMICRO_VERSION
+ARG SLMICRO_VERSION
 
-FROM suse/sle-micro/$SLEMICRO_VERSION/toolbox as BASE
+FROM suse/sl-micro/$SLMICRO_VERSION/toolbox as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
