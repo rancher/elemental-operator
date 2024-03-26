@@ -675,7 +675,7 @@ func TestRegistrationMsgUpdate(t *testing.T) {
 			header := http.Header{}
 			header.Add("Authorization", fmt.Sprintf("Bearer TPM%s", tc.machineName))
 
-			ws, _, err := websocket.DefaultDialer.Dial(url, header)
+			ws, _, _ := websocket.DefaultDialer.Dial(url, header)
 			defer ws.Close()
 
 			// Read MsgReady
@@ -815,8 +815,6 @@ type FakeAuthServer struct {
 // set to the machine-name from the URL.
 func (a *FakeAuthServer) Authenticate(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, bool, error) {
 	token := path.Base(req.URL.Path)
-	escapedToken := strings.Replace(token, "\n", "", -1)
-	escapedToken = strings.Replace(escapedToken, "\r", "", -1)
 
 	// A zero CreationTimestamp implies the MachineInventory is new
 	creationTimestamp := metav1.Time{}
