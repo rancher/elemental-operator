@@ -55,7 +55,7 @@ func (a *AuthServer) Authenticate(_ *websocket.Conn, req *http.Request, regNames
 	log.Info("Authentication: PLAIN")
 	idToken := strings.TrimPrefix(header, "Bearer PLAIN")
 	if idToken == "" {
-		return nil, false, fmt.Errorf("Cannot find token ID")
+		return nil, false, fmt.Errorf("cannot find token ID")
 	}
 	hashedToken := fmt.Sprintf("%x", sha256.Sum256([]byte(idToken)))
 
