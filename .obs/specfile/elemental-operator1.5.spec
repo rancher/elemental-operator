@@ -15,8 +15,9 @@
 # Please submit bugfixes or comments via https://bugs.opensuse.org/
 #
 
+%define minorv 1.5
 
-Name:           elemental-operator
+Name:           elemental-operator%{minorv}
 Version:        0
 Release:        0
 Summary:        Kubernetes operator to support OS management
@@ -25,6 +26,9 @@ Group:          System/Management
 URL:            https://github.com/rancher/%{name}
 Source:         %{name}-%{version}.tar
 Source1:        %{name}.obsinfo
+
+Provides: elemental-operator
+Conflicts: elemental-operator < %{minorv}
 
 # go-tpm-tools aren't _that_ portable :-(
 ExclusiveArch:  x86_64 aarch64
@@ -56,35 +60,47 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 %define systemdir /system
 %define oemdir %{systemdir}/oem
 
-%package -n elemental-register
-Summary: The registration client
-
 %description
 The Elemental operator is responsible for managing the OS
 versions and maintaining a machine inventory to assist with edge or
 baremetal installations.
 
-%description -n elemental-register
+%package -n elemental-register%{minorv}
+Summary: The registration client
+
+Provides: elemental-register
+Conflicts: elemental-register < %{minorv}
+
+%description -n elemental-register%{minorv}
 The elemental-register command is responsible of the node registration
 against an elemental-operator instance running under Rancher.
 
-%package -n elemental-support
+%package -n elemental-support%{minorv}
 Summary: Collect important logs for support
 
-%description -n elemental-support
+Provides: elemental-support
+Conflicts: elemental-support < %{minorv}
+
+%description -n elemental-support%{minorv}
 This collects essential configuration files and logs to improve issue
 resolution.
 
-%package -n elemental-httpfy
+%package -n elemental-httpfy%{minorv}
 Summary: Simple http server
 
-%description -n elemental-httpfy
+Provides: elemental-httpfy
+Conflicts: elemental-httpfy < %{minorv}
+
+%description -n elemental-httpfy%{minorv}
 httpfy starts a simple http server, serving files from the current dir.
 
-%package -n elemental-seedimage-hooks
+%package -n elemental-seedimage-hooks%{minorv}
 Summary: Hooks used in SeedImage builder
 
-%description -n elemental-seedimage-hooks
+Provides: elemental-seedimage-hooks
+Conflicts: elemental-seedimage-hooks < %{minorv}
+
+%description -n elemental-seedimage-hooks%{minorv}
 Hooks used in SeedImage builder to copy firmware when building disk-images.
 
 %prep
@@ -135,25 +151,25 @@ mkdir -p %{buildroot}%{oemdir}
 %files
 %defattr(-,root,root,-)
 %license LICENSE
-%{_sbindir}/%{name}
+%{_sbindir}/elemental-operator
 
-%files -n elemental-register
+%files -n elemental-register%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %{_sbindir}/elemental-register
 
-%files -n elemental-support
+%files -n elemental-support%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %{_sbindir}/elemental-support
 
 
-%files -n elemental-httpfy
+%files -n elemental-httpfy%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %{_sbindir}/elemental-httpfy
 
-%files -n elemental-seedimage-hooks
+%files -n elemental-seedimage-hooks%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %dir %{systemdir}

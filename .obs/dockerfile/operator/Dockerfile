@@ -5,13 +5,13 @@
 #!BuildTag: rancher/elemental-operator:%OPERATOR_VERSION%-%RELEASE%
 #!UseOBSRepositories
 
-ARG SLMICRO_VERSION
+ARG SLE_VERSION
 
-FROM suse/sl-micro/$SLMICRO_VERSION/toolbox as BASE
+FROM suse/sle15:$SLE_VERSION as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
-      elemental-operator ca-certificates ca-certificates-mozilla
+      elemental-operator1.5 ca-certificates ca-certificates-mozilla
 
 FROM scratch as OPERATOR
 
