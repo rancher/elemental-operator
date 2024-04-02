@@ -1,6 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kuberentes.io/version: {{ .Chart.Version }}
   name: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicas }}
