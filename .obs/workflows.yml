@@ -63,11 +63,6 @@ pr_workflow:
         source_project: isv:Rancher:Elemental:Dev
         source_package: seedimage-builder
         target_project: isv:Rancher:Elemental:PR
-    - set_flags:
-        flags:
-          - type: publish
-            status: enable
-            project: isv:Rancher:Elemental:PR
 
   filters:
     event: pull_request
