@@ -59,6 +59,8 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 %package -n elemental-register
 Summary: The registration client
 
+Recommends: dmidecode
+
 %description
 The Elemental operator is responsible for managing the OS
 versions and maintaining a machine inventory to assist with edge or
