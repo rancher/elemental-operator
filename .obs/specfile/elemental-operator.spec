@@ -59,6 +59,9 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 %package -n elemental-register
 Summary: The registration client
 
+Requires: dmidecode
+Requires: libopenssl1_1
+
 %description
 The Elemental operator is responsible for managing the OS
 versions and maintaining a machine inventory to assist with edge or
