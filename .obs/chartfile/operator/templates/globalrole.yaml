@@ -14,3 +14,9 @@ rules:
   - '*'
   verbs:
   - '*'
+- apiGroups:
+  - catalog.cattle.io
+  resources:
+  - apps
+  verbs:
+  - read
