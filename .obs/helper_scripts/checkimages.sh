@@ -29,11 +29,14 @@ function checkChannel {
 
   echo "Checking channel contents for: ${channel}"
 
-  os_images=$(docker run --entrypoint busybox "${channel}" cat /channel.json | jq -r -c '.[] | select(.spec.type | contains("container")).spec.metadata.upgradeImage')
+  os_images=$(docker run --rm --pull=always --entrypoint busybox "${channel}" cat /channel.json | jq -r -c '.[] | select(.spec.type | contains("container")).spec.metadata.upgradeImage')
   checkimages "${os_images}"
 
-  iso_images=$(docker run --entrypoint busybox "${channel}" cat /channel.json | jq -r -c '.[] | select(.spec.type | contains("iso")).spec.metadata.uri')
+  iso_images=$(docker run --rm --pull=always --entrypoint busybox "${channel}" cat /channel.json | jq -r -c '.[] | select(.spec.type | contains("iso")).spec.metadata.uri')
   checkimages "${iso_images}"
+
+  echo "Deleting channel ${channel} from local storage"
+  docker rmi "${channel}" >/dev/null
 }
 
 declare OPERATOR_IMAGES
