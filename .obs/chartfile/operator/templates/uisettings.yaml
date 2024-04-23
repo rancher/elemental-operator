@@ -1,0 +1,7 @@
+apiVersion: elemental.cattle.io/v1beta1
+kind: UISettings
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  annotations: {{ .Chart.Annotations }}
+  version: {{ .Chart.AppVersion }}
