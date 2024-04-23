@@ -3,5 +3,8 @@ kind: UISettings
 metadata:
   name: {{ .Release.Name }}
 spec:
-  annotations: {{ .Chart.Annotations }}
-  version: {{ .Chart.AppVersion }}
+  appVersion: {{ .Chart.AppVersion }}
+  annotations:
+  {{- range $key, $value := .Chart.Annotations }}
+    {{ $key }}: {{ toYaml $value }}
+  {{- end }}
