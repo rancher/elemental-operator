@@ -898,7 +898,6 @@ func fillBuildImageService(name, namespace string) *corev1.Service {
 					Port:     80,
 				},
 			},
-			Type: corev1.ServiceTypeNodePort,
 		},
 	}
 
