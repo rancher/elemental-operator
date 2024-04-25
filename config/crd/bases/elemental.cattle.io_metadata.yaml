@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: uisettings.elemental.cattle.io
+  name: metadata.elemental.cattle.io
 spec:
   group: elemental.cattle.io
   names:
-    kind: UISettings
-    listKind: UISettingsList
-    plural: uisettings
-    singular: uisettings
+    kind: Metadata
+    listKind: MetadataList
+    plural: metadata
+    singular: metadata
   scope: Namespaced
   versions:
   - name: v1beta1

@@ -1,5 +1,5 @@
 apiVersion: elemental.cattle.io/v1beta1
-kind: UISettings
+kind: Metadata
 metadata:
   name: {{ .Release.Name }}
 spec:

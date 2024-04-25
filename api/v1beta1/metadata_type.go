@@ -20,32 +20,32 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type UISettingsSpec struct {
+type MetadataSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 	AppVersion  string            `json:"appVersion,omitempty"`
 }
 
-type UISettingsStatus struct{}
+type MetadataStatus struct{}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-type UISettings struct {
+type Metadata struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   UISettingsSpec   `json:"spec,omitempty"`
-	Status UISettingsStatus `json:"status,omitempty"`
+	Spec   MetadataSpec   `json:"spec,omitempty"`
+	Status MetadataStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-type UISettingsList struct {
+type MetadataList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []UISettings `json:"items"`
+	Items           []Metadata `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&UISettings{}, &UISettingsList{})
+	SchemeBuilder.Register(&Metadata{}, &MetadataList{})
 }
