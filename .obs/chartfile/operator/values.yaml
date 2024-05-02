@@ -35,6 +35,11 @@ debug: false
 nodeSelector:
   kubernetes.io/os: linux
 
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 2000
+
 tolerations:
   - key: cattle.io/os
     operator: "Equal"

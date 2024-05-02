@@ -12,6 +12,10 @@ spec:
       labels:
         app: elemental-operator
     spec:
+      securityContext:
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
       containers:
       - env:
         - name: NO_PROXY
@@ -39,6 +43,11 @@ spec:
         - {{ template "registry_url" . }}{{ .Values.seedImage.repository }}:{{ .Values.seedImage.tag | default .Chart.AppVersion }}
         - --seedimage-image-pullpolicy
         - {{ .Values.seedImage.imagePullPolicy}}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
       serviceAccountName: {{ .Release.Name }}
       {{- with .Values.tolerations }}
       tolerations:
