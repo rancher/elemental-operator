@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -50,6 +51,8 @@ const (
 	rancherSystemNamespace = "cattle-system"
 	fleetLocalNamespace    = "fleet-local"
 )
+
+var dnsLabelRegex = regexp.MustCompile("[^a-zA-Z0-9- ]+")
 
 // ManagedOSImageReconciler reconciles a ManagedOSImage object.
 type ManagedOSImageReconciler struct {
@@ -245,6 +248,11 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	upgradeContainerSpec.Env = metadataEnv
 
 	uniqueName := name.SafeConcatName("os-upgrader", managedOSImage.Name)
+
+	// The system-upgrade-controller will use the Plan name to eventually create a Volume.
+	// To keep things smooth and not bother the end user with excessive name validation,
+	// we just do a safe name conversion here.
+	uniqueName = toDNSLabel(uniqueName)
 
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
@@ -566,4 +574,12 @@ func metadataEnv(m map[string]runtime.RawExtension) []corev1.EnvVar {
 		envs = append(envs, corev1.EnvVar{Name: strings.ToUpper(fmt.Sprintf("METADATA_%s", k)), Value: value})
 	}
 	return envs
+}
+
+// This converts any string to RFC 1123 DNS label standard by replacing invalid characters with "-"
+func toDNSLabel(input string) string {
+	output := dnsLabelRegex.ReplaceAllString(input, "-")
+	output = strings.TrimPrefix(output, "-")
+	output = strings.TrimSuffix(output, "-")
+	return output
 }
