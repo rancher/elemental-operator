@@ -160,6 +160,18 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(bundleResources).To(BeNil())
 	})
+
+	It("should convert ManagedOSImage name to DNS Label standard", func() {
+		managedOSImage.Name = "test.name"
+		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-28ceb391618a.yaml"))
+		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
+		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
+		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
+		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-24d63a562894.yaml"))
+	})
 })
 
 var _ = Describe("createFleetBundle", func() {
@@ -449,5 +461,17 @@ var _ = Describe("getImageVersion", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(version).Should(Equal("latest"))
 		Expect(image).Should(Equal(osImage.Spec.OSImage))
+	})
+})
+
+var _ = Describe("Plan naming", func() {
+	It("should replace invalid characters with -", func() {
+		input := "-my.invalid!name@"
+		wanted := "my-invalid-name"
+		Expect(toDNSLabel(input)).To(Equal(wanted))
+	})
+	It("should not replace valid strings", func() {
+		wanted := "my-valid-name"
+		Expect(toDNSLabel(wanted)).To(Equal(wanted))
 	})
 })
