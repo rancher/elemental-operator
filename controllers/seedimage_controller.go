@@ -869,7 +869,7 @@ func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedI
 		for _, owner := range foundSvc.GetOwnerReferences() {
 			if owner.UID == seedImg.UID {
 				if seedImageDeadlinePassed {
-					logger.V(5).Info("Seed image deadline passed, delete assocaited service", "service", foundSvc.Name)
+					logger.V(5).Info("Seed image deadline passed, delete associated service", "service", foundSvc.Name)
 					if err := r.Delete(ctx, foundSvc); err != nil {
 						return fmt.Errorf("failed to delete service %s: %w", foundSvc.Name, err)
 					}
