@@ -855,18 +855,34 @@ func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedI
 		return err
 	}
 
+	seedImageDeadlinePassed := false
+	if seedImgCondition := meta.FindStatusCondition(seedImg.Status.Conditions, elementalv1.SeedImageConditionReady); seedImgCondition != nil &&
+		seedImgCondition.Status == metav1.ConditionTrue &&
+		seedImgCondition.Reason == elementalv1.SeedImageBuildDeadline {
+		seedImageDeadlinePassed = true
+	}
+
 	if err == nil {
 		logger.V(5).Info("Service already there")
 
 		// ensure the service was created by us
 		for _, owner := range foundSvc.GetOwnerReferences() {
 			if owner.UID == seedImg.UID {
-				// nothing to do
+				if seedImageDeadlinePassed {
+					logger.V(5).Info("Seed image deadline passed, delete associated service", "service", foundSvc.Name)
+					if err := r.Delete(ctx, foundSvc); err != nil {
+						return fmt.Errorf("failed to delete service %s: %w", foundSvc.Name, err)
+					}
+				}
 				return nil
 			}
 		}
 
 		return fmt.Errorf("service already exists and was not created by this controller")
+	}
+
+	if seedImageDeadlinePassed {
+		return nil
 	}
 
 	logger.V(5).Info("Creating service")
