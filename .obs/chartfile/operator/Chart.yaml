@@ -21,4 +21,4 @@ annotations:
   catalog.cattle.io/release-name: elemental-operator
   catalog.cattle.io/scope: management
   catalog.cattle.io/type: cluster-tool
-  catalog.cattle.io/upstream-version: "%VERSION"
+  catalog.cattle.io/upstream-version: "%VERSION%"
