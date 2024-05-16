@@ -649,10 +649,6 @@ func defaultInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pull
 		return defaultRawInitContainers(seedImg, buildImg, pullPolicy)
 	}
 
-	if seedImg.Spec.TargetPlatform != "" {
-		return crossIsoInitContainers(seedImg, buildImg, pullPolicy)
-	}
-
 	return defaultIsoInitContainers(seedImg, buildImg, pullPolicy)
 }
 
@@ -699,69 +695,6 @@ func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 	}
 }
 
-func crossIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
-	const baseIsoPath = "/iso/base.iso"
-
-	containers := []corev1.Container{}
-	buildCommands := []string{
-		fmt.Sprintf("xorriso -indev %s -outdev /iso/$(ELEMENTAL_OUTPUT_NAME) -map /overlay/reg/livecd-cloud-config.yaml /livecd-cloud-config.yaml -map /overlay/iso-config/cloud-config.yaml /iso-config/cloud-config.yaml -boot_image any replay", baseIsoPath),
-		fmt.Sprintf("rm -rf %s", baseIsoPath),
-	}
-
-	if util.IsHTTP(seedImg.Spec.BaseImage) {
-		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, seedImg.Spec.BaseImage)}, buildCommands...)
-	} else {
-		// If baseImg is not an HTTP url assume it is an image reference
-		containers = append(
-			containers, corev1.Container{
-				Name:            "baseiso",
-				Image:           buildImg,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"/bin/bash", "-c"},
-				Args:            []string{fmt.Sprintf("mkdir /work && elemental pull-image --platform=%s %s /work && cp /work/elemental-iso/*.iso %s", seedImg.Spec.TargetPlatform, seedImg.Spec.BaseImage, baseIsoPath)},
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "iso-storage",
-						MountPath: "/iso",
-					},
-				},
-			},
-		)
-	}
-
-	containers = append(
-		containers, corev1.Container{
-			Name:            "build",
-			Image:           buildImg,
-			ImagePullPolicy: pullPolicy,
-			Command:         []string{"/bin/bash", "-c"},
-			Args:            []string{strings.Join(buildCommands, " && ")},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "iso-storage",
-					MountPath: "/iso",
-				}, {
-					Name:      "config-map",
-					MountPath: "/overlay",
-				},
-			},
-			Env: defaultEnvVars(seedImg.Name),
-		},
-	)
-
-	// Make sure the pod starts starts having enough disk for the maximum volume size
-	// volume size just represents a maximum it is not computed to schedule pods.
-	// To ensure there is enough local disk space we add a storage requirement to the first
-	// init container of the pod.
-	containers[0].Resources = corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceEphemeralStorage: seedImg.Spec.Size,
-		},
-	}
-
-	return containers
-}
-
 func defaultIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) []corev1.Container {
 	const baseIsoPath = "/iso/base.iso"
 
@@ -774,14 +707,24 @@ func defaultIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 	if util.IsHTTP(seedImg.Spec.BaseImage) {
 		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, seedImg.Spec.BaseImage)}, buildCommands...)
 	} else {
+		command := []string{"busybox", "sh", "-c"}
+		args := []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)}
+		image := seedImg.Spec.BaseImage
+
+		if seedImg.Spec.TargetPlatform != "" {
+			image = buildImg
+			command = []string{"/bin/bash", "-c"}
+			args = []string{fmt.Sprintf("mkdir /work && elemental pull-image --platform=%s %s /work && cp /work/elemental-iso/*.iso %s", seedImg.Spec.TargetPlatform, seedImg.Spec.BaseImage, baseIsoPath)}
+		}
+
 		// If baseImg is not an HTTP url assume it is an image reference
 		containers = append(
 			containers, corev1.Container{
 				Name:            "baseiso",
-				Image:           seedImg.Spec.BaseImage,
+				Image:           image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"busybox", "sh", "-c"},
-				Args:            []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)},
+				Command:         command,
+				Args:            args,
 				VolumeMounts: []corev1.VolumeMount{
 					{
 						Name:      "iso-storage",
