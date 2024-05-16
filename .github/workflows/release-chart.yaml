@@ -37,13 +37,4 @@ jobs:
           keep_previous: yes
       - name: create release
         if: inputs.release == true
-        uses: ncipollo/release-action@v1
-        id: create_release
-        with:
-          tag: ${{ inputs.tag }}
-          draft: false
-          prerelease: true
-          generateReleaseNotes: true
-          artifacts: "build/*"
-          updateOnlyUnreleased: true
-          allowUpdates: true
+        run: gh release create ${{ inputs.tag }} --prerelease --generate-notes ./build/*
