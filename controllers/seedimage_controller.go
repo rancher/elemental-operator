@@ -707,14 +707,24 @@ func defaultIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 	if util.IsHTTP(seedImg.Spec.BaseImage) {
 		buildCommands = append([]string{fmt.Sprintf("curl -Lo %s %s", baseIsoPath, seedImg.Spec.BaseImage)}, buildCommands...)
 	} else {
+		command := []string{"busybox", "sh", "-c"}
+		args := []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)}
+		image := seedImg.Spec.BaseImage
+
+		if seedImg.Spec.TargetPlatform != "" {
+			image = buildImg
+			command = []string{"/bin/bash", "-c"}
+			args = []string{fmt.Sprintf("mkdir /work && elemental pull-image --platform=%s %s /work && cp /work/elemental-iso/*.iso %s", seedImg.Spec.TargetPlatform, seedImg.Spec.BaseImage, baseIsoPath)}
+		}
+
 		// If baseImg is not an HTTP url assume it is an image reference
 		containers = append(
 			containers, corev1.Container{
 				Name:            "baseiso",
-				Image:           seedImg.Spec.BaseImage,
+				Image:           image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         []string{"busybox", "sh", "-c"},
-				Args:            []string{fmt.Sprintf("busybox cp /elemental-iso/*.iso %s", baseIsoPath)},
+				Command:         command,
+				Args:            args,
 				VolumeMounts: []corev1.VolumeMount{
 					{
 						Name:      "iso-storage",
