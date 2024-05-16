@@ -830,4 +830,21 @@ var _ = Describe("fillBuildImagePod", func() {
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(buildImg))
 		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
 	})
+
+	It("should use targetPlatform when provided", func() {
+		defaultBuildImg := "default-builder:latest"
+		seedImg := &elementalv1.SeedImage{
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage:      "elemental/default-iso:latest",
+				TargetPlatform: "linux/riscv64",
+			},
+		}
+
+		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever)
+
+		Expect(len(pod.Spec.InitContainers)).To(Equal(2))
+		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
+		Expect(pod.Spec.InitContainers[0].Args[0]).To(ContainSubstring("elemental pull-image --platform=linux/riscv64"))
+
+	})
 })
