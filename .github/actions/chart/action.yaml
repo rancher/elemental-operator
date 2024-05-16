@@ -10,8 +10,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install yq
-      uses: mikefarah/yq@v4.28.2
     - name: Set image repositories
       id: set_repo
       shell: bash
