@@ -53,6 +53,7 @@ import (
 const adoptionTimeout = 5
 
 const LocalResetPlanPath = "/oem/reset-cloud-config.yaml"
+const LocalResetUnmanagedMarker = "/etc/rancher/.unmanaged_reset"
 
 // MachineInventoryReconciler reconciles a MachineInventory object.
 type MachineInventoryReconciler struct {
@@ -187,8 +188,7 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 	logger.Info("Reconciling Reset plan")
 
 	resettable, resettableFound := mInventory.Annotations[elementalv1.MachineInventoryResettableAnnotation]
-	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
-	if (!resettableFound || resettable != "true") || (unmanagedFound && unmanaged == "true") {
+	if !resettableFound || resettable != "true" {
 		logger.V(log.DebugDepth).Info("Machine Inventory does not need reset. Removing finalizer.")
 		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
 		return nil
@@ -234,7 +234,17 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 	logger.Info("Updating Secret with Reset plan")
 
-	checksum, resetPlan, err := r.newResetPlan(ctx)
+	var checksum string
+	var resetPlan []byte
+	var err error
+
+	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
+	if unmanagedFound && unmanaged == "true" {
+		checksum, resetPlan, err = r.newUnmanagedResetPlan(ctx)
+	} else {
+		checksum, resetPlan, err = r.newResetPlan(ctx)
+	}
+
 	if err != nil {
 		return fmt.Errorf("getting new reset plan: %w", err)
 	}
@@ -318,6 +328,35 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 						"+1", // Need to have time to confirm plan execution before rebooting
 					},
 				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(resetPlan); err != nil {
+		return "", nil, fmt.Errorf("failed to encode plan: %w", err)
+	}
+
+	plan := buf.Bytes()
+
+	checksum := util.PlanChecksum(plan)
+
+	return checksum, plan, nil
+}
+
+func (r *MachineInventoryReconciler) newUnmanagedResetPlan(ctx context.Context) (string, []byte, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.Info("Creating new Unmanaged Reset plan secret")
+
+	// This is the remote plan that should trigger the creation of a node reset marker with current timestamp
+	timeStamp := time.Now().Format("2006-01-02 15:04:05")
+	resetPlan := systemagent.Plan{
+		Files: []systemagent.File{
+			{
+				Content:     base64.StdEncoding.EncodeToString([]byte(timeStamp)),
+				Path:        LocalResetUnmanagedMarker,
+				Permissions: "0600",
 			},
 		},
 	}
