@@ -53,7 +53,7 @@ import (
 const adoptionTimeout = 5
 
 const LocalResetPlanPath = "/oem/reset-cloud-config.yaml"
-const LocalResetUnmanagedMarker = "/etc/rancher/.unmanaged_reset"
+const LocalResetUnmanagedMarker = "/var/lib/elemental/.unmanaged_reset"
 
 // MachineInventoryReconciler reconciles a MachineInventory object.
 type MachineInventoryReconciler struct {
