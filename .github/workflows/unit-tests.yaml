@@ -26,7 +26,3 @@ jobs:
           ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
     - name: Run tests
       run: make unit-tests
-    - name: Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.out
