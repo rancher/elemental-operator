@@ -220,3 +220,19 @@ func FillData(data []byte) (map[string]interface{}, error) {
 
 	return labels, nil
 }
+
+// Prune() filters out new Disks and Controllers introduced in ghw/pkg/block > 0.9.0
+// see: https://github.com/rancher/elemental-operator/issues/733
+func Prune(data *HostInfo) {
+	prunedDisks := []*block.Disk{}
+	for i := 0; i < len(data.Block.Disks); i++ {
+		if data.Block.Disks[i].DriveType > block.DRIVE_TYPE_SSD {
+			continue
+		}
+		if data.Block.Disks[i].StorageController > block.STORAGE_CONTROLLER_MMC {
+			continue
+		}
+		prunedDisks = append(prunedDisks, data.Block.Disks[i])
+	}
+	data.Block.Disks = prunedDisks
+}
