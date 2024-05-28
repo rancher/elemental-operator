@@ -267,6 +267,9 @@ func sendSystemData(conn *websocket.Conn) error {
 	if err != nil {
 		return fmt.Errorf("reading system data: %w", err)
 	}
+	// preserve compatibility with older Elemental Operators
+	hostinfo.Prune(data)
+
 	err = SendJSONData(conn, MsgSystemData, data)
 	if err != nil {
 		log.Debugf("system data:\n%s", litter.Sdump(data))
