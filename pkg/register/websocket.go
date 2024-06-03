@@ -33,14 +33,15 @@ const (
 	MsgReady
 	MsgSmbios
 	MsgLabels
-	MsgGet                     // v0.5.0
-	MsgVersion                 // v1.1.0
-	MsgSystemData              // v1.1.1
-	MsgConfig                  // v1.1.1
-	MsgError                   // v1.1.1
-	MsgAnnotations             // v1.1.4
-	MsgUpdate                  // v1.2.6
-	MsgLast        = MsgUpdate // MsgLast must point to the last message
+	MsgGet                            // v0.5.0
+	MsgVersion                        // v1.1.0
+	MsgSystemData                     // v1.1.1
+	MsgConfig                         // v1.1.1
+	MsgError                          // v1.1.1
+	MsgAnnotations                    // v1.1.4
+	MsgUpdate                         // v1.2.6
+	MsgSystemDataNG                   // v1.6.0
+	MsgLast         = MsgSystemDataNG // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -67,6 +68,8 @@ func (mt MessageType) String() string {
 		return "Annotations"
 	case MsgUpdate:
 		return "Update"
+	case MsgSystemDataNG:
+		return "SystemDataNG"
 	default:
 		return "Unknown"
 	}

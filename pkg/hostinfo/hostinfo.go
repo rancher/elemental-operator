@@ -18,6 +18,8 @@ package hostinfo
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/jaypipes/ghw"
@@ -33,8 +35,11 @@ import (
 	"github.com/jaypipes/ghw/pkg/product"
 	"github.com/jaypipes/ghw/pkg/topology"
 
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/runtime"
 )
+
+var ErrCouldNotReadHostInfo = errors.New("could not read host info")
 
 // HostInfo represents all the host info minus the PCI devices
 // We cannot use ghw.HostInfo directly as that tries to gather the local pci-ids database, which we don't have
@@ -56,82 +61,90 @@ type HostInfo struct {
 	Runtime   *runtime.Info   `json:"runtime"`
 }
 
-// Host returns a pointer to a HostInfo struct that contains fields with
+// Host returns a HostInfo struct that contains fields with
 // information about the host system's CPU, memory, network devices, etc
-func Host() (*HostInfo, error) {
+func Host() (HostInfo, error) {
 	return host(ghw.WithDisableWarnings())
 }
 
-func host(opts ...*ghw.WithOption) (*HostInfo, error) {
+func host(opts ...*ghw.WithOption) (HostInfo, error) {
+	hostInfoCollectionError := false
+	var err error
 	ctx := context.New(opts...)
+	hostInfo := HostInfo{ctx: ctx}
 
-	memInfo, err := memory.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	blockInfo, err := block.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	cpuInfo, err := cpu.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	topologyInfo, err := topology.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	netInfo, err := net.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	gpuInfo, err := gpu.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	chassisInfo, err := chassis.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	biosInfo, err := bios.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	baseboardInfo, err := baseboard.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	productInfo, err := product.New(opts...)
-	if err != nil {
-		return nil, err
-	}
-	runtimeInfo, err := runtime.New()
-	if err != nil {
-		return nil, err
+	if hostInfo.Memory, err = memory.New(opts...); err != nil {
+		log.Errorf("Could not collect Memory data: %s", err.Error())
+		hostInfoCollectionError = true
 	}
 
-	return &HostInfo{
-		ctx:       ctx,
-		CPU:       cpuInfo,
-		Memory:    memInfo,
-		Block:     blockInfo,
-		Topology:  topologyInfo,
-		Network:   netInfo,
-		GPU:       gpuInfo,
-		Chassis:   chassisInfo,
-		BIOS:      biosInfo,
-		Baseboard: baseboardInfo,
-		Product:   productInfo,
-		Runtime:   runtimeInfo,
-	}, nil
+	if hostInfo.Block, err = block.New(opts...); err != nil {
+		log.Errorf("Could not collect Block storage data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.CPU, err = cpu.New(opts...); err != nil {
+		log.Errorf("Could not collect CPU data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Topology, err = topology.New(opts...); err != nil {
+		log.Errorf("Could not collect Topology data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Network, err = net.New(opts...); err != nil {
+		log.Errorf("Could not collect Network data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.GPU, err = gpu.New(opts...); err != nil {
+		log.Errorf("Could not collect GPU data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Chassis, err = chassis.New(opts...); err != nil {
+		log.Errorf("Could not collect Chassis data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.BIOS, err = bios.New(opts...); err != nil {
+		log.Errorf("Could not collect BIOS data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Baseboard, err = baseboard.New(opts...); err != nil {
+		log.Errorf("Could not collect Base board data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Product, err = product.New(opts...); err != nil {
+		log.Errorf("Could not collect Product data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfo.Runtime, err = runtime.New(); err != nil {
+		log.Errorf("Could not collect Runtime data: %s", err.Error())
+		hostInfoCollectionError = true
+	}
+
+	if hostInfoCollectionError {
+		return hostInfo, ErrCouldNotReadHostInfo
+	}
+
+	return hostInfo, nil
 }
 
+// Deprecated. Remove me together with 'MsgSystemData' type.
 func FillData(data []byte) (map[string]interface{}, error) {
 	systemData := &HostInfo{}
 	if err := json.Unmarshal(data, &systemData); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshalling system data payload: %w", err)
 	}
+	return ExtractLabels(*systemData)
+}
 
+func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 	memory := map[string]interface{}{}
 	if systemData.Memory != nil {
 		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
@@ -219,20 +232,4 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
 	return labels, nil
-}
-
-// Prune() filters out new Disks and Controllers introduced in ghw/pkg/block > 0.9.0
-// see: https://github.com/rancher/elemental-operator/issues/733
-func Prune(data *HostInfo) {
-	prunedDisks := []*block.Disk{}
-	for i := 0; i < len(data.Block.Disks); i++ {
-		if data.Block.Disks[i].DriveType > block.DRIVE_TYPE_SSD {
-			continue
-		}
-		if data.Block.Disks[i].StorageController > block.STORAGE_CONTROLLER_MMC {
-			continue
-		}
-		prunedDisks = append(prunedDisks, data.Block.Disks[i])
-	}
-	data.Block.Disks = prunedDisks
 }

@@ -265,12 +265,17 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 func sendSystemData(conn *websocket.Conn) error {
 	data, err := hostinfo.Host()
 	if err != nil {
-		return fmt.Errorf("reading system data: %w", err)
+		// In case of error try to continue.
+		// This is a best effort to try to push any System Data label available.
+		log.Errorf("Failed to read host data, some labels may not be available: %s", err.Error())
 	}
-	// preserve compatibility with older Elemental Operators
-	hostinfo.Prune(data)
 
-	err = SendJSONData(conn, MsgSystemData, data)
+	labels, err := hostinfo.ExtractLabels(data)
+	if err != nil {
+		return fmt.Errorf("extracting labels from system data: %w", err)
+	}
+
+	err = SendJSONData(conn, MsgSystemDataNG, labels)
 	if err != nil {
 		log.Debugf("system data:\n%s", litter.Sdump(data))
 		return err
