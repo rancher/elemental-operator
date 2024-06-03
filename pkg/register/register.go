@@ -108,8 +108,13 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *St
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
 		}
 
-		if protoVersion >= MsgSystemData {
+		if protoVersion >= MsgSystemDataNG {
 			log.Infof("Send system data")
+			if err := sendSystemDataNG(conn); err != nil {
+				return nil, fmt.Errorf("failed to send system data: %w", err)
+			}
+		} else if protoVersion >= MsgSystemData {
+			log.Infof("Send system data (Legacy protocol)")
 			if err := sendSystemData(conn); err != nil {
 				return nil, fmt.Errorf("failed to send system data: %w", err)
 			}
@@ -262,7 +267,7 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 	return nil
 }
 
-func sendSystemData(conn *websocket.Conn) error {
+func sendSystemDataNG(conn *websocket.Conn) error {
 	data, err := hostinfo.Host()
 	if err != nil {
 		// In case of error try to continue.
@@ -276,6 +281,23 @@ func sendSystemData(conn *websocket.Conn) error {
 	}
 
 	err = SendJSONData(conn, MsgSystemDataNG, labels)
+	if err != nil {
+		log.Debugf("system data:\n%s", litter.Sdump(data))
+		return err
+	}
+	return nil
+}
+
+// Deprecated. Remove me together with 'MsgSystemData' type.
+func sendSystemData(conn *websocket.Conn) error {
+	data, err := hostinfo.Host()
+	if err != nil {
+		return fmt.Errorf("reading system data: %w", err)
+	}
+	// preserve compatibility with older Elemental Operators
+	hostinfo.Prune(&data)
+
+	err = SendJSONData(conn, MsgSystemData, data)
 	if err != nil {
 		log.Debugf("system data:\n%s", litter.Sdump(data))
 		return err
