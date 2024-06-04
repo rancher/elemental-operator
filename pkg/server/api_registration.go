@@ -294,7 +294,11 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err != nil {
 				return fmt.Errorf("failed to extract labels from system data: %w", err)
 			}
-
+		case register.MsgSystemDataV2:
+			err = updateInventoryFromSystemDataNG(data, inventory, registration)
+			if err != nil {
+				return fmt.Errorf("failed to extract labels from system data: %w", err)
+			}
 		default:
 			return fmt.Errorf("got unexpected message: %s", msgType)
 		}
@@ -436,6 +440,18 @@ func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineI
 	return nil
 }
 
+// updateInventoryFromSystemDataNG receives digested hardware labels from the client
+func updateInventoryFromSystemDataNG(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
+	labels := map[string]interface{}{}
+
+	if err := json.Unmarshal(data, &labels); err != nil {
+		return fmt.Errorf("unmarshalling system data labels payload: %w", err)
+	}
+
+	return sanitizeSystemDataLabels(labels, inv, reg)
+}
+
+// Deprecated. Remove me together with 'MsgSystemData' type.
 // updateInventoryFromSystemData creates labels in the inventory based on the hardware information
 func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
 	log.Infof("Adding labels from system data")
@@ -445,6 +461,10 @@ func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventor
 		return err
 	}
 
+	return sanitizeSystemDataLabels(labels, inv, reg)
+}
+
+func sanitizeSystemDataLabels(labels map[string]interface{}, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
 	// Also available but not used:
 	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
 	// systemData.BIOS -> info about the bios. Useless IMO
