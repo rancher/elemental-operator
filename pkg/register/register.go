@@ -107,17 +107,8 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *St
 		if err := sendSMBIOSData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
 		}
-
-		if protoVersion >= MsgSystemDataV2 {
-			log.Infof("Send system data")
-			if err := sendSystemDataNG(conn); err != nil {
-				return nil, fmt.Errorf("failed to send system data: %w", err)
-			}
-		} else if protoVersion >= MsgSystemData {
-			log.Infof("Send system data (Legacy protocol)")
-			if err := sendSystemData(conn); err != nil {
-				return nil, fmt.Errorf("failed to send system data: %w", err)
-			}
+		if err := sendSystemData(conn, protoVersion); err != nil {
+			return nil, fmt.Errorf("failed to send system data: %w", err)
 		}
 	}
 
@@ -267,7 +258,7 @@ func sendSMBIOSData(conn *websocket.Conn) error {
 	return nil
 }
 
-func sendSystemDataNG(conn *websocket.Conn) error {
+func sendSystemData(conn *websocket.Conn, protoVersion MessageType) error {
 	data, err := hostinfo.Host()
 	if err != nil {
 		// In case of error try to continue.
@@ -275,32 +266,22 @@ func sendSystemDataNG(conn *websocket.Conn) error {
 		log.Errorf("Failed to read host data, some labels may not be available: %s", err.Error())
 	}
 
-	labels, err := hostinfo.ExtractLabels(data)
-	if err != nil {
-		return fmt.Errorf("extracting labels from system data: %w", err)
-	}
-
-	err = SendJSONData(conn, MsgSystemDataV2, labels)
-	if err != nil {
-		log.Debugf("system data:\n%s", litter.Sdump(data))
-		return err
-	}
-	return nil
-}
-
-// Deprecated. Remove me together with 'MsgSystemData' type.
-func sendSystemData(conn *websocket.Conn) error {
-	data, err := hostinfo.Host()
-	if err != nil {
-		return fmt.Errorf("reading system data: %w", err)
-	}
-	// preserve compatibility with older Elemental Operators
-	hostinfo.Prune(&data)
-
-	err = SendJSONData(conn, MsgSystemData, data)
-	if err != nil {
-		log.Debugf("system data:\n%s", litter.Sdump(data))
-		return err
+	if protoVersion >= MsgSystemDataV2 {
+		log.Info("Sending System Data")
+		labels, err := hostinfo.ExtractLabels(data)
+		if err != nil {
+			return fmt.Errorf("extracting labels from system data: %w", err)
+		}
+		if err := SendJSONData(conn, MsgSystemDataV2, labels); err != nil {
+			return fmt.Errorf("sending system data labels through websocket channel: %w", err)
+		}
+	} else if protoVersion >= MsgSystemData {
+		log.Info("Sending System Data (Legacy protocol)")
+		// preserve compatibility with older Elemental Operators
+		hostinfo.Prune(&data)
+		if err := SendJSONData(conn, MsgSystemData, data); err != nil {
+			return fmt.Errorf("sending system data through websocket channel: %w", err)
+		}
 	}
 	return nil
 }
