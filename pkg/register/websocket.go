@@ -40,8 +40,8 @@ const (
 	MsgError                          // v1.1.1
 	MsgAnnotations                    // v1.1.4
 	MsgUpdate                         // v1.2.6
-	MsgSystemDataNG                   // v1.6.0
-	MsgLast         = MsgSystemDataNG // MsgLast must point to the last message
+	MsgSystemDataV2                   // v1.6.0
+	MsgLast         = MsgSystemDataV2 // MsgLast must point to the last message
 )
 
 func (mt MessageType) String() string {
@@ -68,8 +68,8 @@ func (mt MessageType) String() string {
 		return "Annotations"
 	case MsgUpdate:
 		return "Update"
-	case MsgSystemDataNG:
-		return "SystemDataNG"
+	case MsgSystemDataV2:
+		return "SystemDataV2"
 	default:
 		return "Unknown"
 	}

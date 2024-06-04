@@ -294,7 +294,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			if err != nil {
 				return fmt.Errorf("failed to extract labels from system data: %w", err)
 			}
-		case register.MsgSystemDataNG:
+		case register.MsgSystemDataV2:
 			err = updateInventoryFromSystemDataNG(data, inventory, registration)
 			if err != nil {
 				return fmt.Errorf("failed to extract labels from system data: %w", err)
