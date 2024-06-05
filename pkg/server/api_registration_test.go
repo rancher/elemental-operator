@@ -50,6 +50,75 @@ import (
 	elementalruntime "github.com/rancher/elemental-operator/pkg/runtime"
 )
 
+var (
+	systemDataLabelsRegistrationFixture = &elementalv1.MachineRegistration{
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineInventoryLabels: map[string]string{
+				"elemental.cattle.io/Hostname":               "${System Data/Runtime/Hostname}",
+				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
+				"elemental.cattle.io/AvailableMemory":        "${System Data/Memory/Total Usable Bytes}",
+				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
+				"elemental.cattle.io/CpuTotalThreads":        "${System Data/CPU/Total Threads}",
+				"elemental.cattle.io/NetIfacesNumber":        "${System Data/Network/Number Interfaces}",
+				"elemental.cattle.io/NetIface0-Name":         "${System Data/Network/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-MAC":          "${System Data/Network/myNic1/MacAddress}",
+				"elemental.cattle.io/NetIface0-IsVirtual":    "${System Data/Network/myNic1/IsVirtual}",
+				"elemental.cattle.io/NetIface1-Name":         "${System Data/Network/myNic2/Name}",
+				"elemental.cattle.io/BlockDevicesNumber":     "${System Data/Block Devices/Number Devices}",
+				"elemental.cattle.io/BlockDevice0-Name":      "${System Data/Block Devices/testdisk1/Name}",
+				"elemental.cattle.io/BlockDevice1-Name":      "${System Data/Block Devices/testdisk2/Name}",
+				"elemental.cattle.io/BlockDevice0-Size":      "${System Data/Block Devices/testdisk1/Size}",
+				"elemental.cattle.io/BlockDevice1-Size":      "${System Data/Block Devices/testdisk2/Size}",
+				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
+				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
+			},
+		},
+	}
+
+	hostInfoFixture = hostinfo.HostInfo{
+		Block: &block.Info{
+			Disks: []*block.Disk{
+				{
+					Name:        "testdisk1",
+					SizeBytes:   300,
+					IsRemovable: true,
+				},
+				{
+					Name:        "testdisk2",
+					SizeBytes:   600,
+					IsRemovable: false,
+				},
+			},
+			Partitions: nil,
+		},
+		Memory: &memory.Info{
+			Area: memory.Area{
+				TotalPhysicalBytes: 100,
+				TotalUsableBytes:   90,
+			},
+		},
+		CPU: &cpu.Info{
+			TotalCores:   300,
+			TotalThreads: 300,
+		},
+		Network: &net.Info{
+			NICs: []*net.NIC{
+				{
+					Name:       "myNic1",
+					MacAddress: "02:00:00:00:00:01",
+					IsVirtual:  true,
+				},
+				{
+					Name: "myNic2",
+				},
+			},
+		},
+		Runtime: &elementalruntime.Info{
+			Hostname: "machine-1",
+		},
+	}
+)
+
 func TestUnauthenticatedResponse(t *testing.T) {
 	testCase := []struct {
 		config *elementalv1.Config
@@ -263,76 +332,28 @@ func TestMergeInventoryLabels(t *testing.T) {
 
 func TestUpdateInventoryFromSystemData(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
-	registration := &elementalv1.MachineRegistration{
-		Spec: elementalv1.MachineRegistrationSpec{
-			MachineInventoryLabels: map[string]string{
-				"elemental.cattle.io/Hostname":               "${System Data/Runtime/Hostname}",
-				"elemental.cattle.io/TotalMemory":            "${System Data/Memory/Total Physical Bytes}",
-				"elemental.cattle.io/AvailableMemory":        "${System Data/Memory/Total Usable Bytes}",
-				"elemental.cattle.io/CpuTotalCores":          "${System Data/CPU/Total Cores}",
-				"elemental.cattle.io/CpuTotalThreads":        "${System Data/CPU/Total Threads}",
-				"elemental.cattle.io/NetIfacesNumber":        "${System Data/Network/Number Interfaces}",
-				"elemental.cattle.io/NetIface0-Name":         "${System Data/Network/myNic1/Name}",
-				"elemental.cattle.io/NetIface0-MAC":          "${System Data/Network/myNic1/MacAddress}",
-				"elemental.cattle.io/NetIface0-IsVirtual":    "${System Data/Network/myNic1/IsVirtual}",
-				"elemental.cattle.io/NetIface1-Name":         "${System Data/Network/myNic2/Name}",
-				"elemental.cattle.io/BlockDevicesNumber":     "${System Data/Block Devices/Number Devices}",
-				"elemental.cattle.io/BlockDevice0-Name":      "${System Data/Block Devices/testdisk1/Name}",
-				"elemental.cattle.io/BlockDevice1-Name":      "${System Data/Block Devices/testdisk2/Name}",
-				"elemental.cattle.io/BlockDevice0-Size":      "${System Data/Block Devices/testdisk1/Size}",
-				"elemental.cattle.io/BlockDevice1-Size":      "${System Data/Block Devices/testdisk2/Size}",
-				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
-				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
-			},
-		},
-	}
-	data := hostinfo.HostInfo{
-		Block: &block.Info{
-			Disks: []*block.Disk{
-				{
-					Name:        "testdisk1",
-					SizeBytes:   300,
-					IsRemovable: true,
-				},
-				{
-					Name:        "testdisk2",
-					SizeBytes:   600,
-					IsRemovable: false,
-				},
-			},
-			Partitions: nil,
-		},
-		Memory: &memory.Info{
-			Area: memory.Area{
-				TotalPhysicalBytes: 100,
-				TotalUsableBytes:   90,
-			},
-		},
-		CPU: &cpu.Info{
-			TotalCores:   300,
-			TotalThreads: 300,
-		},
-		Network: &net.Info{
-			NICs: []*net.NIC{
-				{
-					Name:       "myNic1",
-					MacAddress: "02:00:00:00:00:01",
-					IsVirtual:  true,
-				},
-				{
-					Name: "myNic2",
-				},
-			},
-		},
-		Runtime: &elementalruntime.Info{
-			Hostname: "machine-1",
-		},
-	}
+	encodedData, err := json.Marshal(hostInfoFixture)
+	assert.NilError(t, err)
+	err = updateInventoryFromSystemData(encodedData, inventory, systemDataLabelsRegistrationFixture)
+	assert.NilError(t, err)
+
+	assertSystemDataLabels(t, inventory)
+}
+
+func TestUpdateInventoryFromSystemDataNG(t *testing.T) {
+	inventory := &elementalv1.MachineInventory{}
+	data, err := hostinfo.ExtractLabels(hostInfoFixture)
+	assert.NilError(t, err)
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemData(encodedData, inventory, registration)
+	err = updateInventoryFromSystemDataNG(encodedData, inventory, systemDataLabelsRegistrationFixture)
 	assert.NilError(t, err)
-	// Check that the labels we properly added to the inventory
+	assertSystemDataLabels(t, inventory)
+}
+
+// Check that the labels we properly added to the inventory
+func assertSystemDataLabels(t *testing.T, inventory *elementalv1.MachineInventory) {
+	t.Helper()
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/Hostname"], "machine-1")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
