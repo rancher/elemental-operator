@@ -330,7 +330,6 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		}
 		vcpy.ObjectMeta.Annotations = map[string]string{
 			elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation: syncTime,
-			elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation:  "false",
 		}
 
 		if ch.Spec.UpgradeContainer != nil {
@@ -370,7 +369,7 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTime) {
 			logger.Info("ManagedOSVersion no longer synced through this channel", "name", version.Name)
 			patchBase := client.MergeFrom(version.DeepCopy())
-			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = "true"
+			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
 			if err := r.Patch(ctx, version, patchBase); err != nil {
 				logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync", "name", version.Name)
 				return fmt.Errorf("deprecating ManagedOSVersion '%s': %w", version.Name, err)

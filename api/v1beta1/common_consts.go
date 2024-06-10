@@ -28,6 +28,7 @@ const (
 
 	// ElementalManagedOSVersionNoLongerSyncedAnnotation is used to mark a no longer in sync ManagedOSVersion, this highlight it can be deleted.
 	ElementalManagedOSVersionNoLongerSyncedAnnotation = "elemental.cattle.io/channel-no-longer-in-sync"
+	ElementalManagedOSVersionNoLongerSyncedValue      = "true"
 
 	// SASecretSuffix is the suffix used to name registration service account's token secret
 	SASecretSuffix = "-token"

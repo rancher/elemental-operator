@@ -656,7 +656,8 @@ var _ = Describe("managed os version channel controller integration tests", func
 			}, managedOSVersion)
 			return err == nil
 		}, 12*time.Second, 2*time.Second).Should(BeTrue())
-		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal("false"))
+		_, found := managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]
+		Expect(found).To(BeFalse(), "no-longer-synced annotation must not be present when versions are actually synced")
 		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]).ToNot(BeEmpty(), "Last sync annotation should contain the UTC timestamp")
 
 		// After channel update already existing versions were patched
@@ -664,7 +665,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 			Name:      "v0.1.0",
 			Namespace: ch.Namespace,
 		}, managedOSVersion)).To(Succeed())
-		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal("true"))
+		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal(elementalv1.ElementalManagedOSVersionNoLongerSyncedValue))
 	})
 
 	It("should not reconcile again if it errors during pod lifecycle", func() {
