@@ -77,6 +77,22 @@ const updatedJSON = `[
   }
 ]`
 
+// v0.1.0 removed
+const deprecatingJSON = `[
+  {
+    "metadata": {
+      "name": "v0.2.0"
+    },
+    "spec": {
+      "version": "v0.2.0",
+      "type": "container",
+      "metadata": {
+        "upgradeImage": "foo/bar:v0.2.0"
+      }
+    }
+  }
+]`
+
 const invalidJSON = `[
   {
     "metadata": {
@@ -494,7 +510,13 @@ var _ = Describe("managed os version channel controller integration tests", func
 		if mgrCancel != nil {
 			mgrCancel()
 		}
-		Expect(test.CleanupAndWait(ctx, cl, ch, pod, managedOSVersion)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, ch, pod)).To(Succeed())
+
+		list := &elementalv1.ManagedOSVersionList{}
+		Expect(cl.List(ctx, list)).To(Succeed())
+		for _, version := range list.Items {
+			Expect(test.CleanupAndWait(ctx, cl, &version)).To(Succeed())
+		}
 	})
 
 	It("should reconcile and sync managed os version channel object and apply channel updates", func() {
@@ -568,6 +590,81 @@ var _ = Describe("managed os version channel controller integration tests", func
 			Namespace: ch.Namespace,
 		}, managedOSVersion)).To(Succeed())
 		Expect(managedOSVersion.Spec.Version).To(Equal("v0.1.0-patched"))
+	})
+
+	It("should deprecate a version after it's removed from channel", func() {
+		ch.Spec.Type = "json"
+
+		Expect(cl.Create(ctx, ch)).To(Succeed())
+
+		// Pod is created
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err == nil
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		setPodPhase(pod, corev1.PodSucceeded)
+
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, ch)
+			return err == nil && ch.Status.Conditions[0].Status == metav1.ConditionTrue
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: ch.Namespace,
+		}, managedOSVersion)).To(Succeed())
+		Expect(managedOSVersion.Spec.Version).To(Equal("v0.1.0"))
+
+		// Pod is deleted
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err != nil && apierrors.IsNotFound(err)
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+
+		// Simulate a channel content change
+		syncerProvider.SetJSON(deprecatingJSON)
+
+		// Updating the channel after the minimum time between syncs causes an automatic update
+		patchBase := client.MergeFrom(ch.DeepCopy())
+		ch.Spec.SyncInterval = "10m"
+		Expect(cl.Patch(ctx, ch, patchBase)).To(Succeed())
+
+		// Pod is created
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err == nil
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		setPodPhase(pod, corev1.PodSucceeded)
+
+		// New added versions are synced
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      "v0.2.0",
+				Namespace: ch.Namespace,
+			}, managedOSVersion)
+			return err == nil
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal("false"))
+		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]).ToNot(BeEmpty(), "Last sync annotation should contain the UTC timestamp")
+
+		// After channel update already existing versions were patched
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: ch.Namespace,
+		}, managedOSVersion)).To(Succeed())
+		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal("true"))
 	})
 
 	It("should not reconcile again if it errors during pod lifecycle", func() {
