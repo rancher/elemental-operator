@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/test"
@@ -81,24 +80,19 @@ var _ = Describe("MarshalCloudConfig", func() {
 
 	It("should marshal an example cloud-init file correctly", func() {
 		data, err := MarshalCloudConfig(map[string]runtime.RawExtension{
-			"write_files": {Object: WriteFiles{}},
+			"write_files": {Raw: []byte(`{}`)},
 		})
 		Expect(err).To(BeNil())
-		Expect(data).To(Equal([]byte("#cloud-config\nwrite_files:\n{}\n")))
+		Expect(string(data)).To(Equal("#cloud-config\nwrite_files: {}\n"))
+	})
+	It("should marshal a yip file correctly", func() {
+		data, err := MarshalCloudConfig(map[string]runtime.RawExtension{
+			"stages": {Raw: []byte(`{"network":[{"name":"test","commands":["foo","bar"]}]}`)},
+		})
+		Expect(err).To(BeNil())
+		Expect(string(data)).To(Equal("stages:\n  network:\n  - commands:\n    - foo\n    - bar\n    name: test\n"))
 	})
 })
-
-type WriteFiles struct {
-}
-
-func (w WriteFiles) GetObjectKind() schema.ObjectKind {
-	return nil
-}
-func (w WriteFiles) DeepCopyObject() runtime.Object {
-	return nil
-}
-
-var _ runtime.Object = WriteFiles{}
 
 var _ = Describe("IsObjectOwned", func() {
 	obj := metav1.ObjectMeta{
