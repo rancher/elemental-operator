@@ -250,7 +250,8 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 		if err != nil {
 			return ctrl.Result{}, r.handleFailedSync(ctx, pod, ch, err)
 		}
-		err = r.createManagedOSVersions(ctx, ch, data)
+		now := metav1.Now()
+		err = r.createManagedOSVersions(ctx, ch, data, now.Format(time.RFC3339))
 		if err != nil {
 			return ctrl.Result{}, r.handleFailedSync(ctx, pod, ch, err)
 		}
@@ -265,7 +266,6 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 			Message: "successfully loaded channel data",
 		})
 		ch.Status.FailedSynchronizationAttempts = 0
-		now := metav1.Now()
 		ch.Status.LastSyncedTime = &now
 		return ctrl.Result{RequeueAfter: interval}, nil
 	default:
@@ -294,10 +294,8 @@ func (r *ManagedOSVersionChannelReconciler) handleFailedSync(ctx context.Context
 }
 
 // createManagedOSVersions unmarshals managedOSVersions from a byte array and creates them.
-func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, data []byte) error {
+func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, data []byte, syncTimestamp string) error {
 	logger := ctrl.LoggerFrom(ctx)
-
-	syncTime := time.Now().UTC().String()
 
 	vers := []elementalv1.ManagedOSVersion{}
 	err := json.Unmarshal(data, &vers)
@@ -329,7 +327,7 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 			elementalv1.ElementalManagedOSVersionChannelLabel: ch.Name,
 		}
 		vcpy.ObjectMeta.Annotations = map[string]string{
-			elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation: syncTime,
+			elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation: syncTimestamp,
 		}
 
 		if ch.Spec.UpgradeContainer != nil {
@@ -366,7 +364,7 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 
 	// Flagging orphan versions
 	for _, version := range curVersions {
-		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTime) {
+		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTimestamp) {
 			logger.Info("ManagedOSVersion no longer synced through this channel", "name", version.Name)
 			patchBase := client.MergeFrom(version.DeepCopy())
 			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
