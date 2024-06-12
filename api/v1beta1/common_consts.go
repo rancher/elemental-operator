@@ -20,8 +20,15 @@ const (
 	// ElementalManagedLabel label used to put on resources managed by the elemental operator.
 	ElementalManagedLabel = "elemental.cattle.io/managed"
 
-	// ElementalManagedLabel label used to put on resources managed by the elemental operator.
+	// ElementalManagedOSVersionChannelLabel is used to filter a set of ManagedOSVersions given the channel they originate from.
 	ElementalManagedOSVersionChannelLabel = "elemental.cattle.io/channel"
+
+	// ElementalManagedOSVersionChannelLastSyncAnnotation reports when a ManagedOSVersion was last synced from a channel.
+	ElementalManagedOSVersionChannelLastSyncAnnotation = "elemental.cattle.io/channel-last-sync"
+
+	// ElementalManagedOSVersionNoLongerSyncedAnnotation is used to mark a no longer in sync ManagedOSVersion, this highlight it can be deleted.
+	ElementalManagedOSVersionNoLongerSyncedAnnotation = "elemental.cattle.io/channel-no-longer-in-sync"
+	ElementalManagedOSVersionNoLongerSyncedValue      = "true"
 
 	// SASecretSuffix is the suffix used to name registration service account's token secret
 	SASecretSuffix = "-token"

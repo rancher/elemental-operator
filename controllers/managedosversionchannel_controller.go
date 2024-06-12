@@ -250,7 +250,8 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 		if err != nil {
 			return ctrl.Result{}, r.handleFailedSync(ctx, pod, ch, err)
 		}
-		err = r.createManagedOSVersions(ctx, ch, data)
+		now := metav1.Now()
+		err = r.createManagedOSVersions(ctx, ch, data, now.Format(time.RFC3339))
 		if err != nil {
 			return ctrl.Result{}, r.handleFailedSync(ctx, pod, ch, err)
 		}
@@ -265,7 +266,6 @@ func (r *ManagedOSVersionChannelReconciler) handleSyncPod(ctx context.Context, p
 			Message: "successfully loaded channel data",
 		})
 		ch.Status.FailedSynchronizationAttempts = 0
-		now := metav1.Now()
 		ch.Status.LastSyncedTime = &now
 		return ctrl.Result{RequeueAfter: interval}, nil
 	default:
@@ -294,7 +294,7 @@ func (r *ManagedOSVersionChannelReconciler) handleFailedSync(ctx context.Context
 }
 
 // createManagedOSVersions unmarshals managedOSVersions from a byte array and creates them.
-func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, data []byte) error {
+func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.Context, ch *elementalv1.ManagedOSVersionChannel, data []byte, syncTimestamp string) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	vers := []elementalv1.ManagedOSVersion{}
@@ -326,6 +326,9 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		vcpy.ObjectMeta.Labels = map[string]string{
 			elementalv1.ElementalManagedOSVersionChannelLabel: ch.Name,
 		}
+		vcpy.ObjectMeta.Annotations = map[string]string{
+			elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation: syncTimestamp,
+		}
 
 		if ch.Spec.UpgradeContainer != nil {
 			vcpy.Spec.UpgradeContainer = ch.Spec.UpgradeContainer
@@ -334,6 +337,8 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		if cv, ok := curVersions[v.Name]; ok {
 			patchBase := client.MergeFrom(cv.DeepCopy())
 			cv.Spec = vcpy.Spec
+			cv.ObjectMeta.Labels = vcpy.ObjectMeta.Labels
+			cv.ObjectMeta.Annotations = vcpy.ObjectMeta.Annotations
 			err = r.Patch(ctx, cv, patchBase)
 			if err != nil {
 				logger.Error(err, "failed to patch a managedosversion", "name", cv.Name)
@@ -353,7 +358,24 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		}
 	}
 
-	return errorutils.NewAggregate(errs)
+	if len(errs) > 0 {
+		return errorutils.NewAggregate(errs)
+	}
+
+	// Flagging orphan versions
+	for _, version := range curVersions {
+		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTimestamp) {
+			logger.Info("ManagedOSVersion no longer synced through this channel", "name", version.Name)
+			patchBase := client.MergeFrom(version.DeepCopy())
+			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
+			if err := r.Patch(ctx, version, patchBase); err != nil {
+				logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync", "name", version.Name)
+				return fmt.Errorf("deprecating ManagedOSVersion '%s': %w", version.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // getAllOwnedManagedOSVersions returns a map of all ManagedOSVersions labeled with the given channel, resource name is used as the map key
