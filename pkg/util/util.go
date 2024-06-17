@@ -19,17 +19,18 @@ package util
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"gopkg.in/yaml.v3"
+	"github.com/rancher/yip/pkg/schema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/rancher/elemental-operator/pkg/log"
 )
@@ -51,30 +52,33 @@ func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, er
 		return []byte{}, nil
 	}
 
-	var err error
-	bytes := []byte("#cloud-config\n")
-
-	for k, v := range cloudConfig {
-		var jsonData []byte
-		if jsonData, err = v.MarshalJSON(); err != nil {
-			return nil, fmt.Errorf("%s: %w", k, err)
-		}
-
-		var structData interface{}
-		if err := json.Unmarshal(jsonData, &structData); err != nil {
-			log.Debugf("failed to decode %s (%s): %s", k, string(jsonData), err.Error())
-			return nil, fmt.Errorf("%s: %w", k, err)
-		}
-
-		var yamlData []byte
-		if yamlData, err = yaml.Marshal(structData); err != nil {
-			return nil, err
-		}
-
-		bytes = append(bytes, append([]byte(fmt.Sprintf("%s:\n", k)), yamlData...)...)
+	// This creates a parent "root" key to facilitate parsing the schemaless map
+	mapSlice := yaml.JSONObjectToYAMLObject(map[string]interface{}{"root": cloudConfig})
+	if len(mapSlice) <= 0 {
+		return nil, errors.New("Could not convert json cloudConfig object to yaml")
 	}
 
-	return bytes, nil
+	// Just marshal the value of the "root" key
+	yamlData, err := yaml.Marshal(mapSlice[0].Value)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling yaml: %w", err)
+	}
+
+	// Determine whether this is a yip config or a cloud-init one.
+	// Since all fields are optional in yip, we test whether any stage has been defined,
+	// as an indication that this is indeed a yip config.
+	yipConfig := &schema.YipConfig{}
+	if err := yaml.Unmarshal(yamlData, yipConfig); err == nil {
+		if len(yipConfig.Stages) > 0 {
+			return yamlData, nil
+		}
+	}
+
+	// If it is not a yip config, then assume it's cloud-init.
+	cloudConfigBytes := []byte("#cloud-config\n")
+	cloudConfigBytes = append(cloudConfigBytes, yamlData...)
+
+	return cloudConfigBytes, nil
 }
 
 // GetSettingsValue find the given name in Rancher settings and returns its value if found
