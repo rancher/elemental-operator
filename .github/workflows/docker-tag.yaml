@@ -67,7 +67,7 @@ jobs:
           username: ${{ secrets.QUAY_USERNAME }}
           password: ${{ secrets.QUAY_TOKEN }}
       - name: Build operator image
-        uses: docker/build-push-action@v5.3.0
+        uses: docker/build-push-action@v5.4.0
         with:
           context: .
           tags: ${{ steps.meta-operator.outputs.tags }}
@@ -81,7 +81,7 @@ jobs:
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
       - name: Build register image
-        uses: docker/build-push-action@v5.3.0
+        uses: docker/build-push-action@v5.4.0
         with:
           context: .
           tags: ${{ steps.meta-register.outputs.tags }}
@@ -95,7 +95,7 @@ jobs:
             COMMITDATE=${{ steps.export_tag.outputs.commit_date }}
             COMMIT=${{ github.sha }}
       - name: Build seedimage image
-        uses: docker/build-push-action@v5.3.0
+        uses: docker/build-push-action@v5.4.0
         with:
           context: .
           tags: ${{ steps.meta-seedimage.outputs.tags }}
