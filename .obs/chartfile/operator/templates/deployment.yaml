@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kuberentes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
   name: {{ .Release.Name }}
 spec:
   replicas: {{ .Values.replicas }}
