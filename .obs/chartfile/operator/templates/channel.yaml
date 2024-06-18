@@ -1,8 +1,8 @@
-{{ if and .Values.channel .Values.channel.image .Values.channel.tag }}
+{{ if and .Values.channel .Values.channel.image .Values.channel.tag .Values.channel.name }}
 apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSVersionChannel
 metadata:
-  name: elemental-channel
+  name: {{ .Values.channel.name }}
   namespace: fleet-default
 spec:
   options:
