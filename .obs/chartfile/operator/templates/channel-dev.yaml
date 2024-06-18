@@ -1,0 +1,14 @@
+{{ if contains "isv/rancher/elemental" .Values.registryUrl }}
+  {{ if hasPrefix "registry.opensuse.org" .Values.registryUrl }}
+# Unstable channel for isv:Rancher:Elemental OBS projects
+apiVersion: elemental.cattle.io/v1beta1
+kind: ManagedOSVersionChannel
+metadata:
+  name: unstable-channel
+  namespace: fleet-default
+spec:
+  options:
+    image: {{ .Values.registryUrl }}/rancher/elemental-unstable-channel:latest
+  type: custom
+  {{ end }}
+{{ end }}
