@@ -10,7 +10,8 @@ seedImage:
   imagePullPolicy: IfNotPresent
 
 channel:
-  image: "%%IMG_REPO%%/rancher/elemental-channel"
+  name: "sle-micro-channel"
+  image: "registry.suse.com/rancher/elemental-channel"
   tag: "%VERSION%"
 
 # number of operator replicas to deploy
