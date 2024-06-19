@@ -406,7 +406,7 @@ func (i *installer) getAgentConfigBytes() ([]byte, error) {
 		PreserveWorkDir:    false,
 	}
 
-	agentConfigBytes, err := json.Marshal(agentConfig)
+	agentConfigBytes, err := yaml.Marshal(agentConfig)
 	if err != nil {
 		return nil, fmt.Errorf("encoding agentConfig: %w", err)
 	}
