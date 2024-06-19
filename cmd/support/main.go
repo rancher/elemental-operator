@@ -46,7 +46,7 @@ const (
 	elementalAgentPlanDir = "/var/lib/elemental/agent/applied/"
 	rancherAgentPlanDir   = "/var/lib/rancher/agent/applied/"
 	rancherAgentConf      = "/etc/rancher/agent/config.yaml"
-	elementalAgentConf    = "/etc/rancher/agent/config.yaml"
+	elementalAgentConf    = "/etc/rancher/elemental/agent/config.yaml"
 	osRelease             = "/etc/os-release"
 	hostnameFile          = "/etc/hostname"
 	resolvConf            = "/etc/resolv.conf"
