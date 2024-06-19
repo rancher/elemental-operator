@@ -33,25 +33,27 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/yaml" // See: https://github.com/rancher/system-agent/blob/main/pkg/config/config.go
 
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 const (
-	k3sKubeConfig         = "/etc/rancher/k3s/k3s.yaml"
-	k3sKubectl            = "/usr/local/bin/kubectl"
-	rkeKubeConfig         = "/etc/rancher/rke2/rke2.yaml"
-	rkeKubectl            = "/var/lib/rancher/rke2/bin/kubectl"
-	elementalAgentPlanDir = "/var/lib/elemental/agent/applied/"
-	rancherAgentPlanDir   = "/var/lib/rancher/agent/applied/"
-	rancherAgentConf      = "/etc/rancher/agent/config.yaml"
-	elementalAgentConf    = "/etc/rancher/elemental/agent/config.yaml"
-	osRelease             = "/etc/os-release"
-	hostnameFile          = "/etc/hostname"
-	resolvConf            = "/etc/resolv.conf"
-	oemDir                = "/oem/"
-	systemOEMDir          = "/system/oem"
+	k3sKubeConfig              = "/etc/rancher/k3s/k3s.yaml"
+	k3sKubectl                 = "/usr/local/bin/kubectl"
+	rkeKubeConfig              = "/etc/rancher/rke2/rke2.yaml"
+	rkeKubectl                 = "/var/lib/rancher/rke2/bin/kubectl"
+	elementalAgentPlanDir      = "/var/lib/elemental/agent/applied/"
+	rancherAgentPlanDirDefault = "/var/lib/rancher/agent/applied/"
+	rancherAgentConf           = "/etc/rancher/agent/config.yaml"
+	elementalAgentConf         = "/etc/rancher/elemental/agent/config.yaml"
+	osRelease                  = "/etc/os-release"
+	hostnameFile               = "/etc/hostname"
+	resolvConf                 = "/etc/resolv.conf"
+	oemDir                     = "/oem/"
+	systemOEMDir               = "/system/oem"
 )
 
 func getServices() []string {
@@ -142,6 +144,8 @@ func run() (err error) {
 	copyFileWithAltName(elementalAgentConf, tempDir, "elemental-agent-config.yaml")
 	log.Infof("Copying %s", rancherAgentConf)
 	copyFileWithAltName(rancherAgentConf, tempDir, "rancher-agent-config.yaml")
+
+	rancherAgentPlanDir := getSystemAgentAppliedDir(rancherAgentConf)
 
 	// TODO: Flag to skip certain files? They could have passwords set in them so maybe we need to search and replace
 	// any sensitive fields?
@@ -555,4 +559,24 @@ func getKubectl() (string, error) {
 	}
 
 	return "", errors.New("Cant find kubectl")
+}
+
+func getSystemAgentAppliedDir(systemAgentConfigPath string) string {
+	if existsNoWarn(systemAgentConfigPath) {
+		log.Infof("Found Rancher System Agent config: %s", systemAgentConfigPath)
+		configBytes, err := os.ReadFile(systemAgentConfigPath)
+		if err != nil {
+			log.Errorf("Could not read file '%s': %s", systemAgentConfigPath, err.Error())
+			return rancherAgentPlanDirDefault
+		}
+		agentConfig := systemagent.AgentConfig{}
+		err = yaml.Unmarshal(configBytes, &agentConfig)
+		if err != nil {
+			log.Errorf("Could not unmarshal file '%s': %s", systemAgentConfigPath, err.Error())
+			return rancherAgentPlanDirDefault
+		}
+		log.Infof("Determined Rancher System Agent Applied Dir to be: %s", agentConfig.AppliedPlanDir)
+		return agentConfig.AppliedPlanDir
+	}
+	return rancherAgentPlanDirDefault
 }
