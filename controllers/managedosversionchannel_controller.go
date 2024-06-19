@@ -460,6 +460,12 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 		return err
 	}
 
+	// If we don't update the LastSyncedTime on Pod creation, we will loop
+	// creating/deleting the Pod after the ManagedOSVersionChannel.spec.syncInterval
+	// see https://github.com/rancher/elemental-operator/issues/766
+	now := metav1.Now()
+	ch.Status.LastSyncedTime = &now
+
 	meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
 		Type:    elementalv1.ReadyCondition,
 		Reason:  elementalv1.SyncingReason,
