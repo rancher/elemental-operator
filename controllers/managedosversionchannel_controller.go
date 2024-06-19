@@ -367,6 +367,9 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTimestamp) {
 			logger.Info("ManagedOSVersion no longer synced through this channel", "name", version.Name)
 			patchBase := client.MergeFrom(version.DeepCopy())
+			if version.ObjectMeta.Annotations == nil {
+				version.ObjectMeta.Annotations = map[string]string{}
+			}
 			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
 			if err := r.Patch(ctx, version, patchBase); err != nil {
 				logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync", "name", version.Name)
