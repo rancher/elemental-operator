@@ -69,18 +69,18 @@ type HTTPGetAction struct {
 }
 
 type AgentConfig struct {
-	WorkDir                       string `json:"workDirectory,omitempty"`
-	LocalEnabled                  bool   `json:"localEnabled,omitempty"`
-	LocalPlanDir                  string `json:"localPlanDirectory,omitempty"`
-	AppliedPlanDir                string `json:"appliedPlanDirectory,omitempty"`
-	RemoteEnabled                 bool   `json:"remoteEnabled,omitempty"`
-	ConnectionInfoFile            string `json:"connectionInfoFile,omitempty"`
-	PreserveWorkDir               bool   `json:"preserveWorkDirectory,omitempty"`
-	ImagesDir                     string `json:"imagesDirectory,omitempty"`
-	AgentRegistriesFile           string `json:"agentRegistriesFile,omitempty"`
-	ImageCredentialProviderConfig string `json:"imageCredentialProviderConfig,omitempty"`
-	ImageCredentialProviderBinDir string `json:"imageCredentialProviderBinDirectory,omitempty"`
-	InterlockDir                  string `json:"interlockDirectory,omitempty"`
+	WorkDir                       string `json:"workDirectory,omitempty" yaml:"workDirectory,omitempty"`
+	LocalEnabled                  bool   `json:"localEnabled,omitempty" yaml:"localEnabled,omitempty"`
+	LocalPlanDir                  string `json:"localPlanDirectory,omitempty" yaml:"localPlanDirectory,omitempty"`
+	AppliedPlanDir                string `json:"appliedPlanDirectory,omitempty" yaml:"appliedPlanDirectory,omitempty"`
+	RemoteEnabled                 bool   `json:"remoteEnabled,omitempty" yaml:"remoteEnabled,omitempty"`
+	ConnectionInfoFile            string `json:"connectionInfoFile,omitempty" yaml:"connectionInfoFile,omitempty"`
+	PreserveWorkDir               bool   `json:"preserveWorkDirectory,omitempty" yaml:"preserveWorkDirectory,omitempty"`
+	ImagesDir                     string `json:"imagesDirectory,omitempty" yaml:"imagesDirectory,omitempty"`
+	AgentRegistriesFile           string `json:"agentRegistriesFile,omitempty" yaml:"agentRegistriesFile,omitempty"`
+	ImageCredentialProviderConfig string `json:"imageCredentialProviderConfig,omitempty" yaml:"imageCredentialProviderConfig,omitempty"`
+	ImageCredentialProviderBinDir string `json:"imageCredentialProviderBinDirectory,omitempty" yaml:"imageCredentialProviderBinDirectory,omitempty"`
+	InterlockDir                  string `json:"interlockDirectory,omitempty" yaml:"interlockDirectory,omitempty"`
 }
 
 type ConnectionInfo struct {
