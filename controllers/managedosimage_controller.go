@@ -188,6 +188,12 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 			return nil, fmt.Errorf("failed to get managedOSVersion: %w", err)
 		}
 		m = managedOSVersion.Spec.Metadata
+
+		// Add a label that can be used to List all ManagedOSImages referencing a certain ManagedOSVersion.
+		if managedOSImage.ObjectMeta.Labels == nil {
+			managedOSImage.ObjectMeta.Labels = map[string]string{}
+		}
+		managedOSImage.ObjectMeta.Labels[elementalv1.ElementalManagedOSImageVersionNameLabel] = managedOSImage.Spec.ManagedOSVersionName
 	}
 
 	// Entire logic from below is carried from the old code.

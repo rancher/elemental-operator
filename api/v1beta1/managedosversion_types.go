@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	containerType = "container"
-	isoType       = "iso"
+	containerType             = "container"
+	isoType                   = "iso"
+	ManagedOSVersionFinalizer = "managedosversion.elemental.cattle.io"
 )
 
 // +kubebuilder:object:root=true

@@ -20,6 +20,9 @@ const (
 	// ElementalManagedLabel label used to put on resources managed by the elemental operator.
 	ElementalManagedLabel = "elemental.cattle.io/managed"
 
+	// ElementalManagedOSImageVersionNameLabel label used filter ManagedOSImages referencing a ManagedOSVersion.
+	ElementalManagedOSImageVersionNameLabel = "elemental.cattle.io/managed-os-version-name"
+
 	// ElementalManagedOSVersionChannelLabel is used to filter a set of ManagedOSVersions given the channel they originate from.
 	ElementalManagedOSVersionChannelLabel = "elemental.cattle.io/channel"
 
