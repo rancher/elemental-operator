@@ -187,12 +187,12 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 
 	if readyCondition.Status == metav1.ConditionTrue {
 		logger.Info("synchronization already done", "lastSync", lastSync)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: time.Until(lastSync.Add(interval))}, nil
 	}
 
 	if managedOSVersionChannel.Status.FailedSynchronizationAttempts > maxConscutiveFailures {
 		logger.Error(fmt.Errorf("stop retrying"), "sychronization failed consecutively too many times", "failed attempts", managedOSVersionChannel.Status.FailedSynchronizationAttempts)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: time.Until(lastSync.Add(interval))}, nil
 	}
 
 	pod := &corev1.Pod{}
@@ -478,6 +478,11 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 	return nil
 }
 
+// filterChannelEvents is a method that filters reconcile requests events for the channels reconciler.
+// ManagedOSVersionChannelReconciler watches channels and owned pods. This filter ignores pod
+// create/delete/generic events and only reacts on pod phase updates. Channel update events are
+// only reconciled if the update includes a new generation of the resource, all other events are not
+// filtered.
 func filterChannelEvents() predicate.Funcs {
 	return predicate.Funcs{
 		// Process only new generation updates for channels and new phase for pods updates
@@ -523,6 +528,17 @@ func filterChannelEvents() predicate.Funcs {
 			}
 			// Return true in case it watches other types
 			logger.V(log.DebugDepth).Info("Processing generic event", "Obj", e.Object.GetName())
+			return true
+		},
+		// Ignore pods creation
+		CreateFunc: func(e event.CreateEvent) bool {
+			logger := ctrl.LoggerFrom(context.Background())
+
+			if _, ok := e.Object.(*corev1.Pod); ok {
+				return false
+			}
+			// Return true in case it watches other types
+			logger.V(log.DebugDepth).Info("Processing create event", "Obj", e.Object.GetName())
 			return true
 		},
 	}
