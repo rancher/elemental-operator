@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/rancher/elemental-operator/pkg/object"
-	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -60,9 +59,7 @@ type ManagedOSVersionSpec struct {
 	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
 }
 
-type ManagedOSVersionStatus struct {
-	fleetv1.BundleStatus `json:""` //nolint
-}
+type ManagedOSVersionStatus struct{}
 
 // +kubebuilder:object:root=true
 
