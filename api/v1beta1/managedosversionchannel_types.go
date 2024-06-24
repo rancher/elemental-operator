@@ -39,6 +39,11 @@ type ManagedOSVersionChannelSpec struct {
 	// +optional
 	// +kubebuilder:default:="1h"
 	SyncInterval string `json:"syncInterval,omitempty"`
+	// DeleteNoLongerInSyncVersions automatically deletes
+	// all no-longer-in-sync ManagedOSVersions that were created by this channel.
+	// +optional
+	// +kubebuilder:default:=false
+	DeleteNoLongerInSyncVersions bool `json:"deleteNoLongerInSyncVersions,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
