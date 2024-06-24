@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -33,26 +34,34 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/yaml" // See: https://github.com/rancher/system-agent/blob/main/pkg/config/config.go
 
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
 
 const (
-	k3sKubeConfig         = "/etc/rancher/k3s/k3s.yaml"
-	k3sKubectl            = "/usr/local/bin/kubectl"
-	rkeKubeConfig         = "/etc/rancher/rke2/rke2.yaml"
-	rkeKubectl            = "/var/lib/rancher/rke2/bin/kubectl"
-	elementalAgentPlanDir = "/var/lib/elemental/agent/applied/"
-	rancherAgentPlanDir   = "/var/lib/rancher/agent/applied/"
-	rancherAgentConf      = "/etc/rancher/agent/config.yaml"
-	elementalAgentConf    = "/etc/rancher/elemental/agent/config.yaml"
-	osRelease             = "/etc/os-release"
-	hostnameFile          = "/etc/hostname"
-	resolvConf            = "/etc/resolv.conf"
-	oemDir                = "/oem/"
-	systemOEMDir          = "/system/oem"
+	k3sKubeConfig              = "/etc/rancher/k3s/k3s.yaml"
+	k3sKubectl                 = "/usr/local/bin/kubectl"
+	rkeKubeConfig              = "/etc/rancher/rke2/rke2.yaml"
+	rkeConfigPath              = "/etc/rancher/rke2/config.yaml.d/50-rancher.yaml"
+	rkeDataDirDefault          = "/var/lib/rancher/rke2"
+	rkeKubectl                 = "/bin/kubectl"
+	elementalAgentPlanDir      = "/var/lib/elemental/agent/applied/"
+	rancherAgentPlanDirDefault = "/var/lib/rancher/agent/applied/"
+	rancherAgentConf           = "/etc/rancher/agent/config.yaml"
+	elementalAgentConf         = "/etc/rancher/elemental/agent/config.yaml"
+	osRelease                  = "/etc/os-release"
+	hostnameFile               = "/etc/hostname"
+	resolvConf                 = "/etc/resolv.conf"
+	oemDir                     = "/oem/"
+	systemOEMDir               = "/system/oem"
 )
+
+type RKEConfig struct {
+	DataDir string `json:"data-dir,omitempty" yaml:"data-dir,omitempty"`
+}
 
 func getServices() []string {
 	return []string{
@@ -142,6 +151,8 @@ func run() (err error) {
 	copyFileWithAltName(elementalAgentConf, tempDir, "elemental-agent-config.yaml")
 	log.Infof("Copying %s", rancherAgentConf)
 	copyFileWithAltName(rancherAgentConf, tempDir, "rancher-agent-config.yaml")
+
+	rancherAgentPlanDir := getSystemAgentAppliedDir(rancherAgentConf)
 
 	// TODO: Flag to skip certain files? They could have passwords set in them so maybe we need to search and replace
 	// any sensitive fields?
@@ -549,10 +560,69 @@ func getKubectl() (string, error) {
 		log.Infof("Found k3s kubectl at %s", k3sKubectl)
 		return k3sKubectl, nil
 	}
-	if existsNoWarn(rkeKubectl) {
-		log.Infof("Found rke kubectl at %s", rkeKubectl)
-		return rkeKubectl, nil
+	rkeKubectlPath := getRKEKubectlPath()
+	if existsNoWarn(rkeKubectlPath) {
+		log.Infof("Found rke kubectl at %s", rkeKubectlPath)
+		return rkeKubectlPath, nil
 	}
 
 	return "", errors.New("Cant find kubectl")
+}
+
+// getRKEKubectlPath tries to locate the RKE2 installed kubectl, parsing the RKE2 config.
+// Note that this config has .yaml extension but is a JSON file.
+// We try to parse both.
+// See: https://github.com/rancher/rancher/issues/45865
+func getRKEKubectlPath() string {
+	if existsNoWarn(rkeConfigPath) {
+		log.Infof("Found RKE config: %s", rkeConfigPath)
+		rkeConfigBytes, err := os.ReadFile(rkeConfigPath)
+		if err != nil {
+			log.Errorf("Could not read file '%s': %s", rkeConfigPath, err.Error())
+			return filepath.Join(rkeDataDirDefault, rkeKubectl)
+		}
+		rkeConfig := RKEConfig{}
+		err = json.Unmarshal(rkeConfigBytes, &rkeConfig)
+		if err != nil {
+			log.Errorf("Could not unmarshal JSON '%s': %s", rkeConfigPath, err.Error())
+		}
+		if len(rkeConfig.DataDir) > 0 {
+			kubectlPath := filepath.Join(rkeConfig.DataDir, rkeKubectl)
+			log.Infof("Determined kubectl location: %s", kubectlPath)
+			return kubectlPath
+		}
+		// If JSON didn't work, try YAML
+		err = yaml.Unmarshal(rkeConfigBytes, &rkeConfig)
+		if err != nil {
+			log.Errorf("Could not unmarshal YAML '%s': %s", rkeConfigPath, err.Error())
+		}
+		if len(rkeConfig.DataDir) > 0 {
+			kubectlPath := filepath.Join(rkeConfig.DataDir, rkeKubectl)
+			log.Infof("Determined kubectl location: %s", kubectlPath)
+			return kubectlPath
+		}
+	}
+	return filepath.Join(rkeDataDirDefault, rkeKubectl)
+}
+
+// getSystemAgentAppliedDir tries to locate the Rancher System Agent applied plans dir,
+// parsing the system agent config.
+func getSystemAgentAppliedDir(systemAgentConfigPath string) string {
+	if existsNoWarn(systemAgentConfigPath) {
+		log.Infof("Found Rancher System Agent config: %s", systemAgentConfigPath)
+		configBytes, err := os.ReadFile(systemAgentConfigPath)
+		if err != nil {
+			log.Errorf("Could not read file '%s': %s", systemAgentConfigPath, err.Error())
+			return rancherAgentPlanDirDefault
+		}
+		agentConfig := systemagent.AgentConfig{}
+		err = yaml.Unmarshal(configBytes, &agentConfig)
+		if err != nil {
+			log.Errorf("Could not unmarshal file '%s': %s", systemAgentConfigPath, err.Error())
+			return rancherAgentPlanDirDefault
+		}
+		log.Infof("Determined Rancher System Agent Applied Dir to be: %s", agentConfig.AppliedPlanDir)
+		return agentConfig.AppliedPlanDir
+	}
+	return rancherAgentPlanDirDefault
 }
