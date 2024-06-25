@@ -62,7 +62,7 @@ func (r *ManagedOSVersionReconciler) ManagedOSImageToManagedOSVersion(ctx contex
 	// Verify we are actually handling a ManagedOSImage object
 	managedOSImage, ok := obj.(*elementalv1.ManagedOSImage)
 	if !ok {
-		logger.Error(errors.New("Enqueueing error"), fmt.Sprintf("Expected a ElementalHost object, but got %T", obj))
+		logger.Error(errors.New("Enqueueing error"), fmt.Sprintf("Expected a ManagedOSImage object, but got %T", obj))
 		return []ctrl.Request{}
 	}
 
