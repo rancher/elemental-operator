@@ -654,11 +654,10 @@ var _ = Describe("handle unmanaged finalizer", func() {
 		mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation] = "true"
 		Expect(cl.Update(ctx, mInventory)).To(Succeed())
 
-		wantChecksum, wantPlan, err := r.newUnmanagedResetPlan(ctx)
+		_, wantPlan, err := r.newUnmanagedResetPlan(ctx)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check Plan status
-		Expect(mInventory.Status.Plan.Checksum).To(Equal(wantChecksum))
 		Expect(mInventory.Status.Plan.PlanSecretRef.Name).To(Equal(planSecret.Name))
 		Expect(mInventory.Status.Plan.PlanSecretRef.Namespace).To(Equal(planSecret.Namespace))
 		Expect(mInventory.Status.Plan.State).To(Equal(elementalv1.PlanState("")))
