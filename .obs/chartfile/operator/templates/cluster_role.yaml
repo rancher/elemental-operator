@@ -215,6 +215,7 @@ rules:
   - managedosversions/status
   verbs:
   - get
+  - list
   - patch
   - update
 - apiGroups:

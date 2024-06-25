@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var (
+const (
 	MachineInventoryFinalizer                               = "machineinventory.elemental.cattle.io"
 	PlanSecretType                        corev1.SecretType = "elemental.cattle.io/plan"
 	PlanTypeAnnotation                                      = "elemental.cattle.io/plan.type"
