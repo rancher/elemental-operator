@@ -717,6 +717,73 @@ var _ = Describe("managed os version channel controller integration tests", func
 		Expect(managedOSVersion.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]).To(Equal(elementalv1.ElementalManagedOSVersionNoLongerSyncedValue))
 	})
 
+	It("should auto-delete a version after it's removed from channel", func() {
+		ch.Spec.Type = "json"
+		ch.Spec.DeleteNoLongerInSyncVersions = true
+
+		Expect(cl.Create(ctx, ch)).To(Succeed())
+
+		// Pod is created
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err == nil
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		setPodPhase(pod, corev1.PodSucceeded)
+
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, ch)
+			return err == nil && ch.Status.Conditions[0].Status == metav1.ConditionTrue
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      "v0.1.0",
+			Namespace: ch.Namespace,
+		}, managedOSVersion)).To(Succeed())
+		Expect(managedOSVersion.Spec.Version).To(Equal("v0.1.0"))
+
+		// Pod is deleted
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err != nil && apierrors.IsNotFound(err)
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+
+		// Simulate a channel content change
+		syncerProvider.SetJSON(deprecatingJSON)
+
+		// Updating the channel after the minimum time between syncs causes an automatic update
+		patchBase := client.MergeFrom(ch.DeepCopy())
+		ch.Spec.SyncInterval = "10m"
+		Expect(cl.Patch(ctx, ch, patchBase)).To(Succeed())
+
+		// Pod is created
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      ch.Name,
+				Namespace: ch.Namespace,
+			}, pod)
+			return err == nil
+		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		setPodPhase(pod, corev1.PodSucceeded)
+
+		// Check deprecated version was deleted
+		Eventually(func() bool {
+			err := cl.Get(ctx, client.ObjectKey{
+				Name:      "v0.1.0",
+				Namespace: ch.Namespace,
+			}, managedOSVersion)
+			return apierrors.IsNotFound(err)
+		}, 12*time.Second, 2*time.Second).Should(BeTrue(), "No longer in sync version should have been deleted")
+	})
+
 	It("should not reconcile again if it errors during pod lifecycle", func() {
 		ch.Spec.Type = "json"
 

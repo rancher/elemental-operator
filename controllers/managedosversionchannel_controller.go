@@ -375,6 +375,13 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 				logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync", "name", version.Name)
 				return fmt.Errorf("deprecating ManagedOSVersion '%s': %w", version.Name, err)
 			}
+			if ch.Spec.DeleteNoLongerInSyncVersions {
+				logger.Info("Auto-deleting no longer in sync ManagedOSVersion due to channel settings", "name", version.Name)
+				if err := r.Delete(ctx, version); err != nil {
+					logger.Error(err, "Could not auto-delete no longer in sync ManagedOSVersion")
+					return fmt.Errorf("auto-deleting ManagedOSVersion '%s': %w", version.Name, err)
+				}
+			}
 		}
 	}
 

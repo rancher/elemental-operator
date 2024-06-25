@@ -18,6 +18,7 @@ endif
 
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
+CHART_CRDS?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-crds-$(CHART_VERSION).tgz" -print)
 KUBE_VERSION?="v1.27.10"
 CLUSTER_NAME?="operator-e2e"
 COMMITDATE?=$(shell git log -n1 --format="%as")
@@ -197,6 +198,7 @@ setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart s
 # thus losing any registration/inventories/os CRDs already created
 reload-operator: build-docker-operator chart
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
+	helm upgrade -n cattle-elemental-system elemental-operator-crds $(CHART_CRDS)
 	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
 
 .PHONY: vendor
