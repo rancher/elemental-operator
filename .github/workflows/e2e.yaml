@@ -90,9 +90,9 @@ jobs:
   e2e-tests:
     strategy:
       matrix:
-        kubernetes: [ "v1.23.17", "v1.24.15", "v1.25.11", "v1.26.6" ]
+        kubernetes: ["v1.25.16", "v1.26.15", "v1.27.13", "v1.28.9"]
         replicas: ["1"]
-        rancherVersion : ["2.7.8"]
+        rancherVersion : ["2.8.5"]
     runs-on: ubuntu-latest
     needs: prepare-build
     name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
