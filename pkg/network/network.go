@@ -34,6 +34,7 @@ const (
 	firstBootConfigTempPath  = "/tmp/first-boot-network-config.yaml"
 	firstBootConfigFinalPath = "/oem/network/first-boot-network-config.yaml"
 	appliedConfig            = "/oem/network/applied-config.yaml"
+	configApplicator         = "/oem/99-network-config-applicator.yaml"
 )
 
 type Configurator interface {
@@ -100,6 +101,15 @@ func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 }
 
 func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
+	// Delete config applicator to prevent re-applying the config again
+	if err := n.fs.Remove(configApplicator); err != nil {
+		return fmt.Errorf("deleting file '%s': %w", configApplicator, err)
+	}
+	// Also delete the previously applied config, just in case
+	if err := n.fs.Remove(appliedConfig); err != nil {
+		return fmt.Errorf("deleting file '%s': %w", appliedConfig, err)
+	}
+
 	cmd := exec.Command("nmstatectl")
 	cmd.Args = []string{"apply", firstBootConfigFinalPath}
 	if err := cmd.Run(); err != nil {
@@ -149,9 +159,9 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 	}
 
 	// Finally, "persist" the application so that it will stick in recovery mode as well
-	networkConfig := schema.YipConfig{}
-	networkConfig.Name = "Apply network config"
-	networkConfig.Stages = map[string][]schema.Stage{
+	networkConfigApplicator := schema.YipConfig{}
+	networkConfigApplicator.Name = "Apply network config"
+	networkConfigApplicator.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
 				If: fmt.Sprintf("[ ! -f %s ]", appliedConfig),
@@ -174,6 +184,13 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 				Commands: []string{fmt.Sprintf("nmstatectl apply %s", appliedConfig)},
 			},
 		},
+	}
+	networkConfigApplicatorBytes, err := yaml.Marshal(networkConfigApplicator)
+	if err != nil {
+		return fmt.Errorf("marshalling network config applicator: %w", err)
+	}
+	if err := n.fs.WriteFile(configApplicator, networkConfigApplicatorBytes, 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", configApplicator, err)
 	}
 
 	return nil
