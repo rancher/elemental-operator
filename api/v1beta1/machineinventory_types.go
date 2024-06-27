@@ -45,6 +45,10 @@ type MachineInventorySpec struct {
 	// depend upon the MachineRegistration spec.config.elemental.registration.auth value.
 	// +optional
 	MachineHash string `json:"machineHash,omitempty"`
+	// IPAddressRef the reference to the IPAddress that should be applied to the
+	// machine at installation time.
+	// +optional
+	IPAddressClaimRef *corev1.ObjectReference `json:"ipAddressClaimRef,omitempty"`
 }
 
 type MachineInventoryStatus struct {
