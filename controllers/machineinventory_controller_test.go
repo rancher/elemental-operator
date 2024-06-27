@@ -670,9 +670,9 @@ var _ = Describe("handle unmanaged finalizer", func() {
 
 		// Check plan secret was updated
 		Expect(planSecret.Annotations[elementalv1.PlanTypeAnnotation]).To(Equal(elementalv1.PlanTypeReset))
-		Expect(planSecret.Data["plan"]).To(Equal(wantPlan))
-		Expect(planSecret.Data["applied-checksum"]).To(Equal([]byte("")))
-		Expect(planSecret.Data["failed-checksum"]).To(Equal([]byte("")))
+		Expect(string(planSecret.Data["plan"])).To(Equal(string(wantPlan)))
+		Expect(string(planSecret.Data["applied-checksum"])).To(Equal(""))
+		Expect(string(planSecret.Data["failed-checksum"])).To(Equal(""))
 
 		// Check we are holding on the MachineInventory (preventing actual deletion)
 		_, err = r.Reconcile(ctx, reconcile.Request{
