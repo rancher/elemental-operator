@@ -37,6 +37,7 @@ import (
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
@@ -61,22 +62,25 @@ type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State) error
 	InstallElemental(config elementalv1.Config, state register.State) error
 	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
+	ResetNetwork() error
 }
 
-func NewInstaller(fs vfs.FS, disks []*block.Disk) Installer {
+func NewInstaller(fs vfs.FS, disks []*block.Disk, networkConfigurator network.Configurator) Installer {
 	return &installer{
-		fs:     fs,
-		disks:  disks,
-		runner: elementalcli.NewRunner(),
+		fs:                  fs,
+		disks:               disks,
+		runner:              elementalcli.NewRunner(),
+		networkConfigurator: networkConfigurator,
 	}
 }
 
 var _ Installer = (*installer)(nil)
 
 type installer struct {
-	fs     vfs.FS
-	disks  []*block.Disk
-	runner elementalcli.Runner
+	fs                  vfs.FS
+	disks               []*block.Disk
+	runner              elementalcli.Runner
+	networkConfigurator network.Configurator
 }
 
 func (i *installer) InstallElemental(config elementalv1.Config, state register.State) error {
@@ -506,4 +510,8 @@ func (i *installer) cleanupResetPlan() error {
 		return nil
 	}
 	return i.fs.Remove(controllers.LocalResetPlanPath)
+}
+
+func (i *installer) ResetNetwork() error {
+	return i.networkConfigurator.RestoreFirstBootConfig()
 }

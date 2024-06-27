@@ -310,6 +310,17 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 		OneTimeInstructions: []systemagent.OneTimeInstruction{
 			{
 				CommonInstruction: systemagent.CommonInstruction{
+					Name:    "Reset network config",
+					Command: "elemental-register",
+					Args: []string{
+						"--debug",
+						"--reset",
+						"--network",
+					},
+				},
+			},
+			{
+				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "configure next boot to recovery mode",
 					Command: "grub2-editenv",
 					Args: []string{

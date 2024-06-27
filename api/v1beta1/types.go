@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1beta1
 
-import runtime "k8s.io/apimachinery/pkg/runtime"
+import (
+	corev1 "k8s.io/api/core/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+)
 
 const TPMRandomSeedValue = -1
 
@@ -124,6 +127,8 @@ type Elemental struct {
 	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
 	// +optional
 	SystemAgent SystemAgent `json:"system-agent,omitempty" yaml:"system-agent,omitempty"`
+	// +optional
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network,omitempty"`
 }
 
 type Config struct {
@@ -162,3 +167,23 @@ const (
 	DeviceSelectorKeyName DeviceSelectorKey = "Name"
 	DeviceSelectorKeySize DeviceSelectorKey = "Size"
 )
+
+type NetworkTemplate struct {
+	IPAddresses []IPAddressPool                 `json:"ipAddresses,omitempty"`
+	Config      map[string]runtime.RawExtension `json:"config,omitempty"`
+}
+
+type NetworkConfig struct {
+	IPAddresses []IPAddress                     `json:"ipAddresses,omitempty"`
+	Config      map[string]runtime.RawExtension `json:"config,omitempty"`
+}
+
+type IPAddress struct {
+	Name string `json:"name,omitempty"`
+	IP   string `json:"ip,omitempty"`
+}
+
+type IPAddressPool struct {
+	Name      string                  `json:"name,omitempty"`
+	IPPoolRef *corev1.ObjectReference `json:"ipPoolRef,omitempty"`
+}

@@ -31,6 +31,8 @@ type MachineInventorySelectorTemplate struct {
 type MachineInventorySelectorTemplateSpec struct {
 	// Template machine inventory selector template.
 	Template MachineInventorySelector `json:"template"`
+	// +optional
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network,omitempty"`
 }
 
 // +kubebuilder:object:root=true

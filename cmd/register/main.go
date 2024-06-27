@@ -31,6 +31,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
@@ -51,6 +52,7 @@ var (
 	disableBootEntry bool
 	configPath       string
 	statePath        string
+	networkFlag      bool
 )
 
 var (
@@ -64,7 +66,8 @@ func main() {
 		log.Warningf("error probing disks: %s", err)
 	}
 
-	installer := install.NewInstaller(fs, blockInfo.Disks)
+	networkConfigurator := network.NewConfigurator(fs)
+	installer := install.NewInstaller(fs, blockInfo.Disks, networkConfigurator)
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
@@ -141,6 +144,14 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			}
 			// Reset
 			if reset {
+				if networkFlag {
+					log.Info("Resetting network configuration")
+					if err := installer.ResetNetwork(); err != nil {
+						return fmt.Errorf("resetting network: %w", err)
+					}
+					// We are not meant to perform a full reset, just the network.
+					return nil
+				}
 				if cfg.Elemental.Registration.NoToolkit {
 					log.Warning("Reset not supported for no-toolkit hosts")
 				} else {
@@ -174,6 +185,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
+	cmd.Flags().BoolVar(&networkFlag, "network", false, "When used with --reset, it will reset the network configuration")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	cmd.Flags().BoolVar(&disableBootEntry, "disable-boot-entry", false, "Don't create an EFI entry for the system during install/reset")
