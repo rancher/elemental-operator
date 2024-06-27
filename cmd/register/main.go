@@ -76,7 +76,7 @@ func main() {
 	}
 }
 
-func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command {
+func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command { //nolint: gocyclo
 	// Reset config and viper cache
 	cfg = elementalv1.Config{}
 	viper.Reset()

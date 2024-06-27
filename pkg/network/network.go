@@ -140,7 +140,7 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 
 	// Go through the nmstate yaml config and replace template placeholders "{my-ip-name}" with actual IP.
 	for _, ipAddress := range config.IPAddresses {
-		strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", ipAddress.Name), ipAddress.IP)
+		yamlStringData = strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", ipAddress.Name), ipAddress.IP)
 	}
 
 	// Dump the digested config somewhere

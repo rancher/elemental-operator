@@ -44,6 +44,23 @@ spec:
                   Both the authentication method and the identifier used to derive the hash
                   depend upon the MachineRegistration spec.config.elemental.registration.auth value.
                 type: string
+              network:
+                properties:
+                  config:
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type: object
+                  ipAddresses:
+                    items:
+                      properties:
+                        ip:
+                          type: string
+                        name:
+                          type: string
+                      type: object
+                    type: array
+                type: object
               tpmHash:
                 description: |-
                   TPMHash the hash of the TPM EK public key. This is used if you are
