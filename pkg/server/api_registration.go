@@ -111,6 +111,10 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 
 	if isNewInventory(inventory) {
 		initInventory(inventory, registration)
+		if err := i.createIPAddressClaim(inventory, registration); err != nil {
+			log.Errorf("cannot create the IP address claim to the IPAM provider: %s", err)
+			return err
+		}
 	}
 
 	if err = i.serveLoop(conn, inventory, registration); err != nil {
