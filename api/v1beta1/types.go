@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1beta1
 
-import runtime "k8s.io/apimachinery/pkg/runtime"
+import (
+	corev1 "k8s.io/api/core/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+)
 
 const TPMRandomSeedValue = -1
 
@@ -126,9 +129,16 @@ type Elemental struct {
 	SystemAgent SystemAgent `json:"system-agent,omitempty" yaml:"system-agent,omitempty"`
 }
 
+type Network struct {
+	// +optional
+	IPPoolRef *corev1.TypedLocalObjectReference `json:"ipPoolRef,omitempty"`
+}
+
 type Config struct {
 	// +optional
 	Elemental Elemental `json:"elemental,omitempty" yaml:"elemental"`
+	// +optional
+	Network Network `json:"network,omitempty" yaml:"network"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
