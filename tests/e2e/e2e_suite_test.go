@@ -380,6 +380,7 @@ func getElementalOperatorLogs() {
 	)).To(Succeed())
 
 	for _, pod := range podList.Items {
+		kubectl.Run("wait", "--for=condition=Ready", "pod", pod.Name, "-n", pod.Namespace, "--timeout=30s")
 		for _, container := range pod.Spec.Containers {
 			output, err := kubectl.Run("logs", pod.Name, "-c", container.Name, "-n", pod.Namespace)
 			Expect(err).ToNot(HaveOccurred())
