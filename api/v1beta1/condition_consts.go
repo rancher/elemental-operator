@@ -47,6 +47,9 @@ const (
 	// PlanFailure documents failure of plan owned by the machine inventory object.
 	PlanFailureReason = "PlanFailure"
 
+	// PlanFailure documents failure of plan owned by the machine inventory object.
+	IPReleaseFailureReason = "IPReleaseFailure"
+
 	// PlanSuccessfullyAppliedReason documents that plan owned by the machine inventory object was successfully applied.
 	PlanSuccessfullyAppliedReason = "PlanSuccessfullyApplied"
 )
