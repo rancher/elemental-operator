@@ -58,6 +58,9 @@ type MachineInventoryStatus struct {
 	// PlanStatus reflect the status of the plan owned by the machine inventory object.
 	// +optional
 	Plan *PlanStatus `json:"plan,omitempty"`
+	// IPAddressRef contains the reference to the IPAddress generated from the IPAddressClaim in IPAddressClaimRef
+	// +optional
+	IPAddressRef *corev1.ObjectReference `json:"ipAddressRef,omitempty"`
 }
 
 type PlanState string
