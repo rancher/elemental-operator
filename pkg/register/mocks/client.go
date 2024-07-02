@@ -58,6 +58,21 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// GetNetworkConfig mocks base method.
+func (m *MockClient) GetNetworkConfig(arg0 v1beta1.Registration, arg1 []byte, arg2 *register.State) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetworkConfig", arg0, arg1, arg2)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNetworkConfig indicates an expected call of GetNetworkConfig.
+func (mr *MockClientMockRecorder) GetNetworkConfig(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkConfig", reflect.TypeOf((*MockClient)(nil).GetNetworkConfig), arg0, arg1, arg2)
+}
+
 // Register mocks base method.
 func (m *MockClient) Register(arg0 v1beta1.Registration, arg1 []byte, arg2 *register.State) ([]byte, error) {
 	m.ctrl.T.Helper()

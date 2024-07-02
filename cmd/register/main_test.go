@@ -44,6 +44,7 @@ func TestRegister(t *testing.T) {
 
 var (
 	baseConfigFixture = elementalv1.Config{
+		Network: elementalv1.NetworkTemplate{},
 		Elemental: elementalv1.Elemental{
 			Registration: elementalv1.Registration{
 				URL:             "https://127.0.0.1.sslip.io",
@@ -56,6 +57,7 @@ var (
 		},
 	}
 	notoolkitConfigFixture = elementalv1.Config{
+		Network: elementalv1.NetworkTemplate{},
 		Elemental: elementalv1.Elemental{
 			Registration: elementalv1.Registration{
 				URL:             "https://127.0.0.1.sslip.io",
@@ -69,6 +71,7 @@ var (
 		},
 	}
 	alternateConfigFixture = elementalv1.Config{
+		Network: elementalv1.NetworkTemplate{},
 		Elemental: elementalv1.Elemental{
 			Registration: elementalv1.Registration{
 				URL:             "https://127.0.0.2.sslip.io",

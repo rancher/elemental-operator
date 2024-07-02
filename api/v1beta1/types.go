@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1beta1
 
-import runtime "k8s.io/apimachinery/pkg/runtime"
+import (
+	corev1 "k8s.io/api/core/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+)
 
 const TPMRandomSeedValue = -1
 
@@ -126,9 +129,16 @@ type Elemental struct {
 	SystemAgent SystemAgent `json:"system-agent,omitempty" yaml:"system-agent,omitempty"`
 }
 
+type Network struct {
+	// +optional
+	IPPoolRef *corev1.TypedLocalObjectReference `json:"ipPoolRef,omitempty"`
+}
+
 type Config struct {
 	// +optional
 	Elemental Elemental `json:"elemental,omitempty" yaml:"elemental"`
+	// +optional
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
@@ -162,3 +172,25 @@ const (
 	DeviceSelectorKeyName DeviceSelectorKey = "Name"
 	DeviceSelectorKeySize DeviceSelectorKey = "Size"
 )
+
+// NetworkTemplate contains a list of IPAddressPools and a network config template.
+// This template can be defined in both MachineRegistrations and MachineSelectors.
+type NetworkTemplate struct {
+	IPAddresses []IPAddressPool                 `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	Config      map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
+// NetworkConfig contains a list of claimed IPAddresses and a network config template.
+// This config is a digested NetworkTemplate, the MachineInventory Ready condition highlight that
+// this config is ready to be consumed, this means all needed IPAddressClaims for this machine
+// have been created and the IPAM provider served real IPAddresses that can be applied to the machine.
+type NetworkConfig struct {
+	IPAddresses map[string]string               `json:"ipAddresses,omitempty"`
+	Config      map[string]runtime.RawExtension `json:"config,omitempty"`
+}
+
+// IPAddressPool contains an IPAddressPool reference that can be used to generate an IPAddressClaim.
+type IPAddressPool struct {
+	Name      string                            `json:"name,omitempty"`
+	IPPoolRef *corev1.TypedLocalObjectReference `json:"ipPoolRef,omitempty"`
+}

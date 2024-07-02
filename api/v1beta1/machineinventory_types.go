@@ -30,6 +30,7 @@ const (
 	PlanTypeReset                                           = "reset"
 	MachineInventoryResettableAnnotation                    = "elemental.cattle.io/resettable"
 	MachineInventoryOSUnmanagedAnnotation                   = "elemental.cattle.io/os.unmanaged"
+	MachineInventoryNetworkConfigApplied                    = "elemental.cattle.io/network.applied"
 )
 
 type MachineInventorySpec struct {
@@ -45,6 +46,13 @@ type MachineInventorySpec struct {
 	// depend upon the MachineRegistration spec.config.elemental.registration.auth value.
 	// +optional
 	MachineHash string `json:"machineHash,omitempty"`
+	// IPAddressClaims is a map of IPAddressClaim associated to this machine.
+	// The map key is the ipAddressPool.name.
+	IPAddressClaims map[string]*corev1.ObjectReference `json:"ipAddressClaims,omitempty"`
+	// IPAddressPools is a list of IPAddressPool associated to this machine.
+	IPAddressPools []IPAddressPool `json:"ipAddressPools,omitempty"`
+	// NetworkConfig is the final NetworkConfig.
+	Network NetworkConfig `json:"network,omitempty"`
 }
 
 type MachineInventoryStatus struct {

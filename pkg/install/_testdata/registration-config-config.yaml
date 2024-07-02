@@ -15,6 +15,7 @@ stages:
                         emulated-tpm-seed: 9876543210
                         no-smbios: true
                         auth: a test auth
+                network: {}
               encoding: ""
               ownerstring: ""
           directories:
