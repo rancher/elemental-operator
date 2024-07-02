@@ -44,52 +44,105 @@ spec:
             type: object
           spec:
             properties:
-              ipAddressClaimRef:
+              ipAddressClaims:
+                additionalProperties:
+                  description: |-
+                    ObjectReference contains enough information to let you inspect or modify the referred object.
+                    ---
+                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
+                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
+                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
+                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
+                        Those cannot be well described when embedded.
+                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
+                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
+                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
+                        and the version of the actual struct is irrelevant.
+                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
+                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
+
+
+                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
+                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
+                        TODO: this design is not final and this field is subject to change in the future.
+                      type: string
+                    kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                      type: string
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                      type: string
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
                 description: |-
-                  IPAddressRef the reference to the IPAddress that should be applied to the
-                  machine at installation time.
-                properties:
-                  apiVersion:
-                    description: API version of the referent.
-                    type: string
-                  fieldPath:
-                    description: |-
-                      If referring to a piece of an object instead of an entire object, this string
-                      should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                      For example, if the object reference is to a container within a pod, this would take on a value like:
-                      "spec.containers{name}" (where "name" refers to the name of the container that triggered
-                      the event) or if no container name is specified "spec.containers[2]" (container with
-                      index 2 in this pod). This syntax is chosen only to have some well-defined way of
-                      referencing a part of an object.
-                      TODO: this design is not final and this field is subject to change in the future.
-                    type: string
-                  kind:
-                    description: |-
-                      Kind of the referent.
-                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-                    type: string
-                  name:
-                    description: |-
-                      Name of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                  namespace:
-                    description: |-
-                      Namespace of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-                    type: string
-                  resourceVersion:
-                    description: |-
-                      Specific resourceVersion to which this reference is made, if any.
-                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-                    type: string
-                  uid:
-                    description: |-
-                      UID of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
-                    type: string
+                  IPAddressClaims is a map of IPAddressClaim associated to this machine.
+                  The map key is the ipAddressPool.name.
                 type: object
-                x-kubernetes-map-type: atomic
+              ipAddressPools:
+                description: IPAddressPools is a list of IPAddressPool associated
+                  to this machine.
+                items:
+                  description: IPAddressPool contains an IPAddressPool reference that
+                    can be used to generate an IPAddressClaim.
+                  properties:
+                    ipPoolRef:
+                      description: |-
+                        TypedLocalObjectReference contains enough information to let you locate the
+                        typed referenced object inside the same namespace.
+                      properties:
+                        apiGroup:
+                          description: |-
+                            APIGroup is the group for the resource being referenced.
+                            If APIGroup is not specified, the specified Kind must be in the core API group.
+                            For any other third-party types, APIGroup is required.
+                          type: string
+                        kind:
+                          description: Kind is the type of resource being referenced
+                          type: string
+                        name:
+                          description: Name is the name of resource being referenced
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    name:
+                      type: string
+                  type: object
+                type: array
               machineHash:
                 description: |-
                   MachineHash the hash of the identifier used by the host to identify
@@ -97,6 +150,19 @@ spec:
                   Both the authentication method and the identifier used to derive the hash
                   depend upon the MachineRegistration spec.config.elemental.registration.auth value.
                 type: string
+              network:
+                description: NetworkConfig is the final NetworkConfig.
+                properties:
+                  config:
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type: object
+                  ipAddresses:
+                    additionalProperties:
+                      type: string
+                    type: object
+                type: object
               tpmHash:
                 description: |-
                   TPMHash the hash of the TPM EK public key. This is used if you are
@@ -178,51 +244,6 @@ spec:
                   - type
                   type: object
                 type: array
-              ipAddressRef:
-                description: IPAddressRef contains the reference to the IPAddress
-                  generated from the IPAddressClaim in IPAddressClaimRef
-                properties:
-                  apiVersion:
-                    description: API version of the referent.
-                    type: string
-                  fieldPath:
-                    description: |-
-                      If referring to a piece of an object instead of an entire object, this string
-                      should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                      For example, if the object reference is to a container within a pod, this would take on a value like:
-                      "spec.containers{name}" (where "name" refers to the name of the container that triggered
-                      the event) or if no container name is specified "spec.containers[2]" (container with
-                      index 2 in this pod). This syntax is chosen only to have some well-defined way of
-                      referencing a part of an object.
-                      TODO: this design is not final and this field is subject to change in the future.
-                    type: string
-                  kind:
-                    description: |-
-                      Kind of the referent.
-                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-                    type: string
-                  name:
-                    description: |-
-                      Name of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                  namespace:
-                    description: |-
-                      Namespace of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-                    type: string
-                  resourceVersion:
-                    description: |-
-                      Specific resourceVersion to which this reference is made, if any.
-                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-                    type: string
-                  uid:
-                    description: |-
-                      UID of the referent.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
               plan:
                 description: PlanStatus reflect the status of the plan owned by the
                   machine inventory object.
@@ -335,6 +356,47 @@ spec:
             type: object
           spec:
             properties:
+              network:
+                description: Network is the network template to be applied during
+                  MachineInventory adoption.
+                properties:
+                  config:
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type: object
+                  ipAddresses:
+                    items:
+                      description: IPAddressPool contains an IPAddressPool reference
+                        that can be used to generate an IPAddressClaim.
+                      properties:
+                        ipPoolRef:
+                          description: |-
+                            TypedLocalObjectReference contains enough information to let you locate the
+                            typed referenced object inside the same namespace.
+                          properties:
+                            apiGroup:
+                              description: |-
+                                APIGroup is the group for the resource being referenced.
+                                If APIGroup is not specified, the specified Kind must be in the core API group.
+                                For any other third-party types, APIGroup is required.
+                              type: string
+                            kind:
+                              description: Kind is the type of resource being referenced
+                              type: string
+                            name:
+                              description: Name is the name of resource being referenced
+                              type: string
+                          required:
+                          - kind
+                          - name
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        name:
+                          type: string
+                      type: object
+                    type: array
+                type: object
               providerID:
                 description: |-
                   ProviderID the identifier for the elemental instance.
@@ -568,6 +630,49 @@ spec:
                     type: object
                   spec:
                     properties:
+                      network:
+                        description: Network is the network template to be applied
+                          during MachineInventory adoption.
+                        properties:
+                          config:
+                            additionalProperties:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          ipAddresses:
+                            items:
+                              description: IPAddressPool contains an IPAddressPool
+                                reference that can be used to generate an IPAddressClaim.
+                              properties:
+                                ipPoolRef:
+                                  description: |-
+                                    TypedLocalObjectReference contains enough information to let you locate the
+                                    typed referenced object inside the same namespace.
+                                  properties:
+                                    apiGroup:
+                                      description: |-
+                                        APIGroup is the group for the resource being referenced.
+                                        If APIGroup is not specified, the specified Kind must be in the core API group.
+                                        For any other third-party types, APIGroup is required.
+                                      type: string
+                                    kind:
+                                      description: Kind is the type of resource being
+                                        referenced
+                                      type: string
+                                    name:
+                                      description: Name is the name of resource being
+                                        referenced
+                                      type: string
+                                  required:
+                                  - kind
+                                  - name
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                name:
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
                       providerID:
                         description: |-
                           ProviderID the identifier for the elemental instance.
@@ -921,29 +1026,48 @@ spec:
                         type: object
                     type: object
                   network:
+                    description: |-
+                      NetworkTemplate contains a list of IPAddressPools and a network config template.
+                      This template can be defined in both MachineRegistrations and MachineSelectors.
                     properties:
-                      ipPoolRef:
-                        description: |-
-                          TypedLocalObjectReference contains enough information to let you locate the
-                          typed referenced object inside the same namespace.
-                        properties:
-                          apiGroup:
-                            description: |-
-                              APIGroup is the group for the resource being referenced.
-                              If APIGroup is not specified, the specified Kind must be in the core API group.
-                              For any other third-party types, APIGroup is required.
-                            type: string
-                          kind:
-                            description: Kind is the type of resource being referenced
-                            type: string
-                          name:
-                            description: Name is the name of resource being referenced
-                            type: string
-                        required:
-                        - kind
-                        - name
+                      config:
+                        additionalProperties:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         type: object
-                        x-kubernetes-map-type: atomic
+                      ipAddresses:
+                        items:
+                          description: IPAddressPool contains an IPAddressPool reference
+                            that can be used to generate an IPAddressClaim.
+                          properties:
+                            ipPoolRef:
+                              description: |-
+                                TypedLocalObjectReference contains enough information to let you locate the
+                                typed referenced object inside the same namespace.
+                              properties:
+                                apiGroup:
+                                  description: |-
+                                    APIGroup is the group for the resource being referenced.
+                                    If APIGroup is not specified, the specified Kind must be in the core API group.
+                                    For any other third-party types, APIGroup is required.
+                                  type: string
+                                kind:
+                                  description: Kind is the type of resource being
+                                    referenced
+                                  type: string
+                                name:
+                                  description: Name is the name of resource being
+                                    referenced
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            name:
+                              type: string
+                          type: object
+                        type: array
                     type: object
                 type: object
               machineInventoryAnnotations:

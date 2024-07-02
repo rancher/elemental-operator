@@ -173,29 +173,48 @@ spec:
                         type: object
                     type: object
                   network:
+                    description: |-
+                      NetworkTemplate contains a list of IPAddressPools and a network config template.
+                      This template can be defined in both MachineRegistrations and MachineSelectors.
                     properties:
-                      ipPoolRef:
-                        description: |-
-                          TypedLocalObjectReference contains enough information to let you locate the
-                          typed referenced object inside the same namespace.
-                        properties:
-                          apiGroup:
-                            description: |-
-                              APIGroup is the group for the resource being referenced.
-                              If APIGroup is not specified, the specified Kind must be in the core API group.
-                              For any other third-party types, APIGroup is required.
-                            type: string
-                          kind:
-                            description: Kind is the type of resource being referenced
-                            type: string
-                          name:
-                            description: Name is the name of resource being referenced
-                            type: string
-                        required:
-                        - kind
-                        - name
+                      config:
+                        additionalProperties:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         type: object
-                        x-kubernetes-map-type: atomic
+                      ipAddresses:
+                        items:
+                          description: IPAddressPool contains an IPAddressPool reference
+                            that can be used to generate an IPAddressClaim.
+                          properties:
+                            ipPoolRef:
+                              description: |-
+                                TypedLocalObjectReference contains enough information to let you locate the
+                                typed referenced object inside the same namespace.
+                              properties:
+                                apiGroup:
+                                  description: |-
+                                    APIGroup is the group for the resource being referenced.
+                                    If APIGroup is not specified, the specified Kind must be in the core API group.
+                                    For any other third-party types, APIGroup is required.
+                                  type: string
+                                kind:
+                                  description: Kind is the type of resource being
+                                    referenced
+                                  type: string
+                                name:
+                                  description: Name is the name of resource being
+                                    referenced
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            name:
+                              type: string
+                          type: object
+                        type: array
                     type: object
                 type: object
               machineInventoryAnnotations:

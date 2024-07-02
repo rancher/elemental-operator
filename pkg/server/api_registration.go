@@ -102,10 +102,6 @@ func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Re
 
 	if isNewInventory(inventory) {
 		initInventory(inventory, registration)
-		if err := i.createIPAddressClaim(inventory, registration); err != nil {
-			log.Errorf("cannot create the IP address claim to the IPAM provider: %s", err)
-			return err
-		}
 	}
 
 	if err = i.serveLoop(conn, inventory, registration); err != nil {
@@ -274,6 +270,8 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return fmt.Errorf("failed to parse system data: %w", err)
 			}
 			tmpl.Fill(systemData)
+		case register.MsgNetworkConfig:
+			return i.handleGetNetworkConfig(conn, inventory)
 		default:
 			return fmt.Errorf("got unexpected message: %s", msgType)
 		}
@@ -290,6 +288,17 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 			log.Errorf("Error reporting back error to client: %v\n", writeErr)
 		}
 		return errInventoryNotFound
+	}
+	return nil
+}
+
+func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory) error {
+	networkConfigData, err := json.Marshal(inventory.Spec.Network)
+	if err != nil {
+		return fmt.Errorf("marshalling network config data: %w", err)
+	}
+	if err := register.WriteMessage(conn, register.MsgNetworkConfig, networkConfigData); err != nil {
+		return fmt.Errorf("sending network config data: %w", err)
 	}
 	return nil
 }

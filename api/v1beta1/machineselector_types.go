@@ -38,6 +38,9 @@ type MachineInventorySelectorSpec struct {
 	ProviderID string `json:"providerID,omitempty"`
 	// Selector selector to choose elemental machines.
 	Selector metav1.LabelSelector `json:"selector,omitempty"`
+	// Network is the network template to be applied during MachineInventory adoption.
+	// +optional
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network"`
 }
 
 type MachineInventorySelectorStatus struct {

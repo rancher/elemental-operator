@@ -27,10 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -171,6 +168,10 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 		}
 		inventory.Annotations[elementalv1.MachineInventoryResettableAnnotation] = "true"
 	}
+
+	// Forward network config from Registration
+	inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
+	inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
@@ -223,30 +224,6 @@ func (i *InventoryServer) updateMachineInventory(inventory *elementalv1.MachineI
 	log.Infof("machine inventory updated: %s", inventory.Name)
 
 	return inventory, nil
-}
-
-func (i *InventoryServer) createIPAddressClaim(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
-	ipAddressClaimName := "elemental-" + uuid.NewString()
-	if registration.Spec.Config.Network.IPPoolRef != nil {
-		ipClaim := &ipamv1.IPAddressClaim{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ipAddressClaimName,
-				Namespace: inventory.Namespace,
-			},
-			Spec: ipamv1.IPAddressClaimSpec{
-				PoolRef: *registration.Spec.Config.Network.IPPoolRef,
-			},
-		}
-		if err := i.Create(i, ipClaim); err != nil {
-			return fmt.Errorf("IPAddressClaim creation failed: %w", err)
-		}
-
-		inventory.Spec.IPAddressClaimRef = &corev1.ObjectReference{
-			Namespace: ipClaim.Namespace,
-			Name:      ipClaim.Name,
-		}
-	}
-	return nil
 }
 
 func (i *InventoryServer) commitMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {

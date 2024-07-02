@@ -43,6 +43,7 @@ import (
 
 type Client interface {
 	Register(reg elementalv1.Registration, caCert []byte, state *State) ([]byte, error)
+	GetNetworkConfig(reg elementalv1.Registration, caCert []byte, state *State) ([]byte, error)
 }
 
 type authClient interface {
@@ -59,6 +60,44 @@ type client struct{}
 
 func NewClient() Client {
 	return &client{}
+}
+
+func (r *client) GetNetworkConfig(reg elementalv1.Registration, caCert []byte, state *State) ([]byte, error) {
+	auth, err := getAuthenticator(reg, state)
+	if err != nil {
+		return nil, fmt.Errorf("initializing authenticator: %w", err)
+	}
+
+	log.Infof("Connect to %s", reg.URL)
+
+	conn, err := initWebsocketConn(reg.URL, caCert, auth)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if err := authenticate(conn, auth); err != nil {
+		return nil, fmt.Errorf("%s authentication failed: %w", auth.GetName(), err)
+	}
+	log.Infof("%s authentication completed", auth.GetName())
+
+	log.Debugf("elemental-register protocol version: %d", MsgLast)
+	protoVersion, err := negotiateProtoVersion(conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to negotiate protocol version: %w", err)
+	}
+	log.Infof("Negotiated protocol version: %d", protoVersion)
+	if protoVersion < MsgNetworkConfig {
+		log.Infof("Elemental Operator does not support Network configuration.")
+		return nil, nil
+	}
+
+	log.Info("Get elemental configuration")
+	if err := WriteMessage(conn, MsgNetworkConfig, []byte{}); err != nil {
+		return nil, fmt.Errorf("request elemental network configuration: %w", err)
+	}
+
+	return getNetworkConfig(conn)
 }
 
 // Register attempts to register the machine with the elemental-operator.
@@ -406,6 +445,28 @@ func getConfig(conn *websocket.Conn) ([]byte, error) {
 		}
 		return nil, errors.New(msg.Message)
 	case MsgConfig:
+		return data, nil
+	default:
+		return nil, fmt.Errorf("unexpected response message: %s", msgType)
+	}
+}
+
+func getNetworkConfig(conn *websocket.Conn) ([]byte, error) {
+	msgType, data, err := ReadMessage(conn)
+	if err != nil {
+		return nil, fmt.Errorf("read network configuration response: %w", err)
+	}
+
+	log.Debugf("Got network configuration response: %s", msgType.String())
+
+	switch msgType {
+	case MsgError:
+		msg := &ErrorMessage{}
+		if err = yaml.Unmarshal(data, &msg); err != nil {
+			return nil, fmt.Errorf("unmarshalling error message: %w", err)
+		}
+		return nil, errors.New(msg.Message)
+	case MsgNetworkConfig:
 		return data, nil
 	default:
 		return nil, fmt.Errorf("unexpected response message: %s", msgType)

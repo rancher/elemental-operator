@@ -145,14 +145,6 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 				})
 				return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
 			}
-			if err := r.releaseIPAddressClaim(ctx, mInventory); err != nil {
-				meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-					Type:    elementalv1.ReadyCondition,
-					Reason:  elementalv1.IPReleaseFailureReason,
-					Status:  metav1.ConditionFalse,
-					Message: err.Error(),
-				})
-			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, nil
@@ -168,17 +160,18 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 		return ctrl.Result{}, fmt.Errorf("failed to create plan secret: %w", err)
 	}
 
-	if requeue, err := r.updateInventoryWithIPAddressRef(ctx, mInventory); err != nil {
-		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-			Type:    elementalv1.ReadyCondition,
-			Reason:  elementalv1.WaitingForIPAddressReason,
-			Status:  metav1.ConditionFalse,
-			Message: err.Error(),
-		})
-		if requeue {
-			return ctrl.Result{RequeueAfter: time.Second}, err
+	if r.networkNeedsReconcile(*mInventory) {
+		result, err := r.reconcileNetworkConfig(ctx, mInventory)
+		if err != nil {
+			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.ReadyCondition,
+				Reason:  elementalv1.NetworkConfigFailure,
+				Status:  metav1.ConditionFalse,
+				Message: err.Error(),
+			})
+			return ctrl.Result{}, fmt.Errorf("reconciling network config: %w", err)
 		}
-		return ctrl.Result{}, err
+		return result, nil
 	}
 
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
@@ -296,62 +289,91 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	return nil
 }
 
-func (r *MachineInventoryReconciler) updateInventoryWithIPAddressRef(ctx context.Context, mInventory *elementalv1.MachineInventory) (bool, error) {
-	logger := ctrl.LoggerFrom(ctx)
-
-	logger.V(log.DebugDepth).Info("Attempting to set ipAddressRef")
-
-	if mInventory.Spec.IPAddressClaimRef == nil {
-		logger.V(log.DebugDepth).Info("No ipAddressClaimRef is set, skip it")
-		return false, nil
-	}
-
-	ipAddress := &ipamv1.IPAddress{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: mInventory.Spec.IPAddressClaimRef.Namespace,
-		Name:      mInventory.Spec.IPAddressClaimRef.Name,
-	}, ipAddress); err != nil {
-		if apierrors.IsNotFound(err) {
-			return true, fmt.Errorf("IPAddress not found, requeuing")
+// networkNeedsReconcile checks if there is an IPAddress for each IPPool referenced by the MachineInventory.
+func (r *MachineInventoryReconciler) networkNeedsReconcile(mInventory elementalv1.MachineInventory) bool {
+	for _, ipPool := range mInventory.Spec.IPAddressPools {
+		_, ipExists := mInventory.Spec.Network.IPAddresses[ipPool.Name]
+		if !ipExists {
+			return true
 		}
-		return false, fmt.Errorf("cannot retrieve IPAddress %s/%s: %w", ipAddress.Namespace, ipAddress.Name, err)
 	}
-
-	mInventory.Status.IPAddressRef = &corev1.ObjectReference{
-		Namespace: ipAddress.Namespace,
-		Name:      ipAddress.Name,
-	}
-	return false, nil
+	return false
 }
 
-func (r *MachineInventoryReconciler) releaseIPAddressClaim(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
+func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context, mInventory *elementalv1.MachineInventory) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Reconciling Network Config")
 
-	logger.V(log.DebugDepth).Info("Attempting to release the ipAddressRef")
-
-	if mInventory.Spec.IPAddressClaimRef == nil {
-		return nil
+	// Before we do any change, we make sure the MachineInventory is patched with the appropriate status and annotation.
+	// This will put the MachineInventory "on hold" with a Ready=false condition, so that the elemental-register knows
+	// the config is not ready yet to be consumed. IPAddressClaims must be created and IPAddresses must be served first.
+	if mInventory.Annotations[elementalv1.MachineInventoryNetworkConfigApplied] != "false" {
+		logger.Info("Marking Network Config as deprecated")
+		mInventory.Annotations[elementalv1.MachineInventoryNetworkConfigApplied] = "false"
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.ReconcilingNetworkConfig,
+			Status:  metav1.ConditionFalse,
+			Message: "NetworkConfig needs changes",
+		})
+		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
 
-	ipAddressClaim := &ipamv1.IPAddressClaim{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Namespace: mInventory.Spec.IPAddressClaimRef.Namespace,
-		Name:      mInventory.Spec.IPAddressClaimRef.Name,
-	}, ipAddressClaim); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("IPAddressClaim was already cleared")
-		} else {
-			return fmt.Errorf("cannot retrieve IPAddressClaim %s/%s: %w", ipAddressClaim.Namespace, ipAddressClaim.Name, err)
+	// Loops over the IPAddressPools and create an IPClaim for each
+	for _, ipPool := range mInventory.Spec.IPAddressPools {
+		ipClaimName := fmt.Sprintf("%s-%s", mInventory.Name, ipPool.Name)
+		ipClaim := &ipamv1.IPAddressClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ipClaimName,
+				Namespace: mInventory.Namespace,
+			},
+			Spec: ipamv1.IPAddressClaimSpec{
+				PoolRef: *ipPool.IPPoolRef,
+			},
+		}
+		if err := r.Create(ctx, ipClaim); apierrors.IsAlreadyExists(err) {
+			logger.Info("Reusing already existing IPAddressClaim", "IPAddressClaim", ipClaimName)
+		} else if err != nil {
+			return ctrl.Result{}, fmt.Errorf("creating IPAddressClaim '%s': %w", ipClaimName, err)
+		}
+
+		if err := r.Get(ctx, client.ObjectKeyFromObject(ipClaim), ipClaim); err != nil {
+			return ctrl.Result{}, fmt.Errorf("getting IPAddressClaim '%s': %w", ipClaimName, err)
+		}
+
+		mInventory.Spec.IPAddressClaims[ipPool.Name] = &corev1.ObjectReference{
+			APIVersion: ipClaim.APIVersion,
+			Kind:       ipClaim.Kind,
+			Name:       ipClaim.Name,
+			Namespace:  ipClaim.Namespace,
+			UID:        ipClaim.UID,
 		}
 	}
 
-	if err := r.Delete(ctx, ipAddressClaim); err != nil {
-		return fmt.Errorf("cannot delete IPAddressClaim %s/%s: %w", ipAddressClaim.Namespace, ipAddressClaim.Name, err)
+	// Loops over the IPAddressClaims and get the IPAddresses
+	for name, ipClaimRef := range mInventory.Spec.IPAddressClaims {
+		ipAddress := &ipamv1.IPAddress{}
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      ipClaimRef.Name,
+			Namespace: ipClaimRef.Namespace,
+		}, ipAddress)
+		if apierrors.IsNotFound(err) {
+			logger.Info("IPAddress not found. Requeuing.", "IPAddress", ipClaimRef.Name)
+			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.ReadyCondition,
+				Reason:  elementalv1.WaitingForIPAddressReason,
+				Status:  metav1.ConditionFalse,
+				Message: fmt.Sprintf("Waiting to claim IPAddress %s", ipClaimRef.Name),
+			})
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+		}
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("getting IPAddress '%s': %w", ipClaimRef.Name, err)
+		}
+		mInventory.Spec.Network.IPAddresses[name] = ipAddress.Spec.Address
 	}
 
-	mInventory.Spec.IPAddressClaimRef = nil
-	mInventory.Status.IPAddressRef = nil
-	return nil
+	return ctrl.Result{}, nil
 }
 
 func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, []byte, error) {
