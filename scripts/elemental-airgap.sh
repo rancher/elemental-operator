@@ -26,25 +26,28 @@ HAULER_REG_DUMMY_FILE="hauler-registry.txt"
 : ${CHANNEL_ONLY:="false"}
 : ${CHANNEL_IMAGE_NAME:="\$CHANNEL_IMAGE_NAME"}
 : ${SKIP_ARCHIVE_CREATION:="false"}
+: ${ALL_CHANNELS:="false"}
 
 print_help() {
     cat <<- EOF
 Usage: $0  [OPTION]  -r LOCAL_REGISTRY  ELEMENTAL_OPERATOR_CHART
+    [-ac|-all-channels] add all defined ManagedOSVersionChannel.
     [-c|--crds-chart] Elemental CRDS chart (if URL, will be downloaded).
-    [-co|--channel-only] just extract and rebuild the ManagedOSVersionChannel container image
-    [-cv|--chart-version] Specify the chart version (only used if passing chart as URLs).
+    [-co|--channel-only] just extract and rebuild the ManagedOSVersionChannel container image.
+    [-cv|--chart-version] specify the chart version (only used if passing chart as URLs).
     [-d|--debug] enable debug output on screen.
     [-i|--images path] tar.gz gernerated by docker save.
-    [-h|--help] Usage message.
-    [-ha|--hauler] Use hauler to generate the archive (an "Haul") of the Elemental "Collection".
+    [-h|--help] usage message.
+    [-ha|--hauler] use hauler to generate the archive (an "Haul") of the Elemental "Collection".
     [-l|--image-list path] generated text file with the list of saved images (one image per line).
     [-r|--local-registry] registry where to load the images to (used in the next steps).
-    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation
+    [-sa|--skip-archive] put the list of images in the $CONTAINER_IMAGES_FILE but skip $CONTAINER_IMAGES_ARCHIVE creation.
 
     ELEMENTAL_OPERATOR_CHART could be either a chart tgz file or an url (in that case will be downloaded first)
     it could even be 'dev', 'staging' or 'stable' to allow automatic download of the charts.
 
     Parameters could also be set passing env vars:
+    ALL_CHANNELS (-ac)              : $ALL_CHANNELS
     CONTAINER_IMAGES_NAME           : $CONTAINER_IMAGES_NAME
     CONTAINER_IMAGES_FILE (-l)      : $CONTAINER_IMAGES_FILE
     CONTAINER_IMAGES_ARCHIVE (-i)   : $CONTAINER_IMAGES_ARCHIVE
@@ -125,6 +128,10 @@ parse_parameters() {
             if [[ "${container_images_archive}" == "false" ]]; then
                 CONTAINER_IMAGES_ARCHIVE="elemental-haul.tar.zst"
             fi
+            shift
+            ;;
+            -ac|--all-channels)
+            ALL_CHANNELS=true
             shift
             ;;
             *)
@@ -352,6 +359,7 @@ build_os_channel() {
     local channel_img
     local channel_tag
     local channel_repo
+    local channel_list
 
     log_info "Creating OS channel"
      # name of the new channel container image we are going to create
@@ -384,27 +392,53 @@ build_os_channel() {
     fi
 
     get_chart_val channel_tag "channel.tag"
+    channel_list+="${channel_img}:${channel_tag} "
 
-    if [[ -z "$channel_img" || -z "$channel_tag" ]]; then
+    # we can have OS channels added in templates, so we have to sync them if needed
+    if [[ "$ALL_CHANNELS" == "true" ]]; then
+        # get all ManagedOSVersionChannel, so the already extracted one is in, we can overwrite channel_list
+        channel_list=$(helm template $CHART_NAME_OPERATOR \
+                       | yq 'select(.kind=="ManagedOSVersionChannel") .spec.options.image' \
+                       | sed -e s/\"//g -e /^---$/d 2>&1)
+    fi
+
+    if [[ -z "${channel_list// /}" ]]; then
         log_info "\nWARNING: channel image not found: you will need to provide your own Elemental OS images\n"
         return 0
     fi
-    log_info "Found channel image: ${channel_img}:${channel_tag}"
 
     TEMPDIR=$(mktemp -d)
     log_debug "build channel image in $TEMPDIR"
     pushd $TEMPDIR > /dev/null
-    # extract the channel.json
-    if ! docker run --entrypoint busybox ${channel_img}:${channel_tag} cat channel.json > channel.json; then
-        exit_error "cannot extract OS images"
+
+    # loop on the channel list
+    for channel in ${channel_list}; do
+        channel_img=${channel%:*}
+        channel_tag=${channel#*:}
+
+        log_info "Found channel image: ${channel_img}:${channel_tag}"
+
+        # extract the channel.json
+        if ! docker run --entrypoint busybox ${channel_img}:${channel_tag} cat channel.json > channel_${channel_img//\//_}.json; then
+            exit_error "cannot extract OS images"
+        fi
+    done
+
+    # Merge all channel_*.json files
+    if ! jq -s add channel_*.json > channel.json; then
+        exit_error "cannot merge channel json files"
     fi
 
     # write the new channel and identify OS images to save
     local new_channel=""
-    for i in $(seq 0 20); do
+    local -i index=0
+    while true; do
         local item item_type item_image item_name item_url_field
-        item=$(jq .[$i] channel.json)
+        item=$(jq .[$index] channel.json)
         [[ "$item" == "null" ]] && break
+
+        # increment index
+        index+=1
 
         get_json_val item_name "$item" ".metadata.name"
         get_json_val item_type "$item" ".spec.type"
