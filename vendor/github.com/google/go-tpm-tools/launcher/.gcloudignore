@@ -1,4 +1,0 @@
-# Ignores binary uploads for Cloud Build.
-launcher
-launcher.test
-image/launcher
