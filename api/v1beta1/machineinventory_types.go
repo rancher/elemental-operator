@@ -45,6 +45,8 @@ type MachineInventorySpec struct {
 	// depend upon the MachineRegistration spec.config.elemental.registration.auth value.
 	// +optional
 	MachineHash string `json:"machineHash,omitempty"`
+	// +optional
+	Network NetworkConfig `json:"network,omitempty" yaml:"network,omitempty"`
 }
 
 type MachineInventoryStatus struct {
