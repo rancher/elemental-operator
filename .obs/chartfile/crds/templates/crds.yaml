@@ -154,10 +154,7 @@ spec:
                 description: NetworkConfig is the final NetworkConfig.
                 properties:
                   config:
-                    additionalProperties:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   ipAddresses:
                     additionalProperties:
                       type: string
@@ -361,10 +358,7 @@ spec:
                   MachineInventory adoption.
                 properties:
                   config:
-                    additionalProperties:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   ipAddresses:
                     items:
                       description: IPAddressPool contains an IPAddressPool reference
@@ -635,10 +629,7 @@ spec:
                           during MachineInventory adoption.
                         properties:
                           config:
-                            additionalProperties:
-                              type: object
-                              x-kubernetes-preserve-unknown-fields: true
-                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                           ipAddresses:
                             items:
                               description: IPAddressPool contains an IPAddressPool
@@ -1031,10 +1022,7 @@ spec:
                       This template can be defined in both MachineRegistrations and MachineSelectors.
                     properties:
                       config:
-                        additionalProperties:
-                          type: object
-                          x-kubernetes-preserve-unknown-fields: true
-                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       ipAddresses:
                         items:
                           description: IPAddressPool contains an IPAddressPool reference

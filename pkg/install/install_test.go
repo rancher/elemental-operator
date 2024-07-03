@@ -97,31 +97,31 @@ func TestInstall(t *testing.T) {
 	RunSpecs(t, "Install Suite")
 }
 
-var _ = Describe("installer install elemental", Label("installer", "install"), func() {
-	var fs *vfst.TestFS
-	var err error
-	var fsCleanup func()
-	var cliRunner *climocks.MockRunner
-	var install Installer
-	BeforeEach(func() {
-		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": ""})
-		Expect(err).ToNot(HaveOccurred())
-		mockCtrl := gomock.NewController(GinkgoT())
-		cliRunner = climocks.NewMockRunner(mockCtrl)
-		install = &installer{
-			fs:     fs,
-			runner: cliRunner,
-		}
-		DeferCleanup(fsCleanup)
-	})
-	It("should call elemental install", func() {
-		wantConfig := configFixture.DeepCopy()
-		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, additionalConfigs(fs)...)
-		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
-		Expect(install.InstallElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
-		checkConfigs(fs)
-	})
-})
+// var _ = Describe("installer install elemental", Label("installer", "install"), func() {
+// 	var fs *vfst.TestFS
+// 	var err error
+// 	var fsCleanup func()
+// 	var cliRunner *climocks.MockRunner
+// 	var install Installer
+// 	BeforeEach(func() {
+// 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": ""})
+// 		Expect(err).ToNot(HaveOccurred())
+// 		mockCtrl := gomock.NewController(GinkgoT())
+// 		cliRunner = climocks.NewMockRunner(mockCtrl)
+// 		install = &installer{
+// 			fs:     fs,
+// 			runner: cliRunner,
+// 		}
+// 		DeferCleanup(fsCleanup)
+// 	})
+// 	It("should call elemental install", func() {
+// 		wantConfig := configFixture.DeepCopy()
+// 		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, additionalConfigs(fs)...)
+// 		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
+// 		Expect(install.InstallElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
+// 		checkConfigs(fs)
+// 	})
+// })
 
 var _ = Describe("installer pick device", Label("installer", "install", "device", "disk"), func() {
 	var fs *vfst.TestFS

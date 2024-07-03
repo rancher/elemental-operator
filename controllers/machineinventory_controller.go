@@ -341,6 +341,10 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 			return ctrl.Result{}, fmt.Errorf("getting IPAddressClaim '%s': %w", ipClaimName, err)
 		}
 
+		if mInventory.Spec.IPAddressClaims == nil {
+			mInventory.Spec.IPAddressClaims = map[string]*corev1.ObjectReference{}
+		}
+
 		mInventory.Spec.IPAddressClaims[ipPool.Name] = &corev1.ObjectReference{
 			APIVersion: ipClaim.APIVersion,
 			Kind:       ipClaim.Kind,
@@ -370,6 +374,11 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("getting IPAddress '%s': %w", ipClaimRef.Name, err)
 		}
+
+		if mInventory.Spec.Network.IPAddresses == nil {
+			mInventory.Spec.Network.IPAddresses = map[string]string{}
+		}
+
 		mInventory.Spec.Network.IPAddresses[name] = ipAddress.Spec.Address
 	}
 

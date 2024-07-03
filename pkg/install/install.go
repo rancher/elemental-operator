@@ -37,6 +37,7 @@ import (
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
@@ -59,27 +60,29 @@ const (
 
 type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State) error
-	InstallElemental(config elementalv1.Config, state register.State) error
+	InstallElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
 	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
 }
 
-func NewInstaller(fs vfs.FS, disks []*block.Disk) Installer {
+func NewInstaller(fs vfs.FS, disks []*block.Disk, networkConfigurator network.Configurator) Installer {
 	return &installer{
-		fs:     fs,
-		disks:  disks,
-		runner: elementalcli.NewRunner(),
+		fs:                  fs,
+		disks:               disks,
+		runner:              elementalcli.NewRunner(),
+		networkConfigurator: networkConfigurator,
 	}
 }
 
 var _ Installer = (*installer)(nil)
 
 type installer struct {
-	fs     vfs.FS
-	disks  []*block.Disk
-	runner elementalcli.Runner
+	fs                  vfs.FS
+	disks               []*block.Disk
+	runner              elementalcli.Runner
+	networkConfigurator network.Configurator
 }
 
-func (i *installer) InstallElemental(config elementalv1.Config, state register.State) error {
+func (i *installer) InstallElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
 	if config.Elemental.Install.ConfigURLs == nil {
 		config.Elemental.Install.ConfigURLs = []string{}
 	}
@@ -105,6 +108,9 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
 		return fmt.Errorf("failed to install elemental: %w", err)
 	}
+
+	log.Info("Applying network config")
+	i.networkConfigurator.ApplyConfig(networkConfig)
 
 	log.Info("Elemental install completed, please reboot")
 	return nil

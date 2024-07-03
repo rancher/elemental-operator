@@ -147,10 +147,7 @@ spec:
                 description: NetworkConfig is the final NetworkConfig.
                 properties:
                   config:
-                    additionalProperties:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   ipAddresses:
                     additionalProperties:
                       type: string

@@ -64,10 +64,7 @@ spec:
                           during MachineInventory adoption.
                         properties:
                           config:
-                            additionalProperties:
-                              type: object
-                              x-kubernetes-preserve-unknown-fields: true
-                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                           ipAddresses:
                             items:
                               description: IPAddressPool contains an IPAddressPool

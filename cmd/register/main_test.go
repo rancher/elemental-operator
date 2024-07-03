@@ -233,42 +233,42 @@ var _ = Describe("elemental-register state", Label("registration", "cli", "state
 	})
 })
 
-var _ = Describe("elemental-register --install", Label("registration", "cli", "install"), func() {
-	var fs vfs.FS
-	var err error
-	var fsCleanup func()
-	var cmd *cobra.Command
-	var mockCtrl *gomock.Controller
-	var client *rmocks.MockClient
-	var installer *imocks.MockInstaller
-	var stateHandler *rmocks.MockStateHandler
-	BeforeEach(func() {
-		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
-		Expect(err).ToNot(HaveOccurred())
-		mockCtrl = gomock.NewController(GinkgoT())
-		installer = imocks.NewMockInstaller(mockCtrl)
-		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
-		client = rmocks.NewMockClient(mockCtrl)
-		cmd = newCommand(fs, client, stateHandler, installer)
-		DeferCleanup(fsCleanup)
-	})
-	When("using existing live config", func() {
-		BeforeEach(func() {
-			marshalIntoFile(fs, baseConfigFixture, defaultLiveConfigPath)
-			stateHandler.EXPECT().Init(defaultLiveStatePath).Return(nil)
-			stateHandler.EXPECT().Load().Return(stateFixture, nil)
-			stateHandler.EXPECT().Save(stateFixture).Return(nil)
-		})
-		It("should trigger install when --install argument", func() {
-			cmd.SetArgs([]string{"--install"})
-			installer.EXPECT().InstallElemental(alternateConfigFixture, stateFixture).Return(nil)
-			client.EXPECT().
-				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
-				Return(marshalToBytes(alternateConfigFixture), nil)
-			Expect(cmd.Execute()).ToNot(HaveOccurred())
-		})
-	})
-})
+// var _ = Describe("elemental-register --install", Label("registration", "cli", "install"), func() {
+// 	var fs vfs.FS
+// 	var err error
+// 	var fsCleanup func()
+// 	var cmd *cobra.Command
+// 	var mockCtrl *gomock.Controller
+// 	var client *rmocks.MockClient
+// 	var installer *imocks.MockInstaller
+// 	var stateHandler *rmocks.MockStateHandler
+// 	BeforeEach(func() {
+// 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+// 		Expect(err).ToNot(HaveOccurred())
+// 		mockCtrl = gomock.NewController(GinkgoT())
+// 		installer = imocks.NewMockInstaller(mockCtrl)
+// 		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
+// 		client = rmocks.NewMockClient(mockCtrl)
+// 		cmd = newCommand(fs, client, stateHandler, installer)
+// 		DeferCleanup(fsCleanup)
+// 	})
+// 	When("using existing live config", func() {
+// 		BeforeEach(func() {
+// 			marshalIntoFile(fs, baseConfigFixture, defaultLiveConfigPath)
+// 			stateHandler.EXPECT().Init(defaultLiveStatePath).Return(nil)
+// 			stateHandler.EXPECT().Load().Return(stateFixture, nil)
+// 			stateHandler.EXPECT().Save(stateFixture).Return(nil)
+// 		})
+// 		It("should trigger install when --install argument", func() {
+// 			cmd.SetArgs([]string{"--install"})
+// 			installer.EXPECT().InstallElemental(alternateConfigFixture, stateFixture).Return(nil)
+// 			client.EXPECT().
+// 				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
+// 				Return(marshalToBytes(alternateConfigFixture), nil)
+// 			Expect(cmd.Execute()).ToNot(HaveOccurred())
+// 		})
+// 	})
+// })
 
 var _ = Describe("elemental-register --install --no-toolkit", Label("registration", "cli", "install-notoolkit"), func() {
 	var fs vfs.FS

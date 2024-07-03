@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
@@ -64,7 +66,8 @@ func main() {
 		log.Warningf("error probing disks: %s", err)
 	}
 
-	installer := install.NewInstaller(fs, blockInfo.Disks)
+	networkConfigurator := network.NewConfigurator(fs)
+	installer := install.NewInstaller(fs, blockInfo.Disks, networkConfigurator)
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
@@ -132,8 +135,17 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 						return fmt.Errorf("Installing local agent config")
 					}
 				} else {
+					log.Info("Retrieving Network configuration")
+					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
+					if err != nil {
+						return fmt.Errorf("retrieving network configuration: %w", err)
+					}
+					networkConfig := elementalv1.NetworkConfig{}
+					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
+						return fmt.Errorf("unmarshalling network config data: %w", err)
+					}
 					log.Info("Installing elemental")
-					if err := installer.InstallElemental(cfg, registrationState); err != nil {
+					if err := installer.InstallElemental(cfg, registrationState, networkConfig); err != nil {
 						return fmt.Errorf("installing elemental: %w", err)
 					}
 				}
