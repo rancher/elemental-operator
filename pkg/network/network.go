@@ -16,6 +16,7 @@ package network
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ const (
 	firstBootConfigTempPath  = "/tmp/first-boot-network-config.yaml"
 	firstBootConfigFinalPath = "/oem/network/first-boot-network-config.yaml"
 	appliedConfig            = "/oem/network/applied-config.yaml"
-	configApplicator         = "/oem/99-network-config-applicator.yaml"
+	ConfigApplicator         = "/oem/99-network-config-applicator.yaml"
 )
 
 type Configurator interface {
@@ -99,8 +100,8 @@ func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 
 func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
 	// Delete config applicator to prevent re-applying the config again
-	if err := n.fs.Remove(configApplicator); err != nil {
-		return fmt.Errorf("deleting file '%s': %w", configApplicator, err)
+	if err := n.fs.Remove(ConfigApplicator); err != nil {
+		return fmt.Errorf("deleting file '%s': %w", ConfigApplicator, err)
 	}
 	// Also delete the previously applied config, just in case
 	if err := n.fs.Remove(appliedConfig); err != nil {
@@ -117,7 +118,7 @@ func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
 
 func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) error {
 	if len(config.Config) == 0 {
-		log.Warningf("no network config data to decode")
+		log.Warning("no network config data to decode")
 		return nil
 	}
 
@@ -141,7 +142,7 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 	}
 
 	// Dump the digested config somewhere
-	if err := vfs.MkdirAll(n.fs, appliedConfig, 0700); err != nil {
+	if err := vfs.MkdirAll(n.fs, filepath.Dir(appliedConfig), 0700); err != nil {
 		return fmt.Errorf("creating directory for file '%s': %w", appliedConfig, err)
 	}
 	if err := n.fs.WriteFile(appliedConfig, []byte(yamlStringData), 0600); err != nil {
@@ -149,8 +150,10 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 	}
 
 	// Try to apply it
-	cmd := exec.Command("nmstatectl")
-	cmd.Args = []string{"apply", appliedConfig}
+	cmd := exec.Command("nmstatectl", "apply", appliedConfig)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("running nmstatectl apply %s: %w", appliedConfig, err)
 	}
@@ -176,7 +179,7 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 				},
 			},
 		},
-		"network.before": {
+		"network.after": {
 			schema.Stage{
 				Commands: []string{fmt.Sprintf("nmstatectl apply %s", appliedConfig)},
 			},
@@ -186,8 +189,8 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 	if err != nil {
 		return fmt.Errorf("marshalling network config applicator: %w", err)
 	}
-	if err := n.fs.WriteFile(configApplicator, networkConfigApplicatorBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", configApplicator, err)
+	if err := n.fs.WriteFile(ConfigApplicator, networkConfigApplicatorBytes, 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", ConfigApplicator, err)
 	}
 
 	return nil

@@ -294,11 +294,18 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 }
 
 func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory) error {
+	// TODO: Implement something more graceful to make the elemental-register wait.
+	conditionFound := false
 	for _, condition := range inventory.Status.Conditions {
-		if condition.Type == elementalv1.NetworkConfigReady && condition.Status == metav1.ConditionFalse {
-			// TODO: Implement something more graceful to make the elemental-register wait.
-			return fmt.Errorf("inventory is not ready")
+		if condition.Type == elementalv1.NetworkConfigReady {
+			conditionFound = true
+			if condition.Status == metav1.ConditionFalse {
+				return fmt.Errorf("NetworkConfigReady is false")
+			}
 		}
+	}
+	if !conditionFound {
+		return fmt.Errorf("NetworkConfigReady condition not found")
 	}
 
 	networkConfigData, err := json.Marshal(inventory.Spec.Network)

@@ -110,7 +110,10 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 	}
 
 	log.Info("Applying network config")
-	i.networkConfigurator.ApplyConfig(networkConfig)
+	if err := i.networkConfigurator.ApplyConfig(networkConfig); err != nil {
+		return fmt.Errorf("applying network config: %w", err)
+	}
+	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, network.ConfigApplicator)
 
 	log.Info("Elemental install completed, please reboot")
 	return nil
