@@ -295,7 +295,7 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 
 func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory) error {
 	for _, condition := range inventory.Status.Conditions {
-		if condition.Type == elementalv1.ReadyCondition && condition.Status == metav1.ConditionFalse {
+		if condition.Type == elementalv1.NetworkConfigReady && condition.Status == metav1.ConditionFalse {
 			// TODO: Implement something more graceful to make the elemental-register wait.
 			return fmt.Errorf("inventory is not ready")
 		}

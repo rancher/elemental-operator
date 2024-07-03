@@ -38,15 +38,6 @@ const (
 	// PlanCreationFailureReason documents that the secret plan owned by the machine inventory could not be created
 	PlanCreationFailureReason = "PlanCreationFailureReason"
 
-	// NetworkConfigFailure documents a failure when reconciling the network config for this Machine Inventory.
-	NetworkConfigFailure = "NetworkConfigFailure"
-
-	// WaitingForIPAddressReason documents a machine inventory waiting for an IPAddress to be allocated by an IPAM provider.
-	WaitingForIPAddressReason = "WaitingForIPAddress"
-
-	// ReconcilingNetworkConfig documents the operator needs to do some work to reconcile the NetworkConfig.
-	ReconcilingNetworkConfig = "ReconcilingNetworkConfig"
-
 	// WaitingForPlanReason documents a machine inventory waiting for plan to applied.
 	WaitingForPlanReason = "WaitingForPlan"
 
@@ -75,6 +66,18 @@ const (
 
 	// AdoptionFailureReason documents that the machine inventory adoption process failed
 	AdoptionFailureReason = "AdoptionFailure"
+
+	// NetworkConfigReady documents the state of a machine inventory network config
+	NetworkConfigReady = "NetworkConfigReady"
+
+	// NetworkConfigFailure documents a failure when reconciling the network config for this Machine Inventory.
+	NetworkConfigFailure = "NetworkConfigFailure"
+
+	// WaitingForIPAddressReason documents a machine inventory waiting for an IPAddress to be allocated by an IPAM provider.
+	WaitingForIPAddressReason = "WaitingForIPAddress"
+
+	// ReconcilingNetworkConfig documents the operator needs to do some work to reconcile the NetworkConfig.
+	ReconcilingNetworkConfig = "ReconcilingNetworkConfig"
 )
 
 // Machine Selector conditions

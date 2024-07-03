@@ -173,6 +173,12 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 		}
 		return result, nil
 	}
+	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.NetworkConfigReady,
+		Reason:  elementalv1.ReconcilingNetworkConfig,
+		Status:  metav1.ConditionTrue,
+		Message: "NetworkConfig is ready",
+	})
 
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
@@ -311,7 +317,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 		logger.Info("Marking Network Config as deprecated")
 		mInventory.Annotations[elementalv1.MachineInventoryNetworkConfigApplied] = "false"
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-			Type:    elementalv1.ReadyCondition,
+			Type:    elementalv1.NetworkConfigReady,
 			Reason:  elementalv1.ReconcilingNetworkConfig,
 			Status:  metav1.ConditionFalse,
 			Message: "NetworkConfig needs changes",
@@ -364,7 +370,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 		if apierrors.IsNotFound(err) {
 			logger.Info("IPAddress not found. Requeuing.", "IPAddress", ipClaimRef.Name)
 			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-				Type:    elementalv1.ReadyCondition,
+				Type:    elementalv1.NetworkConfigReady,
 				Reason:  elementalv1.WaitingForIPAddressReason,
 				Status:  metav1.ConditionFalse,
 				Message: fmt.Sprintf("Waiting to claim IPAddress %s", ipClaimRef.Name),
