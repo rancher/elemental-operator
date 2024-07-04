@@ -56,6 +56,7 @@ const (
 	tempRegistrationState = "/tmp/elemental-registration-state.yaml"
 	tempCloudInit         = "/tmp/elemental-cloud-init.yaml"
 	tempSystemAgent       = "/tmp/elemental-system-agent.yaml"
+	tempNetworkConfig     = "/tmp/elemental-network-config.yaml"
 )
 
 type Installer interface {
@@ -105,15 +106,15 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
 
+	log.Info("Applying network config")
+	if err := i.networkConfigurator.ApplyConfig(networkConfig, tempNetworkConfig); err != nil {
+		return fmt.Errorf("applying network config: %w", err)
+	}
+	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, tempNetworkConfig)
+
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
 		return fmt.Errorf("failed to install elemental: %w", err)
 	}
-
-	log.Info("Applying network config")
-	if err := i.networkConfigurator.ApplyConfig(networkConfig); err != nil {
-		return fmt.Errorf("applying network config: %w", err)
-	}
-	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, network.ConfigApplicator)
 
 	log.Info("Elemental install completed, please reboot")
 	return nil

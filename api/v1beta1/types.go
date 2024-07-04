@@ -188,11 +188,11 @@ type NetworkTemplate struct {
 // this config is ready to be consumed, this means all needed IPAddressClaims for this machine
 // have been created and the IPAM provider served real IPAddresses that can be applied to the machine.
 type NetworkConfig struct {
-	IPAddresses map[string]string `json:"ipAddresses,omitempty"`
+	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
-	Config map[string]runtime.RawExtension `json:"config,omitempty"`
+	Config map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
 }
 
 // IPAddressPool contains an IPAddressPool reference that can be used to generate an IPAddressClaim.

@@ -59,17 +59,17 @@ func (m *MockConfigurator) EXPECT() *MockConfiguratorMockRecorder {
 }
 
 // ApplyConfig mocks base method.
-func (m *MockConfigurator) ApplyConfig(arg0 v1beta1.NetworkConfig) error {
+func (m *MockConfigurator) ApplyConfig(arg0 v1beta1.NetworkConfig, arg1 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyConfig", arg0)
+	ret := m.ctrl.Call(m, "ApplyConfig", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ApplyConfig indicates an expected call of ApplyConfig.
-func (mr *MockConfiguratorMockRecorder) ApplyConfig(arg0 any) *gomock.Call {
+func (mr *MockConfiguratorMockRecorder) ApplyConfig(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyConfig", reflect.TypeOf((*MockConfigurator)(nil).ApplyConfig), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyConfig", reflect.TypeOf((*MockConfigurator)(nil).ApplyConfig), arg0, arg1)
 }
 
 // GetFirstBootConfig mocks base method.

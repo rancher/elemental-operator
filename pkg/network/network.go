@@ -25,14 +25,15 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v3"
+	k8syaml "sigs.k8s.io/yaml"
 )
 
 const (
 	firstBootConfigTempPath  = "/tmp/first-boot-network-config.yaml"
 	firstBootConfigFinalPath = "/oem/network/first-boot-network-config.yaml"
 	appliedConfig            = "/oem/network/applied-config.yaml"
-	ConfigApplicator         = "/oem/99-network-config-applicator.yaml"
+	configApplicator         = "/oem/99-network-config-applicator.yaml"
 )
 
 type Configurator interface {
@@ -44,7 +45,7 @@ type Configurator interface {
 	// This assumes the FirstBootConfig can still contact the Rancher endpoint to confirm reset.
 	RestoreFirstBootConfig() error
 	// ApplyConfig should apply a given config to the system.
-	ApplyConfig(elementalv1.NetworkConfig) error
+	ApplyConfig(networkConfig elementalv1.NetworkConfig, configApplicatorPath string) error
 }
 
 var _ Configurator = (*nmstateConfigurator)(nil)
@@ -100,8 +101,8 @@ func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 
 func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
 	// Delete config applicator to prevent re-applying the config again
-	if err := n.fs.Remove(ConfigApplicator); err != nil {
-		return fmt.Errorf("deleting file '%s': %w", ConfigApplicator, err)
+	if err := n.fs.Remove(configApplicator); err != nil {
+		return fmt.Errorf("deleting file '%s': %w", configApplicator, err)
 	}
 	// Also delete the previously applied config, just in case
 	if err := n.fs.Remove(appliedConfig); err != nil {
@@ -116,20 +117,20 @@ func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
 	return nil
 }
 
-func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) error {
-	if len(config.Config) == 0 {
+func (n *nmstateConfigurator) ApplyConfig(networkConfig elementalv1.NetworkConfig, configApplicatorPath string) error {
+	if len(networkConfig.Config) == 0 {
 		log.Warning("no network config data to decode")
 		return nil
 	}
 
 	// This creates a parent "root" key to facilitate parsing the schemaless map
-	mapSlice := yaml.JSONObjectToYAMLObject(map[string]interface{}{"root": config.Config})
+	mapSlice := k8syaml.JSONObjectToYAMLObject(map[string]interface{}{"root": networkConfig.Config})
 	if len(mapSlice) <= 0 {
 		return errors.New("Could not convert json cloudConfig object to yaml")
 	}
 
 	// Just marshal the value of the "root" key
-	yamlData, err := yaml.Marshal(mapSlice[0].Value)
+	yamlData, err := k8syaml.Marshal(mapSlice[0].Value)
 	if err != nil {
 		return fmt.Errorf("marshalling yaml: %w", err)
 	}
@@ -137,7 +138,7 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 	yamlStringData := string(yamlData)
 
 	// Go through the nmstate yaml config and replace template placeholders "{my-ip-name}" with actual IP.
-	for name, ipAddress := range config.IPAddresses {
+	for name, ipAddress := range networkConfig.IPAddresses {
 		yamlStringData = strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", name), ipAddress)
 	}
 
@@ -185,12 +186,13 @@ func (n *nmstateConfigurator) ApplyConfig(config elementalv1.NetworkConfig) erro
 			},
 		},
 	}
+
 	networkConfigApplicatorBytes, err := yaml.Marshal(networkConfigApplicator)
 	if err != nil {
 		return fmt.Errorf("marshalling network config applicator: %w", err)
 	}
-	if err := n.fs.WriteFile(ConfigApplicator, networkConfigApplicatorBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", ConfigApplicator, err)
+	if err := n.fs.WriteFile(configApplicatorPath, networkConfigApplicatorBytes, 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", configApplicatorPath, err)
 	}
 
 	return nil
