@@ -33,10 +33,10 @@ import (
 )
 
 const (
-	firstBootConfigTempPath  = "/tmp/first-boot-network-config.yaml"
-	firstBootConfigFinalPath = "/oem/network/first-boot-network-config.yaml"
-	appliedConfig            = "/oem/network/applied-config.yaml"
-	configApplicator         = "/oem/99-network-config-applicator.yaml"
+	firstBootConfigTempPath = "/tmp/first-boot-network-config.yaml"
+	firstBootConfigPath     = "/oem/network/first-boot-network-config.yaml"
+	appliedConfigPath       = "/oem/network/applied-config.yaml"
+	configApplicator        = "/oem/99-network-config-applicator.yaml"
 )
 
 type Configurator interface {
@@ -63,12 +63,19 @@ type nmstateConfigurator struct {
 
 func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 	config := schema.YipConfig{}
+	firstBootFile, err := n.fs.Create(firstBootConfigTempPath)
+	if err != nil {
+		return config, fmt.Errorf("creating file '%s': %w", firstBootConfigTempPath, err)
+	}
+	defer firstBootFile.Close()
 
 	// 1. Dump the current config into a tmp file
-	cmd := exec.Command("nmstatectl")
-	cmd.Args = []string{"show", ">", firstBootConfigTempPath}
+	cmd := exec.Command("nmstatectl", "show")
+	cmd.Stdout = firstBootFile
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return config, fmt.Errorf("running nmstatectl show: %w", err)
+		return config, fmt.Errorf("running: nmstatectl show > %s: %w", firstBootConfigTempPath, err)
 	}
 
 	// 2. Read the file
@@ -82,15 +89,15 @@ func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 	config.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
-				If: fmt.Sprintf("[ ! -f %s ]", firstBootConfigFinalPath),
+				If: fmt.Sprintf("[ ! -f %s ]", firstBootConfigPath),
 				Directories: []schema.Directory{
 					{
-						Path:        filepath.Dir(firstBootConfigFinalPath),
+						Path:        filepath.Dir(firstBootConfigPath),
 						Permissions: 0700,
 					},
 				}, Files: []schema.File{
 					{
-						Path:        firstBootConfigFinalPath,
+						Path:        firstBootConfigPath,
 						Content:     string(bytes),
 						Permissions: 0600,
 					},
@@ -103,19 +110,23 @@ func (n *nmstateConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
 }
 
 func (n *nmstateConfigurator) RestoreFirstBootConfig() error {
-	// Delete config applicator to prevent re-applying the config again
-	if err := n.fs.Remove(configApplicator); err != nil {
-		return fmt.Errorf("deleting file '%s': %w", configApplicator, err)
-	}
-	// Also delete the previously applied config, just in case
-	if err := n.fs.Remove(appliedConfig); err != nil {
-		return fmt.Errorf("deleting file '%s': %w", appliedConfig, err)
+	// Try to apply the first boot config
+	cmd := exec.Command("nmstatectl", "apply", firstBootConfigPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("running: nmstatectl apply %s: %w", firstBootConfigPath, err)
 	}
 
-	cmd := exec.Command("nmstatectl")
-	cmd.Args = []string{"apply", firstBootConfigFinalPath}
+	// If application was successful, then overwrite the applied config,
+	// so that it will be reapplied across reboots (and on recovery).
+	cmd = exec.Command("cp", firstBootConfigPath, appliedConfigPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("running nmstatectl apply %s: %w", firstBootConfigFinalPath, err)
+		return fmt.Errorf("overwriting '%s': %w", appliedConfigPath, err)
 	}
 	return nil
 }
@@ -146,20 +157,20 @@ func (n *nmstateConfigurator) ApplyConfig(networkConfig elementalv1.NetworkConfi
 	}
 
 	// Dump the digested config somewhere
-	if err := vfs.MkdirAll(n.fs, filepath.Dir(appliedConfig), 0700); err != nil {
-		return fmt.Errorf("creating directory for file '%s': %w", appliedConfig, err)
+	if err := vfs.MkdirAll(n.fs, filepath.Dir(appliedConfigPath), 0700); err != nil {
+		return fmt.Errorf("creating directory for file '%s': %w", appliedConfigPath, err)
 	}
-	if err := n.fs.WriteFile(appliedConfig, []byte(yamlStringData), 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", appliedConfig, err)
+	if err := n.fs.WriteFile(appliedConfigPath, []byte(yamlStringData), 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", appliedConfigPath, err)
 	}
 
 	// Try to apply it
-	cmd := exec.Command("nmstatectl", "apply", appliedConfig)
+	cmd := exec.Command("nmstatectl", "apply", appliedConfigPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("running nmstatectl apply %s: %w", appliedConfig, err)
+		return fmt.Errorf("running: nmstatectl apply %s: %w", appliedConfigPath, err)
 	}
 
 	// Finally, "persist" the application so that it will stick in recovery mode as well
@@ -168,24 +179,24 @@ func (n *nmstateConfigurator) ApplyConfig(networkConfig elementalv1.NetworkConfi
 	networkConfigApplicator.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
-				If: fmt.Sprintf("[ ! -f %s ]", appliedConfig),
+				If: fmt.Sprintf("[ ! -f %s ]", appliedConfigPath),
 				Directories: []schema.Directory{
 					{
-						Path:        filepath.Dir(appliedConfig),
+						Path:        filepath.Dir(appliedConfigPath),
 						Permissions: 0700,
 					},
 				}, Files: []schema.File{
 					{
-						Path:        appliedConfig,
+						Path:        appliedConfigPath,
 						Content:     yamlStringData,
 						Permissions: 0600,
 					},
 				},
 			},
 		},
-		"network.after": {
+		"network.before": {
 			schema.Stage{
-				Commands: []string{fmt.Sprintf("nmstatectl apply %s", appliedConfig)},
+				Commands: []string{fmt.Sprintf("nmstatectl apply %s", appliedConfigPath)},
 			},
 		},
 	}

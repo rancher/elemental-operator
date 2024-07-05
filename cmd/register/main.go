@@ -49,6 +49,7 @@ var (
 	cfg              elementalv1.Config
 	debug            bool
 	reset            bool
+	resetNetwork     bool
 	installation     bool
 	disableBootEntry bool
 	configPath       string
@@ -104,7 +105,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				return fmt.Errorf("getting registration state: %w", err)
 			}
 			// Determine if registration should execute or skip a cycle
-			if !installation && !reset && !registrationState.HasLastUpdateElapsed(registrationUpdateSuppressTimer) {
+			if !installation && !reset && !resetNetwork && !registrationState.HasLastUpdateElapsed(registrationUpdateSuppressTimer) {
 				log.Info("Nothing to do")
 				return nil
 			}
@@ -151,13 +152,26 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				}
 				return nil
 			}
+			if resetNetwork {
+				log.Info("Resetting Elemental Network configuration")
+				return installer.ResetElementalNetwork()
+			}
 			// Reset
 			if reset {
 				if cfg.Elemental.Registration.NoToolkit {
 					log.Warning("Reset not supported for no-toolkit hosts")
 				} else {
+					log.Info("Retrieving Network configuration")
+					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
+					if err != nil {
+						return fmt.Errorf("retrieving network configuration: %w", err)
+					}
+					networkConfig := elementalv1.NetworkConfig{}
+					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
+						return fmt.Errorf("unmarshalling network config data: %w", err)
+					}
 					log.Info("Resetting Elemental")
-					if err := installer.ResetElemental(cfg, registrationState); err != nil {
+					if err := installer.ResetElemental(cfg, registrationState, networkConfig); err != nil {
 						return fmt.Errorf("resetting elemental: %w", err)
 					}
 				}
@@ -186,6 +200,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
+	cmd.Flags().BoolVar(&resetNetwork, "reset-network", false, "Reset the machine network to the first boot state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	cmd.Flags().BoolVar(&disableBootEntry, "disable-boot-entry", false, "Don't create an EFI entry for the system during install/reset")

@@ -246,6 +246,23 @@ func (r *MachineInventoryReconciler) reconcileResetPlanSecret(ctx context.Contex
 	}
 	if mInventory.Status.Plan.State == elementalv1.PlanApplied {
 		logger.V(log.DebugDepth).Info("Reset plan was successfully applied.")
+		logger.V(log.DebugDepth).Info("Releasing all IPAddressClaims")
+		for _, ipClaimRef := range mInventory.Spec.IPAddressClaims {
+			ipClaim := ipamv1.IPAddressClaim{}
+			err := r.Get(ctx, client.ObjectKey{Namespace: ipClaimRef.Namespace, Name: ipClaimRef.Name}, &ipClaim)
+			if apierrors.IsNotFound(err) {
+				logger.V(log.DebugDepth).Info("IPAddressClaim already deleted", "IPAddressClaim", ipClaimRef.Name)
+				continue
+			}
+			if err != nil {
+				logger.Error(err, "Could not get IPAddressClaim", "IPAddressClaim", ipClaimRef.Name)
+				return fmt.Errorf("getting IPAddressClaim '%s': %w", ipClaimRef.Name, err)
+			}
+			if err := r.Delete(ctx, &ipClaim); err != nil {
+				logger.Error(err, "Could not delete IPAddressClaim", "IPAddressClaim", ipClaimRef.Name)
+				return fmt.Errorf("deleting IPAddressClaim '%s': %w", ipClaimRef.Name, err)
+			}
+		}
 		controllerutil.RemoveFinalizer(mInventory, elementalv1.MachineInventoryFinalizer)
 	}
 
@@ -427,6 +444,15 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 			},
 		},
 		OneTimeInstructions: []systemagent.OneTimeInstruction{
+			{
+				CommonInstruction: systemagent.CommonInstruction{
+					Name:    "restore first boot config",
+					Command: "elemental-register",
+					Args: []string{
+						"--reset-network",
+					},
+				},
+			},
 			{
 				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "configure next boot to recovery mode",

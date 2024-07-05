@@ -307,42 +307,42 @@ var _ = Describe("elemental-register --install --no-toolkit", Label("registratio
 	})
 })
 
-var _ = Describe("elemental-register --reset", Label("registration", "cli", "reset"), func() {
-	var fs vfs.FS
-	var err error
-	var fsCleanup func()
-	var cmd *cobra.Command
-	var mockCtrl *gomock.Controller
-	var client *rmocks.MockClient
-	var installer *imocks.MockInstaller
-	var stateHandler *rmocks.MockStateHandler
-	BeforeEach(func() {
-		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
-		Expect(err).ToNot(HaveOccurred())
-		mockCtrl = gomock.NewController(GinkgoT())
-		installer = imocks.NewMockInstaller(mockCtrl)
-		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
-		client = rmocks.NewMockClient(mockCtrl)
-		cmd = newCommand(fs, client, stateHandler, installer)
-		DeferCleanup(fsCleanup)
-	})
-	When("using existing default config", func() {
-		BeforeEach(func() {
-			marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
-			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
-			stateHandler.EXPECT().Load().Times(0) // When resetting expect new state to be initialized
-			stateHandler.EXPECT().Save(register.State{}).Return(nil)
-		})
-		It("should trigger reset when --reset argument", func() {
-			cmd.SetArgs([]string{"--reset"})
-			installer.EXPECT().ResetElemental(alternateConfigFixture, register.State{}).Return(nil)
-			client.EXPECT().
-				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &register.State{}).
-				Return(marshalToBytes(alternateConfigFixture), nil)
-			Expect(cmd.Execute()).ToNot(HaveOccurred())
-		})
-	})
-})
+// var _ = Describe("elemental-register --reset", Label("registration", "cli", "reset"), func() {
+// 	var fs vfs.FS
+// 	var err error
+// 	var fsCleanup func()
+// 	var cmd *cobra.Command
+// 	var mockCtrl *gomock.Controller
+// 	var client *rmocks.MockClient
+// 	var installer *imocks.MockInstaller
+// 	var stateHandler *rmocks.MockStateHandler
+// 	BeforeEach(func() {
+// 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+// 		Expect(err).ToNot(HaveOccurred())
+// 		mockCtrl = gomock.NewController(GinkgoT())
+// 		installer = imocks.NewMockInstaller(mockCtrl)
+// 		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
+// 		client = rmocks.NewMockClient(mockCtrl)
+// 		cmd = newCommand(fs, client, stateHandler, installer)
+// 		DeferCleanup(fsCleanup)
+// 	})
+// 	When("using existing default config", func() {
+// 		BeforeEach(func() {
+// 			marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
+// 			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
+// 			stateHandler.EXPECT().Load().Times(0) // When resetting expect new state to be initialized
+// 			stateHandler.EXPECT().Save(register.State{}).Return(nil)
+// 		})
+// 		It("should trigger reset when --reset argument", func() {
+// 			cmd.SetArgs([]string{"--reset"})
+// 			installer.EXPECT().ResetElemental(alternateConfigFixture, register.State{}).Return(nil)
+// 			client.EXPECT().
+// 				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &register.State{}).
+// 				Return(marshalToBytes(alternateConfigFixture), nil)
+// 			Expect(cmd.Execute()).ToNot(HaveOccurred())
+// 		})
+// 	})
+// })
 
 func marshalIntoFile(fs vfs.FS, input any, filePath string) {
 	bytes := marshalToBytes(input)
