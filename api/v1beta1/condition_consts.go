@@ -38,11 +38,17 @@ const (
 	// PlanCreationFailureReason documents that the secret plan owned by the machine inventory could not be created
 	PlanCreationFailureReason = "PlanCreationFailureReason"
 
+	// WaitingForIPAddressReason documents a machine inventory waiting for an IPAddress to be allocated by an IPAM provider.
+	WaitingForIPAddressReason = "WaitingForIPAddress"
+
 	// WaitingForPlanReason documents a machine inventory waiting for plan to applied.
 	WaitingForPlanReason = "WaitingForPlan"
 
 	// PlanFailure documents failure of plan owned by the machine inventory object.
 	PlanFailureReason = "PlanFailure"
+
+	// PlanFailure documents failure of plan owned by the machine inventory object.
+	IPReleaseFailureReason = "IPReleaseFailure"
 
 	// PlanSuccessfullyAppliedReason documents that plan owned by the machine inventory object was successfully applied.
 	PlanSuccessfullyAppliedReason = "PlanSuccessfullyApplied"

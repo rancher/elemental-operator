@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -62,7 +63,9 @@ type MachineInventoryReconciler struct {
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;list
+// +kubebuilder:rbac:groups="ipam.cluster.x-k8s.io",resources=ipaddresses,verbs=get;list;watch
+// +kubebuilder:rbac:groups="ipam.cluster.x-k8s.io",resources=ipaddresseclaims,verbs=get;list;watch;delete
 
 func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -142,6 +145,14 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 				})
 				return ctrl.Result{}, fmt.Errorf("reconciling reset plan secret: %w", err)
 			}
+			if err := r.releaseIPAddressClaim(ctx, mInventory); err != nil {
+				meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+					Type:    elementalv1.ReadyCondition,
+					Reason:  elementalv1.IPReleaseFailureReason,
+					Status:  metav1.ConditionFalse,
+					Message: err.Error(),
+				})
+			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, nil
@@ -155,6 +166,19 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 			Message: err.Error(),
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to create plan secret: %w", err)
+	}
+
+	if requeue, err := r.updateInventoryWithIPAddressRef(ctx, mInventory); err != nil {
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.WaitingForIPAddressReason,
+			Status:  metav1.ConditionFalse,
+			Message: err.Error(),
+		})
+		if requeue {
+			return ctrl.Result{RequeueAfter: time.Second}, err
+		}
+		return ctrl.Result{}, err
 	}
 
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
@@ -269,6 +293,64 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 		},
 	}
 
+	return nil
+}
+
+func (r *MachineInventoryReconciler) updateInventoryWithIPAddressRef(ctx context.Context, mInventory *elementalv1.MachineInventory) (bool, error) {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.V(log.DebugDepth).Info("Attempting to set ipAddressRef")
+
+	if mInventory.Spec.IPAddressClaimRef == nil {
+		logger.V(log.DebugDepth).Info("No ipAddressClaimRef is set, skip it")
+		return false, nil
+	}
+
+	ipAddress := &ipamv1.IPAddress{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: mInventory.Spec.IPAddressClaimRef.Namespace,
+		Name:      mInventory.Spec.IPAddressClaimRef.Name,
+	}, ipAddress); err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, fmt.Errorf("IPAddress not found, requeuing")
+		}
+		return false, fmt.Errorf("cannot retrieve IPAddress %s/%s: %w", ipAddress.Namespace, ipAddress.Name, err)
+	}
+
+	mInventory.Status.IPAddressRef = &corev1.ObjectReference{
+		Namespace: ipAddress.Namespace,
+		Name:      ipAddress.Name,
+	}
+	return false, nil
+}
+
+func (r *MachineInventoryReconciler) releaseIPAddressClaim(ctx context.Context, mInventory *elementalv1.MachineInventory) error {
+	logger := ctrl.LoggerFrom(ctx)
+
+	logger.V(log.DebugDepth).Info("Attempting to release the ipAddressRef")
+
+	if mInventory.Spec.IPAddressClaimRef == nil {
+		return nil
+	}
+
+	ipAddressClaim := &ipamv1.IPAddressClaim{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: mInventory.Spec.IPAddressClaimRef.Namespace,
+		Name:      mInventory.Spec.IPAddressClaimRef.Name,
+	}, ipAddressClaim); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info("IPAddressClaim was already cleared")
+		} else {
+			return fmt.Errorf("cannot retrieve IPAddressClaim %s/%s: %w", ipAddressClaim.Namespace, ipAddressClaim.Name, err)
+		}
+	}
+
+	if err := r.Delete(ctx, ipAddressClaim); err != nil {
+		return fmt.Errorf("cannot delete IPAddressClaim %s/%s: %w", ipAddressClaim.Namespace, ipAddressClaim.Name, err)
+	}
+
+	mInventory.Spec.IPAddressClaimRef = nil
+	mInventory.Status.IPAddressRef = nil
 	return nil
 }
 

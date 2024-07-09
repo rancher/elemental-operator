@@ -45,6 +45,10 @@ type MachineInventorySpec struct {
 	// depend upon the MachineRegistration spec.config.elemental.registration.auth value.
 	// +optional
 	MachineHash string `json:"machineHash,omitempty"`
+	// IPAddressRef the reference to the IPAddress that should be applied to the
+	// machine at installation time.
+	// +optional
+	IPAddressClaimRef *corev1.ObjectReference `json:"ipAddressClaimRef,omitempty"`
 }
 
 type MachineInventoryStatus struct {
@@ -54,6 +58,9 @@ type MachineInventoryStatus struct {
 	// PlanStatus reflect the status of the plan owned by the machine inventory object.
 	// +optional
 	Plan *PlanStatus `json:"plan,omitempty"`
+	// IPAddressRef contains the reference to the IPAddress generated from the IPAddressClaim in IPAddressClaimRef
+	// +optional
+	IPAddressRef *corev1.ObjectReference `json:"ipAddressRef,omitempty"`
 }
 
 type PlanState string
