@@ -58,45 +58,30 @@ func (m *MockConfigurator) EXPECT() *MockConfiguratorMockRecorder {
 	return m.recorder
 }
 
-// ApplyConfig mocks base method.
-func (m *MockConfigurator) ApplyConfig(arg0 v1beta1.NetworkConfig, arg1 string) error {
+// GetNetworkConfigApplicator mocks base method.
+func (m *MockConfigurator) GetNetworkConfigApplicator(arg0 v1beta1.NetworkConfig) schema.YipConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyConfig", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ApplyConfig indicates an expected call of ApplyConfig.
-func (mr *MockConfiguratorMockRecorder) ApplyConfig(arg0, arg1 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyConfig", reflect.TypeOf((*MockConfigurator)(nil).ApplyConfig), arg0, arg1)
-}
-
-// GetFirstBootConfig mocks base method.
-func (m *MockConfigurator) GetFirstBootConfig() (schema.YipConfig, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFirstBootConfig")
+	ret := m.ctrl.Call(m, "GetNetworkConfigApplicator", arg0)
 	ret0, _ := ret[0].(schema.YipConfig)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
-// GetFirstBootConfig indicates an expected call of GetFirstBootConfig.
-func (mr *MockConfiguratorMockRecorder) GetFirstBootConfig() *gomock.Call {
+// GetNetworkConfigApplicator indicates an expected call of GetNetworkConfigApplicator.
+func (mr *MockConfiguratorMockRecorder) GetNetworkConfigApplicator(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFirstBootConfig", reflect.TypeOf((*MockConfigurator)(nil).GetFirstBootConfig))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetworkConfigApplicator", reflect.TypeOf((*MockConfigurator)(nil).GetNetworkConfigApplicator), arg0)
 }
 
-// RestoreFirstBootConfig mocks base method.
-func (m *MockConfigurator) RestoreFirstBootConfig() error {
+// ResetNetworkConfig mocks base method.
+func (m *MockConfigurator) ResetNetworkConfig() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RestoreFirstBootConfig")
+	ret := m.ctrl.Call(m, "ResetNetworkConfig")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RestoreFirstBootConfig indicates an expected call of RestoreFirstBootConfig.
-func (mr *MockConfiguratorMockRecorder) RestoreFirstBootConfig() *gomock.Call {
+// ResetNetworkConfig indicates an expected call of ResetNetworkConfig.
+func (mr *MockConfiguratorMockRecorder) ResetNetworkConfig() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreFirstBootConfig", reflect.TypeOf((*MockConfigurator)(nil).RestoreFirstBootConfig))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetNetworkConfig", reflect.TypeOf((*MockConfigurator)(nil).ResetNetworkConfig))
 }

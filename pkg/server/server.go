@@ -170,7 +170,7 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	}
 
 	// Forward network config from Registration
-	inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
+	inventory.Spec.Network.Connections = registration.Spec.Config.Network.Connections
 	inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
 }
 

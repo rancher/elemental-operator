@@ -52,12 +52,11 @@ const (
 // Temporary cloud-init configuration files.
 // These paths will be passed to the `elemental` cli as additional `config-urls`.
 const (
-	tempRegistrationConf       = "/tmp/elemental-registration-conf.yaml"
-	tempRegistrationState      = "/tmp/elemental-registration-state.yaml"
-	tempCloudInit              = "/tmp/elemental-cloud-init.yaml"
-	tempSystemAgent            = "/tmp/elemental-system-agent.yaml"
-	tempNetworkConfig          = "/tmp/elemental-network-config.yaml"
-	tempFirstBootNetworkConfig = "/tmp/elemental-first-boot-network-config.yaml"
+	tempRegistrationConf  = "/tmp/elemental-registration-conf.yaml"
+	tempRegistrationState = "/tmp/elemental-registration-state.yaml"
+	tempCloudInit         = "/tmp/elemental-cloud-init.yaml"
+	tempSystemAgent       = "/tmp/elemental-system-agent.yaml"
+	tempNetworkConfig     = "/tmp/elemental-network-config.yaml"
 )
 
 type Installer interface {
@@ -108,22 +107,14 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
 
-	log.Info("Saving First Boot network config")
-	firstBootConfig, err := i.networkConfigurator.GetFirstBootConfig()
+	log.Info("Installing Network config")
+	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
 	if err != nil {
-		return fmt.Errorf("saving first boot network config: %w", err)
+		return fmt.Errorf("marshalling network config: %w", err)
 	}
-	firstBootConfigBytes, err := yaml.Marshal(firstBootConfig)
-	if err != nil {
-		return fmt.Errorf("marshalling first boot network config: %w", err)
-	}
-	if err := i.fs.WriteFile(tempFirstBootNetworkConfig, firstBootConfigBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", tempFirstBootNetworkConfig, err)
-	}
-	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, tempFirstBootNetworkConfig)
-	log.Info("Applying network config")
-	if err := i.networkConfigurator.ApplyConfig(networkConfig, tempNetworkConfig); err != nil {
-		return fmt.Errorf("applying network config: %w", err)
+	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
 	}
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, tempNetworkConfig)
 
@@ -146,22 +137,14 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 	}
 	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, additionalConfigs...)
 
-	log.Info("Saving First Boot network config")
-	firstBootConfig, err := i.networkConfigurator.GetFirstBootConfig()
+	log.Info("Installing Network config")
+	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
 	if err != nil {
-		return fmt.Errorf("saving first boot network config: %w", err)
+		return fmt.Errorf("marshalling network config: %w", err)
 	}
-	firstBootConfigBytes, err := yaml.Marshal(firstBootConfig)
-	if err != nil {
-		return fmt.Errorf("marshalling first boot network config: %w", err)
-	}
-	if err := i.fs.WriteFile(tempFirstBootNetworkConfig, firstBootConfigBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", tempFirstBootNetworkConfig, err)
-	}
-	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, tempFirstBootNetworkConfig)
-	log.Info("Applying network config")
-	if err := i.networkConfigurator.ApplyConfig(networkConfig, tempNetworkConfig); err != nil {
-		return fmt.Errorf("applying network config: %w", err)
+	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
+		return fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
 	}
 	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, tempNetworkConfig)
 
@@ -178,8 +161,8 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 }
 
 func (i *installer) ResetElementalNetwork() error {
-	if err := i.networkConfigurator.RestoreFirstBootConfig(); err != nil {
-		return fmt.Errorf("restoring first boot config: %w", err)
+	if err := i.networkConfigurator.ResetNetworkConfig(); err != nil {
+		return fmt.Errorf("resetting network config: %w", err)
 	}
 	return nil
 }

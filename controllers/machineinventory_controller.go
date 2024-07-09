@@ -314,8 +314,8 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 // networkNeedsReconcile checks if there is an IPAddress for each IPPool referenced by the MachineInventory.
 func (r *MachineInventoryReconciler) networkNeedsReconcile(mInventory elementalv1.MachineInventory) bool {
-	for _, ipPool := range mInventory.Spec.IPAddressPools {
-		_, ipExists := mInventory.Spec.Network.IPAddresses[ipPool.Name]
+	for ipName := range mInventory.Spec.IPAddressPools {
+		_, ipExists := mInventory.Spec.Network.IPAddresses[ipName]
 		if !ipExists {
 			return true
 		}
@@ -343,15 +343,15 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 	}
 
 	// Loops over the IPAddressPools and create an IPClaim for each
-	for _, ipPool := range mInventory.Spec.IPAddressPools {
-		ipClaimName := fmt.Sprintf("%s-%s", mInventory.Name, ipPool.Name)
+	for name, ipPoolRef := range mInventory.Spec.IPAddressPools {
+		ipClaimName := fmt.Sprintf("%s-%s", mInventory.Name, name)
 		ipClaim := &ipamv1.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ipClaimName,
 				Namespace: mInventory.Namespace,
 			},
 			Spec: ipamv1.IPAddressClaimSpec{
-				PoolRef: *ipPool.IPPoolRef,
+				PoolRef: *ipPoolRef,
 			},
 		}
 		if err := r.Create(ctx, ipClaim); apierrors.IsAlreadyExists(err) {
@@ -368,7 +368,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 			mInventory.Spec.IPAddressClaims = map[string]*corev1.ObjectReference{}
 		}
 
-		mInventory.Spec.IPAddressClaims[ipPool.Name] = &corev1.ObjectReference{
+		mInventory.Spec.IPAddressClaims[name] = &corev1.ObjectReference{
 			APIVersion: ipClaim.APIVersion,
 			Kind:       ipClaim.Kind,
 			Name:       ipClaim.Name,

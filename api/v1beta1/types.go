@@ -176,11 +176,8 @@ const (
 // NetworkTemplate contains a list of IPAddressPools and a network config template.
 // This template can be defined in both MachineRegistrations and MachineSelectors.
 type NetworkTemplate struct {
-	IPAddresses []IPAddressPool `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:validation:XPreserveUnknownFields
-	// +optional
-	Config map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
+	IPAddresses map[string]*corev1.TypedLocalObjectReference `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	Connections map[string]string                            `json:"connections,omitempty" yaml:"connections,omitempty"`
 }
 
 // NetworkConfig contains a list of claimed IPAddresses and a network config template.
@@ -189,14 +186,5 @@ type NetworkTemplate struct {
 // have been created and the IPAM provider served real IPAddresses that can be applied to the machine.
 type NetworkConfig struct {
 	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:validation:XPreserveUnknownFields
-	// +optional
-	Config map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
-}
-
-// IPAddressPool contains an IPAddressPool reference that can be used to generate an IPAddressClaim.
-type IPAddressPool struct {
-	Name      string                            `json:"name,omitempty"`
-	IPPoolRef *corev1.TypedLocalObjectReference `json:"ipPoolRef,omitempty"`
+	Connections map[string]string `json:"connections,omitempty" yaml:"connections,omitempty"`
 }
