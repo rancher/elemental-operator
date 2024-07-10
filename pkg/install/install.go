@@ -100,23 +100,12 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
 
 	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
-
-	log.Info("Installing Network config")
-	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
-	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
-	if err != nil {
-		return fmt.Errorf("marshalling network config: %w", err)
-	}
-	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
-	}
-	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, tempNetworkConfig)
 
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
 		return fmt.Errorf("failed to install elemental: %w", err)
@@ -131,22 +120,11 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
 	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, additionalConfigs...)
-
-	log.Info("Installing Network config")
-	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
-	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
-	if err != nil {
-		return fmt.Errorf("marshalling network config: %w", err)
-	}
-	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
-		return fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
-	}
-	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, tempNetworkConfig)
 
 	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
 		return fmt.Errorf("failed to reset elemental: %w", err)
@@ -263,7 +241,7 @@ func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 // getCloudInitConfigs creates cloud-init configuration files that can be passed as additional `config-urls`
 // to the `elemental` cli. We exploit this mechanism to persist information during `elemental install`
 // or `elemental reset` calls into the newly installed or resetted system.
-func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State) ([]string, error) {
+func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) ([]string, error) {
 	configs := []string{}
 	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
 	if err != nil {
@@ -290,6 +268,12 @@ func (i *installer) getCloudInitConfigs(config elementalv1.Config, state registe
 		return nil, fmt.Errorf("writing registration state plan: %w", err)
 	}
 	configs = append(configs, registrationStatePath)
+
+	networkConfigPath, err := i.writeNetworkConfig(networkConfig)
+	if err != nil {
+		return nil, fmt.Errorf("writing temporary network config: %w", err)
+	}
+	configs = append(configs, networkConfigPath)
 
 	return configs, nil
 }
@@ -391,6 +375,18 @@ func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) 
 		return "", fmt.Errorf("writing cloud config: %w", err)
 	}
 	return f.Name(), nil
+}
+
+func (i *installer) writeNetworkConfig(networkConfig elementalv1.NetworkConfig) (string, error) {
+	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
+	if err != nil {
+		return "", fmt.Errorf("marshalling network config: %w", err)
+	}
+	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
+		return "", fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
+	}
+	return tempNetworkConfig, nil
 }
 
 func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte, error) {

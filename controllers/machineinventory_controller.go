@@ -161,6 +161,12 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 	}
 
 	if r.networkNeedsReconcile(*mInventory) {
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.ReconcilingNetworkConfig,
+			Status:  metav1.ConditionFalse,
+			Message: "NetworkConfig needs reconcile",
+		})
 		result, err := r.reconcileNetworkConfig(ctx, mInventory)
 		if err != nil {
 			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
@@ -310,28 +316,14 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Network Config")
 
-	// Before we do any change, we make sure the MachineInventory is patched with the appropriate status and annotation.
-	// This will put the MachineInventory "on hold" with a Ready=false condition, so that the elemental-register knows
-	// the config is not ready yet to be consumed. IPAddressClaims must be created and IPAddresses must be served first.
-	if mInventory.Annotations[elementalv1.MachineInventoryNetworkConfigApplied] != "false" {
-		logger.Info("Marking Network Config as deprecated")
-		mInventory.Annotations[elementalv1.MachineInventoryNetworkConfigApplied] = "false"
-		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
-			Type:    elementalv1.NetworkConfigReady,
-			Reason:  elementalv1.ReconcilingNetworkConfig,
-			Status:  metav1.ConditionFalse,
-			Message: "NetworkConfig needs changes",
-		})
-		return ctrl.Result{RequeueAfter: time.Second}, nil
-	}
-
-	// Loops over the IPAddressPools and create an IPClaim for each
+	// Loops over the IPAddressPools and create an IPAddressClaim for each
 	for name, ipPoolRef := range mInventory.Spec.IPAddressPools {
 		ipClaimName := fmt.Sprintf("%s-%s", mInventory.Name, name)
 		ipClaim := &ipamv1.IPAddressClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ipClaimName,
 				Namespace: mInventory.Namespace,
+				// Ownership takes care of IPAddressClaim deletion when the MachineInventory is also deleted.
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						APIVersion: mInventory.APIVersion,
@@ -355,6 +347,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 		if err := r.Get(ctx, client.ObjectKeyFromObject(ipClaim), ipClaim); err != nil {
 			return ctrl.Result{}, fmt.Errorf("getting IPAddressClaim '%s': %w", ipClaimName, err)
 		}
+		// Just for safety, prevent usage of any IPClaim that is undergoing deletion (we don't have an IPAddressClaim watch for a further reconcile)
 		if !ipClaim.DeletionTimestamp.IsZero() {
 			return ctrl.Result{}, fmt.Errorf("Waiting for IPAddressClaim deletion '%s'", ipClaimName)
 		}

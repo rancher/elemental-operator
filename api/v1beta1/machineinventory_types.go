@@ -30,7 +30,6 @@ const (
 	PlanTypeReset                                           = "reset"
 	MachineInventoryResettableAnnotation                    = "elemental.cattle.io/resettable"
 	MachineInventoryOSUnmanagedAnnotation                   = "elemental.cattle.io/os.unmanaged"
-	MachineInventoryNetworkConfigApplied                    = "elemental.cattle.io/network.applied"
 )
 
 type MachineInventorySpec struct {

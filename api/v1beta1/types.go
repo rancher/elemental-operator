@@ -173,17 +173,22 @@ const (
 	DeviceSelectorKeySize DeviceSelectorKey = "Size"
 )
 
-// NetworkTemplate contains a list of IPAddressPools and a network config template.
-// This template can be defined in both MachineRegistrations and MachineSelectors.
+// NetworkTemplate contains a map of IPAddressPools and a map of connection templates.
 type NetworkTemplate struct {
 	IPAddresses map[string]*corev1.TypedLocalObjectReference `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
 	Connections map[string]string                            `json:"connections,omitempty" yaml:"connections,omitempty"`
 }
 
-// NetworkConfig contains a list of claimed IPAddresses and a network config template.
+// NetworkConfig contains a map of claimed IPAddresses and a map of connection templates.
 // This config is a digested NetworkTemplate, the MachineInventory Ready condition highlight that
 // this config is ready to be consumed, this means all needed IPAddressClaims for this machine
 // have been created and the IPAM provider served real IPAddresses that can be applied to the machine.
+//
+// Note that Connections still carries the same connection templates from the NetworkTemplate object.
+// An alternative could be to simplify this object to contain final connections where the variable
+// substitution already took place (fully digested).
+// Right now we send both connection templates and real ipaddressed so the consumer (elemental-register)
+// can do the substitution itself.
 type NetworkConfig struct {
 	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
 	Connections map[string]string `json:"connections,omitempty" yaml:"connections,omitempty"`

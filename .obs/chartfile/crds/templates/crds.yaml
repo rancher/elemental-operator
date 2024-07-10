@@ -348,39 +348,6 @@ spec:
             type: object
           spec:
             properties:
-              network:
-                description: Network is the network template to be applied during
-                  MachineInventory adoption.
-                properties:
-                  connections:
-                    additionalProperties:
-                      type: string
-                    type: object
-                  ipAddresses:
-                    additionalProperties:
-                      description: |-
-                        TypedLocalObjectReference contains enough information to let you locate the
-                        typed referenced object inside the same namespace.
-                      properties:
-                        apiGroup:
-                          description: |-
-                            APIGroup is the group for the resource being referenced.
-                            If APIGroup is not specified, the specified Kind must be in the core API group.
-                            For any other third-party types, APIGroup is required.
-                          type: string
-                        kind:
-                          description: Kind is the type of resource being referenced
-                          type: string
-                        name:
-                          description: Name is the name of resource being referenced
-                          type: string
-                      required:
-                      - kind
-                      - name
-                      type: object
-                      x-kubernetes-map-type: atomic
-                    type: object
-                type: object
               providerID:
                 description: |-
                   ProviderID the identifier for the elemental instance.
@@ -614,41 +581,6 @@ spec:
                     type: object
                   spec:
                     properties:
-                      network:
-                        description: Network is the network template to be applied
-                          during MachineInventory adoption.
-                        properties:
-                          connections:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          ipAddresses:
-                            additionalProperties:
-                              description: |-
-                                TypedLocalObjectReference contains enough information to let you locate the
-                                typed referenced object inside the same namespace.
-                              properties:
-                                apiGroup:
-                                  description: |-
-                                    APIGroup is the group for the resource being referenced.
-                                    If APIGroup is not specified, the specified Kind must be in the core API group.
-                                    For any other third-party types, APIGroup is required.
-                                  type: string
-                                kind:
-                                  description: Kind is the type of resource being
-                                    referenced
-                                  type: string
-                                name:
-                                  description: Name is the name of resource being
-                                    referenced
-                                  type: string
-                              required:
-                              - kind
-                              - name
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            type: object
-                        type: object
                       providerID:
                         description: |-
                           ProviderID the identifier for the elemental instance.
@@ -1002,9 +934,8 @@ spec:
                         type: object
                     type: object
                   network:
-                    description: |-
-                      NetworkTemplate contains a list of IPAddressPools and a network config template.
-                      This template can be defined in both MachineRegistrations and MachineSelectors.
+                    description: NetworkTemplate contains a map of IPAddressPools
+                      and a map of connection templates.
                     properties:
                       connections:
                         additionalProperties:

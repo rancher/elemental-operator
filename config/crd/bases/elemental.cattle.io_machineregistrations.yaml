@@ -173,9 +173,8 @@ spec:
                         type: object
                     type: object
                   network:
-                    description: |-
-                      NetworkTemplate contains a list of IPAddressPools and a network config template.
-                      This template can be defined in both MachineRegistrations and MachineSelectors.
+                    description: NetworkTemplate contains a map of IPAddressPools
+                      and a map of connection templates.
                     properties:
                       connections:
                         additionalProperties:
