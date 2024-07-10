@@ -16,8 +16,32 @@ entries:
       catalog.cattle.io/type: cluster-tool
       catalog.cattle.io/upstream-version: '%VERSION'
     apiVersion: v2
+    appVersion: 1.5.3
+    created: "2024-07-10T10:21:54.530970184Z"
+    description: Elemental provides Cloud Native OS Management for Cluster Nodes.
+    digest: c61e33a7a4efb2a31c1cdd57d57749469103b34b701a70253c8d7c79698ddfe4
+    icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
+    name: elemental-operator
+    urls:
+    - https://rancher.github.io/elemental-operator/stable/build/elemental-operator-chart-1.5.3.tgz
+    version: 1.5.3
+  - annotations:
+      catalog.cattle.io/auto-install: elemental-operator-crds=match
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/display-name: Elemental
+      catalog.cattle.io/kube-version: '>= 1.23.0-0'
+      catalog.cattle.io/namespace: cattle-elemental-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/permits-os: linux
+      catalog.cattle.io/provides-gvr: elemental.cattle.io/v1beta1
+      catalog.cattle.io/rancher-version: '>= 2.7.0-0'
+      catalog.cattle.io/release-name: elemental-operator
+      catalog.cattle.io/scope: management
+      catalog.cattle.io/type: cluster-tool
+      catalog.cattle.io/upstream-version: '%VERSION'
+    apiVersion: v2
     appVersion: 1.5.1
-    created: "2024-07-10T10:19:28.560253893Z"
+    created: "2024-07-10T10:21:54.530646549Z"
     description: Elemental provides Cloud Native OS Management for Cluster Nodes.
     digest: affa5b985d15af7b55bc56d73f4d57fbbcd23946cac90de1f7d2617de287c3cd
     icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
@@ -40,7 +64,7 @@ entries:
       catalog.cattle.io/type: cluster-tool
     apiVersion: v2
     appVersion: 1.4.4
-    created: "2024-07-10T10:19:28.559931586Z"
+    created: "2024-07-10T10:21:54.530307985Z"
     description: Rancher Elemental Operator
     digest: d6c8ffe51679b0852a89a57a4c54534a848c4876bba1418a95afb27543a72d09
     icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
@@ -63,7 +87,7 @@ entries:
       catalog.cattle.io/type: cluster-tool
     apiVersion: v2
     appVersion: 1.4.3
-    created: "2024-07-10T10:19:28.55959956Z"
+    created: "2024-07-10T10:21:54.529673976Z"
     description: Rancher Elemental Operator
     digest: d1eca9ffd77233fb4d03ffcb6f87c0659247ff734128d33250f0dbfca79fb070
     icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
@@ -86,7 +110,7 @@ entries:
       catalog.cattle.io/type: cluster-tool
     apiVersion: v2
     appVersion: 1.4.2
-    created: "2024-07-10T10:19:28.559261653Z"
+    created: "2024-07-10T10:21:54.528831931Z"
     description: Rancher Elemental Operator
     digest: 7ba7d71a4bfe016c2696b65066367e42fc03180c905f52c689154a63362e0627
     icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
@@ -109,7 +133,7 @@ entries:
       catalog.cattle.io/type: cluster-tool
     apiVersion: v2
     appVersion: 1.3.5
-    created: "2024-07-10T10:19:28.558908718Z"
+    created: "2024-07-10T10:21:54.528459354Z"
     description: Rancher Elemental Operator
     digest: 8a5a7ef5d7e03a0217e52e80939e5be336ba5c4e7c1630fdad443a3ae30aa231
     icon: https://raw.githubusercontent.com/rancher/elemental/main/logo/icon-elemental.svg
@@ -124,8 +148,22 @@ entries:
       catalog.cattle.io/namespace: cattle-elemental-system
       catalog.cattle.io/release-name: elemental-operator-crds
     apiVersion: v2
+    appVersion: 1.5.3
+    created: "2024-07-10T10:21:54.534715823Z"
+    description: A Helm chart for deploying Rancher Elemental Operator CRDs
+    digest: 85ab1d53a771d0fb331a6fb976d1bffd23879b40f768e5eb6f701a0f86a9bf09
+    name: elemental-operator-crds
+    urls:
+    - https://rancher.github.io/elemental-operator/stable/build/elemental-operator-crds-chart-1.5.3.tgz
+    version: 1.5.3
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/hidden: "true"
+      catalog.cattle.io/namespace: cattle-elemental-system
+      catalog.cattle.io/release-name: elemental-operator-crds
+    apiVersion: v2
     appVersion: 1.5.1
-    created: "2024-07-10T10:19:28.563066131Z"
+    created: "2024-07-10T10:21:54.534117133Z"
     description: A Helm chart for deploying Rancher Elemental Operator CRDs
     digest: ce2a08245801f66ba335d07b163440c06fd9fc453f2f00f96d82e8a24dae8e53
     name: elemental-operator-crds
@@ -139,7 +177,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator-crds
     apiVersion: v2
     appVersion: 1.4.4
-    created: "2024-07-10T10:19:28.562445882Z"
+    created: "2024-07-10T10:21:54.53266749Z"
     description: A Helm chart for deploying Rancher Elemental Operator CRDs
     digest: 035d33992fa6c5ff46420fbb3bd93cc7489cb4b323c64b70388c0895f563e164
     name: elemental-operator-crds
@@ -153,7 +191,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator-crds
     apiVersion: v2
     appVersion: 1.4.3
-    created: "2024-07-10T10:19:28.561708444Z"
+    created: "2024-07-10T10:21:54.532216506Z"
     description: A Helm chart for deploying Rancher Elemental Operator CRDs
     digest: 6345c83c46b20394c55456a8273e7a2dcd9f0c577f0905dab561682d82540f68
     name: elemental-operator-crds
@@ -167,7 +205,7 @@ entries:
       catalog.cattle.io/release-name: elemental-operator-crds
     apiVersion: v2
     appVersion: 1.4.2
-    created: "2024-07-10T10:19:28.561058038Z"
+    created: "2024-07-10T10:21:54.531802371Z"
     description: A Helm chart for deploying Rancher Elemental Operator CRDs
     digest: 55b6e44e117a4c194b8ce8da233c1b972acc916568c68f59ea46044fde71b158
     name: elemental-operator-crds
@@ -181,11 +219,11 @@ entries:
       catalog.cattle.io/release-name: elemental-operator-crds
     apiVersion: v2
     appVersion: 1.3.5
-    created: "2024-07-10T10:19:28.560650481Z"
+    created: "2024-07-10T10:21:54.531366436Z"
     description: A Helm chart for deploying Rancher Elemental Operator CRDs
     digest: 6eb951f172c01c73a01e7a69a7d6d8c997f456a21b17aa107d79d3d780bed991
     name: elemental-operator-crds
     urls:
     - https://rancher.github.io/elemental-operator/stable/build/elemental-operator-crds-chart-1.3.5.tgz
     version: 1.3.5
-generated: "2024-07-10T10:19:28.558345096Z"
+generated: "2024-07-10T10:21:54.527800772Z"
