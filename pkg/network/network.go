@@ -70,13 +70,7 @@ func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig el
 	config.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
-				If: "[ -f /run/elemental/active_mode ]",
-				Directories: []schema.Directory{
-					{
-						Path:        "systemConnectionsDir",
-						Permissions: 0700,
-					},
-				},
+				If:    "[ -f /run/elemental/active_mode ]",
 				Files: files,
 			},
 		},
