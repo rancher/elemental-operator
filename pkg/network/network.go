@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/yip/pkg/schema"
 )
 
@@ -80,7 +81,8 @@ func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig el
 }
 
 func (n *networkManagerConfigurator) ResetNetworkConfig() error {
-	cmd := exec.Command("find", systemConnectionsDir, "-name", "\"*.nmconnection\"", "-type", "f", "-delete")
+	log.Debug("Deleting all .nmconnection configs")
+	cmd := exec.Command("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete")
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
@@ -88,6 +90,7 @@ func (n *networkManagerConfigurator) ResetNetworkConfig() error {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
 	}
 
+	log.Debug("Reloading connections")
 	cmd = exec.Command("nmcli", "connection", "reload")
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
@@ -96,12 +99,22 @@ func (n *networkManagerConfigurator) ResetNetworkConfig() error {
 		return fmt.Errorf("running: nmcli connection reload: %w", err)
 	}
 
+	log.Debug("Restarting NetworkManager")
 	cmd = exec.Command("systemctl", "restart", "NetworkManager.service")
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("running command: systemctl restart NetworkManager.service: %w", err)
+	}
+
+	log.Debug("Waiting NetworkManager online")
+	cmd = exec.Command("systemctl", "start", "NetworkManager-wait-online.service")
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("running command: systemctl start NetworkManager-wait-online.service: %w", err)
 	}
 	return nil
 }
