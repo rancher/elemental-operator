@@ -17,18 +17,26 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"path"
+<<<<<<< HEAD
+=======
+	"regexp"
+	"strings"
+	"time"
+>>>>>>> b7c0db2e (Wait on NetworkConfigReady condition)
 
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
@@ -294,18 +302,34 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 }
 
 func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory) error {
-	// TODO: Implement something more graceful to make the elemental-register wait.
-	conditionFound := false
-	for _, condition := range inventory.Status.Conditions {
-		if condition.Type == elementalv1.NetworkConfigReady {
-			conditionFound = true
-			if condition.Status == metav1.ConditionFalse {
-				return fmt.Errorf("NetworkConfigReady is false")
+	ctx, cancel := context.WithTimeout(context.TODO(), register.RegistrationDeadlineSeconds*time.Second)
+	defer cancel()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("NewtworkConfig not ready")
+		default:
+			time.Sleep(time.Second)
+		}
+		if err := i.Get(ctx, client.ObjectKeyFromObject(inventory), inventory); err != nil {
+			return fmt.Errorf("getting machine inventory: %w", err)
+		}
+		conditionFound := false
+		for _, condition := range inventory.Status.Conditions {
+			if condition.Type == elementalv1.NetworkConfigReady {
+				conditionFound = true
+				if condition.Status == metav1.ConditionFalse {
+					log.Debug("NetworkConfigReady is false")
+					continue
+				}
 			}
 		}
-	}
-	if !conditionFound {
-		return fmt.Errorf("NetworkConfigReady condition not found")
+		if !conditionFound {
+			log.Debug("NetworkConfigReady condition not found")
+			continue
+		}
+		break
 	}
 
 	networkConfigData, err := json.Marshal(inventory.Spec.Network)
