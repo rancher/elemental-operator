@@ -67,7 +67,7 @@ func main() {
 		log.Warningf("error probing disks: %s", err)
 	}
 
-	networkConfigurator := network.NewConfigurator()
+	networkConfigurator := network.NewConfigurator(fs)
 	installer := install.NewInstaller(fs, blockInfo.Disks, networkConfigurator)
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()

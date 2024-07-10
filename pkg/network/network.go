@@ -26,6 +26,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/yip/pkg/schema"
+	"github.com/twpayne/go-vfs"
 )
 
 const (
@@ -42,11 +43,15 @@ type Configurator interface {
 
 var _ Configurator = (*networkManagerConfigurator)(nil)
 
-func NewConfigurator() Configurator {
-	return &networkManagerConfigurator{}
+func NewConfigurator(fs vfs.FS) Configurator {
+	return &networkManagerConfigurator{
+		fs: fs,
+	}
 }
 
-type networkManagerConfigurator struct{}
+type networkManagerConfigurator struct {
+	fs vfs.FS
+}
 
 func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) schema.YipConfig {
 	// Replace the "{my-ip-name}" placeholders with real IPAddresses
@@ -81,6 +86,22 @@ func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig el
 }
 
 func (n *networkManagerConfigurator) ResetNetworkConfig() error {
+	connectionFiles, err := n.fs.ReadDir(systemConnectionsDir)
+	if err != nil {
+		return fmt.Errorf("reading files in dir '%s': %w", systemConnectionsDir, err)
+	}
+	needsReset := false
+	for _, file := range connectionFiles {
+		if !file.IsDir() && strings.HasSuffix(file.Name(), ".nmconnection") {
+			needsReset = true
+			break
+		}
+	}
+	if !needsReset {
+		log.Debug("Network is already reset, nothing to do")
+		return nil
+	}
+
 	log.Debug("Deleting all .nmconnection configs")
 	cmd := exec.Command("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete")
 	cmd.Stdout = os.Stdout
@@ -115,6 +136,15 @@ func (n *networkManagerConfigurator) ResetNetworkConfig() error {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("running command: systemctl start NetworkManager-wait-online.service: %w", err)
+	}
+
+	log.Debug("Restarting elemental-system-agent")
+	cmd = exec.Command("systemctl", "restart", "elemental-system-agent.service")
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("running command: systemctl restart elemental-system-agent.service: %w", err)
 	}
 	return nil
 }
