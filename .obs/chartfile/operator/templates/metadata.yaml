@@ -8,3 +8,21 @@ spec:
   {{- range $key, $value := .Chart.Annotations }}
     {{ $key }}: {{ toYaml $value }}
   {{- end }}
+  channels:
+  - defaultName: sle-micro-5-5
+    baseOS: SLE Micro
+    baseOSVersion: "5.5"
+    uri: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5
+    description: Default channel that can be used for any generic workload.
+  - defaultName: sle-micro-5-5-kvm
+    baseOS: SLE Micro
+    baseOSVersion: "5.5"
+    flavor: KVM
+    uri: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-kvm
+    description: Ready to be used with KVM. Contains QEMU Guest agent by default.
+  - defaultName: sle-micro-5-5-rt
+    baseOS: SLE Micro
+    baseOSVersion: "5.5"
+    flavor: RT
+    uri: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-rt
+    description: Channel that can be used for any generic workload with a Real-Time kernel.

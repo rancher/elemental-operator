@@ -20,9 +20,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Channel struct {
+	DefaultName   string `json:"defaultName,omitempty"`
+	BaseOS        string `json:"baseOS,omitempty"`
+	BaseOSVersion string `json:"baseOSVersion,omitempty"`
+	// +optional
+	Flavor      string `json:"flavor,omitempty"`
+	URI         string `json:"uri,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type MetadataSpec struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 	AppVersion  string            `json:"appVersion,omitempty"`
+	Channels    []Channel         `json:"channels,omitempty"`
 }
 
 type MetadataStatus struct{}
