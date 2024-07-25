@@ -1,0 +1,9 @@
+<services>
+  <service mode="buildtime" name="kiwi_metainfo_helper"/>
+  <service mode="buildtime" name="docker_label_helper"/>
+  <service name="replace_using_env" mode="buildtime">
+    <param name="file">Dockerfile</param>
+    <param name="eval">IMG_REPO=$(rpm --macros=/root/.rpmmacros -E %img_repo)</param>
+    <param name="var">IMG_REPO</param>
+  </service>
+</services>
