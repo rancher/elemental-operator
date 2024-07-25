@@ -11,7 +11,48 @@ spec:
     image: {{ .Values.channel.image }}:{{ .Values.channel.tag }}
   type: custom
 {{ end }}
-
+---
+{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sle_micro_5_5 (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5")) }}
+apiVersion: elemental.cattle.io/v1beta1
+kind: ManagedOSVersionChannel
+metadata:
+  name: sle-micro-5.5
+  namespace: fleet-default
+spec:
+  deleteNoLongerInSyncVersions: true
+  enabled: false
+  options:
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5
+  type: custom
+{{ end }}
+---
+{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sle_micro_5_5_kvm (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5-kvm")) }}
+apiVersion: elemental.cattle.io/v1beta1
+kind: ManagedOSVersionChannel
+metadata:
+  name: sle-micro-5.5-kvm
+  namespace: fleet-default
+spec:
+  deleteNoLongerInSyncVersions: true
+  enabled: false
+  options:
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-kvm
+  type: custom
+{{ end }}
+---
+{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sle_micro_5_5_rt (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5-rt")) }}
+apiVersion: elemental.cattle.io/v1beta1
+kind: ManagedOSVersionChannel
+metadata:
+  name: sle-micro-5.5-rt
+  namespace: fleet-default
+spec:
+  deleteNoLongerInSyncVersions: true
+  enabled: false
+  options:
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-rt
+  type: custom
+{{ end }}
 # Keep pre-existing channels managed by Helm if they do not match with the current default
 # this way if an upgrade introduces a new channel any pre-existing channel managed by Helm is not deleted
 {{ range $index, $channel := (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "").items }}
@@ -23,8 +64,6 @@ metadata:
   name: {{ $channel.metadata.name }}
   namespace: fleet-default
 spec:
-  options:
-    image: {{ $channel.spec.options.image }}
-  type: custom
+    {{- toYaml $channel.spec | nindent 2}}
   {{ end }}
 {{ end }}

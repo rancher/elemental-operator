@@ -2570,6 +2570,9 @@ spec:
                   DeleteNoLongerInSyncVersions automatically deletes
                   all no-longer-in-sync ManagedOSVersions that were created by this channel.
                 type: boolean
+              enabled:
+                default: true
+                type: boolean
               options:
                 x-kubernetes-preserve-unknown-fields: true
               syncInterval:

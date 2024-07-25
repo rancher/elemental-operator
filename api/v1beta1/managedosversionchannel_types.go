@@ -44,6 +44,9 @@ type ManagedOSVersionChannelSpec struct {
 	// +optional
 	// +kubebuilder:default:=false
 	DeleteNoLongerInSyncVersions bool `json:"deleteNoLongerInSyncVersions,omitempty"`
+	// +optional
+	// +kubebuilder:default:=true
+	Enabled bool `json:"enabled"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional

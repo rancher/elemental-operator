@@ -1,6 +1,6 @@
 questions:
 - variable: channel.defaultChannel
-  default: "true"
+  default: "false"
   description: "Provide an Elemental OS Channel container image"
   label: Elemental OS Channel
   type: boolean
@@ -8,17 +8,41 @@ questions:
   group: "Elemental OS Channel"
   subquestions:
   - variable: channel.image
-    default: "%%IMG_REPO%%/rancher/elemental-channel"
     description: "Specify the Elemental OS channel: for air-gapped scenarios you need to provide your own OS channel image (see https://elemental.docs.rancher.com/airgap for detailed instructions)"
     type: string
     label: Elemental OS Channel Image
     group: "Elemental OS Channel"
   - variable: channel.tag
-    default: "%VERSION%"
     description: "Specify Elemental OS channel image tag"
     type: string
     label: "Elemental OS Channel Tag"
     group: "Elemental OS Channel"
+- variable: defaultChannels.included
+  default: true
+  description: "Provide default Elemental OS Channels. Note for air-gapped scenarios you need to provide your own OS channel image (see https://elemental.docs.rancher.com/airgap )"
+  label: Elemental OS Channels
+  type: boolean
+  show_subquestion_if: true
+  group: "Elemental OS Channels"
+  subquestions:
+  - variable: defaultChannels.includes.sle_micro_5_5
+    default: true
+    description: "Default channel that can be used for any generic workload."
+    type: bool
+    label: SLE Micro 5.5 Channel
+    group: "Elemental OS Channels"
+  - variable: defaultChannels.includes.sle_micro_5_5_kvm
+    default: true
+    description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
+    type: bool
+    label: SLE Micro 5.5 KVM Channel
+    group: "Elemental OS Channels"
+  - variable: defaultChannels.includes.sle_micro_5_5_rt
+    default: true
+    description: "Channel that can be used for any generic workload with a Real-Time kernel."
+    type: bool
+    label: SLE Micro 5.5 RT Channel
+    group: "Elemental OS Channels"
 - variable: debug
   default: "false"
   description: "Enable debug logging in the Elemental operator"

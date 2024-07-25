@@ -9,10 +9,15 @@ seedImage:
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
-channel:
-  name: "sle-micro-5.5"
-  image: "%%IMG_REPO%%/rancher/elemental-channel/sle-micro"
-  tag: "5.5"
+# default Elemental channels
+defaultChannels:
+  # default channels are included in the chart
+  included: true
+  # default channels to include
+  includes:
+    sle_micro_5_5: true
+    sle_micro_5_5_kvm: true
+    sle_micro_5_5_rt: true
 
 # number of operator replicas to deploy
 replicas: 1

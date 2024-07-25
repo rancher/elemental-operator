@@ -113,6 +113,9 @@ const (
 
 	// FailedToCreatePodReason documents that managed OS version channel failed to create the synchronization pod
 	FailedToCreatePodReason = "FailedToCreatePod"
+
+	// ChannelDisabledReason documents that the managed OS version channel is not enabled
+	ChannelDisabledReason = "ChannelDisabled"
 )
 
 // Managed OS Image conditions

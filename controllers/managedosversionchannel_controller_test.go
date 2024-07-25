@@ -130,6 +130,9 @@ var _ = Describe("reconcile managed os version channel", func() {
 				Name:      "test-name",
 				Namespace: "default",
 			},
+			Spec: elementalv1.ManagedOSVersionChannelSpec{
+				Enabled: true,
+			},
 		}
 
 		pod = &corev1.Pod{
@@ -446,6 +449,98 @@ var _ = Describe("reconcile managed os version channel", func() {
 		Expect(managedOSVersionChannel.Status.Conditions[0].Reason).To(Equal(elementalv1.FailedToCreatePodReason))
 		Expect(managedOSVersionChannel.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
 	})
+
+	It("should deprecate ManagedOSVersions when disabled", func() {
+		// Pre-populate synced ManagedOSVersion
+		managedOSVersion.Name = "test-disabled"
+		managedOSVersion.Namespace = managedOSVersionChannel.Namespace
+		managedOSVersion.Labels = map[string]string{elementalv1.ElementalManagedOSVersionChannelLabel: managedOSVersionChannel.Name}
+		Expect(cl.Create(ctx, managedOSVersion)).Should(Succeed())
+		// Create channel
+		managedOSVersionChannel.Spec.Type = "json"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		managedOSVersionChannel.Spec.Enabled = false
+		name := types.NamespacedName{
+			Namespace: managedOSVersionChannel.Namespace,
+			Name:      managedOSVersionChannel.Name,
+		}
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		// No error and status updated (no requeue)
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(cl.Get(ctx, types.NamespacedName{
+			Name:      managedOSVersion.Name,
+			Namespace: managedOSVersion.Namespace,
+		}, managedOSVersion))
+
+		noLongerInSync, found := managedOSVersion.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation]
+		Expect(found).Should(BeTrue(), "ElementalManagedOSVersionNoLongerSyncedAnnotation must be present")
+
+		Expect(noLongerInSync).Should(Equal(elementalv1.ElementalManagedOSVersionNoLongerSyncedValue), "ManagedOSVersion must be marked as no longer in sync")
+	})
+
+	It("should delete ManagedOSVersions when disabled", func() {
+		// Pre-populate synced ManagedOSVersion
+		managedOSVersion.Name = "test-disabled"
+		managedOSVersion.Namespace = managedOSVersionChannel.Namespace
+		managedOSVersion.Labels = map[string]string{elementalv1.ElementalManagedOSVersionChannelLabel: managedOSVersionChannel.Name}
+		Expect(cl.Create(ctx, managedOSVersion)).Should(Succeed())
+		// Create channel
+		managedOSVersionChannel.Spec.Type = "json"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		managedOSVersionChannel.Spec.Enabled = false
+		managedOSVersionChannel.Spec.DeleteNoLongerInSyncVersions = true
+		name := types.NamespacedName{
+			Namespace: managedOSVersionChannel.Namespace,
+			Name:      managedOSVersionChannel.Name,
+		}
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		// No error and status updated (no requeue)
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() bool {
+			err := cl.Get(ctx, types.NamespacedName{
+				Name:      managedOSVersion.Name,
+				Namespace: managedOSVersion.Namespace,
+			}, managedOSVersion)
+			return apierrors.IsNotFound(err)
+		}, time.Minute).Should(BeTrue(), "ManagedOSVersion must have been deleted")
+	})
+	It("should delete syncer pod when disabled", func() {
+		// Pre-populate syncer pod
+		pod.Spec.Containers = []corev1.Container{
+			{
+				Name:  "test",
+				Image: r.OperatorImage,
+			},
+		}
+		Expect(cl.Create(ctx, pod)).Should(Succeed())
+		// Create channel
+		managedOSVersionChannel.Spec.Type = "json"
+		managedOSVersionChannel.Spec.SyncInterval = "1m"
+		managedOSVersionChannel.Spec.Enabled = false
+		name := types.NamespacedName{
+			Namespace: managedOSVersionChannel.Namespace,
+			Name:      managedOSVersionChannel.Name,
+		}
+		Expect(cl.Create(ctx, managedOSVersionChannel)).To(Succeed())
+
+		// No error and status updated (no requeue)
+		_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() bool {
+			err := cl.Get(ctx, types.NamespacedName{
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+			}, pod)
+			return apierrors.IsNotFound(err)
+		}, time.Minute).Should(BeTrue(), "syncer pod must have been deleted")
+	})
 })
 
 var _ = Describe("managed os version channel controller integration tests", func() {
@@ -481,6 +576,9 @@ var _ = Describe("managed os version channel controller integration tests", func
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
+			},
+			Spec: elementalv1.ManagedOSVersionChannelSpec{
+				Enabled: true,
 			},
 		}
 

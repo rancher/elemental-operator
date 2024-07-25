@@ -193,13 +193,14 @@ setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart s
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v --label-filter="do-nothing" ./e2e
 
-# This builds the docker image, generates the chart, loads the image into the kind cluster and upgrades the chart to latest
+# This generates the chart, builds the docker image, loads the image into the kind cluster and upgrades the chart to latest
 # useful to test changes into the operator with a running system, without clearing the operator namespace
 # thus losing any registration/inventories/os CRDs already created
-reload-operator: build-docker-operator chart
+reload-operator: chart build-docker-operator
 	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION}
 	helm upgrade -n cattle-elemental-system elemental-operator-crds $(CHART_CRDS)
 	helm upgrade -n cattle-elemental-system elemental-operator $(CHART)
+	kubectl -n cattle-elemental-system rollout restart deployment/elemental-operator
 
 .PHONY: vendor
 vendor:
