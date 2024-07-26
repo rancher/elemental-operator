@@ -34,6 +34,7 @@ func NewManagedOSVersionChannel(namespace, name, sType, interval string, options
 			Namespace: namespace,
 		},
 		Spec: elementalv1.ManagedOSVersionChannelSpec{
+			Enabled:          true,
 			Type:             sType,
 			SyncInterval:     interval,
 			Options:          options,
