@@ -1,22 +1,30 @@
 questions:
-- variable: defaultChannels.includes.sle_micro_5_5
+- variable: defaultChannels.included
   default: true
-  description: "Default channel that can be used for any generic workload."
-  type: bool
-  label: SLE Micro 5.5 Channel
+  description: "Provide default Elemental OS Channels. Note for air-gapped scenarios you need to provide your own OS channel image (see https://elemental.docs.rancher.com/airgap)"
+  label: Elemental Default OS Channels
+  type: boolean
+  show_subquestion_if: true
   group: "Default Elemental OS Channels"
-- variable: defaultChannels.includes.sle_micro_5_5_kvm
-  default: true
-  description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
-  type: bool
-  label: SLE Micro 5.5 KVM Channel
-  group: "Default Elemental OS Channels"
-- variable: defaultChannels.includes.sle_micro_5_5_rt
-  default: true
-  description: "Channel that can be used for any generic workload with a Real-Time kernel."
-  type: bool
-  label: SLE Micro 5.5 RT Channel
-  group: "Default Elemental OS Channels"
+  subquestions:
+  - variable: defaultChannels.includes.sle_micro_5_5
+    default: true
+    description: "Default channel that can be used for any generic workload."
+    type: boolean
+    label: SLE Micro 5.5 Channel
+    group: "Default Elemental OS Channels"
+  - variable: defaultChannels.includes.sle_micro_5_5_kvm
+    default: true
+    description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
+    type: boolean
+    label: SLE Micro 5.5 KVM Channel
+    group: "Default Elemental OS Channels"
+  - variable: defaultChannels.includes.sle_micro_5_5_rt
+    default: true
+    description: "Channel that can be used for any generic workload with a Real-Time kernel."
+    type: boolean
+    label: SLE Micro 5.5 RT Channel
+    group: "Default Elemental OS Channels"
 - variable: channel.defaultChannel
   default: "false"
   description: "Provide a Custom OS Channel container image"
@@ -26,7 +34,7 @@ questions:
   group: "Custom OS Channel"
   subquestions:
   - variable: channel.image
-    description: "Specify the custom OS channel: for air-gapped scenarios please see https://elemental.docs.rancher.com/airgap for detailed instructions"
+    description: "Specify the custom OS channel: for air-gapped scenarios please see https://elemental.docs.rancher.com/airgap"
     type: string
     label: Custom OS Channel Image
     group: "Custom OS Channel"

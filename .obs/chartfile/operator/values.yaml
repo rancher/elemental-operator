@@ -11,6 +11,8 @@ seedImage:
 
 # default Elemental channels
 defaultChannels:
+  # default channels are included in the chart
+  included: true
   # default channels to include
   includes:
     sle_micro_5_5: true
