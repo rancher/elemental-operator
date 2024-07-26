@@ -4,26 +4,26 @@ questions:
   description: "Default channel that can be used for any generic workload."
   type: bool
   label: SLE Micro 5.5 Channel
-  group: "01. Default Elemental OS Channels"
+  group: "Default Elemental OS Channels"
 - variable: defaultChannels.includes.sle_micro_5_5_kvm
   default: true
   description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
   type: bool
   label: SLE Micro 5.5 KVM Channel
-  group: "01. Default Elemental OS Channels"
+  group: "Default Elemental OS Channels"
 - variable: defaultChannels.includes.sle_micro_5_5_rt
   default: true
   description: "Channel that can be used for any generic workload with a Real-Time kernel."
   type: bool
   label: SLE Micro 5.5 RT Channel
-  group: "01. Default Elemental OS Channels"
+  group: "Default Elemental OS Channels"
 - variable: channel.defaultChannel
   default: "false"
   description: "Provide a Custom OS Channel container image"
   label: Custom OS Channel
   type: boolean
   show_subquestion_if: true
-  group: "02. Custom OS Channel"
+  group: "Custom OS Channel"
   subquestions:
   - variable: channel.image
     description: "Specify the custom OS channel: for air-gapped scenarios please see https://elemental.docs.rancher.com/airgap for detailed instructions"
@@ -40,4 +40,4 @@ questions:
   description: "Enable debug logging in the Elemental operator"
   type: boolean
   label: "Enable Debug Logging"
-  group: "03. Logging"
+  group: "Logging"
