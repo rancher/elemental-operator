@@ -1,30 +1,25 @@
 questions:
-- variable: defaultChannels.included
+- variable: defaultChannels.sleMicro55.included
+  show_if: "defaultChannels.sleMicro55"
   default: true
-  description: "Provide default Elemental OS Channels. Note for air-gapped scenarios you need to provide your own OS channel image (see https://elemental.docs.rancher.com/airgap)"
-  label: Elemental Default OS Channels
+  description: "Default channel that can be used for any generic workload."
   type: boolean
-  show_subquestion_if: true
+  label: SLE Micro 5.5 Channel
   group: "Default Elemental OS Channels"
-  subquestions:
-  - variable: defaultChannels.includes.sleMicro55
-    default: true
-    description: "Default channel that can be used for any generic workload."
-    type: boolean
-    label: SLE Micro 5.5 Channel
-    group: "Default Elemental OS Channels"
-  - variable: defaultChannels.includes.sleMicro55KVM
-    default: true
-    description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
-    type: boolean
-    label: SLE Micro 5.5 KVM Channel
-    group: "Default Elemental OS Channels"
-  - variable: defaultChannels.includes.sleMicro55RT
-    default: true
-    description: "Channel that can be used for any generic workload with a Real-Time kernel."
-    type: boolean
-    label: SLE Micro 5.5 RT Channel
-    group: "Default Elemental OS Channels"
+- variable: defaultChannels.sleMicro55KVM.included
+  show_if: "defaultChannels.sleMicro55KVM"
+  default: true
+  description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
+  type: boolean
+  label: SLE Micro 5.5 KVM Channel
+  group: "Default Elemental OS Channels"
+- variable: defaultChannels.sleMicro55RT.included
+  show_if: "defaultChannels.sleMicro55RT"
+  default: true
+  description: "Channel that can be used for any generic workload with a Real-Time kernel."
+  type: boolean
+  label: SLE Micro 5.5 RT Channel
+  group: "Default Elemental OS Channels"
 - variable: channel.defaultChannel
   default: "false"
   description: "Provide a Custom OS Channel container image"

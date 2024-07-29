@@ -17,13 +17,24 @@ seedImage:
 
 # default Elemental channels
 defaultChannels:
-  # default channels are included in the chart
-  included: true
-  # default channels to include
-  includes:
-    sleMicro55: true
-    sleMicro55KVM: true
-    sleMicro55RT: true
+  sleMicro55:
+    included: true 
+    name: sle-micro-5.5
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5
+    deleteNoLongerInSyncVersions: true
+  sleMicro55KVM:
+    included: true
+    name: sle-micro-5.5-kvm
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-kvm
+    deleteNoLongerInSyncVersions: true
+  sleMicro55RT:
+    included: true
+    name: sle-micro-5.5-rt
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-rt
+    deleteNoLongerInSyncVersions: true
 
 # number of operator replicas to deploy
 replicas: 1

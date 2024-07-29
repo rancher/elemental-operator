@@ -11,48 +11,25 @@ spec:
     image: {{ .Values.channel.image }}:{{ .Values.channel.tag }}
   type: custom
 {{ end }}
+
+{{ range $key, $channel := .Values.defaultChannels }}
+  {{ if and $channel.included (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "$channel.name")) }}
 ---
-{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sleMicro55 (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5")) }}
 apiVersion: elemental.cattle.io/v1beta1
 kind: ManagedOSVersionChannel
 metadata:
-  name: sle-micro-5.5
+  name: {{ $channel.name }}
   namespace: fleet-default
 spec:
-  deleteNoLongerInSyncVersions: true
-  enabled: false
+  deleteNoLongerInSyncVersions: {{ $channel.deleteNoLongerInSyncVersions }}
+  enabled: {{ $channel.enabled }}
   options:
-    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5
+    image: {{ $channel.image }}
   type: custom
+  {{ end }}
 {{ end }}
----
-{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sleMicro55KVM (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5-kvm")) }}
-apiVersion: elemental.cattle.io/v1beta1
-kind: ManagedOSVersionChannel
-metadata:
-  name: sle-micro-5.5-kvm
-  namespace: fleet-default
-spec:
-  deleteNoLongerInSyncVersions: true
-  enabled: false
-  options:
-    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-kvm
-  type: custom
-{{ end }}
----
-{{ if and .Values.defaultChannels.included .Values.defaultChannels.includes.sleMicro55RT (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "sle-micro-5.5-rt")) }}
-apiVersion: elemental.cattle.io/v1beta1
-kind: ManagedOSVersionChannel
-metadata:
-  name: sle-micro-5.5-rt
-  namespace: fleet-default
-spec:
-  deleteNoLongerInSyncVersions: true
-  enabled: false
-  options:
-    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-rt
-  type: custom
-{{ end }}
+
+
 # Keep pre-existing channels managed by Helm if they do not match with the current default
 # this way if an upgrade introduces a new channel any pre-existing channel managed by Helm is not deleted
 {{ range $index, $channel := (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "").items }}
