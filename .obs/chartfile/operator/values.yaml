@@ -9,6 +9,12 @@ seedImage:
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
+# a custom channel to install
+#channel:
+#  name: "my-os-channel"
+#  image: "my-repo/my-os-channel"
+#  tag: "1.2.3"
+
 # default Elemental channels
 defaultChannels:
   # default channels are included in the chart
