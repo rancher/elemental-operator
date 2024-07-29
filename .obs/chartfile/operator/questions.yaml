@@ -7,19 +7,19 @@ questions:
   show_subquestion_if: true
   group: "Default Elemental OS Channels"
   subquestions:
-  - variable: defaultChannels.includes.sle_micro_5_5
+  - variable: defaultChannels.includes.sleMicro55
     default: true
     description: "Default channel that can be used for any generic workload."
     type: boolean
     label: SLE Micro 5.5 Channel
     group: "Default Elemental OS Channels"
-  - variable: defaultChannels.includes.sle_micro_5_5_kvm
+  - variable: defaultChannels.includes.sleMicro55KVM
     default: true
     description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
     type: boolean
     label: SLE Micro 5.5 KVM Channel
     group: "Default Elemental OS Channels"
-  - variable: defaultChannels.includes.sle_micro_5_5_rt
+  - variable: defaultChannels.includes.sleMicro55RT
     default: true
     description: "Channel that can be used for any generic workload with a Real-Time kernel."
     type: boolean

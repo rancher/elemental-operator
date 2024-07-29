@@ -21,9 +21,9 @@ defaultChannels:
   included: true
   # default channels to include
   includes:
-    sle_micro_5_5: true
-    sle_micro_5_5_kvm: true
-    sle_micro_5_5_rt: true
+    sleMicro55: true
+    sleMicro55KVM: true
+    sleMicro55RT: true
 
 # number of operator replicas to deploy
 replicas: 1
