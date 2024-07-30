@@ -101,20 +101,20 @@ if [ "$(uname)" = "Linux" ]; then
     OTHER_LINKFLAGS="-extldflags -static -s"
 fi
 
-if [ "%{commit}" = "0" ]; then
+if [ "%{commit}" = "_replaceme_" ]; then
   echo "No commit hash provided"
   exit 1
 fi
 
-if [ "%{c_date}" = "0" ]; then
+if [ "%{c_date}" = "_replaceme_" ]; then
   echo "No commit date provided"
   exit 1
 fi
 
-export GIT_TAG=`echo "%{version}" | cut -d "+" -f 1`
-GIT_COMMIT=`echo "%{commit}"`
+export GIT_TAG=$(echo "%{version}" | cut -d "+" -f 1)
+GIT_COMMIT=$(echo "%{commit}")
 export GIT_COMMIT=${GIT_COMMIT:0:8}
-export MTIME=`echo "%{c_date}"`
+export COMMITDATE="%{c_date}"
 
 # build binaries
 CGO_ENABLED=0 make operator
