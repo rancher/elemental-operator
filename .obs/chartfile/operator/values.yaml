@@ -9,10 +9,32 @@ seedImage:
   tag: "%VERSION%"
   imagePullPolicy: IfNotPresent
 
-channel:
-  name: "sle-micro-5.5"
-  image: "%%IMG_REPO%%/rancher/elemental-channel/sle-micro"
-  tag: "5.5"
+# a custom channel to install
+#channel:
+#  name: "my-os-channel"
+#  image: "my-repo/my-os-channel"
+#  tag: "1.2.3"
+
+# default Elemental channels
+defaultChannels:
+  sleMicro55:
+    included: true 
+    name: sle-micro-5.5
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5
+    deleteNoLongerInSyncVersions: true
+  sleMicro55KVM:
+    included: true
+    name: sle-micro-5.5-kvm
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-kvm
+    deleteNoLongerInSyncVersions: true
+  sleMicro55RT:
+    included: true
+    name: sle-micro-5.5-rt
+    enabled: false
+    image: registry.opensuse.org/isv/rancher/elemental/dev/containers/rancher/elemental-channel/sle-micro:5.5-rt
+    deleteNoLongerInSyncVersions: true
 
 # number of operator replicas to deploy
 replicas: 1

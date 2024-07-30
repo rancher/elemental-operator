@@ -170,6 +170,29 @@ func (r *ManagedOSVersionChannelReconciler) reconcile(ctx context.Context, manag
 		return ctrl.Result{}, nil
 	}
 
+	if !managedOSVersionChannel.Spec.Enabled {
+		logger.Info("Channel is disabled. Skipping sync.")
+		curVersions := r.getAllOwnedManagedOSVersions(ctx, client.ObjectKey{
+			Name:      managedOSVersionChannel.Name,
+			Namespace: managedOSVersionChannel.Namespace,
+		})
+		for _, version := range curVersions {
+			if err := r.deprecateVersion(ctx, *managedOSVersionChannel, version); err != nil {
+				return ctrl.Result{}, fmt.Errorf("Deprecating ManagedOSVersion %s: %w", version.Name, err)
+			}
+		}
+		if err := r.deleteSyncerPod(ctx, *managedOSVersionChannel); err != nil {
+			return ctrl.Result{}, fmt.Errorf("deleting syncer pod: %w", err)
+		}
+		meta.SetStatusCondition(&managedOSVersionChannel.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.ChannelDisabledReason,
+			Status:  metav1.ConditionTrue,
+			Message: "Channel is disabled",
+		})
+		return ctrl.Result{}, nil
+	}
+
 	reachedNextInterval := false
 	lastSync := managedOSVersionChannel.Status.LastSyncedTime
 	if lastSync != nil && lastSync.Add(interval).Before(time.Now()) {
@@ -365,26 +388,35 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 	// Flagging orphan versions
 	for _, version := range curVersions {
 		if lastSyncTime, found := version.Annotations[elementalv1.ElementalManagedOSVersionChannelLastSyncAnnotation]; !found || (lastSyncTime != syncTimestamp) {
-			logger.Info("ManagedOSVersion no longer synced through this channel", "name", version.Name)
-			patchBase := client.MergeFrom(version.DeepCopy())
-			if version.ObjectMeta.Annotations == nil {
-				version.ObjectMeta.Annotations = map[string]string{}
-			}
-			version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
-			if err := r.Patch(ctx, version, patchBase); err != nil {
-				logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync", "name", version.Name)
-				return fmt.Errorf("deprecating ManagedOSVersion '%s': %w", version.Name, err)
-			}
-			if ch.Spec.DeleteNoLongerInSyncVersions {
-				logger.Info("Auto-deleting no longer in sync ManagedOSVersion due to channel settings", "name", version.Name)
-				if err := r.Delete(ctx, version); err != nil {
-					logger.Error(err, "Could not auto-delete no longer in sync ManagedOSVersion")
-					return fmt.Errorf("auto-deleting ManagedOSVersion '%s': %w", version.Name, err)
-				}
+			if err := r.deprecateVersion(ctx, *ch, version); err != nil {
+				return fmt.Errorf("Deprecating ManagedOSVersion %s: %w", version.Name, err)
 			}
 		}
 	}
 
+	return nil
+}
+
+// deprecateVersion flags a ManagedOSVersion as orphan and if needed trigger its deletion.
+func (r *ManagedOSVersionChannelReconciler) deprecateVersion(ctx context.Context, channel elementalv1.ManagedOSVersionChannel, version *elementalv1.ManagedOSVersion) error {
+	logger := ctrl.LoggerFrom(ctx).WithValues("ManagedOSVersionChannel", channel.Name).WithValues("ManagedOSVersion", version.Name)
+	logger.Info("ManagedOSVersion no longer synced through this channel")
+	patchBase := client.MergeFrom(version.DeepCopy())
+	if version.ObjectMeta.Annotations == nil {
+		version.ObjectMeta.Annotations = map[string]string{}
+	}
+	version.ObjectMeta.Annotations[elementalv1.ElementalManagedOSVersionNoLongerSyncedAnnotation] = elementalv1.ElementalManagedOSVersionNoLongerSyncedValue
+	if err := r.Patch(ctx, version, patchBase); err != nil {
+		logger.Error(err, "Could not patch ManagedOSVersion as no longer in sync")
+		return fmt.Errorf("deprecating ManagedOSVersion '%s': %w", version.Name, err)
+	}
+	if channel.Spec.DeleteNoLongerInSyncVersions {
+		logger.Info("Auto-deleting no longer in sync ManagedOSVersion due to channel settings")
+		if err := r.Delete(ctx, version); err != nil {
+			logger.Error(err, "Could not auto-delete no longer in sync ManagedOSVersion")
+			return fmt.Errorf("auto-deleting ManagedOSVersion '%s': %w", version.Name, err)
+		}
+	}
 	return nil
 }
 
@@ -482,6 +514,24 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 		Status:  metav1.ConditionFalse,
 		Message: "started synchronization pod",
 	})
+	return nil
+}
+
+// deleteSyncerPod deletes the syncer pod if it exists
+func (r *ManagedOSVersionChannelReconciler) deleteSyncerPod(ctx context.Context, channel elementalv1.ManagedOSVersionChannel) error {
+	pod := &corev1.Pod{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: channel.Namespace,
+		Name:      channel.Name,
+	}, pod); apierrors.IsNotFound(err) {
+		// Pod does not exist. Nothing to do.
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("getting pod: %w", err)
+	}
+	if err := r.Delete(ctx, pod); err != nil {
+		return fmt.Errorf("deleting pod: %w", err)
+	}
 	return nil
 }
 

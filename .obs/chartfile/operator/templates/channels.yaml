@@ -12,6 +12,24 @@ spec:
   type: custom
 {{ end }}
 
+{{ range $key, $channel := .Values.defaultChannels }}
+  {{ if and $channel.included (not (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "$channel.name")) }}
+---
+apiVersion: elemental.cattle.io/v1beta1
+kind: ManagedOSVersionChannel
+metadata:
+  name: {{ $channel.name }}
+  namespace: fleet-default
+spec:
+  deleteNoLongerInSyncVersions: {{ $channel.deleteNoLongerInSyncVersions }}
+  enabled: {{ $channel.enabled }}
+  options:
+    image: {{ $channel.image }}
+  type: custom
+  {{ end }}
+{{ end }}
+
+
 # Keep pre-existing channels managed by Helm if they do not match with the current default
 # this way if an upgrade introduces a new channel any pre-existing channel managed by Helm is not deleted
 {{ range $index, $channel := (lookup "elemental.cattle.io/v1beta1" "ManagedOSVersionChannel" "fleet-default" "").items }}
@@ -23,8 +41,6 @@ metadata:
   name: {{ $channel.metadata.name }}
   namespace: fleet-default
 spec:
-  options:
-    image: {{ $channel.spec.options.image }}
-  type: custom
+    {{- toYaml $channel.spec | nindent 2}}
   {{ end }}
 {{ end }}

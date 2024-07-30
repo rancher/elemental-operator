@@ -1,24 +1,43 @@
 questions:
+- variable: defaultChannels.sleMicro55.included
+  show_if: "defaultChannels.sleMicro55"
+  default: true
+  description: "Default channel that can be used for any generic workload."
+  type: boolean
+  label: SLE Micro 5.5
+  group: "Default Elemental OS Channels"
+- variable: defaultChannels.sleMicro55KVM.included
+  show_if: "defaultChannels.sleMicro55KVM"
+  default: true
+  description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
+  type: boolean
+  label: SLE Micro 5.5 KVM
+  group: "Default Elemental OS Channels"
+- variable: defaultChannels.sleMicro55RT.included
+  show_if: "defaultChannels.sleMicro55RT"
+  default: true
+  description: "Channel that can be used for any generic workload with a Real-Time kernel."
+  type: boolean
+  label: SLE Micro 5.5 RT
+  group: "Default Elemental OS Channels"
 - variable: channel.defaultChannel
-  default: "true"
-  description: "Provide an Elemental OS Channel container image"
-  label: Elemental OS Channel
+  default: "false"
+  description: "Provide a Custom OS Channel container image"
+  label: Custom OS Channel
   type: boolean
   show_subquestion_if: true
-  group: "Elemental OS Channel"
+  group: "Custom OS Channel"
   subquestions:
   - variable: channel.image
-    default: "%%IMG_REPO%%/rancher/elemental-channel"
-    description: "Specify the Elemental OS channel: for air-gapped scenarios you need to provide your own OS channel image (see https://elemental.docs.rancher.com/airgap for detailed instructions)"
+    description: "Specify the custom OS channel: for air-gapped scenarios please see https://elemental.docs.rancher.com/airgap"
     type: string
-    label: Elemental OS Channel Image
-    group: "Elemental OS Channel"
+    label: Custom OS Channel Image
+    group: "Custom OS Channel"
   - variable: channel.tag
-    default: "%VERSION%"
-    description: "Specify Elemental OS channel image tag"
+    description: "Specify Custom OS Channel image tag"
     type: string
-    label: "Elemental OS Channel Tag"
-    group: "Elemental OS Channel"
+    label: "Custom OS Channel Tag"
+    group: "Custom OS Channel"
 - variable: debug
   default: "false"
   description: "Enable debug logging in the Elemental operator"
