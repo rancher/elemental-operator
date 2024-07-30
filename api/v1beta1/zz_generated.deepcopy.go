@@ -1132,11 +1132,11 @@ func (in *NetworkConfig) DeepCopyInto(out *NetworkConfig) {
 			(*out)[key] = val
 		}
 	}
-	if in.Connections != nil {
-		in, out := &in.Connections, &out.Connections
-		*out = make(map[string]string, len(*in))
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = make(map[string]runtime.RawExtension, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 }
@@ -1170,11 +1170,11 @@ func (in *NetworkTemplate) DeepCopyInto(out *NetworkTemplate) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.Connections != nil {
-		in, out := &in.Connections, &out.Connections
-		*out = make(map[string]string, len(*in))
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = make(map[string]runtime.RawExtension, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 }

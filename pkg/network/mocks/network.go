@@ -59,11 +59,12 @@ func (m *MockConfigurator) EXPECT() *MockConfiguratorMockRecorder {
 }
 
 // GetNetworkConfigApplicator mocks base method.
-func (m *MockConfigurator) GetNetworkConfigApplicator(arg0 v1beta1.NetworkConfig) schema.YipConfig {
+func (m *MockConfigurator) GetNetworkConfigApplicator(arg0 v1beta1.NetworkConfig) (schema.YipConfig, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNetworkConfigApplicator", arg0)
 	ret0, _ := ret[0].(schema.YipConfig)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetNetworkConfigApplicator indicates an expected call of GetNetworkConfigApplicator.

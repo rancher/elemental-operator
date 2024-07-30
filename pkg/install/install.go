@@ -18,6 +18,7 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -270,6 +271,10 @@ func (i *installer) getCloudInitConfigs(config elementalv1.Config, state registe
 	configs = append(configs, registrationStatePath)
 
 	networkConfigPath, err := i.writeNetworkConfig(networkConfig)
+	if errors.Is(err, network.ErrEmptyConfig) {
+		// Nothing to do on an empty network config.
+		return configs, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("writing temporary network config: %w", err)
 	}
@@ -378,7 +383,10 @@ func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) 
 }
 
 func (i *installer) writeNetworkConfig(networkConfig elementalv1.NetworkConfig) (string, error) {
-	networkYipConfig := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	networkYipConfig, err := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	if err != nil {
+		return "", fmt.Errorf("getting network config applicator: %w", err)
+	}
 	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
 	if err != nil {
 		return "", fmt.Errorf("marshalling network config: %w", err)

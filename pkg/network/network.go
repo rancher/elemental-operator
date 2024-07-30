@@ -17,6 +17,7 @@ limitations under the License.
 package network
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,62 +28,116 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
+	k8syaml "sigs.k8s.io/yaml"
 )
 
 const (
-	firstBootConfigTempPath = "/tmp/first-boot-network-config.yaml"
-	firstBootConfigPath     = "/oem/network/first-boot-network-config.yaml"
-	systemConnectionsDir    = "/etc/NetworkManager/system-connections"
-	configApplicator        = "/oem/99-network-config-applicator.yaml"
+	nmstateTempPath      = "/tmp/elemental-nmstate.yaml"
+	firstBootConfigPath  = "/oem/network/first-boot-network-config.yaml"
+	systemConnectionsDir = "/etc/NetworkManager/system-connections"
+	configApplicator     = "/oem/99-network-config-applicator.yaml"
+)
+
+var (
+	ErrEmptyConfig = errors.New("Network config is empty")
 )
 
 type Configurator interface {
-	GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) schema.YipConfig
+	GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error)
 	ResetNetworkConfig() error
 }
 
-var _ Configurator = (*networkManagerConfigurator)(nil)
+var _ Configurator = (*nmstateConfigurator)(nil)
 
 func NewConfigurator(fs vfs.FS) Configurator {
-	return &networkManagerConfigurator{
+	return &nmstateConfigurator{
 		fs: fs,
 	}
 }
 
-type networkManagerConfigurator struct {
+type nmstateConfigurator struct {
 	fs vfs.FS
 }
 
-func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) schema.YipConfig {
-	// Replace the "{my-ip-name}" placeholders with real IPAddresses
-	for connectionName, connectionConfig := range networkConfig.Connections {
-		for ipName, ipAddress := range networkConfig.IPAddresses {
-			networkConfig.Connections[connectionName] = strings.ReplaceAll(connectionConfig, fmt.Sprintf("{%s}", ipName), ipAddress)
+func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
+	configApplicator := schema.YipConfig{}
+
+	if len(networkConfig.Config) == 0 {
+		log.Warning("no network config data to decode")
+		return configApplicator, ErrEmptyConfig
+	}
+
+	// This creates a parent "root" key to facilitate parsing the schemaless map
+	mapSlice := k8syaml.JSONObjectToYAMLObject(map[string]interface{}{"root": networkConfig.Config})
+	if len(mapSlice) <= 0 {
+		return configApplicator, errors.New("Could not convert json cloudConfig object to yaml")
+	}
+
+	// Just marshal the value of the "root" key
+	yamlData, err := k8syaml.Marshal(mapSlice[0].Value)
+	if err != nil {
+		return configApplicator, fmt.Errorf("marshalling yaml: %w", err)
+	}
+
+	yamlStringData := string(yamlData)
+
+	// Go through the nmstate yaml config and replace template placeholders "{my-ip-name}" with actual IP.
+	for name, ipAddress := range networkConfig.IPAddresses {
+		yamlStringData = strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", name), ipAddress)
+	}
+
+	// Dump the digested config somewhere
+	if err := vfs.MkdirAll(n.fs, filepath.Dir(nmstateTempPath), 0700); err != nil {
+		return configApplicator, fmt.Errorf("creating directory for file '%s': %w", nmstateTempPath, err)
+	}
+	if err := n.fs.WriteFile(nmstateTempPath, []byte(yamlStringData), 0600); err != nil {
+		return configApplicator, fmt.Errorf("writing file '%s': %w", nmstateTempPath, err)
+	}
+
+	// Try to apply it
+	cmd := exec.Command("nmstatectl", "apply", nmstateTempPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return configApplicator, fmt.Errorf("running: nmstatectl apply %s: %w", nmstateTempPath, err)
+	}
+
+	// Now fetch all /etc/NetworkManager/system-connections/*.nmconnection files.
+	// Each file is added to the configApplicator.
+	files, err := n.fs.ReadDir(systemConnectionsDir)
+	if err != nil {
+		return configApplicator, fmt.Errorf("reading directory '%s': %w", systemConnectionsDir, err)
+	}
+
+	yipFiles := []schema.File{}
+	for _, file := range files {
+		fileName := file.Name()
+		if strings.HasSuffix(fileName, ".nmconnection") {
+			bytes, err := n.fs.ReadFile(filepath.Join(systemConnectionsDir, fileName))
+			if err != nil {
+				return configApplicator, fmt.Errorf("reading file '%s': %w", fileName, err)
+			}
+			yipFiles = append(yipFiles, schema.File{
+				Path:        filepath.Join(systemConnectionsDir, fileName),
+				Permissions: 0600,
+				Content:     string(bytes),
+			})
 		}
 	}
 
-	// Add files to the yip config
-	files := []schema.File{}
-	for connectionName, connectionConfig := range networkConfig.Connections {
-		files = append(files, schema.File{
-			Path:        filepath.Join(systemConnectionsDir, fmt.Sprintf("%s.nmconnection", connectionName)),
-			Permissions: 0600,
-			Content:     connectionConfig,
-		})
-	}
-
-	config := schema.YipConfig{}
-	config.Name = "Apply network config"
-	config.Stages = map[string][]schema.Stage{
+	// Wrap up the yip config
+	configApplicator.Name = "Apply network config"
+	configApplicator.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
 				If:    "[ -f /run/elemental/active_mode ]",
-				Files: files,
+				Files: yipFiles,
 			},
 		},
 	}
 
-	return config
+	return configApplicator, nil
 }
 
 // ResetNetworkConfig is invoked during reset trigger.
@@ -96,7 +151,7 @@ func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig el
 // waiting for the (old) connection timeout. This can lead to the scheduled shutdown to trigger (and reset from recovery start),
 // before the elemental-system-agent has time to recover from the connection change and confirm the application of the reset-trigger plan.
 // Potentially this can lead to an infinite reset loop.
-func (n *networkManagerConfigurator) ResetNetworkConfig() error {
+func (n *nmstateConfigurator) ResetNetworkConfig() error {
 	// If there are no /etc/NetworkManager/system-connections/*.nmconnection files,
 	// then this is the second time we invoke this method, or we never configured any
 	// network config so we have nothing to do.

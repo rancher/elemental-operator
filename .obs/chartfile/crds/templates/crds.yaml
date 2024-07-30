@@ -146,10 +146,8 @@ spec:
               network:
                 description: NetworkConfig is the final NetworkConfig.
                 properties:
-                  connections:
-                    additionalProperties:
-                      type: string
-                    type: object
+                  config:
+                    x-kubernetes-preserve-unknown-fields: true
                   ipAddresses:
                     additionalProperties:
                       type: string
@@ -935,12 +933,10 @@ spec:
                     type: object
                   network:
                     description: NetworkTemplate contains a map of IPAddressPools
-                      and a map of connection templates.
+                      and a schemaless network config template.
                     properties:
-                      connections:
-                        additionalProperties:
-                          type: string
-                        type: object
+                      config:
+                        x-kubernetes-preserve-unknown-fields: true
                       ipAddresses:
                         additionalProperties:
                           description: |-
