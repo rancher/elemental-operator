@@ -127,6 +127,11 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return fmt.Errorf("parsing returned configuration: %w", err)
 			}
+			// Update caCert from refreshed config
+			caCert, err = getRegistrationCA(fs, cfg)
+			if err != nil {
+				return fmt.Errorf("validating CA from remote registration: %w", err)
+			}
 			// Install
 			if installation {
 				// Optionally install agent config to local filesystem (no install)

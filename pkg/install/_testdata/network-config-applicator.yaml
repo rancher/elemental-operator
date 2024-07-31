@@ -1,0 +1,5 @@
+name: Test Network Config Applicator
+stages:
+    foo:
+        - commands:
+            - bar

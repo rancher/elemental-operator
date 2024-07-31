@@ -387,14 +387,17 @@ func (i *installer) writeNetworkConfig(networkConfig elementalv1.NetworkConfig) 
 	if err != nil {
 		return "", fmt.Errorf("getting network config applicator: %w", err)
 	}
-	networkConfigBytes, err := yaml.Marshal(networkYipConfig)
+
+	f, err := i.fs.Create(tempNetworkConfig)
 	if err != nil {
-		return "", fmt.Errorf("marshalling network config: %w", err)
+		return "", fmt.Errorf("creating temporary network-config file: %w", err)
 	}
-	if err := i.fs.WriteFile(tempNetworkConfig, networkConfigBytes, 0600); err != nil {
-		return "", fmt.Errorf("writing file '%s': %w", tempNetworkConfig, err)
+	defer f.Close()
+
+	if err := yaml.NewEncoder(f).Encode(networkYipConfig); err != nil {
+		return "", fmt.Errorf("writing encoded network-config: %w", err)
 	}
-	return tempNetworkConfig, nil
+	return f.Name(), nil
 }
 
 func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte, error) {

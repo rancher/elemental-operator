@@ -19,13 +19,12 @@ package network
 import (
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/util"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
 	k8syaml "sigs.k8s.io/yaml"
@@ -33,7 +32,6 @@ import (
 
 const (
 	nmstateTempPath      = "/tmp/elemental-nmstate.yaml"
-	firstBootConfigPath  = "/oem/network/first-boot-network-config.yaml"
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/99-network-config-applicator.yaml"
 )
@@ -51,12 +49,14 @@ var _ Configurator = (*nmstateConfigurator)(nil)
 
 func NewConfigurator(fs vfs.FS) Configurator {
 	return &nmstateConfigurator{
-		fs: fs,
+		fs:     fs,
+		runner: &util.ExecRunner{},
 	}
 }
 
 type nmstateConfigurator struct {
-	fs vfs.FS
+	fs     vfs.FS
+	runner util.CommandRunner
 }
 
 func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
@@ -87,19 +87,12 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 	}
 
 	// Dump the digested config somewhere
-	if err := vfs.MkdirAll(n.fs, filepath.Dir(nmstateTempPath), 0700); err != nil {
-		return configApplicator, fmt.Errorf("creating directory for file '%s': %w", nmstateTempPath, err)
-	}
 	if err := n.fs.WriteFile(nmstateTempPath, []byte(yamlStringData), 0600); err != nil {
 		return configApplicator, fmt.Errorf("writing file '%s': %w", nmstateTempPath, err)
 	}
 
 	// Try to apply it
-	cmd := exec.Command("nmstatectl", "apply", nmstateTempPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("nmstatectl", "apply", nmstateTempPath); err != nil {
 		return configApplicator, fmt.Errorf("running: nmstatectl apply %s: %w", nmstateTempPath, err)
 	}
 
@@ -131,7 +124,7 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 	configApplicator.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
-				If:    "[ -f /run/elemental/active_mode ]",
+				If:    "[ -f /run/elemental/active_mode ] || [ -f /run/elemental/passive_mode ]",
 				Files: yipFiles,
 			},
 		},
@@ -175,11 +168,7 @@ func (n *nmstateConfigurator) ResetNetworkConfig() error {
 	// Which means maybe that is not supported anymore, or if we want to support it we should make sure we only delete the ones created by elemental,
 	// for example prefixing all files with "elemental-" or just parsing the network config again at this stage to determine the file names.
 	log.Debug("Deleting all .nmconnection configs")
-	cmd := exec.Command("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete")
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
 	}
 
@@ -189,43 +178,27 @@ func (n *nmstateConfigurator) ResetNetworkConfig() error {
 	// We need to invoke nmcli connection reload to tell NetworkManager to reload connections from disk.
 	// NetworkManager won't reload them alone with a simple restart.
 	log.Debug("Reloading connections")
-	cmd = exec.Command("nmcli", "connection", "reload")
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("nmcli", "connection", "reload"); err != nil {
 		return fmt.Errorf("running: nmcli connection reload: %w", err)
 	}
 
 	// Restart NetworkManager to restart connections.
 	log.Debug("Restarting NetworkManager")
-	cmd = exec.Command("systemctl", "restart", "NetworkManager.service")
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("systemctl", "restart", "NetworkManager.service"); err != nil {
 		return fmt.Errorf("running command: systemctl restart NetworkManager.service: %w", err)
 	}
 
 	// Not entirely necessary, but this mitigates the risk of continuing with any potential elemental-system-agent
 	// plan confirmation while the network is offline.
 	log.Debug("Waiting NetworkManager online")
-	cmd = exec.Command("systemctl", "start", "NetworkManager-wait-online.service")
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("systemctl", "start", "NetworkManager-wait-online.service"); err != nil {
 		return fmt.Errorf("running command: systemctl start NetworkManager-wait-online.service: %w", err)
 	}
 
 	// Restarts the elemental-system-agent to start a new connection using the new config.
 	// This will make the plan be executed a second time.
 	log.Debug("Restarting elemental-system-agent")
-	cmd = exec.Command("systemctl", "restart", "elemental-system-agent.service")
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := n.runner.Run("systemctl", "restart", "elemental-system-agent.service"); err != nil {
 		return fmt.Errorf("running command: systemctl restart elemental-system-agent.service: %w", err)
 	}
 	return nil
