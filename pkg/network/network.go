@@ -124,7 +124,7 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 	configApplicator.Stages = map[string][]schema.Stage{
 		"initramfs": {
 			schema.Stage{
-				If:    "[ -f /run/elemental/active_mode ] || [ -f /run/elemental/passive_mode ]",
+				If:    "[ ! -f /run/elemental/recovery_mode ]",
 				Files: yipFiles,
 			},
 		},

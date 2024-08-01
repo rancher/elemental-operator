@@ -91,7 +91,7 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 		stage, found := applicator.Stages["initramfs"]
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
 
-		Expect(stage[0].If).To(Equal("[ -f /run/elemental/active_mode ] || [ -f /run/elemental/passive_mode ]"), "Network config must be applied on active or passive systems only (not recovery)")
+		Expect(stage[0].If).To(Equal("[ ! -f /run/elemental/recovery_mode ]"), "Network config must be applied on active or passive systems only (not recovery)")
 		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
 		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n"))
 		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired1.nmconnection")))
