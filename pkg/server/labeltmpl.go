@@ -83,7 +83,9 @@ func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInv
 	return nil
 }
 
-func updateInventoryWithLabels(inventory *elementalv1.MachineInventory, data []byte) error {
+// mergeInventoryLabels: DEPRECATED
+// Used to merge client side labels, now deprecated would just skip and log an error.
+func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
 	labels := map[string]string{}
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
@@ -96,7 +98,9 @@ func updateInventoryWithLabels(inventory *elementalv1.MachineInventory, data []b
 	return nil
 }
 
-func updateInventoryWithAnnotations(data []byte, mInventory *elementalv1.MachineInventory) error {
+// mergeInventoryAnnotations: merge annotations from the client, which include dynamic data,
+// e.g., the IP address. All annotation keys are prepended with "elemental.cattle.io/".
+func mergeInventoryAnnotations(data []byte, mInventory *elementalv1.MachineInventory) error {
 	annotations := map[string]string{}
 	if err := json.Unmarshal(data, &annotations); err != nil {
 		return fmt.Errorf("cannot extract inventory annotations: %w", err)

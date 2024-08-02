@@ -27,7 +27,9 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/jaypipes/ghw/pkg/block"
 	"github.com/jaypipes/ghw/pkg/cpu"
@@ -257,6 +259,30 @@ func TestBuildName(t *testing.T) {
 			Format: "a${unknown}",
 			Error:  "value not found",
 		},
+		{
+			Format: "+check-sanitize!",
+			Output: "check-sanitize",
+		},
+		{
+			Format: "VeryVeryVeryLongLabelValueThatWillBeCutTo58Chars-xxxxx-End|CUTFROMHERE",
+			Output: "VeryVeryVeryLongLabelValueThatWillBeCutTo58Chars-xxxxx-End",
+		},
+		{
+			Format: "double--dash--+-sanitized++--",
+			Output: "double-dash-sanitized",
+		},
+		{
+			Format: "AllowedNotAlphaNumChars:_.NotTrailingBTW_.",
+			Output: "AllowedNotAlphaNumChars-_.NotTrailingBTW",
+		},
+		{
+			Format: "+.!_-",
+			Output: "",
+		},
+		{
+			Format: "",
+			Output: "",
+		},
 	}
 
 	tmpl := templater.NewTemplater()
@@ -318,7 +344,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
-		err := updateInventoryWithLabels(inventory, test.data)
+		err := mergeInventoryLabels(inventory, test.data)
 		if test.fail {
 			assert.Assert(t, err != nil)
 		} else {
@@ -330,6 +356,63 @@ func TestMergeInventoryLabels(t *testing.T) {
 			assert.Equal(t, v, val)
 		}
 
+	}
+}
+
+func TestMergeInventoryAnnotations(t *testing.T) {
+	testCase := []struct {
+		data        []byte            // annotations to add to the inventory
+		annotations map[string]string // annotations already in the inventory
+		fail        bool
+		expected    map[string]string
+	}{
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			false,
+			map[string]string{"key1": "val1", "elemental.cattle.io/key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":2}`),
+			map[string]string{"key1": "val1"},
+			true,
+			map[string]string{"key1": "val1"},
+		},
+		{
+			[]byte(`{"key2":"val2", "key3":"val3"}`),
+			map[string]string{"key1": "val1", "elemental.cattle.io/key3": "previous_val"},
+			false,
+			map[string]string{"key1": "val1", "elemental.cattle.io/key3": "val3", "elemental.cattle.io/key2": "val2"},
+		},
+		{
+			[]byte{},
+			map[string]string{"key1": "val1"},
+			true,
+			map[string]string{"key1": "val1"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			nil,
+			false,
+			map[string]string{"elemental.cattle.io/key2": "val2"},
+		},
+	}
+
+	for _, test := range testCase {
+		inventory := &elementalv1.MachineInventory{}
+		inventory.Annotations = test.annotations
+
+		err := mergeInventoryAnnotations(test.data, inventory)
+		if test.fail {
+			assert.Assert(t, err != nil)
+		} else {
+			assert.NilError(t, err)
+		}
+		for k, v := range test.expected {
+			val, ok := inventory.Annotations[k]
+			assert.Equal(t, ok, true, "annotations: %v\nexpected: %v ", inventory.Annotations, test.expected)
+			assert.Equal(t, v, val, "annotations: %v\nexpected: %v ", inventory.Annotations, test.expected)
+		}
 	}
 }
 
@@ -391,7 +474,7 @@ func assertSystemDataLabels(t *testing.T, inventory *elementalv1.MachineInventor
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/BlockDevice1-Removable"], "false")
 }
 
-func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
+func TestUpdateInventoryLabels(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
 	inventory.Name = "${System Data/Runtime/Hostname}"
 
@@ -412,6 +495,7 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 				"elemental.cattle.io/BlockDevice1-Size":      "${System Data/Block Devices/testdisk2/Size}",
 				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
 				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
+				"elemental.cattle.io/UnexistingTemplate":     "${System Data/Not Existing Value}",
 			},
 		},
 	}
@@ -488,6 +572,74 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	// Check values were sanitized
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuModel"])), 0)
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuVendor"])), 0)
+}
+
+func TestUpdateInventoryName(t *testing.T) {
+	tmplData := map[string]interface{}{
+		"Template Data": map[string]interface{}{
+			"Data 1":     "value1",
+			"Data 2":     "value2",
+			"Empty data": "",
+			"Bad data":   0,
+		},
+	}
+	tmpl := templater.NewTemplater()
+	tmpl.Fill(tmplData)
+
+	testCases := []struct {
+		invName  string // initial Inventory.Name
+		expName  string // expected Inventory.Name
+		isOldInv bool   // the inventory was created previously (do not update the name)
+		isError  bool   // the inventory name update will error out
+		isFallbk bool   // the inventory name will be set to the fallback (UUID generated)
+	}{
+		{
+			invName: "machine-${Template Data/Data 1}",
+			expName: "machine-value1",
+		},
+		{
+			invName:  "don't Touch if not new ${Template Data/Data 2}",
+			expName:  "don't Touch if not new ${Template Data/Data 2}",
+			isOldInv: true,
+		},
+		{
+			invName: "machine-${Template Data/Empty data}",
+			expName: "machine",
+		},
+		{
+			invName:  "machine-${Template Data/Dont Exists}",
+			isFallbk: true,
+		},
+		{
+			invName:  "$machine-${Template Data/Bad data}",
+			isFallbk: true,
+		},
+		{
+			invName: "${Template Data/Empty data}.-",
+			isError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		inv := &elementalv1.MachineInventory{}
+		inv.Name = tc.invName
+		if tc.isOldInv {
+			inv.CreationTimestamp.Time = time.Now()
+		}
+		err := updateInventoryName(tmpl, inv)
+		if tc.isError {
+			assert.Assert(t, err != nil)
+			continue
+		}
+		if tc.isFallbk {
+			// Fallback is a m-UUID generated name
+			assert.Equal(t, inv.Name[:2], "m-")
+			_, err = uuid.Parse(inv.Name[2:])
+			assert.NilError(t, err)
+			continue
+		}
+		assert.Equal(t, inv.Name, tc.expName)
+	}
 }
 
 func TestRegistrationMsgGet(t *testing.T) {

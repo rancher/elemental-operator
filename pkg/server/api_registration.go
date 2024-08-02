@@ -238,11 +238,11 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			}
 			tmpl.Fill(smbiosData)
 		case register.MsgLabels:
-			if err := updateInventoryWithLabels(inventory, data); err != nil {
+			if err := mergeInventoryLabels(inventory, data); err != nil {
 				return err
 			}
 		case register.MsgAnnotations:
-			err = updateInventoryWithAnnotations(data, inventory)
+			err = mergeInventoryAnnotations(data, inventory)
 			if err != nil {
 				return fmt.Errorf("failed to decode dynamic data: %w", err)
 			}
