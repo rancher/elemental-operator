@@ -35,7 +35,7 @@ const (
 	MsgLabels
 	MsgGet                            // v0.5.0
 	MsgVersion                        // v1.1.0
-	MsgSystemData                     // v1.1.1
+	MsgSystemData                     // v1.1.1	deprecated by MsgSystemDataV2
 	MsgConfig                         // v1.1.1
 	MsgError                          // v1.1.1
 	MsgAnnotations                    // v1.1.4

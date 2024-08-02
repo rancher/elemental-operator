@@ -137,6 +137,13 @@ func host(opts ...*ghw.WithOption) (HostInfo, error) {
 
 // Deprecated. Remove me together with 'MsgSystemData' type.
 func FillData(data []byte) (map[string]interface{}, error) {
+	// Also available but not used:
+	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
+	// systemData.BIOS -> info about the bios. Useless IMO
+	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
+	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
+	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
 	systemData := &HostInfo{}
 	if err := json.Unmarshal(data, &systemData); err != nil {
 		return nil, fmt.Errorf("unmarshalling system data payload: %w", err)
