@@ -48,6 +48,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/register"
 	elementalruntime "github.com/rancher/elemental-operator/pkg/runtime"
+	"github.com/rancher/elemental-operator/pkg/templater"
 )
 
 var (
@@ -258,9 +259,11 @@ func TestBuildName(t *testing.T) {
 		},
 	}
 
+	tmpl := templater.NewTemplater()
+	tmpl.Fill(data)
 	for _, testCase := range testCase {
 		t.Run(testCase.Format, func(t *testing.T) {
-			str, err := replaceStringData(data, testCase.Format)
+			str, err := tmpl.Decode(testCase.Format)
 			if testCase.Error == "" {
 				str = sanitizeString(str)
 				assert.NilError(t, err)
@@ -315,7 +318,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
-		err := mergeInventoryLabels(inventory, test.data)
+		err := updateInventoryWithLabels(inventory, test.data)
 		if test.fail {
 			assert.Assert(t, err != nil)
 		} else {
@@ -332,21 +335,36 @@ func TestMergeInventoryLabels(t *testing.T) {
 
 func TestUpdateInventoryFromSystemData(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
+	tmpl := templater.NewTemplater()
+
 	encodedData, err := json.Marshal(hostInfoFixture)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemData(encodedData, inventory, systemDataLabelsRegistrationFixture)
+
+	systemData, err := hostinfo.FillData(encodedData)
 	assert.NilError(t, err)
 
+	tmpl.Fill(systemData)
+	err = updateInventoryLabels(tmpl, inventory, systemDataLabelsRegistrationFixture)
+	assert.NilError(t, err)
 	assertSystemDataLabels(t, inventory)
 }
 
 func TestUpdateInventoryFromSystemDataNG(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
+	tmpl := templater.NewTemplater()
+
 	data, err := hostinfo.ExtractLabels(hostInfoFixture)
 	assert.NilError(t, err)
+
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemDataNG(encodedData, inventory, systemDataLabelsRegistrationFixture)
+
+	systemData := map[string]interface{}{}
+	err = json.Unmarshal(encodedData, &systemData)
+	assert.NilError(t, err)
+
+	tmpl.Fill(systemData)
+	err = updateInventoryLabels(tmpl, inventory, systemDataLabelsRegistrationFixture)
 	assert.NilError(t, err)
 	assertSystemDataLabels(t, inventory)
 }
@@ -444,7 +462,13 @@ func TestUpdateInventoryFromSystemDataSanitized(t *testing.T) {
 	}
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
-	err = updateInventoryFromSystemData(encodedData, inventory, registration)
+	systemData, err := hostinfo.FillData(encodedData)
+	assert.NilError(t, err)
+	tmpl := templater.NewTemplater()
+	tmpl.Fill(systemData)
+	err = updateInventoryName(tmpl, inventory)
+	assert.NilError(t, err)
+	err = updateInventoryLabels(tmpl, inventory, registration)
 	assert.NilError(t, err)
 	// Check that the labels we properly added to the inventory
 	assert.Equal(t, inventory.Name, "machine-1")
