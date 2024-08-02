@@ -19,11 +19,19 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/templater"
+)
+
+var (
+	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
+	sanitizeHostname = regexp.MustCompile("[^0-9a-zA-Z.]")
+	doubleDash       = regexp.MustCompile("--+")
+	start            = regexp.MustCompile("^[a-zA-Z0-9]")
 )
 
 func updateInventoryName(tmpl templater.Templater, inv *elementalv1.MachineInventory) error {

@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"regexp"
 
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
@@ -42,13 +41,7 @@ type LegacyConfig struct {
 	CloudConfig map[string]interface{} `yaml:"cloud-config,omitempty"`
 }
 
-var (
-	sanitize             = regexp.MustCompile("[^0-9a-zA-Z_]")
-	sanitizeHostname     = regexp.MustCompile("[^0-9a-zA-Z.]")
-	doubleDash           = regexp.MustCompile("--+")
-	start                = regexp.MustCompile("^[a-zA-Z0-9]")
-	errInventoryNotFound = errors.New("MachineInventory not found")
-)
+var errInventoryNotFound = errors.New("MachineInventory not found")
 
 func (i *InventoryServer) apiRegistration(resp http.ResponseWriter, req *http.Request) error {
 	var err error
