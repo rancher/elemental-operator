@@ -31,8 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/register"
+	"github.com/rancher/elemental-operator/pkg/templater"
 )
 
 type LegacyConfig struct {
@@ -45,7 +47,6 @@ var (
 	sanitizeHostname     = regexp.MustCompile("[^0-9a-zA-Z.]")
 	doubleDash           = regexp.MustCompile("--+")
 	start                = regexp.MustCompile("^[a-zA-Z0-9]")
-	errValueNotFound     = errors.New("value not found")
 	errInventoryNotFound = errors.New("MachineInventory not found")
 )
 
@@ -216,6 +217,7 @@ func (i *InventoryServer) getRancherCACert() string {
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
 	protoVersion := register.MsgUndefined
+	tmpl := templater.NewTemplater()
 
 	for {
 		var data []byte
@@ -237,13 +239,13 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			replyMsgType = register.MsgVersion
 			replyData = []byte{byte(protoVersion)}
 		case register.MsgSmbios:
-			err = updateInventoryFromSMBIOSData(data, inventory, registration)
-			if err != nil {
+			smbiosData := map[string]interface{}{}
+			if err := json.Unmarshal(data, &smbiosData); err != nil {
 				return fmt.Errorf("failed to extract labels from SMBIOS data: %w", err)
 			}
-			log.Debugf("received SMBIOS data - generated machine name: %s", inventory.Name)
+			tmpl.Fill(smbiosData)
 		case register.MsgLabels:
-			if err := mergeInventoryLabels(inventory, data); err != nil {
+			if err := updateInventoryWithLabels(inventory, data); err != nil {
 				return err
 			}
 		case register.MsgAnnotations:
@@ -252,6 +254,14 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return fmt.Errorf("failed to decode dynamic data: %w", err)
 			}
 		case register.MsgGet:
+			// Final call: here we commit the MachineInventory, send the Elemental config data
+			// and close the connection.
+			if err := updateInventoryName(tmpl, inventory); err != nil {
+				return fmt.Errorf("failed to resolve inventory name: %w", err)
+			}
+			if err := updateInventoryLabels(tmpl, inventory, registration); err != nil {
+				return fmt.Errorf("failed to update inventory labels: %w", err)
+			}
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgUpdate:
 			err = i.handleUpdate(conn, protoVersion, inventory)
@@ -259,15 +269,17 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return fmt.Errorf("failed to negotiate registration update: %w", err)
 			}
 		case register.MsgSystemData:
-			err = updateInventoryFromSystemData(data, inventory, registration)
+			systemData, err := hostinfo.FillData(data)
 			if err != nil {
-				return fmt.Errorf("failed to extract labels from system data: %w", err)
+				return fmt.Errorf("failed to parse system data: %w", err)
 			}
+			tmpl.Fill(systemData)
 		case register.MsgSystemDataV2:
-			err = updateInventoryFromSystemDataNG(data, inventory, registration)
-			if err != nil {
-				return fmt.Errorf("failed to extract labels from system data: %w", err)
+			systemData := map[string]interface{}{}
+			if err := json.Unmarshal(data, &systemData); err != nil {
+				return fmt.Errorf("failed to parse system data: %w", err)
 			}
+			tmpl.Fill(systemData)
 		default:
 			return fmt.Errorf("got unexpected message: %s", msgType)
 		}
@@ -348,50 +360,4 @@ func decodeProtocolVersion(data []byte) (register.MessageType, error) {
 	}
 
 	return protoVersion, nil
-}
-
-// sanitizeString will sanitize a given string by:
-// replacing all invalid chars as set on the sanitize regex by dashes
-// removing any double dashes resulted from the above method
-// removing prefix+suffix if they are a dash
-func sanitizeString(s string) string {
-	s1 := sanitize.ReplaceAllString(s, "-")
-	s2 := doubleDash.ReplaceAllString(s1, "-")
-	if !start.MatchString(s2) {
-		s2 = "m" + s2
-	}
-	if len(s2) > 58 {
-		s2 = s2[:58]
-	}
-	return s2
-}
-
-// like sanitizeString but allows also '.' inside "s"
-func sanitizeStringHostname(s string) string {
-	s1 := sanitizeHostname.ReplaceAllString(s, "-")
-	s2 := doubleDash.ReplaceAllLiteralString(s1, "-")
-	if !start.MatchString(s2) {
-		s2 = "m" + s2
-	}
-	if len(s2) > 58 {
-		s2 = s2[:58]
-	}
-	return s2
-}
-
-func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
-	labels := map[string]string{}
-	if err := json.Unmarshal(data, &labels); err != nil {
-		return fmt.Errorf("cannot extract inventory labels: %w", err)
-	}
-	log.Debugf("received labels: %v", labels)
-	log.Warningf("received labels from registering client: no more supported, skipping")
-	if inventory.Labels == nil {
-		inventory.Labels = map[string]string{}
-	}
-	return nil
-}
-
-func isNewInventory(inventory *elementalv1.MachineInventory) bool {
-	return inventory.CreationTimestamp.IsZero()
 }

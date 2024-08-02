@@ -141,27 +141,25 @@ func (i *InventoryServer) authMachine(conn *websocket.Conn, req *http.Request, r
 	return nil, nil
 }
 
-func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
+func generateInventoryName() string {
 	const namePrefix = "m-"
+	return namePrefix + uuid.NewString()
+}
 
+func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
 	if registration.Spec.Config == nil {
 		registration.Spec.Config = &elementalv1.Config{}
 	}
 	inventory.Name = registration.Spec.MachineName
 	if inventory.Name == "" {
-		inventory.Name = namePrefix + uuid.NewString()
+		inventory.Name = generateInventoryName()
 	}
 	inventory.Namespace = registration.Namespace
 	inventory.Annotations = registration.Spec.MachineInventoryAnnotations
 
-	// Set labels using replaceStringData to remove forbidden characters and
-	// default values for SMBIOS/System Data values until they are updated.
+	// Set the labels later as we may need to do some template decoding and we need
+	// to get data from the client first
 	inventory.Labels = map[string]string{}
-	for k, v := range registration.Spec.MachineInventoryLabels {
-		value, _ := replaceStringData(map[string]interface{}{}, v)
-		value = sanitizeString(value)
-		inventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(value, "-"), "-")
-	}
 
 	// Set resettable annotation on cascade from MachineRegistration spec
 	if registration.Spec.Config.Elemental.Reset.Enabled {

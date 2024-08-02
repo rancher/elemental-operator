@@ -18,20 +18,81 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
-	values "github.com/rancher/wrangler/v2/pkg/data"
+	"github.com/rancher/elemental-operator/pkg/templater"
 )
+
+func updateInventoryName(tmpl templater.Templater, inv *elementalv1.MachineInventory) error {
+	// Inventory Name should be set only on freshly created inventories.
+	if !isNewInventory(inv) {
+		return nil
+	}
+	// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
+	// to set the machine hostname. Also set it to lowercase.
+	name, err := tmpl.Decode(inv.Name)
+	if err != nil {
+		if templater.IsValueNotFoundError(err) {
+			name = generateInventoryName()
+			log.Warningf("Templater cannot decode MachineInventory name %q, fallback to %q.", inv.Name, name)
+			inv.Name = name
+			return nil
+		}
+		return fmt.Errorf("templater: cannot decode MachineInventory name %q: %w", inv.Name, err)
+	}
+	name = sanitizeStringHostname(name)
+
+	// Something went wrong, decoding and sanitizing the hostname it got empty.
+	if name == "" {
+		return fmt.Errorf("invalid MachineInventory name: %q", name)
+	}
+	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
+	return nil
+}
+
+func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
+	log.Debugf("Adding registration labels")
+	if inv.Labels == nil {
+		inv.Labels = map[string]string{}
+	}
+	for k, v := range reg.Spec.MachineInventoryLabels {
+		decodedLabel, err := tmpl.Decode(v)
+		if err != nil {
+			if templater.IsValueNotFoundError(err) {
+				log.Warningf("Templater cannot decode label '%q': %s", v, err.Error())
+				continue
+			}
+			log.Errorf("Templater failed decoding label '%q': %s", v, err.Error())
+			return err
+		}
+		decodedLabel = sanitizeString(decodedLabel)
+
+		log.Debugf("Decoded %s into %s, setting it to label %s", v, decodedLabel, k)
+		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(decodedLabel, "-"), "-")
+	}
+	return nil
+}
+
+func updateInventoryWithLabels(inventory *elementalv1.MachineInventory, data []byte) error {
+	labels := map[string]string{}
+	if err := json.Unmarshal(data, &labels); err != nil {
+		return fmt.Errorf("cannot extract inventory labels: %w", err)
+	}
+	log.Debugf("received labels: %v", labels)
+	log.Errorf("received labels from registering client: no more supported, skipping")
+	if inventory.Labels == nil {
+		inventory.Labels = map[string]string{}
+	}
+	return nil
+}
 
 func updateInventoryWithAnnotations(data []byte, mInventory *elementalv1.MachineInventory) error {
 	annotations := map[string]string{}
 	if err := json.Unmarshal(data, &annotations); err != nil {
-		return err
+		return fmt.Errorf("cannot extract inventory annotations: %w", err)
 	}
 	log.Debug("Adding annotations from client data")
 	if mInventory.Annotations == nil {
@@ -43,145 +104,38 @@ func updateInventoryWithAnnotations(data []byte, mInventory *elementalv1.Machine
 	return nil
 }
 
-// updateInventoryFromSMBIOSData() updates mInventory Name and Labels from the MachineRegistration and the SMBIOS data
-func updateInventoryFromSMBIOSData(data []byte, mInventory *elementalv1.MachineInventory, mRegistration *elementalv1.MachineRegistration) error {
-	smbiosData := map[string]interface{}{}
-	if err := json.Unmarshal(data, &smbiosData); err != nil {
-		return err
+// like sanitizeString but allows also '.' inside "s"
+func sanitizeStringHostname(s string) string {
+	if s == "" {
+		return ""
 	}
-	// Sanitize any lower dashes into dashes as hostnames cannot have lower dashes, and we use the inventory name
-	// to set the machine hostname. Also set it to lowercase
-	name, err := replaceStringData(smbiosData, mInventory.Name)
-	if err == nil {
-		name = sanitizeStringHostname(name)
-		mInventory.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
-	} else {
-		if errors.Is(err, errValueNotFound) {
-			// value not found, will be set in updateInventoryFromSystemData
-			log.Warningf("SMBIOS Value not found: %v", mInventory.Name)
-		} else {
-			return err
-		}
+	s1 := sanitizeHostname.ReplaceAllString(s, "-")
+	s2 := doubleDash.ReplaceAllLiteralString(s1, "-")
+	if !start.MatchString(s2) {
+		s2 = "m" + s2
 	}
-
-	log.Debugf("Adding labels from registration")
-	// Add extra label info from data coming from smbios and based on the registration data
-	if mInventory.Labels == nil {
-		mInventory.Labels = map[string]string{}
+	if len(s2) > 58 {
+		s2 = s2[:58]
 	}
-	for k, v := range mRegistration.Spec.MachineInventoryLabels {
-		parsedData, err := replaceStringData(smbiosData, v)
-		if err != nil {
-			if errors.Is(err, errValueNotFound) {
-				log.Debugf("Value not found: %v", v)
-				continue
-			}
-			log.Errorf("Failed parsing smbios data: %v", err.Error())
-			return err
-		}
-		parsedData = sanitizeString(parsedData)
-
-		log.Debugf("Parsed %s into %s with smbios data, setting it to label %s", v, parsedData, k)
-		mInventory.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
-	}
-	return nil
+	return s2
 }
 
-// updateInventoryFromSystemDataNG receives digested hardware labels from the client
-func updateInventoryFromSystemDataNG(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
-	labels := map[string]interface{}{}
-
-	if err := json.Unmarshal(data, &labels); err != nil {
-		return fmt.Errorf("unmarshalling system data labels payload: %w", err)
+// sanitizeString will sanitize a given string by:
+// replacing all invalid chars as set on the sanitize regex by dashes
+// removing any double dashes resulted from the above method
+// removing prefix+suffix if they are a dash
+func sanitizeString(s string) string {
+	s1 := sanitize.ReplaceAllString(s, "-")
+	s2 := doubleDash.ReplaceAllString(s1, "-")
+	if !start.MatchString(s2) {
+		s2 = "m" + s2
 	}
-
-	return sanitizeSystemDataLabels(labels, inv, reg)
+	if len(s2) > 58 {
+		s2 = s2[:58]
+	}
+	return s2
 }
 
-// Deprecated. Remove me together with 'MsgSystemData' type.
-// updateInventoryFromSystemData creates labels in the inventory based on the hardware information
-func updateInventoryFromSystemData(data []byte, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
-	log.Infof("Adding labels from system data")
-
-	labels, err := hostinfo.FillData(data)
-	if err != nil {
-		return err
-	}
-
-	return sanitizeSystemDataLabels(labels, inv, reg)
-}
-
-func sanitizeSystemDataLabels(labels map[string]interface{}, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
-	// Also available but not used:
-	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
-	// systemData.BIOS -> info about the bios. Useless IMO
-	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
-	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
-	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
-
-	name, err := replaceStringData(labels, inv.Name)
-	if err != nil {
-		if errors.Is(err, errValueNotFound) {
-			log.Warningf("System data value not found: %v", inv.Name)
-			name = "m"
-		} else {
-			return err
-		}
-	}
-	name = sanitizeStringHostname(name)
-
-	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
-
-	log.Debugf("Parsing labels from System Data")
-
-	if inv.Labels == nil {
-		inv.Labels = map[string]string{}
-	}
-
-	for k, v := range reg.Spec.MachineInventoryLabels {
-		log.Debugf("Parsing: %v : %v", k, v)
-
-		parsedData, err := replaceStringData(labels, v)
-		if err != nil {
-			if errors.Is(err, errValueNotFound) {
-				log.Debugf("Value not found: %v", v)
-				continue
-			}
-			log.Errorf("Failed parsing system data: %v", err.Error())
-			return err
-		}
-		parsedData = sanitizeString(parsedData)
-
-		log.Debugf("Parsed %s into %s with system data, setting it to label %s", v, parsedData, k)
-		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(parsedData, "-"), "-")
-	}
-
-	return nil
-}
-func replaceStringData(data map[string]interface{}, name string) (string, error) {
-	str := name
-	result := &strings.Builder{}
-	for {
-		i := strings.Index(str, "${")
-		if i == -1 {
-			result.WriteString(str)
-			break
-		}
-		j := strings.Index(str[i:], "}")
-		if j == -1 {
-			result.WriteString(str)
-			break
-		}
-
-		result.WriteString(str[:i])
-		obj := values.GetValueN(data, strings.Split(str[i+2:j+i], "/")...)
-		if str, ok := obj.(string); ok {
-			result.WriteString(str)
-		} else {
-			return "", errValueNotFound
-		}
-		str = str[j+i+1:]
-	}
-
-	return result.String(), nil
+func isNewInventory(inventory *elementalv1.MachineInventory) bool {
+	return inventory.CreationTimestamp.IsZero()
 }
