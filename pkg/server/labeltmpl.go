@@ -28,10 +28,9 @@ import (
 )
 
 var (
-	sanitize         = regexp.MustCompile("[^0-9a-zA-Z_]")
-	sanitizeHostname = regexp.MustCompile("[^0-9a-zA-Z.]")
-	doubleDash       = regexp.MustCompile("--+")
-	start            = regexp.MustCompile("^[a-zA-Z0-9]")
+	doubleDash = regexp.MustCompile("--+")
+	start      = regexp.MustCompile("^[a-zA-Z0-9]")
+	end        = regexp.MustCompile("[a-zA-Z0-9]$")
 )
 
 func updateInventoryName(tmpl templater.Templater, inv *elementalv1.MachineInventory) error {
@@ -51,13 +50,13 @@ func updateInventoryName(tmpl templater.Templater, inv *elementalv1.MachineInven
 		}
 		return fmt.Errorf("templater: cannot decode MachineInventory name %q: %w", inv.Name, err)
 	}
-	name = sanitizeStringHostname(name)
+	name = sanitizeHostname(name)
 
 	// Something went wrong, decoding and sanitizing the hostname it got empty.
 	if name == "" {
 		return fmt.Errorf("invalid MachineInventory name: %q", name)
 	}
-	inv.Name = strings.ToLower(sanitizeHostname.ReplaceAllString(name, "-"))
+	inv.Name = strings.ToLower(name)
 	return nil
 }
 
@@ -76,10 +75,10 @@ func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInv
 			log.Errorf("Templater failed decoding label '%q': %s", v, err.Error())
 			return err
 		}
-		decodedLabel = sanitizeString(decodedLabel)
+		decodedLabel = sanitizeLabel(decodedLabel)
 
 		log.Debugf("Decoded %s into %s, setting it to label %s", v, decodedLabel, k)
-		inv.Labels[k] = strings.TrimSuffix(strings.TrimPrefix(decodedLabel, "-"), "-")
+		inv.Labels[k] = decodedLabel
 	}
 	return nil
 }
@@ -112,31 +111,40 @@ func updateInventoryWithAnnotations(data []byte, mInventory *elementalv1.Machine
 	return nil
 }
 
-// like sanitizeString but allows also '.' inside "s"
-func sanitizeStringHostname(s string) string {
+// like sanitizeString but drops '_' inside "s"
+func sanitizeHostname(s string) string {
+	regHostname := regexp.MustCompile("[^0-9a-zA-Z.]")
+
+	return sanitize(s, regHostname)
+}
+
+func sanitizeLabel(s string) string {
+	regLabels := regexp.MustCompile("[^0-9a-zA-Z._]")
+
+	return sanitize(s, regLabels)
+}
+
+// sanitize will sanitize a given string by:
+// replacing all invalid chars as set on the sanitize regex by dashes
+// removing any double dashes resulted from the above method
+// removing prefix+suffix if they are not alphanum characters
+func sanitize(s string, reg *regexp.Regexp) string {
 	if s == "" {
 		return ""
 	}
-	s1 := sanitizeHostname.ReplaceAllString(s, "-")
-	s2 := doubleDash.ReplaceAllLiteralString(s1, "-")
-	if !start.MatchString(s2) {
-		s2 = "m" + s2
-	}
-	if len(s2) > 58 {
-		s2 = s2[:58]
-	}
-	return s2
-}
-
-// sanitizeString will sanitize a given string by:
-// replacing all invalid chars as set on the sanitize regex by dashes
-// removing any double dashes resulted from the above method
-// removing prefix+suffix if they are a dash
-func sanitizeString(s string) string {
-	s1 := sanitize.ReplaceAllString(s, "-")
+	s1 := reg.ReplaceAllString(s, "-")
 	s2 := doubleDash.ReplaceAllString(s1, "-")
-	if !start.MatchString(s2) {
-		s2 = "m" + s2
+	for !start.MatchString(s2) {
+		if len(s2) == 1 {
+			return ""
+		}
+		s2 = s2[1:]
+	}
+	for !end.MatchString(s2) {
+		if len(s2) == 1 {
+			return ""
+		}
+		s2 = s2[:len(s2)-1]
 	}
 	if len(s2) > 58 {
 		s2 = s2[:58]

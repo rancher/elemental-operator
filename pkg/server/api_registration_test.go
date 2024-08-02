@@ -207,7 +207,7 @@ func TestBuildName(t *testing.T) {
 		},
 		{
 			Format: "${level1B",
-			Output: "m-level1B",
+			Output: "level1B",
 		},
 		{
 			Format: "a${level1B",
@@ -219,11 +219,11 @@ func TestBuildName(t *testing.T) {
 		},
 		{
 			Format: "${",
-			Output: "m-",
+			Output: "",
 		},
 		{
 			Format: "a${",
-			Output: "a-",
+			Output: "a",
 		},
 		{
 			Format: "${level1A}",
@@ -265,7 +265,7 @@ func TestBuildName(t *testing.T) {
 		t.Run(testCase.Format, func(t *testing.T) {
 			str, err := tmpl.Decode(testCase.Format)
 			if testCase.Error == "" {
-				str = sanitizeString(str)
+				str = sanitizeLabel(str)
 				assert.NilError(t, err)
 				assert.Equal(t, testCase.Output, str, "'%s' not equal to '%s'", testCase.Output, str)
 			} else {
