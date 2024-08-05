@@ -33,6 +33,16 @@ var (
 	end        = regexp.MustCompile("[a-zA-Z0-9]$")
 )
 
+func updateInventoryWithTemplates(tmpl templater.Templater, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
+	if err := updateInventoryName(tmpl, inv); err != nil {
+		return fmt.Errorf("failed to resolve inventory name: %w", err)
+	}
+	if err := updateInventoryLabels(tmpl, inv, reg); err != nil {
+		return fmt.Errorf("failed to update inventory labels: %w", err)
+	}
+	return nil
+}
+
 func updateInventoryName(tmpl templater.Templater, inv *elementalv1.MachineInventory) error {
 	// Inventory Name should be set only on freshly created inventories.
 	if !isNewInventory(inv) {

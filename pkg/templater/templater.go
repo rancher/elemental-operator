@@ -34,7 +34,7 @@ type Templater interface {
 	Decode(str string) (string, error)
 }
 
-func NewTemplater() *templater {
+func NewTemplater() Templater {
 	return &templater{
 		data: map[string]interface{}{},
 	}

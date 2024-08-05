@@ -249,11 +249,8 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 		case register.MsgGet:
 			// Final call: here we commit the MachineInventory, send the Elemental config data
 			// and close the connection.
-			if err := updateInventoryName(tmpl, inventory); err != nil {
-				return fmt.Errorf("failed to resolve inventory name: %w", err)
-			}
-			if err := updateInventoryLabels(tmpl, inventory, registration); err != nil {
-				return fmt.Errorf("failed to update inventory labels: %w", err)
+			if err := updateInventoryWithTemplates(tmpl, inventory, registration); err != nil {
+				return err
 			}
 			return i.handleGet(conn, protoVersion, inventory, registration)
 		case register.MsgUpdate:
