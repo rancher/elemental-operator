@@ -24,12 +24,7 @@ import (
 	"io"
 	"net/http"
 	"path"
-<<<<<<< HEAD
-=======
-	"regexp"
-	"strings"
 	"time"
->>>>>>> b7c0db2e (Wait on NetworkConfigReady condition)
 
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v3"
