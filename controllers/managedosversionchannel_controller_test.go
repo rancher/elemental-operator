@@ -212,8 +212,7 @@ var _ = Describe("reconcile managed os version channel", func() {
 		// Re-sync is triggered to interval
 		res, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: name})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.RequeueAfter).To(BeNumerically("<", 1*time.Minute))
-		Expect(res.RequeueAfter).To(BeNumerically(">", 59*time.Second))
+		Expect(res.RequeueAfter).To(BeNumerically("~", 59*time.Second, 1*time.Minute))
 	})
 
 	It("should reconcile managed os version channel object without a type", func() {

@@ -2,10 +2,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: machineinventories.elemental.cattle.io
 spec:
@@ -198,10 +202,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: machineinventoryselectors.elemental.cattle.io
 spec:
@@ -405,10 +413,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: machineinventoryselectortemplates.elemental.cattle.io
 spec:
@@ -640,10 +652,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: machineregistrations.elemental.cattle.io
 spec:
@@ -964,10 +980,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: managedosimages.elemental.cattle.io
 spec:
@@ -2502,10 +2522,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: managedosversionchannels.elemental.cattle.io
 spec:
@@ -2998,10 +3022,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: managedosversions.elemental.cattle.io
 spec:
@@ -3404,10 +3432,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: metadata.elemental.cattle.io
 spec:
@@ -3461,10 +3493,14 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+    app.kubernetes.io/part-of: Elemental Operator
+    app.kubernetes.io/version: '{{ .Chart.Version }}'
     controller-gen.kubebuilder.io/version: v0.14.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
+    helm.sh/chart: '{{ .Chart.Name }}-{{ .Chart.Version }}'
     release-name: '{{ .Release.Name }}'
   name: seedimages.elemental.cattle.io
 spec:
