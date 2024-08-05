@@ -74,3 +74,4 @@ pr_workflow:
     branches:
       only:
         - main
+        - v1.6.x
