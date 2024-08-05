@@ -212,7 +212,7 @@ func (i *InventoryServer) getRancherCACert() string {
 	return cacert
 }
 
-func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
+func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error { //nolint: gocyclo
 	protoVersion := register.MsgUndefined
 	tmpl := templater.NewTemplater()
 
