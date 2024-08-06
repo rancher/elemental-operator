@@ -129,11 +129,6 @@ type Elemental struct {
 	SystemAgent SystemAgent `json:"system-agent,omitempty" yaml:"system-agent,omitempty"`
 }
 
-type Network struct {
-	// +optional
-	IPPoolRef *corev1.TypedLocalObjectReference `json:"ipPoolRef,omitempty"`
-}
-
 type Config struct {
 	// +optional
 	Elemental Elemental `json:"elemental,omitempty" yaml:"elemental"`
