@@ -37,10 +37,8 @@ func TestRegister(t *testing.T) {
 var (
 	testStateDir  = "/test/register/state"
 	testStatePath = fmt.Sprintf("%s/%s", testStateDir, "state.yaml")
-	loc, _        = time.LoadLocation("Europe/Berlin")
 	stateFixture  = State{
 		InitialRegistration: time.Now().UTC(),
-		LastUpdate:          time.Now().UTC(),
 		EmulatedTPM:         true,
 		EmulatedTPMSeed:     123456789,
 	}
@@ -56,19 +54,6 @@ var _ = Describe("is state updatable", Label("registration", "state"), func() {
 			InitialRegistration: time.Now(),
 		}
 		Expect(state.IsUpdatable()).To(BeTrue())
-	})
-})
-
-var _ = Describe("has state update elapsed", Label("registration", "state"), func() {
-	It("returns false if the state is new", func() {
-		state := State{}
-		Expect(state.HasLastUpdateElapsed(-1 * time.Hour)).To(BeTrue())
-	})
-	It("returns true last update time is more than suppress timer ago", func() {
-		state := State{
-			LastUpdate: time.Now().Add(-10 * time.Hour),
-		}
-		Expect(state.HasLastUpdateElapsed(1 * time.Hour)).To(BeTrue())
 	})
 })
 

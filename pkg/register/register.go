@@ -97,7 +97,6 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *St
 		if err := sendUpdateData(conn); err != nil {
 			return nil, fmt.Errorf("failed to send update data: %w", err)
 		}
-		state.LastUpdate = time.Now()
 	} else {
 		state.InitialRegistration = time.Now()
 	}
