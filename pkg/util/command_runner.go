@@ -35,5 +35,5 @@ func (e *ExecRunner) Run(name string, arg ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	return cmd.Err
+	return cmd.Run()
 }
