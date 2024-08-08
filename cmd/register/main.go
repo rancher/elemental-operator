@@ -100,11 +100,6 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err != nil {
 				return fmt.Errorf("getting registration state: %w", err)
 			}
-			// Determine if registration should execute or skip a cycle
-			if !installation && !reset && !registrationState.HasLastUpdateElapsed(registrationUpdateSuppressTimer) {
-				log.Info("Nothing to do")
-				return nil
-			}
 			// Validate CA
 			caCert, err := getRegistrationCA(fs, cfg)
 			if err != nil {
