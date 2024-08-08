@@ -107,7 +107,6 @@ var (
 	}
 	stateFixture = register.State{
 		InitialRegistration: time.Now(),
-		LastUpdate:          time.Time{},
 		EmulatedTPM:         true,
 		EmulatedTPMSeed:     987654321,
 	}
@@ -206,18 +205,19 @@ var _ = Describe("elemental-register state", Label("registration", "cli", "state
 			cmd.SetArgs([]string{"--state-path", newPath})
 			registrationState := register.State{
 				InitialRegistration: time.Now(),
-				LastUpdate:          time.Now(),
 			}
 			stateHandler.EXPECT().Init(newPath).Return(nil)
 			stateHandler.EXPECT().Load().Return(registrationState, nil)
-			client.EXPECT().Register(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+			stateHandler.EXPECT().Save(registrationState).Return(nil)
+			client.EXPECT().
+				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &registrationState).
+				Return(marshalToBytes(baseConfigFixture), nil)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})
-		It("should not skip registration if lastUpdate is stale", func() {
+		It("should return the registration data", func() {
 			cmd.SetArgs([]string{})
 			registrationState := register.State{
 				InitialRegistration: time.Now(),
-				LastUpdate:          time.Now().Add(-25 * time.Hour),
 			}
 			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
 			stateHandler.EXPECT().Load().Return(registrationState, nil)
