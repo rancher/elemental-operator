@@ -21,25 +21,25 @@ defaultChannels:
     included: true 
     name: sl-micro-6.0-baremetal
     enabled: false
-    image: registry.suse.com/elemental-channel/sl-micro:6.0-baremetal
+    image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.0-baremetal"
     deleteNoLongerInSyncVersions: true
   slMicro60Base:
     included: true 
     name: sl-micro-6.0-base
     enabled: false
-    image: registry.suse.com/elemental-channel/sl-micro:6.0-base
+    image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.0-base"
     deleteNoLongerInSyncVersions: true
   slMicro60KVM:
     included: true
     name: sl-micro-6.0-kvm
     enabled: false
-    image: registry.suse.com/elemental-channel/sl-micro:6.0-kvm
+    image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.0-kvm"
     deleteNoLongerInSyncVersions: true
   slMicro60RT:
     included: true
     name: sle-micro-6.0-rt
     enabled: false
-    image: registry.suse.com/elemental-channel/sl-micro:6.0-rt
+    image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.0-rt"
     deleteNoLongerInSyncVersions: true
 
 # number of operator replicas to deploy
