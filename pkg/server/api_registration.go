@@ -125,7 +125,7 @@ func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.Mach
 		Encode(config)
 }
 
-func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
+func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration, netConf *elementalv1.NetworkConfig) error {
 	sa := &corev1.ServiceAccount{}
 
 	if err := i.Get(i, types.NamespacedName{
@@ -192,6 +192,15 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 	if err != nil {
 		log.Errorf("error marshalling config: %v", err)
 		return err
+	}
+
+	if netConf != nil {
+		netData, err := yaml.Marshal(netConf)
+		if err != nil {
+			log.Errorf("error marshalling network config: %v", err)
+			return err
+		}
+		data = append(data, netData...)
 	}
 
 	return register.WriteMessage(conn, register.MsgConfig, data)
@@ -274,8 +283,6 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 				return fmt.Errorf("failed to parse system data: %w", err)
 			}
 			tmpl.Fill(systemData)
-		case register.MsgNetworkConfig:
-			return i.handleGetNetworkConfig(conn, inventory)
 		default:
 			return fmt.Errorf("got unexpected message: %s", msgType)
 		}
@@ -296,19 +303,19 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 	return nil
 }
 
-func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory *elementalv1.MachineInventory) error {
+func (i *InventoryServer) handleGetNetworkConfig(inventory *elementalv1.MachineInventory) (*elementalv1.NetworkConfig, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), register.RegistrationDeadlineSeconds*time.Second)
 	defer cancel()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("NewtworkConfig not ready")
+			return nil, fmt.Errorf("NewtworkConfig not ready")
 		default:
 			time.Sleep(time.Second)
 		}
 		if err := i.Get(ctx, client.ObjectKeyFromObject(inventory), inventory); err != nil {
-			return fmt.Errorf("getting machine inventory: %w", err)
+			return nil, fmt.Errorf("getting machine inventory: %w", err)
 		}
 		conditionFound := false
 		for _, condition := range inventory.Status.Conditions {
@@ -327,18 +334,12 @@ func (i *InventoryServer) handleGetNetworkConfig(conn *websocket.Conn, inventory
 		break
 	}
 
-	networkConfigData, err := json.Marshal(inventory.Spec.Network)
-	if err != nil {
-		return fmt.Errorf("marshalling network config data: %w", err)
-	}
-	if err := register.WriteMessage(conn, register.MsgNetworkConfig, networkConfigData); err != nil {
-		return fmt.Errorf("sending network config data: %w", err)
-	}
-	return nil
+	return &inventory.Spec.Network, nil
 }
 
 func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
 	var err error
+	var netConf *elementalv1.NetworkConfig
 
 	inventory, err = i.commitMachineInventory(inventory)
 	if err != nil {
@@ -349,7 +350,17 @@ func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.
 		return err
 	}
 
-	if err := i.writeMachineInventoryCloudConfig(conn, protoVersion, inventory, registration); err != nil {
+	if protoVersion >= register.MsgNetworkConfig {
+		netConf, err = i.handleGetNetworkConfig(inventory)
+		if err != nil {
+			if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
+				log.Errorf("Error reporting back error to client: %v", writeErr)
+			}
+			return err
+		}
+	}
+
+	if err := i.writeMachineInventoryCloudConfig(conn, protoVersion, inventory, registration, netConf); err != nil {
 		if writeErr := writeError(conn, protoVersion, register.NewErrorMessage(err)); writeErr != nil {
 			log.Errorf("Error reporting back error to client: %v", writeErr)
 		}
