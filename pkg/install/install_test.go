@@ -89,7 +89,6 @@ var (
 	}
 	stateFixture = register.State{
 		InitialRegistration: time.Date(2023, time.August, 2, 12, 35, 10, 3, time.UTC),
-		LastUpdate:          time.Time{},
 		EmulatedTPM:         true,
 		EmulatedTPMSeed:     987654321,
 	}

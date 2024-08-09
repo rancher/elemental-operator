@@ -31,17 +31,12 @@ import (
 
 type State struct {
 	InitialRegistration time.Time `yaml:"initialRegistration,omitempty"`
-	LastUpdate          time.Time `yaml:"lastUpdate,omitempty"`
 	EmulatedTPM         bool      `yaml:"emulatedTPM,omitempty"`
 	EmulatedTPMSeed     int64     `yaml:"emulatedTPMSeed,omitempty"`
 }
 
 func (s *State) IsUpdatable() bool {
 	return !s.InitialRegistration.IsZero()
-}
-
-func (s *State) HasLastUpdateElapsed(suppress time.Duration) bool {
-	return time.Now().After(s.LastUpdate.Add(suppress))
 }
 
 type StateHandler interface {
