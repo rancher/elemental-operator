@@ -50,7 +50,7 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 		Expect(err).ToNot(HaveOccurred())
 		mockCtrl := gomock.NewController(GinkgoT())
 		runner = utilmocks.NewMockCommandRunner(mockCtrl)
-		networkConfigurator = &nmstateConfigurator{
+		networkConfigurator = &nmcConfigurator{
 			fs:     fs,
 			runner: runner,
 		}
@@ -76,8 +76,9 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 			},
 		}
 
-		runner.EXPECT().Run("nmstatectl", "apply", nmstateTempPath).Return(nil)
-		//prepare some dummy nmconnection files to simulate `nmstatectl apply` result
+		runner.EXPECT().Run("nmc", "generate", "--config-dir", nmcDesiredStatesDir, "--output-dir", nmcNewtorkConfigDir).Return(nil)
+		runner.EXPECT().Run("nmc", "apply", "--config-dir", nmcNewtorkConfigDir).Return(nil)
+		//prepare some dummy nmconnection files to simulate `nmc apply` result
 		Expect(vfs.MkdirAll(fs, systemConnectionsDir, 0700)).Should(Succeed())
 		Expect(fs.WriteFile(filepath.Join(systemConnectionsDir, "wired1.nmconnection"), []byte("[connection]\nid=Wired connection 1\n"), 0600)).Should(Succeed())
 		Expect(fs.WriteFile(filepath.Join(systemConnectionsDir, "wired2.nmconnection"), []byte("[connection]\nid=Wired connection 2\n"), 0600)).Should(Succeed())
@@ -85,8 +86,8 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 		applicator, err := networkConfigurator.GetNetworkConfigApplicator(wantNetworkConfig)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		// Test the variable substitution took place when generating the nmstate config from the template
-		compareFiles(fs, nmstateTempPath, "_testdata/nmstate-intermediate.yaml")
+		// Test the variable substitution took place when generating the nmc config from the template
+		compareFiles(fs, filepath.Join(nmcDesiredStatesDir, nmcAllConfigName), "_testdata/digested-intermediate.yaml")
 
 		stage, found := applicator.Stages["initramfs"]
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")

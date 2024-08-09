@@ -31,7 +31,9 @@ import (
 )
 
 const (
-	nmstateTempPath      = "/tmp/elemental-nmstate.yaml"
+	nmcDesiredStatesDir  = "/tmp/desired-states"
+	nmcNewtorkConfigDir  = "/tmp/network-config"
+	nmcAllConfigName     = "_all.yaml"
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/99-network-config-applicator.yaml"
 )
@@ -45,21 +47,21 @@ type Configurator interface {
 	ResetNetworkConfig() error
 }
 
-var _ Configurator = (*nmstateConfigurator)(nil)
+var _ Configurator = (*nmcConfigurator)(nil)
 
 func NewConfigurator(fs vfs.FS) Configurator {
-	return &nmstateConfigurator{
+	return &nmcConfigurator{
 		fs:     fs,
 		runner: &util.ExecRunner{},
 	}
 }
 
-type nmstateConfigurator struct {
+type nmcConfigurator struct {
 	fs     vfs.FS
 	runner util.CommandRunner
 }
 
-func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
+func (n *nmcConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
 	configApplicator := schema.YipConfig{}
 
 	if len(networkConfig.Config) == 0 {
@@ -81,19 +83,31 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 
 	yamlStringData := string(yamlData)
 
-	// Go through the nmstate yaml config and replace template placeholders "{my-ip-name}" with actual IP.
+	// Go through the nmc yaml config and replace template placeholders "{my-ip-name}" with actual IP.
 	for name, ipAddress := range networkConfig.IPAddresses {
 		yamlStringData = strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", name), ipAddress)
 	}
 
 	// Dump the digested config somewhere
-	if err := n.fs.WriteFile(nmstateTempPath, []byte(yamlStringData), 0600); err != nil {
-		return configApplicator, fmt.Errorf("writing file '%s': %w", nmstateTempPath, err)
+	if err := vfs.MkdirAll(n.fs, nmcDesiredStatesDir, 0700); err != nil {
+		return configApplicator, fmt.Errorf("creating dir '%s': %w", nmcDesiredStatesDir, err)
+	}
+	nmcAllConfigPath := filepath.Join(nmcDesiredStatesDir, nmcAllConfigName)
+	if err := n.fs.WriteFile(nmcAllConfigPath, []byte(yamlStringData), 0600); err != nil {
+		return configApplicator, fmt.Errorf("writing file '%s': %w", nmcAllConfigPath, err)
 	}
 
-	// Try to apply it
-	if err := n.runner.Run("nmstatectl", "apply", nmstateTempPath); err != nil {
-		return configApplicator, fmt.Errorf("running: nmstatectl apply %s: %w", nmstateTempPath, err)
+	// Generate configurations
+	if err := vfs.MkdirAll(n.fs, nmcNewtorkConfigDir, 0700); err != nil {
+		return configApplicator, fmt.Errorf("creating dir '%s': %w", nmcNewtorkConfigDir, err)
+	}
+	if err := n.runner.Run("nmc", "generate", "--config-dir", nmcDesiredStatesDir, "--output-dir", nmcNewtorkConfigDir); err != nil {
+		return configApplicator, fmt.Errorf("running: nmc generate: %w", err)
+	}
+
+	// Apply configurations
+	if err := n.runner.Run("nmc", "apply", "--config-dir", nmcNewtorkConfigDir); err != nil {
+		return configApplicator, fmt.Errorf("running: nmc apply: %w", err)
 	}
 
 	// Now fetch all /etc/NetworkManager/system-connections/*.nmconnection files.
@@ -144,7 +158,7 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 // waiting for the (old) connection timeout. This can lead to the scheduled shutdown to trigger (and reset from recovery start),
 // before the elemental-system-agent has time to recover from the connection change and confirm the application of the reset-trigger plan.
 // Potentially this can lead to an infinite reset loop.
-func (n *nmstateConfigurator) ResetNetworkConfig() error {
+func (n *nmcConfigurator) ResetNetworkConfig() error {
 	// If there are no /etc/NetworkManager/system-connections/*.nmconnection files,
 	// then this is the second time we invoke this method, or we never configured any
 	// network config so we have nothing to do.
