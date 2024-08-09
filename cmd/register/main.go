@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -80,6 +79,7 @@ func main() {
 func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command { //nolint: gocyclo
 	// Reset config and viper cache
 	cfg = elementalv1.Config{}
+	netCfg := elementalv1.NetworkConfig{}
 	viper.Reset()
 	// Define command (using closures)
 	cmd := &cobra.Command{
@@ -122,10 +122,9 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return fmt.Errorf("parsing returned configuration: %w", err)
 			}
-			// Update caCert from refreshed config
-			caCert, err = getRegistrationCA(fs, cfg)
-			if err != nil {
-				return fmt.Errorf("validating CA from remote registration: %w", err)
+			// Validate remote network config
+			if err := yaml.Unmarshal(data, &netCfg); err != nil {
+				return fmt.Errorf("parsing returned network configuration: %w", err)
 			}
 			// Install
 			if installation {
@@ -136,17 +135,8 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 						return fmt.Errorf("installing local agent config %w", err)
 					}
 				} else {
-					log.Info("Retrieving Network configuration")
-					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
-					if err != nil {
-						return fmt.Errorf("retrieving network configuration: %w", err)
-					}
-					networkConfig := elementalv1.NetworkConfig{}
-					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
-						return fmt.Errorf("unmarshalling network config data: %w", err)
-					}
 					log.Info("Installing elemental")
-					if err := installer.InstallElemental(cfg, registrationState, networkConfig); err != nil {
+					if err := installer.InstallElemental(cfg, registrationState, netCfg); err != nil {
 						return fmt.Errorf("installing elemental: %w", err)
 					}
 				}
@@ -161,17 +151,8 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				if cfg.Elemental.Registration.NoToolkit {
 					log.Warning("Reset not supported for no-toolkit hosts")
 				} else {
-					log.Info("Retrieving Network configuration")
-					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
-					if err != nil {
-						return fmt.Errorf("retrieving network configuration: %w", err)
-					}
-					networkConfig := elementalv1.NetworkConfig{}
-					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
-						return fmt.Errorf("unmarshalling network config data: %w", err)
-					}
 					log.Info("Resetting Elemental")
-					if err := installer.ResetElemental(cfg, registrationState, networkConfig); err != nil {
+					if err := installer.ResetElemental(cfg, registrationState, netCfg); err != nil {
 						return fmt.Errorf("resetting elemental: %w", err)
 					}
 				}
