@@ -133,7 +133,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 				if cfg.Elemental.Registration.NoToolkit {
 					log.Info("Installing local agent config")
 					if err := installer.WriteLocalSystemAgentConfig(cfg.Elemental); err != nil {
-						return fmt.Errorf("Installing local agent config")
+						return fmt.Errorf("installing local agent config %w", err)
 					}
 				} else {
 					log.Info("Retrieving Network configuration")
