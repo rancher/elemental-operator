@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1beta1
 
-import runtime "k8s.io/apimachinery/pkg/runtime"
+import (
+	corev1 "k8s.io/api/core/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
+)
 
 const TPMRandomSeedValue = -1
 
@@ -129,6 +132,8 @@ type Elemental struct {
 type Config struct {
 	// +optional
 	Elemental Elemental `json:"elemental,omitempty" yaml:"elemental"`
+	// +optional
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
@@ -162,3 +167,30 @@ const (
 	DeviceSelectorKeyName DeviceSelectorKey = "Name"
 	DeviceSelectorKeySize DeviceSelectorKey = "Size"
 )
+
+// NetworkTemplate contains a map of IPAddressPools and a schemaless network config template.
+type NetworkTemplate struct {
+	IPAddresses map[string]*corev1.TypedLocalObjectReference `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +optional
+	Config map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
+}
+
+// NetworkConfig contains a map of claimed IPAddresses and a schemaless network config template.
+// This NetworkConfig is a digested NetworkTemplate, the MachineInventory's NetworkConfigReady condition
+// highlight that this config is ready to be consumed, this means all needed IPAddressClaims for this machine
+// have been created and the IPAM provider served real IPAddresses that can be applied to the machine.
+//
+// Note that the Config is the same as in NetworkTemplate, so actually a template, not a fully digested config.
+// An alternative could be to simplify this object to contain final connections where the variable
+// substitution already took place.
+// Right now we send both Config template and real IPAddresses so the consumer (elemental-register)
+// can do the substitution itself.
+type NetworkConfig struct {
+	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:XPreserveUnknownFields
+	// +optional
+	Config map[string]runtime.RawExtension `json:"config,omitempty" yaml:"config,omitempty"`
+}

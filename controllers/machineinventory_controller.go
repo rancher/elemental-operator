@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
+	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -62,7 +63,9 @@ type MachineInventoryReconciler struct {
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=machineinventories/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;create;list
+// +kubebuilder:rbac:groups="ipam.cluster.x-k8s.io",resources=ipaddresses,verbs=get;list;watch
+// +kubebuilder:rbac:groups="ipam.cluster.x-k8s.io",resources=ipaddresseclaims,verbs=get;list;watch;delete
 
 func (r *MachineInventoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -156,6 +159,32 @@ func (r *MachineInventoryReconciler) reconcile(ctx context.Context, mInventory *
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to create plan secret: %w", err)
 	}
+
+	if r.networkNeedsReconcile(*mInventory) {
+		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+			Type:    elementalv1.ReadyCondition,
+			Reason:  elementalv1.ReconcilingNetworkConfig,
+			Status:  metav1.ConditionFalse,
+			Message: "NetworkConfig needs reconcile",
+		})
+		result, err := r.reconcileNetworkConfig(ctx, mInventory)
+		if err != nil {
+			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.ReadyCondition,
+				Reason:  elementalv1.NetworkConfigFailure,
+				Status:  metav1.ConditionFalse,
+				Message: err.Error(),
+			})
+			return ctrl.Result{}, fmt.Errorf("reconciling network config: %w", err)
+		}
+		return result, nil
+	}
+	meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+		Type:    elementalv1.NetworkConfigReady,
+		Reason:  elementalv1.ReconcilingNetworkConfig,
+		Status:  metav1.ConditionTrue,
+		Message: "NetworkConfig is ready",
+	})
 
 	if err := r.updateInventoryWithPlanStatus(ctx, mInventory); err != nil {
 		meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
@@ -272,6 +301,101 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	return nil
 }
 
+// networkNeedsReconcile checks if there is an IPAddress for each IPPool referenced by the MachineInventory.
+func (r *MachineInventoryReconciler) networkNeedsReconcile(mInventory elementalv1.MachineInventory) bool {
+	for ipName := range mInventory.Spec.IPAddressPools {
+		_, ipExists := mInventory.Spec.Network.IPAddresses[ipName]
+		if !ipExists {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context, mInventory *elementalv1.MachineInventory) (ctrl.Result, error) {
+	logger := ctrl.LoggerFrom(ctx)
+	logger.Info("Reconciling Network Config")
+
+	// Loops over the IPAddressPools and create an IPAddressClaim for each
+	for name, ipPoolRef := range mInventory.Spec.IPAddressPools {
+		ipClaimName := fmt.Sprintf("%s-%s", mInventory.Name, name)
+		ipClaim := &ipamv1.IPAddressClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ipClaimName,
+				Namespace: mInventory.Namespace,
+				// Ownership takes care of IPAddressClaim deletion when the MachineInventory is also deleted.
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: mInventory.APIVersion,
+						Kind:       mInventory.Kind,
+						Name:       mInventory.Name,
+						UID:        mInventory.UID,
+						Controller: ptr.To(true),
+					},
+				},
+			},
+			Spec: ipamv1.IPAddressClaimSpec{
+				PoolRef: *ipPoolRef,
+			},
+		}
+		if err := r.Create(ctx, ipClaim); apierrors.IsAlreadyExists(err) {
+			logger.Info("Reusing already existing IPAddressClaim", "IPAddressClaim", ipClaimName)
+		} else if err != nil {
+			return ctrl.Result{}, fmt.Errorf("creating IPAddressClaim '%s': %w", ipClaimName, err)
+		}
+
+		if err := r.Get(ctx, client.ObjectKeyFromObject(ipClaim), ipClaim); err != nil {
+			return ctrl.Result{}, fmt.Errorf("getting IPAddressClaim '%s': %w", ipClaimName, err)
+		}
+		// Just for safety, prevent usage of any IPClaim that is undergoing deletion (we don't have an IPAddressClaim watch for a further reconcile)
+		if !ipClaim.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, fmt.Errorf("Waiting for IPAddressClaim deletion '%s'", ipClaimName)
+		}
+
+		if mInventory.Spec.IPAddressClaims == nil {
+			mInventory.Spec.IPAddressClaims = map[string]*corev1.ObjectReference{}
+		}
+
+		mInventory.Spec.IPAddressClaims[name] = &corev1.ObjectReference{
+			APIVersion: ipClaim.APIVersion,
+			Kind:       ipClaim.Kind,
+			Name:       ipClaim.Name,
+			Namespace:  ipClaim.Namespace,
+			UID:        ipClaim.UID,
+		}
+	}
+
+	// Loops over the IPAddressClaims and get the IPAddresses
+	for name, ipClaimRef := range mInventory.Spec.IPAddressClaims {
+		ipAddress := &ipamv1.IPAddress{}
+		err := r.Get(ctx, types.NamespacedName{
+			Name:      ipClaimRef.Name,
+			Namespace: ipClaimRef.Namespace,
+		}, ipAddress)
+		if apierrors.IsNotFound(err) {
+			logger.Info("IPAddress not found. Requeuing.", "IPAddress", ipClaimRef.Name)
+			meta.SetStatusCondition(&mInventory.Status.Conditions, metav1.Condition{
+				Type:    elementalv1.NetworkConfigReady,
+				Reason:  elementalv1.WaitingForIPAddressReason,
+				Status:  metav1.ConditionFalse,
+				Message: fmt.Sprintf("Waiting to claim IPAddress %s", ipClaimRef.Name),
+			})
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+		}
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("getting IPAddress '%s': %w", ipClaimRef.Name, err)
+		}
+
+		if mInventory.Spec.Network.IPAddresses == nil {
+			mInventory.Spec.Network.IPAddresses = map[string]string{}
+		}
+
+		mInventory.Spec.Network.IPAddresses[name] = ipAddress.Spec.Address
+	}
+
+	return ctrl.Result{}, nil
+}
+
 func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, []byte, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
@@ -308,6 +432,16 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 			},
 		},
 		OneTimeInstructions: []systemagent.OneTimeInstruction{
+			{
+				CommonInstruction: systemagent.CommonInstruction{
+					Name:    "restore first boot config",
+					Command: "elemental-register",
+					Args: []string{
+						"--debug",
+						"--reset-network",
+					},
+				},
+			},
 			{
 				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "configure next boot to recovery mode",

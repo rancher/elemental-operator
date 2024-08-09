@@ -18,6 +18,7 @@ package install
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ import (
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/elementalcli"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
@@ -55,31 +57,35 @@ const (
 	tempRegistrationState = "/tmp/elemental-registration-state.yaml"
 	tempCloudInit         = "/tmp/elemental-cloud-init.yaml"
 	tempSystemAgent       = "/tmp/elemental-system-agent.yaml"
+	tempNetworkConfig     = "/tmp/elemental-network-config.yaml"
 )
 
 type Installer interface {
-	ResetElemental(config elementalv1.Config, state register.State) error
-	InstallElemental(config elementalv1.Config, state register.State) error
+	ResetElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
+	ResetElementalNetwork() error
+	InstallElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
 	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
 }
 
-func NewInstaller(fs vfs.FS, disks []*block.Disk) Installer {
+func NewInstaller(fs vfs.FS, disks []*block.Disk, networkConfigurator network.Configurator) Installer {
 	return &installer{
-		fs:     fs,
-		disks:  disks,
-		runner: elementalcli.NewRunner(),
+		fs:                  fs,
+		disks:               disks,
+		runner:              elementalcli.NewRunner(),
+		networkConfigurator: networkConfigurator,
 	}
 }
 
 var _ Installer = (*installer)(nil)
 
 type installer struct {
-	fs     vfs.FS
-	disks  []*block.Disk
-	runner elementalcli.Runner
+	fs                  vfs.FS
+	disks               []*block.Disk
+	runner              elementalcli.Runner
+	networkConfigurator network.Configurator
 }
 
-func (i *installer) InstallElemental(config elementalv1.Config, state register.State) error {
+func (i *installer) InstallElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
 	if config.Elemental.Install.ConfigURLs == nil {
 		config.Elemental.Install.ConfigURLs = []string{}
 	}
@@ -95,7 +101,7 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
@@ -110,12 +116,12 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 	return nil
 }
 
-func (i *installer) ResetElemental(config elementalv1.Config, state register.State) error {
+func (i *installer) ResetElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
 	if config.Elemental.Reset.ConfigURLs == nil {
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state)
+	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
 	if err != nil {
 		return fmt.Errorf("generating additional cloud configs: %w", err)
 	}
@@ -130,6 +136,13 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 	}
 
 	log.Info("Elemental reset completed, please reboot")
+	return nil
+}
+
+func (i *installer) ResetElementalNetwork() error {
+	if err := i.networkConfigurator.ResetNetworkConfig(); err != nil {
+		return fmt.Errorf("resetting network config: %w", err)
+	}
 	return nil
 }
 
@@ -229,7 +242,7 @@ func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 // getCloudInitConfigs creates cloud-init configuration files that can be passed as additional `config-urls`
 // to the `elemental` cli. We exploit this mechanism to persist information during `elemental install`
 // or `elemental reset` calls into the newly installed or resetted system.
-func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State) ([]string, error) {
+func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) ([]string, error) {
 	configs := []string{}
 	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
 	if err != nil {
@@ -256,6 +269,16 @@ func (i *installer) getCloudInitConfigs(config elementalv1.Config, state registe
 		return nil, fmt.Errorf("writing registration state plan: %w", err)
 	}
 	configs = append(configs, registrationStatePath)
+
+	networkConfigPath, err := i.writeNetworkConfig(networkConfig)
+	if errors.Is(err, network.ErrEmptyConfig) {
+		// Nothing to do on an empty network config.
+		return configs, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("writing temporary network config: %w", err)
+	}
+	configs = append(configs, networkConfigPath)
 
 	return configs, nil
 }
@@ -355,6 +378,24 @@ func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) 
 	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
 	if _, err = f.Write(bytes); err != nil {
 		return "", fmt.Errorf("writing cloud config: %w", err)
+	}
+	return f.Name(), nil
+}
+
+func (i *installer) writeNetworkConfig(networkConfig elementalv1.NetworkConfig) (string, error) {
+	networkYipConfig, err := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
+	if err != nil {
+		return "", fmt.Errorf("getting network config applicator: %w", err)
+	}
+
+	f, err := i.fs.Create(tempNetworkConfig)
+	if err != nil {
+		return "", fmt.Errorf("creating temporary network-config file: %w", err)
+	}
+	defer f.Close()
+
+	if err := yaml.NewEncoder(f).Encode(networkYipConfig); err != nil {
+		return "", fmt.Errorf("writing encoded network-config: %w", err)
 	}
 	return f.Name(), nil
 }

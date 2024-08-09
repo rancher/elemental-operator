@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -31,6 +32,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/install"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/version"
 )
@@ -47,6 +49,7 @@ var (
 	cfg              elementalv1.Config
 	debug            bool
 	reset            bool
+	resetNetwork     bool
 	installation     bool
 	disableBootEntry bool
 	configPath       string
@@ -64,7 +67,8 @@ func main() {
 		log.Warningf("error probing disks: %s", err)
 	}
 
-	installer := install.NewInstaller(fs, blockInfo.Disks)
+	networkConfigurator := network.NewConfigurator(fs)
+	installer := install.NewInstaller(fs, blockInfo.Disks, networkConfigurator)
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
@@ -73,7 +77,7 @@ func main() {
 	}
 }
 
-func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command {
+func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHandler, installer install.Installer) *cobra.Command { //nolint: gocyclo
 	// Reset config and viper cache
 	cfg = elementalv1.Config{}
 	viper.Reset()
@@ -118,6 +122,11 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			if err := yaml.Unmarshal(data, &cfg); err != nil {
 				return fmt.Errorf("parsing returned configuration: %w", err)
 			}
+			// Update caCert from refreshed config
+			caCert, err = getRegistrationCA(fs, cfg)
+			if err != nil {
+				return fmt.Errorf("validating CA from remote registration: %w", err)
+			}
 			// Install
 			if installation {
 				// Optionally install agent config to local filesystem (no install)
@@ -127,20 +136,42 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 						return fmt.Errorf("Installing local agent config")
 					}
 				} else {
+					log.Info("Retrieving Network configuration")
+					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
+					if err != nil {
+						return fmt.Errorf("retrieving network configuration: %w", err)
+					}
+					networkConfig := elementalv1.NetworkConfig{}
+					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
+						return fmt.Errorf("unmarshalling network config data: %w", err)
+					}
 					log.Info("Installing elemental")
-					if err := installer.InstallElemental(cfg, registrationState); err != nil {
+					if err := installer.InstallElemental(cfg, registrationState, networkConfig); err != nil {
 						return fmt.Errorf("installing elemental: %w", err)
 					}
 				}
 				return nil
+			}
+			if resetNetwork {
+				log.Info("Resetting Elemental Network configuration")
+				return installer.ResetElementalNetwork()
 			}
 			// Reset
 			if reset {
 				if cfg.Elemental.Registration.NoToolkit {
 					log.Warning("Reset not supported for no-toolkit hosts")
 				} else {
+					log.Info("Retrieving Network configuration")
+					networkConfigData, err := client.GetNetworkConfig(cfg.Elemental.Registration, caCert, &registrationState)
+					if err != nil {
+						return fmt.Errorf("retrieving network configuration: %w", err)
+					}
+					networkConfig := elementalv1.NetworkConfig{}
+					if err := json.Unmarshal(networkConfigData, &networkConfig); err != nil {
+						return fmt.Errorf("unmarshalling network config data: %w", err)
+					}
 					log.Info("Resetting Elemental")
-					if err := installer.ResetElemental(cfg, registrationState); err != nil {
+					if err := installer.ResetElemental(cfg, registrationState, networkConfig); err != nil {
 						return fmt.Errorf("resetting elemental: %w", err)
 					}
 				}
@@ -169,6 +200,7 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.PersistentFlags().BoolP("version", "v", false, "print version and exit")
 	_ = viper.BindPFlag("version", cmd.PersistentFlags().Lookup("version"))
 	cmd.Flags().BoolVar(&reset, "reset", false, "Reset the machine to its original post-installation state")
+	cmd.Flags().BoolVar(&resetNetwork, "reset-network", false, "Reset the machine network to the first boot state")
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	cmd.Flags().BoolVar(&disableBootEntry, "disable-boot-entry", false, "Don't create an EFI entry for the system during install/reset")

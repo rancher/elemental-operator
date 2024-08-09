@@ -33,7 +33,10 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/controllers"
 	climocks "github.com/rancher/elemental-operator/pkg/elementalcli/mocks"
+	"github.com/rancher/elemental-operator/pkg/network"
+	networkmocks "github.com/rancher/elemental-operator/pkg/network/mocks"
 	"github.com/rancher/elemental-operator/pkg/register"
+	"github.com/rancher/yip/pkg/schema"
 )
 
 var (
@@ -89,6 +92,27 @@ var (
 		EmulatedTPM:         true,
 		EmulatedTPMSeed:     987654321,
 	}
+	networkConfigFixture = elementalv1.NetworkConfig{
+		IPAddresses: map[string]string{
+			"foo": "192.168.122.10",
+			"bar": "192.168.122.11",
+		},
+		Config: map[string]runtime.RawExtension{
+			"foo": {
+				Raw: []byte(`"bar"`),
+			},
+		},
+	}
+	networkConfigApplicatorFixture = schema.YipConfig{
+		Name: "Test Network Config Applicator",
+		Stages: map[string][]schema.Stage{
+			"foo": {
+				{
+					Commands: []string{"bar"},
+				},
+			},
+		},
+	}
 )
 
 func TestInstall(t *testing.T) {
@@ -101,15 +125,18 @@ var _ = Describe("installer install elemental", Label("installer", "install"), f
 	var err error
 	var fsCleanup func()
 	var cliRunner *climocks.MockRunner
+	var networkConfigurator *networkmocks.MockConfigurator
 	var install Installer
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": ""})
 		Expect(err).ToNot(HaveOccurred())
 		mockCtrl := gomock.NewController(GinkgoT())
 		cliRunner = climocks.NewMockRunner(mockCtrl)
+		networkConfigurator = networkmocks.NewMockConfigurator(mockCtrl)
 		install = &installer{
-			fs:     fs,
-			runner: cliRunner,
+			fs:                  fs,
+			runner:              cliRunner,
+			networkConfigurator: networkConfigurator,
 		}
 		DeferCleanup(fsCleanup)
 	})
@@ -117,8 +144,20 @@ var _ = Describe("installer install elemental", Label("installer", "install"), f
 		wantConfig := configFixture.DeepCopy()
 		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, additionalConfigs(fs)...)
 		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
-		Expect(install.InstallElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(elementalv1.NetworkConfig{}).Return(schema.YipConfig{}, network.ErrEmptyConfig)
+		Expect(install.InstallElemental(configFixture, stateFixture, elementalv1.NetworkConfig{})).ToNot(HaveOccurred())
 		checkConfigs(fs)
+	})
+	It("should install network config", func() {
+		wantConfig := configFixture.DeepCopy()
+		wantConfigs := additionalConfigs(fs)
+		wantConfigs = append(wantConfigs, networkConfig(fs))
+		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, wantConfigs...)
+		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
+		Expect(install.InstallElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
+		checkConfigs(fs)
+		compareFiles(fs, tempNetworkConfig, "_testdata/network-config-applicator.yaml")
 	})
 })
 
@@ -250,15 +289,18 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 	var err error
 	var fsCleanup func()
 	var cliRunner *climocks.MockRunner
+	var networkConfigurator *networkmocks.MockConfigurator
 	var install Installer
 	BeforeEach(func() {
 		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{"/tmp/init": "", "/oem/init": ""})
 		Expect(err).ToNot(HaveOccurred())
 		mockCtrl := gomock.NewController(GinkgoT())
 		cliRunner = climocks.NewMockRunner(mockCtrl)
+		networkConfigurator = networkmocks.NewMockConfigurator(mockCtrl)
 		install = &installer{
-			fs:     fs,
-			runner: cliRunner,
+			fs:                  fs,
+			runner:              cliRunner,
+			networkConfigurator: networkConfigurator,
 		}
 		DeferCleanup(fsCleanup)
 	})
@@ -266,15 +308,28 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		wantConfig := configFixture.DeepCopy()
 		wantConfig.Elemental.Reset.ConfigURLs = append(wantConfig.Elemental.Reset.ConfigURLs, additionalConfigs(fs)...)
 		cliRunner.EXPECT().Reset(wantConfig.Elemental.Reset).Return(nil)
-		Expect(install.ResetElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(elementalv1.NetworkConfig{}).Return(schema.YipConfig{}, network.ErrEmptyConfig)
+		Expect(install.ResetElemental(configFixture, stateFixture, elementalv1.NetworkConfig{})).ToNot(HaveOccurred())
 		checkConfigs(fs)
 	})
 	It("should remove reset plan", func() {
 		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(0600))).ToNot(HaveOccurred())
 		cliRunner.EXPECT().Reset(gomock.Any()).Return(nil)
-		Expect(install.ResetElemental(configFixture, stateFixture)).ToNot(HaveOccurred())
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(elementalv1.NetworkConfig{}).Return(schema.YipConfig{}, network.ErrEmptyConfig)
+		Expect(install.ResetElemental(configFixture, stateFixture, elementalv1.NetworkConfig{})).ToNot(HaveOccurred())
 		_, err := fs.Stat(controllers.LocalResetPlanPath)
 		Expect(err).To(MatchError(os.ErrNotExist))
+	})
+	It("should install network config", func() {
+		wantConfig := configFixture.DeepCopy()
+		wantConfigs := additionalConfigs(fs)
+		wantConfigs = append(wantConfigs, networkConfig(fs))
+		wantConfig.Elemental.Reset.ConfigURLs = append(wantConfig.Elemental.Reset.ConfigURLs, wantConfigs...)
+		cliRunner.EXPECT().Reset(wantConfig.Elemental.Reset).Return(nil)
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
+		Expect(install.ResetElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
+		checkConfigs(fs)
+		compareFiles(fs, tempNetworkConfig, "_testdata/network-config-applicator.yaml")
 	})
 })
 
@@ -286,6 +341,11 @@ func additionalConfigs(fs *vfst.TestFS) []string {
 		fmt.Sprintf("%s%s", fs.TempDir(), tempRegistrationConf),
 		fmt.Sprintf("%s%s", fs.TempDir(), tempRegistrationState),
 	}
+}
+
+func networkConfig(fs *vfst.TestFS) string {
+	// Prefix the go-vfs temp dir because that's what file.Name() returns
+	return fmt.Sprintf("%s%s", fs.TempDir(), tempNetworkConfig)
 }
 
 func checkConfigs(fs vfs.FS) {

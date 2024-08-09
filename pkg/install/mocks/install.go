@@ -59,31 +59,45 @@ func (m *MockInstaller) EXPECT() *MockInstallerMockRecorder {
 }
 
 // InstallElemental mocks base method.
-func (m *MockInstaller) InstallElemental(arg0 v1beta1.Config, arg1 register.State) error {
+func (m *MockInstaller) InstallElemental(arg0 v1beta1.Config, arg1 register.State, arg2 v1beta1.NetworkConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallElemental", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallElemental", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallElemental indicates an expected call of InstallElemental.
-func (mr *MockInstallerMockRecorder) InstallElemental(arg0, arg1 any) *gomock.Call {
+func (mr *MockInstallerMockRecorder) InstallElemental(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallElemental", reflect.TypeOf((*MockInstaller)(nil).InstallElemental), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallElemental", reflect.TypeOf((*MockInstaller)(nil).InstallElemental), arg0, arg1, arg2)
 }
 
 // ResetElemental mocks base method.
-func (m *MockInstaller) ResetElemental(arg0 v1beta1.Config, arg1 register.State) error {
+func (m *MockInstaller) ResetElemental(arg0 v1beta1.Config, arg1 register.State, arg2 v1beta1.NetworkConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResetElemental", arg0, arg1)
+	ret := m.ctrl.Call(m, "ResetElemental", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ResetElemental indicates an expected call of ResetElemental.
-func (mr *MockInstallerMockRecorder) ResetElemental(arg0, arg1 any) *gomock.Call {
+func (mr *MockInstallerMockRecorder) ResetElemental(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElemental", reflect.TypeOf((*MockInstaller)(nil).ResetElemental), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElemental", reflect.TypeOf((*MockInstaller)(nil).ResetElemental), arg0, arg1, arg2)
+}
+
+// ResetElementalNetwork mocks base method.
+func (m *MockInstaller) ResetElementalNetwork() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetElementalNetwork")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResetElementalNetwork indicates an expected call of ResetElementalNetwork.
+func (mr *MockInstallerMockRecorder) ResetElementalNetwork() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElementalNetwork", reflect.TypeOf((*MockInstaller)(nil).ResetElementalNetwork))
 }
 
 // WriteLocalSystemAgentConfig mocks base method.

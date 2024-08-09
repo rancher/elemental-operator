@@ -168,6 +168,10 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 		}
 		inventory.Annotations[elementalv1.MachineInventoryResettableAnnotation] = "true"
 	}
+
+	// Forward network config from Registration
+	inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
+	inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
