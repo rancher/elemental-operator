@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -276,15 +275,13 @@ var _ = Describe("elemental-register --install", Label("registration", "cli", "i
 			stateHandler.EXPECT().Save(stateFixture).Return(nil)
 		})
 		It("should trigger install when --install argument", func() {
-			wantConfigJson, err := json.Marshal(networkConfigFixture)
 			Expect(err).ShouldNot(HaveOccurred())
 
 			cmd.SetArgs([]string{"--install"})
-			client.EXPECT().GetNetworkConfig(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert), gomock.Any()).Return(wantConfigJson, nil)
 			installer.EXPECT().InstallElemental(alternateConfigFixture, stateFixture, networkConfigFixture).Return(nil)
 			client.EXPECT().
 				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
-				Return(marshalToBytes(alternateConfigFixture), nil)
+				Return(append(marshalToBytes(alternateConfigFixture), marshalToBytes(networkConfigFixture)...), nil)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})
 	})
@@ -354,15 +351,13 @@ var _ = Describe("elemental-register --reset", Label("registration", "cli", "res
 			stateHandler.EXPECT().Save(register.State{}).Return(nil)
 		})
 		It("should trigger reset when --reset argument", func() {
-			wantConfigJson, err := json.Marshal(networkConfigFixture)
 			Expect(err).ShouldNot(HaveOccurred())
 
 			cmd.SetArgs([]string{"--reset"})
-			client.EXPECT().GetNetworkConfig(alternateConfigFixture.Elemental.Registration, []byte(alternateConfigFixture.Elemental.Registration.CACert), gomock.Any()).Return(wantConfigJson, nil)
 			installer.EXPECT().ResetElemental(alternateConfigFixture, register.State{}, networkConfigFixture).Return(nil)
 			client.EXPECT().
 				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &register.State{}).
-				Return(marshalToBytes(alternateConfigFixture), nil)
+				Return(append(marshalToBytes(alternateConfigFixture), marshalToBytes(networkConfigFixture)...), nil)
 			Expect(cmd.Execute()).ToNot(HaveOccurred())
 		})
 	})
