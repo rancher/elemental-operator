@@ -10,6 +10,7 @@ TAG_CHANNEL?=${CHART_VERSION}
 REPO_CHANNEL?=rancher/elemental-channel
 REGISTRY_URL?=registry.opensuse.org/isv/rancher/elemental/dev/containers
 DOCKER_ARGS=
+LOCAL_BUILD?=false
 ifneq ($(REGISTRY_URL),)
 	REGISTRY_HEADER := $(REGISTRY_URL)/
 else
@@ -149,6 +150,14 @@ chart: build-manifests
 	yq -i '.questions[0].subquestions[0].default = "${REGISTRY_URL}/${REPO_CHANNEL}"' $(ROOT_DIR)/build/operator/questions.yaml
 	yq -i '.questions[0].subquestions[1].default = "${TAG_CHANNEL}"' $(ROOT_DIR)/build/operator/questions.yaml
 	yq -i '.registryUrl = "${REGISTRY_URL}"' $(ROOT_DIR)/build/operator/values.yaml
+# See OBS _service for reference
+ifeq ($(LOCAL_BUILD),true)
+	echo "Applying LOCAL_BUILD tweaks"
+	sed -i 's/%%IMG_REPO%%/registry.suse.com/g' $(ROOT_DIR)/build/operator/values.yaml
+	sed -i 's/%VERSION%/${GIT_TAG}/g' $(ROOT_DIR)/build/operator/values.yaml
+	sed -i 's/%VERSION%/${GIT_TAG}/g' $(ROOT_DIR)/build/operator/questions.yaml
+	sed -i 's/%VERSION%/${GIT_TAG}/g' $(ROOT_DIR)/build/operator/Chart.yaml
+endif
 	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/operator
 	rm -Rf $(ROOT_DIR)/build/operator
 
