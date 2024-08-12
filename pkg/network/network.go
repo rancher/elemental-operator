@@ -33,8 +33,8 @@ const (
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/99-network-config-applicator.yaml"
 	// nmc intermediate
-	nmcDesiredStatesDir = "/tmp/declarative-networking/desired-states"
-	nmcNewtorkConfigDir = "/tmp/declarative-networking/network-config"
+	nmcDesiredStatesDir = "/tmp/declarative-networking/nmc/desired-states"
+	nmcNewtorkConfigDir = "/tmp/declarative-networking/nmc/network-config"
 	nmcAllConfigName    = "_all.yaml"
 	// nmstate intermediate
 	nmstateTempPath = "/tmp/declarative-networking/elemental-nmstate.yaml"
