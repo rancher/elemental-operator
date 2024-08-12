@@ -140,10 +140,21 @@ spec:
                 description: NetworkConfig is the final NetworkConfig.
                 properties:
                   config:
+                    description: Config contains the network config template (nmc,
+                      nmstate, or nmconnections formats)
                     x-kubernetes-preserve-unknown-fields: true
+                  configurator:
+                    default: nmc
+                    description: Configurator
+                    enum:
+                    - nmc
+                    - nmstate
+                    - nmconnections
+                    type: string
                   ipAddresses:
                     additionalProperties:
                       type: string
+                    description: IPAddresses contains a map of claimed IPAddresses
                     type: object
                 type: object
               tpmHash:
