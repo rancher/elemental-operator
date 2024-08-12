@@ -19,7 +19,6 @@ package network
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -27,19 +26,27 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
-	k8syaml "sigs.k8s.io/yaml"
 )
 
 const (
-	nmcDesiredStatesDir  = "/tmp/desired-states"
-	nmcNewtorkConfigDir  = "/tmp/network-config"
-	nmcAllConfigName     = "_all.yaml"
+	// common
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/99-network-config-applicator.yaml"
+	// nmc intermediate
+	nmcDesiredStatesDir = "/tmp/declarative-networking/desired-states"
+	nmcNewtorkConfigDir = "/tmp/declarative-networking/network-config"
+	nmcAllConfigName    = "_all.yaml"
+	// nmstate intermediate
+	nmstateTempPath = "/tmp/declarative-networking/elemental-nmstate.yaml"
+	// yip Applicator config
+	applicatorName  = "Apply network config"
+	applicatorStage = "initramfs"
+	applicatorIf    = "[ ! -f /run/elemental/recovery_mode ]"
 )
 
 var (
-	ErrEmptyConfig = errors.New("Network config is empty")
+	ErrEmptyConfig         = errors.New("Network config is empty")
+	ErrUnknownConfigurator = errors.New("Unknown network configurator type")
 )
 
 type Configurator interface {
@@ -47,107 +54,38 @@ type Configurator interface {
 	ResetNetworkConfig() error
 }
 
-var _ Configurator = (*nmcConfigurator)(nil)
+var _ Configurator = (*configurator)(nil)
+
+type configurator struct {
+	fs     vfs.FS
+	runner util.CommandRunner
+}
 
 func NewConfigurator(fs vfs.FS) Configurator {
-	return &nmcConfigurator{
+	return &configurator{
 		fs:     fs,
 		runner: &util.ExecRunner{},
 	}
 }
 
-type nmcConfigurator struct {
-	fs     vfs.FS
-	runner util.CommandRunner
+func (c *configurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
+	switch networkConfig.Configurator {
+	case "nmc":
+		nc := nmcConfigurator{fs: c.fs, runner: c.runner}
+		return nc.GetNetworkConfigApplicator(networkConfig)
+	case "nmstate":
+		nc := nmstateConfigurator{fs: c.fs, runner: c.runner}
+		return nc.GetNetworkConfigApplicator(networkConfig)
+	case "nmconnections":
+		nc := networkManagerConfigurator{fs: c.fs, runner: c.runner}
+		return nc.GetNetworkConfigApplicator(networkConfig)
+	default:
+		return schema.YipConfig{}, fmt.Errorf("using configurator '%s': %w", networkConfig.Configurator, ErrUnknownConfigurator)
+	}
 }
 
-func (n *nmcConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
-	configApplicator := schema.YipConfig{}
-
-	if len(networkConfig.Config) == 0 {
-		log.Warning("no network config data to decode")
-		return configApplicator, ErrEmptyConfig
-	}
-
-	// This creates a parent "root" key to facilitate parsing the schemaless map
-	mapSlice := k8syaml.JSONObjectToYAMLObject(map[string]interface{}{"root": networkConfig.Config})
-	if len(mapSlice) <= 0 {
-		return configApplicator, errors.New("Could not convert json cloudConfig object to yaml")
-	}
-
-	// Just marshal the value of the "root" key
-	yamlData, err := k8syaml.Marshal(mapSlice[0].Value)
-	if err != nil {
-		return configApplicator, fmt.Errorf("marshalling yaml: %w", err)
-	}
-
-	yamlStringData := string(yamlData)
-
-	// Go through the nmc yaml config and replace template placeholders "{my-ip-name}" with actual IP.
-	for name, ipAddress := range networkConfig.IPAddresses {
-		yamlStringData = strings.ReplaceAll(yamlStringData, fmt.Sprintf("{%s}", name), ipAddress)
-	}
-
-	// Dump the digested config somewhere
-	if err := vfs.MkdirAll(n.fs, nmcDesiredStatesDir, 0700); err != nil {
-		return configApplicator, fmt.Errorf("creating dir '%s': %w", nmcDesiredStatesDir, err)
-	}
-	nmcAllConfigPath := filepath.Join(nmcDesiredStatesDir, nmcAllConfigName)
-	if err := n.fs.WriteFile(nmcAllConfigPath, []byte(yamlStringData), 0600); err != nil {
-		return configApplicator, fmt.Errorf("writing file '%s': %w", nmcAllConfigPath, err)
-	}
-
-	// Generate configurations
-	if err := vfs.MkdirAll(n.fs, nmcNewtorkConfigDir, 0700); err != nil {
-		return configApplicator, fmt.Errorf("creating dir '%s': %w", nmcNewtorkConfigDir, err)
-	}
-	if err := n.runner.Run("nmc", "generate", "--config-dir", nmcDesiredStatesDir, "--output-dir", nmcNewtorkConfigDir); err != nil {
-		return configApplicator, fmt.Errorf("running: nmc generate: %w", err)
-	}
-
-	// Apply configurations
-	if err := n.runner.Run("nmc", "apply", "--config-dir", nmcNewtorkConfigDir); err != nil {
-		return configApplicator, fmt.Errorf("running: nmc apply: %w", err)
-	}
-
-	// Now fetch all /etc/NetworkManager/system-connections/*.nmconnection files.
-	// Each file is added to the configApplicator.
-	files, err := n.fs.ReadDir(systemConnectionsDir)
-	if err != nil {
-		return configApplicator, fmt.Errorf("reading directory '%s': %w", systemConnectionsDir, err)
-	}
-
-	yipFiles := []schema.File{}
-	for _, file := range files {
-		fileName := file.Name()
-		if strings.HasSuffix(fileName, ".nmconnection") {
-			bytes, err := n.fs.ReadFile(filepath.Join(systemConnectionsDir, fileName))
-			if err != nil {
-				return configApplicator, fmt.Errorf("reading file '%s': %w", fileName, err)
-			}
-			yipFiles = append(yipFiles, schema.File{
-				Path:        filepath.Join(systemConnectionsDir, fileName),
-				Permissions: 0600,
-				Content:     string(bytes),
-			})
-		}
-	}
-
-	// Wrap up the yip config
-	configApplicator.Name = "Apply network config"
-	configApplicator.Stages = map[string][]schema.Stage{
-		"initramfs": {
-			schema.Stage{
-				If:    "[ ! -f /run/elemental/recovery_mode ]",
-				Files: yipFiles,
-			},
-		},
-	}
-
-	return configApplicator, nil
-}
-
-// ResetNetworkConfig is invoked during reset trigger.
+// ResetNetworkConfig is a common reset procedure that works for all NetworkManager based installations.
+//
 // It is important that once the elemental-system-agent marks the reset-trigger plan as completed,
 // the assigned IPs are no longer used.
 // This to prevent any race condition in which the remote MachineInventory is deleted,
@@ -158,11 +96,11 @@ func (n *nmcConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.N
 // waiting for the (old) connection timeout. This can lead to the scheduled shutdown to trigger (and reset from recovery start),
 // before the elemental-system-agent has time to recover from the connection change and confirm the application of the reset-trigger plan.
 // Potentially this can lead to an infinite reset loop.
-func (n *nmcConfigurator) ResetNetworkConfig() error {
+func (c *configurator) ResetNetworkConfig() error {
 	// If there are no /etc/NetworkManager/system-connections/*.nmconnection files,
 	// then this is the second time we invoke this method, or we never configured any
 	// network config so we have nothing to do.
-	connectionFiles, err := n.fs.ReadDir(systemConnectionsDir)
+	connectionFiles, err := c.fs.ReadDir(systemConnectionsDir)
 	if err != nil {
 		return fmt.Errorf("reading files in dir '%s': %w", systemConnectionsDir, err)
 	}
@@ -182,7 +120,7 @@ func (n *nmcConfigurator) ResetNetworkConfig() error {
 	// Which means maybe that is not supported anymore, or if we want to support it we should make sure we only delete the ones created by elemental,
 	// for example prefixing all files with "elemental-" or just parsing the network config again at this stage to determine the file names.
 	log.Debug("Deleting all .nmconnection configs")
-	if err := n.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
+	if err := c.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
 	}
 
@@ -192,27 +130,27 @@ func (n *nmcConfigurator) ResetNetworkConfig() error {
 	// We need to invoke nmcli connection reload to tell NetworkManager to reload connections from disk.
 	// NetworkManager won't reload them alone with a simple restart.
 	log.Debug("Reloading connections")
-	if err := n.runner.Run("nmcli", "connection", "reload"); err != nil {
+	if err := c.runner.Run("nmcli", "connection", "reload"); err != nil {
 		return fmt.Errorf("running: nmcli connection reload: %w", err)
 	}
 
 	// Restart NetworkManager to restart connections.
 	log.Debug("Restarting NetworkManager")
-	if err := n.runner.Run("systemctl", "restart", "NetworkManager.service"); err != nil {
+	if err := c.runner.Run("systemctl", "restart", "NetworkManager.service"); err != nil {
 		return fmt.Errorf("running command: systemctl restart NetworkManager.service: %w", err)
 	}
 
 	// Not entirely necessary, but this mitigates the risk of continuing with any potential elemental-system-agent
 	// plan confirmation while the network is offline.
 	log.Debug("Waiting NetworkManager online")
-	if err := n.runner.Run("systemctl", "start", "NetworkManager-wait-online.service"); err != nil {
+	if err := c.runner.Run("systemctl", "start", "NetworkManager-wait-online.service"); err != nil {
 		return fmt.Errorf("running command: systemctl start NetworkManager-wait-online.service: %w", err)
 	}
 
 	// Restarts the elemental-system-agent to start a new connection using the new config.
 	// This will make the plan be executed a second time.
 	log.Debug("Restarting elemental-system-agent")
-	if err := n.runner.Run("systemctl", "restart", "elemental-system-agent.service"); err != nil {
+	if err := c.runner.Run("systemctl", "restart", "elemental-system-agent.service"); err != nil {
 		return fmt.Errorf("running command: systemctl restart elemental-system-agent.service: %w", err)
 	}
 	return nil
