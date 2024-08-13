@@ -52,16 +52,9 @@ func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, er
 		return []byte{}, nil
 	}
 
-	// This creates a parent "root" key to facilitate parsing the schemaless map
-	mapSlice := yaml.JSONObjectToYAMLObject(map[string]interface{}{"root": cloudConfig})
-	if len(mapSlice) <= 0 {
-		return nil, errors.New("Could not convert json cloudConfig object to yaml")
-	}
-
-	// Just marshal the value of the "root" key
-	yamlData, err := yaml.Marshal(mapSlice[0].Value)
+	yamlData, err := JSONObjectToYamlBytes(cloudConfig)
 	if err != nil {
-		return nil, fmt.Errorf("marshalling yaml: %w", err)
+		return nil, fmt.Errorf("converting cloud config to yaml: %w", err)
 	}
 
 	// Determine whether this is a yip config or a cloud-init one.
@@ -79,6 +72,22 @@ func MarshalCloudConfig(cloudConfig map[string]runtime.RawExtension) ([]byte, er
 	cloudConfigBytes = append(cloudConfigBytes, yamlData...)
 
 	return cloudConfigBytes, nil
+}
+
+// JSONObjectToYamlBytes converts any-schema JSON object to YAML bytes
+func JSONObjectToYamlBytes(object map[string]runtime.RawExtension) ([]byte, error) {
+	// This creates a parent "root" key to facilitate parsing the schemaless map
+	mapSlice := yaml.JSONObjectToYAMLObject(map[string]interface{}{"root": object})
+	if len(mapSlice) <= 0 {
+		return nil, errors.New("Could not convert json object to yaml")
+	}
+
+	// Just marshal the value of the "root" key
+	yamlData, err := yaml.Marshal(mapSlice[0].Value)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling yaml: %w", err)
+	}
+	return yamlData, nil
 }
 
 // GetSettingsValue find the given name in Rancher settings and returns its value if found

@@ -24,14 +24,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/rancher/elemental-operator/api/v1beta1"
 	utilmocks "github.com/rancher/elemental-operator/pkg/util/mocks"
+	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/twpayne/go-vfs"
 	"github.com/twpayne/go-vfs/vfst"
-	"go.uber.org/mock/gomock"
 )
 
 func TestInstall(t *testing.T) {
@@ -39,7 +38,7 @@ func TestInstall(t *testing.T) {
 	RunSpecs(t, "Network Suite")
 }
 
-var _ = Describe("network configurator", Label("network", "configurator"), func() {
+var _ = Describe("configurator", Label("network", "configurator"), func() {
 	var fs *vfst.TestFS
 	var err error
 	var fsCleanup func()
@@ -50,18 +49,49 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 		Expect(err).ToNot(HaveOccurred())
 		mockCtrl := gomock.NewController(GinkgoT())
 		runner = utilmocks.NewMockCommandRunner(mockCtrl)
-		networkConfigurator = &nmstateConfigurator{
+		networkConfigurator = &configurator{
 			fs:     fs,
 			runner: runner,
 		}
 		DeferCleanup(fsCleanup)
 	})
-	It("should return error on empty network config", func() {
-		_, err := networkConfigurator.GetNetworkConfigApplicator(v1beta1.NetworkConfig{})
-		Expect(errors.Is(err, ErrEmptyConfig)).Should(BeTrue(), "Empty config must return ErrEmptyConfig")
+	It("should return error on uknown configurator", func() {
+		_, err := networkConfigurator.GetNetworkConfigApplicator(v1beta1.NetworkConfig{Configurator: "does not exist"})
+		Expect(errors.Is(err, ErrUnknownConfigurator)).Should(BeTrue(), "Uknown configurator must return ErrUnknownConfigurator")
 	})
-	It("should return yip config applicator", func() {
+	It("should return nmconnections yip config applicator", func() {
 		wantNetworkConfig := v1beta1.NetworkConfig{
+			Configurator: "nmconnections",
+			IPAddresses: map[string]string{
+				"my-ip-1": "192.168.122.10",
+				"my-ip-2": "192.168.122.11",
+			},
+			Config: map[string]runtime.RawExtension{
+				"eth0": {
+					Raw: []byte(`"[connection]\nid=Wired connection 1\n[ipv4]\naddress1={my-ip-1}"`),
+				},
+				"eth1": {
+					Raw: []byte(`"[connection]\nid=Wired connection 2\n[ipv4]\naddress1={my-ip-2}"`),
+				},
+			},
+		}
+
+		applicator, err := networkConfigurator.GetNetworkConfigApplicator(wantNetworkConfig)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		stage, found := applicator.Stages["initramfs"]
+		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
+
+		Expect(stage[0].If).To(Equal("[ ! -f /run/elemental/recovery_mode ]"), "Network config must be applied on active or passive systems only (not recovery)")
+		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
+		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n[ipv4]\naddress1=192.168.122.10"))
+		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "eth0.nmconnection")))
+		Expect(stage[0].Files[1].Content).To(Equal("[connection]\nid=Wired connection 2\n[ipv4]\naddress1=192.168.122.11"))
+		Expect(stage[0].Files[1].Path).To(Equal(filepath.Join(systemConnectionsDir, "eth1.nmconnection")))
+	})
+	It("should return nmstate yip config applicator", func() {
+		wantNetworkConfig := v1beta1.NetworkConfig{
+			Configurator: "nmstate",
 			IPAddresses: map[string]string{
 				"foo": "192.168.122.10",
 				"bar": "192.168.122.11",
@@ -86,7 +116,47 @@ var _ = Describe("network configurator", Label("network", "configurator"), func(
 		Expect(err).ShouldNot(HaveOccurred())
 
 		// Test the variable substitution took place when generating the nmstate config from the template
-		compareFiles(fs, nmstateTempPath, "_testdata/nmstate-intermediate.yaml")
+		compareFiles(fs, nmstateTempPath, "_testdata/digested-intermediate.yaml")
+
+		stage, found := applicator.Stages["initramfs"]
+		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
+
+		Expect(stage[0].If).To(Equal("[ ! -f /run/elemental/recovery_mode ]"), "Network config must be applied on active or passive systems only (not recovery)")
+		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
+		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n"))
+		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired1.nmconnection")))
+		Expect(stage[0].Files[1].Content).To(Equal("[connection]\nid=Wired connection 2\n"))
+		Expect(stage[0].Files[1].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired2.nmconnection")))
+	})
+	It("should return nmc yip config applicator", func() {
+		wantNetworkConfig := v1beta1.NetworkConfig{
+			Configurator: "nmc",
+			IPAddresses: map[string]string{
+				"foo": "192.168.122.10",
+				"bar": "192.168.122.11",
+			},
+			Config: map[string]runtime.RawExtension{
+				"foo": {
+					Raw: []byte(`"{foo}"`),
+				},
+				"bar": {
+					Raw: []byte(`"{bar}"`),
+				},
+			},
+		}
+
+		runner.EXPECT().Run("nmc", "generate", "--config-dir", nmcDesiredStatesDir, "--output-dir", nmcNewtorkConfigDir).Return(nil)
+		runner.EXPECT().Run("nmc", "apply", "--config-dir", nmcNewtorkConfigDir).Return(nil)
+		//prepare some dummy nmconnection files to simulate `nmc apply` result
+		Expect(vfs.MkdirAll(fs, systemConnectionsDir, 0700)).Should(Succeed())
+		Expect(fs.WriteFile(filepath.Join(systemConnectionsDir, "wired1.nmconnection"), []byte("[connection]\nid=Wired connection 1\n"), 0600)).Should(Succeed())
+		Expect(fs.WriteFile(filepath.Join(systemConnectionsDir, "wired2.nmconnection"), []byte("[connection]\nid=Wired connection 2\n"), 0600)).Should(Succeed())
+
+		applicator, err := networkConfigurator.GetNetworkConfigApplicator(wantNetworkConfig)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		// Test the variable substitution took place when generating the nmc config from the template
+		compareFiles(fs, filepath.Join(nmcDesiredStatesDir, nmcAllConfigName), "_testdata/digested-intermediate.yaml")
 
 		stage, found := applicator.Stages["initramfs"]
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")

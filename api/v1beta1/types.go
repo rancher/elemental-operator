@@ -170,7 +170,13 @@ const (
 
 // NetworkTemplate contains a map of IPAddressPools and a schemaless network config template.
 type NetworkTemplate struct {
+	// Configurator
+	// +kubebuilder:validation:Enum=nmc;nmstate;nmconnections
+	// +kubebuilder:default:=nmc
+	Configurator string `json:"configurator,omitempty" yaml:"configurator,omitempty"`
+	// IPAddresses contains a map of IPPools references
 	IPAddresses map[string]*corev1.TypedLocalObjectReference `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	// Config contains the network config template (nmc, nmstate, or nmconnections formats)
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
@@ -188,7 +194,13 @@ type NetworkTemplate struct {
 // Right now we send both Config template and real IPAddresses so the consumer (elemental-register)
 // can do the substitution itself.
 type NetworkConfig struct {
+	// Configurator
+	// +kubebuilder:validation:Enum=nmc;nmstate;nmconnections
+	// +kubebuilder:default:=nmc
+	Configurator string `json:"configurator,omitempty" yaml:"configurator,omitempty"`
+	// IPAddresses contains a map of claimed IPAddresses
 	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
+	// Config contains the network config template (nmc, nmstate, or nmconnections formats)
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional

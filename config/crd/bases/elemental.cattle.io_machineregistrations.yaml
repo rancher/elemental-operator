@@ -177,7 +177,17 @@ spec:
                       and a schemaless network config template.
                     properties:
                       config:
+                        description: Config contains the network config template (nmc,
+                          nmstate, or nmconnections formats)
                         x-kubernetes-preserve-unknown-fields: true
+                      configurator:
+                        default: nmc
+                        description: Configurator
+                        enum:
+                        - nmc
+                        - nmstate
+                        - nmconnections
+                        type: string
                       ipAddresses:
                         additionalProperties:
                           description: |-
@@ -201,6 +211,7 @@ spec:
                           - name
                           type: object
                           x-kubernetes-map-type: atomic
+                        description: IPAddresses contains a map of IPPools references
                         type: object
                     type: object
                 type: object
