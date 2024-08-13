@@ -18,6 +18,7 @@ package templater
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -129,4 +130,38 @@ func TestIsValueNotFoundError(t *testing.T) {
 
 	assert.Equal(t, IsValueNotFoundError(errValueNotFound), true)
 	assert.Equal(t, IsValueNotFoundError(errRandom), false)
+}
+
+func TestRandomTemplate(t *testing.T) {
+	testCase := []struct {
+		tmplVal []string
+		isRand  bool
+		isValid bool
+	}{
+		{[]string{"Custom"}, false, false},
+		{[]string{tmplRandomKey, "Custom"}, false, false},
+		{[]string{tmplRandomKey, tmplUUIDKey}, true, true},
+		{[]string{tmplRandomKey, tmplUUIDKey, "ABC"}, true, false},
+		{[]string{tmplRandomKey, tmplUUIDKey, "16"}, true, false},
+		{[]string{tmplRandomKey, tmplHexKey}, true, false},
+		{[]string{tmplRandomKey, tmplHexKey, "0"}, true, false},
+		{[]string{tmplRandomKey, tmplHexKey, "33"}, true, false},
+		{[]string{tmplRandomKey, tmplHexKey, "32"}, true, true},
+		{[]string{tmplRandomKey, tmplIntKey}, true, false},
+		{[]string{tmplRandomKey, tmplIntKey, "12123123"}, true, true},
+		{[]string{tmplRandomKey, tmplIntKey, "0"}, true, false},
+		{[]string{tmplRandomKey, tmplIntKey, "pippo"}, true, false},
+		{[]string{tmplRandomKey, tmplIntKey, "1000", "extraarg"}, true, false},
+	}
+
+	for _, testCase := range testCase {
+		assert.Equal(t, isRandomTemplate(testCase.tmplVal), testCase.isRand,
+			"template: %s, expected ret: %t", strings.Join(testCase.tmplVal, "/"), testCase.isRand)
+		val, err := randomTemplateToString(testCase.tmplVal)
+		if testCase.isValid {
+			assert.NilError(t, err)
+		} else {
+			assert.Assert(t, err != nil, "template '%s' got converted to '%s'", strings.Join(testCase.tmplVal, "/"), val)
+		}
+	}
 }

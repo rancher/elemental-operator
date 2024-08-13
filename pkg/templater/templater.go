@@ -72,14 +72,31 @@ func replaceStringData(data map[string]interface{}, name string) (string, error)
 		}
 
 		result.WriteString(str[:i])
-		obj := values.GetValueN(data, strings.Split(str[i+2:j+i], "/")...)
-		if str, ok := obj.(string); ok {
-			result.WriteString(str)
-		} else {
-			return "", errValueNotFound
+		tmplVal := strings.Split(str[i+2:j+i], "/")
+
+		strVal, err := templateToString(data, tmplVal)
+		if err != nil {
+			return "", err
 		}
+
+		result.WriteString(strVal)
 		str = str[j+i+1:]
 	}
 
 	return result.String(), nil
+}
+
+func templateToString(data map[string]interface{}, tmplVal []string) (string, error) {
+	var str string
+	var ok bool
+
+	if isRandomTemplate(tmplVal) {
+		return randomTemplateToString(tmplVal)
+	}
+
+	obj := values.GetValueN(data, tmplVal...)
+	if str, ok = obj.(string); !ok {
+		return "", errValueNotFound
+	}
+	return str, nil
 }
