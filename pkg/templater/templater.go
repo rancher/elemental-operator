@@ -18,7 +18,6 @@ package templater
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	values "github.com/rancher/wrangler/v2/pkg/data"
@@ -76,7 +75,6 @@ func replaceStringData(data map[string]interface{}, name string) (string, error)
 		tmplVal := strings.Split(str[i+2:j+i], "/")
 
 		strVal, err := templateToString(data, tmplVal)
-		fmt.Printf("TMPL CONVERSION: %q --> %q\n", tmplVal, strVal)
 		if err != nil {
 			return "", err
 		}

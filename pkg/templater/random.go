@@ -17,9 +17,10 @@ limitations under the License.
 package templater
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"math/rand/v2"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -106,8 +107,12 @@ func randomTemplateToString(tmplVal []string) (string, error) {
 			return "", fmt.Errorf("unsupported %s/%s template: %s",
 				tmplRandomKey, tmplIntKey, strings.Join(tmplVal, "/"))
 		}
-		intVal := rand.IntN(intMax)
-		return strconv.Itoa(intVal), nil
+		intBigVal, err := rand.Int(rand.Reader, big.NewInt(int64(intMax)))
+		if err != nil {
+			return "", fmt.Errorf("converting %s: %w", strings.Join(tmplVal, "/"), err)
+		}
+		strVal := fmt.Sprintf("%d", intBigVal)
+		return strVal, nil
 	}
 
 	return "", fmt.Errorf("invalid template: %s", strings.Join(tmplVal, "/"))
