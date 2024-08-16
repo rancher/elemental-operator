@@ -87,7 +87,6 @@ func (r *runner) Reset(conf elementalv1.Reset) error {
 func mapToInstallEnv(conf elementalv1.Install) []string {
 	var variables []string
 	// See GetInstallKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
-	variables = append(variables, formatEV("ELEMENTAL_INSTALL_CLOUD_INIT", strings.Join(conf.ConfigURLs[:], ",")))
 	variables = append(variables, formatEV("ELEMENTAL_INSTALL_TARGET", conf.Device))
 	variables = append(variables, formatEV("ELEMENTAL_INSTALL_SYSTEM", conf.SystemURI))
 	variables = append(variables, formatEV("ELEMENTAL_INSTALL_FIRMWARE", conf.Firmware))
@@ -106,7 +105,6 @@ func mapToInstallEnv(conf elementalv1.Install) []string {
 func mapToResetEnv(conf elementalv1.Reset) []string {
 	var variables []string
 	// See GetResetKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
-	variables = append(variables, formatEV("ELEMENTAL_RESET_CLOUD_INIT", strings.Join(conf.ConfigURLs[:], ",")))
 	variables = append(variables, formatEV("ELEMENTAL_RESET_SYSTEM", conf.SystemURI))
 	variables = append(variables, formatEV("ELEMENTAL_RESET_PERSISTENT", strconv.FormatBool(conf.ResetPersistent)))
 	variables = append(variables, formatEV("ELEMENTAL_RESET_OEM", strconv.FormatBool(conf.ResetOEM)))

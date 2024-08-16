@@ -17,7 +17,6 @@ limitations under the License.
 package install
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -141,23 +140,10 @@ var _ = Describe("installer install elemental", Label("installer", "install"), f
 		DeferCleanup(fsCleanup)
 	})
 	It("should call elemental install", func() {
-		wantConfig := configFixture.DeepCopy()
-		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, additionalConfigs(fs)...)
-		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
-		networkConfigurator.EXPECT().GetNetworkConfigApplicator(elementalv1.NetworkConfig{}).Return(schema.YipConfig{}, network.ErrEmptyConfig)
-		Expect(install.InstallElemental(configFixture, stateFixture, elementalv1.NetworkConfig{})).ToNot(HaveOccurred())
-		checkConfigs(fs)
-	})
-	It("should install network config", func() {
-		wantConfig := configFixture.DeepCopy()
-		wantConfigs := additionalConfigs(fs)
-		wantConfigs = append(wantConfigs, networkConfig(fs))
-		wantConfig.Elemental.Install.ConfigURLs = append(wantConfig.Elemental.Install.ConfigURLs, wantConfigs...)
-		cliRunner.EXPECT().Install(wantConfig.Elemental.Install).Return(nil)
+		cliRunner.EXPECT().Install(configFixture.Elemental.Install).Return(nil)
 		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
 		Expect(install.InstallElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
-		checkConfigs(fs)
-		compareFiles(fs, tempNetworkConfig, "_testdata/network-config-applicator.yaml")
+		compareFiles(fs, elementalAfterHookPath, "_testdata/after-hook-config-install.yaml")
 	})
 })
 
@@ -305,12 +291,10 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		DeferCleanup(fsCleanup)
 	})
 	It("should call elemental reset", func() {
-		wantConfig := configFixture.DeepCopy()
-		wantConfig.Elemental.Reset.ConfigURLs = append(wantConfig.Elemental.Reset.ConfigURLs, additionalConfigs(fs)...)
-		cliRunner.EXPECT().Reset(wantConfig.Elemental.Reset).Return(nil)
-		networkConfigurator.EXPECT().GetNetworkConfigApplicator(elementalv1.NetworkConfig{}).Return(schema.YipConfig{}, network.ErrEmptyConfig)
-		Expect(install.ResetElemental(configFixture, stateFixture, elementalv1.NetworkConfig{})).ToNot(HaveOccurred())
-		checkConfigs(fs)
+		cliRunner.EXPECT().Reset(configFixture.Elemental.Reset).Return(nil)
+		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
+		Expect(install.ResetElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
+		compareFiles(fs, elementalAfterHookPath, "_testdata/after-hook-config-reset.yaml")
 	})
 	It("should remove reset plan", func() {
 		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(0600))).ToNot(HaveOccurred())
@@ -320,40 +304,7 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		_, err := fs.Stat(controllers.LocalResetPlanPath)
 		Expect(err).To(MatchError(os.ErrNotExist))
 	})
-	It("should install network config", func() {
-		wantConfig := configFixture.DeepCopy()
-		wantConfigs := additionalConfigs(fs)
-		wantConfigs = append(wantConfigs, networkConfig(fs))
-		wantConfig.Elemental.Reset.ConfigURLs = append(wantConfig.Elemental.Reset.ConfigURLs, wantConfigs...)
-		cliRunner.EXPECT().Reset(wantConfig.Elemental.Reset).Return(nil)
-		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
-		Expect(install.ResetElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
-		checkConfigs(fs)
-		compareFiles(fs, tempNetworkConfig, "_testdata/network-config-applicator.yaml")
-	})
 })
-
-func additionalConfigs(fs *vfst.TestFS) []string {
-	// Prefix the go-vfs temp dir because that's what file.Name() returns
-	return []string{
-		fmt.Sprintf("%s%s", fs.TempDir(), tempSystemAgent),
-		fmt.Sprintf("%s%s", fs.TempDir(), tempCloudInit),
-		fmt.Sprintf("%s%s", fs.TempDir(), tempRegistrationConf),
-		fmt.Sprintf("%s%s", fs.TempDir(), tempRegistrationState),
-	}
-}
-
-func networkConfig(fs *vfst.TestFS) string {
-	// Prefix the go-vfs temp dir because that's what file.Name() returns
-	return fmt.Sprintf("%s%s", fs.TempDir(), tempNetworkConfig)
-}
-
-func checkConfigs(fs vfs.FS) {
-	compareFiles(fs, tempRegistrationConf, "_testdata/registration-config-config.yaml")
-	compareFiles(fs, tempRegistrationState, "_testdata/registration-state-config.yaml")
-	compareFiles(fs, tempSystemAgent, "_testdata/system-agent-config.yaml")
-	compareFiles(fs, tempCloudInit, "_testdata/cloud-init-config.yaml")
-}
 
 func compareFiles(fs vfs.FS, got string, want string) {
 	gotFile, err := fs.ReadFile(got)

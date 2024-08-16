@@ -1,0 +1,125 @@
+name: Elemental Finalize System
+stages:
+    after-reset:
+        - files:
+            - path: /run/elemental/oem/elemental-registration.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                name: Include registration config into installed system
+                stages:
+                    initramfs:
+                        - files:
+                            - path: /oem/registration/config.yaml
+                              permissions: 384
+                              owner: 0
+                              group: 0
+                              content: |
+                                elemental:
+                                    registration:
+                                        url: https://127.0.0.1.sslip.io/test/registration/endpoint
+                                        ca-cert: a test ca
+                                        emulate-tpm: true
+                                        emulated-tpm-seed: 9876543210
+                                        no-smbios: true
+                                        auth: a test auth
+                              encoding: ""
+                              ownerstring: ""
+                          directories:
+                            - path: /oem/registration
+                              permissions: 448
+                              owner: 0
+                              group: 0
+                          if: '[ ! -f /oem/registration/config.yaml ]'
+              encoding: ""
+              ownerstring: ""
+          name: Registration Config
+        - files:
+            - path: /run/elemental/oem/elemental-state.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                name: Include registration state into installed system
+                stages:
+                    initramfs:
+                        - files:
+                            - path: /oem/registration/state.yaml
+                              permissions: 384
+                              owner: 0
+                              group: 0
+                              content: |
+                                initialRegistration: 2023-08-02T12:35:10.000000003Z
+                                emulatedTPM: true
+                                emulatedTPMSeed: 987654321
+                              encoding: ""
+                              ownerstring: ""
+                          directories:
+                            - path: /oem/registration
+                              permissions: 448
+                              owner: 0
+                              group: 0
+                          if: '[ ! -f /oem/registration/state.yaml ]'
+              encoding: ""
+              ownerstring: ""
+          name: Registration State Config
+        - files:
+            - path: /run/elemental/oem/elemental-cloud-init.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                #cloud-config
+                users:
+                - name: root
+                  passwd: root
+              encoding: ""
+              ownerstring: ""
+          name: Cloud Init Config
+        - files:
+            - path: /run/elemental/oem/elemental-system-agent.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                name: Elemental System Agent Configuration
+                stages:
+                    initramfs:
+                        - files:
+                            - path: /var/lib/elemental/agent/elemental_connection.json
+                              permissions: 384
+                              owner: 0
+                              group: 0
+                              content: '{"kubeConfig":"apiVersion: v1\nclusters:\n- cluster:\n    certificate-authority-data: YSB0ZXN0IGNh\n    server: https://127.0.0.1.sslip.io/test/control/plane/endpoint\n  name: cluster\ncontexts:\n- context:\n    cluster: cluster\n    user: user\n  name: context\ncurrent-context: context\nkind: Config\npreferences: {}\nusers:\n- name: user\n  user:\n    token: a test token\n","namespace":"a test namespace","secretName":"a test secret name"}'
+                              encoding: ""
+                              ownerstring: ""
+                            - path: /etc/rancher/elemental/agent/config.yaml
+                              permissions: 384
+                              owner: 0
+                              group: 0
+                              content: |
+                                workDirectory: /var/lib/elemental/agent/work
+                                localPlanDirectory: /var/lib/elemental/agent/plans
+                                appliedPlanDirectory: /var/lib/elemental/agent/applied
+                                remoteEnabled: true
+                                connectionInfoFile: /var/lib/elemental/agent/elemental_connection.json
+                              encoding: ""
+                              ownerstring: ""
+              encoding: ""
+              ownerstring: ""
+          name: Elemental System Agent Config
+        - files:
+            - path: /run/elemental/oem/elemental-network.yaml
+              permissions: 384
+              owner: 0
+              group: 0
+              content: |
+                name: Test Network Config Applicator
+                stages:
+                    foo:
+                        - commands:
+                            - bar
+              encoding: ""
+              ownerstring: ""
+          name: Network Config
