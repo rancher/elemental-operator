@@ -51,14 +51,21 @@ const (
 )
 
 const (
-	afterInstallStage      = "after-install"
-	afterResetStage        = "after-reset"
-	elementalAfterHookPath = "/system/oem/elemental-after-hook.yaml" // Used in after-{install|reset} stages
-	registrationConfigPath = "/run/elemental/oem/elemental-registration.yaml"
-	stateConfigPath        = "/run/elemental/oem/elemental-state.yaml"
-	cloudInitConfigPath    = "/run/elemental/oem/elemental-cloud-init.yaml"
-	systemAgentConfigPath  = "/run/elemental/oem/elemental-system-agent.yaml"
-	networkConfigPath      = "/run/elemental/oem/elemental-network.yaml"
+	afterInstallStage = "after-install"
+	afterResetStage   = "after-reset"
+	// Used in after-{install|reset} stages
+	elementalAfterHook = "elemental-after-hook.yaml"
+
+	// Deterministic Elemental yip paths
+	registrationConfigPath = "elemental-registration.yaml"
+	stateConfigPath        = "elemental-state.yaml"
+	cloudInitConfigPath    = "elemental-cloud-init.yaml"
+	systemAgentConfigPath  = "elemental-system-agent.yaml"
+	networkConfigPath      = "elemental-network.yaml"
+
+	// OEM is mounted on different paths depending if we are resetting (from recovery) or installing (from live media)
+	installOEMMount = "/run/elemental/oem"
+	resetOEMMount   = "/oem"
 )
 
 type Installer interface {
@@ -102,7 +109,7 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
-	if err := i.writeAfterHookConfigurator(afterInstallStage, config, state, networkConfig); err != nil {
+	if err := i.writeAfterHookConfigurator(afterInstallStage, installOEMMount, config, state, networkConfig); err != nil {
 		return fmt.Errorf("writing %s configurator: %w", afterInstallStage, err)
 	}
 
@@ -119,7 +126,7 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	if err := i.writeAfterHookConfigurator(afterResetStage, config, state, networkConfig); err != nil {
+	if err := i.writeAfterHookConfigurator(afterResetStage, resetOEMMount, config, state, networkConfig); err != nil {
 		return fmt.Errorf("writing %s configurator: %w", afterResetStage, err)
 	}
 
@@ -235,7 +242,7 @@ func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 	return diskSize.Cmp(keySize) == 1, nil
 }
 
-func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
+func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
 	afterHookConfigurator := schema.YipConfig{}
 	afterHookConfigurator.Name = "Elemental Finalize System"
 	afterHookConfigurator.Stages = map[string][]schema.Stage{
@@ -247,7 +254,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.
 	if err != nil {
 		return fmt.Errorf("getting registration config yip: %w", err)
 	}
-	registrationYip := yipAfterHookWrap(string(registrationYipBytes), registrationConfigPath, "Registration Config")
+	registrationYip := yipAfterHookWrap(string(registrationYipBytes), filepath.Join(oemMount, registrationConfigPath), "Registration Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], registrationYip)
 
 	// State
@@ -255,7 +262,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.
 	if err != nil {
 		return fmt.Errorf("getting registration state config yip: %w", err)
 	}
-	stateYip := yipAfterHookWrap(string(stateYipBytes), stateConfigPath, "Registration State Config")
+	stateYip := yipAfterHookWrap(string(stateYipBytes), filepath.Join(oemMount, stateConfigPath), "Registration State Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], stateYip)
 
 	// Cloud Init
@@ -263,7 +270,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.
 	if err != nil {
 		return fmt.Errorf("getting cloud-init config yip: %w", err)
 	}
-	cloudInitYip := yipAfterHookWrap(string(cloudInitYipBytes), cloudInitConfigPath, "Cloud Init Config")
+	cloudInitYip := yipAfterHookWrap(string(cloudInitYipBytes), filepath.Join(oemMount, cloudInitConfigPath), "Cloud Init Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], cloudInitYip)
 
 	// Elemental System Agent
@@ -271,7 +278,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.
 	if err != nil {
 		return fmt.Errorf("getting elemental system agent config yip: %w", err)
 	}
-	systemAgentYip := yipAfterHookWrap(string(systemAgentYipBytes), systemAgentConfigPath, "Elemental System Agent Config")
+	systemAgentYip := yipAfterHookWrap(string(systemAgentYipBytes), filepath.Join(oemMount, systemAgentConfigPath), "Elemental System Agent Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], systemAgentYip)
 
 	// Network Config
@@ -280,18 +287,18 @@ func (i *installer) writeAfterHookConfigurator(stage string, config elementalv1.
 		return fmt.Errorf("getting network config yip: %w", err)
 	}
 	if !errors.Is(err, network.ErrEmptyConfig) {
-		networkConfigYip := yipAfterHookWrap(string(networkConfigYipBytes), networkConfigPath, "Network Config")
+		networkConfigYip := yipAfterHookWrap(string(networkConfigYipBytes), filepath.Join(oemMount, networkConfigPath), "Network Config")
 		afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], networkConfigYip)
 	}
 
 	// Create dir if not exist
-	if err := vfs.MkdirAll(i.fs, filepath.Dir(elementalAfterHookPath), 0700); err != nil {
-		return fmt.Errorf("creating directory '%s': %w", filepath.Dir(elementalAfterHookPath), err)
+	if err := vfs.MkdirAll(i.fs, elementalcli.TempCloudInitDir, 0700); err != nil {
+		return fmt.Errorf("creating directory '%s': %w", elementalcli.TempCloudInitDir, err)
 	}
 	// Create the after hook configurator yip
-	f, err := i.fs.Create(elementalAfterHookPath)
+	f, err := i.fs.Create(filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook))
 	if err != nil {
-		return fmt.Errorf("creating file '%s': %w", elementalAfterHookPath, err)
+		return fmt.Errorf("creating file '%s': %w", filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook), err)
 	}
 	defer f.Close()
 

@@ -2,7 +2,7 @@ name: Elemental Finalize System
 stages:
     after-reset:
         - files:
-            - path: /run/elemental/oem/elemental-registration.yaml
+            - path: /oem/elemental-registration.yaml
               permissions: 384
               owner: 0
               group: 0
@@ -36,7 +36,7 @@ stages:
               ownerstring: ""
           name: Registration Config
         - files:
-            - path: /run/elemental/oem/elemental-state.yaml
+            - path: /oem/elemental-state.yaml
               permissions: 384
               owner: 0
               group: 0
@@ -65,7 +65,7 @@ stages:
               ownerstring: ""
           name: Registration State Config
         - files:
-            - path: /run/elemental/oem/elemental-cloud-init.yaml
+            - path: /oem/elemental-cloud-init.yaml
               permissions: 384
               owner: 0
               group: 0
@@ -78,7 +78,7 @@ stages:
               ownerstring: ""
           name: Cloud Init Config
         - files:
-            - path: /run/elemental/oem/elemental-system-agent.yaml
+            - path: /oem/elemental-system-agent.yaml
               permissions: 384
               owner: 0
               group: 0
@@ -110,7 +110,7 @@ stages:
               ownerstring: ""
           name: Elemental System Agent Config
         - files:
-            - path: /run/elemental/oem/elemental-network.yaml
+            - path: /oem/elemental-network.yaml
               permissions: 384
               owner: 0
               group: 0

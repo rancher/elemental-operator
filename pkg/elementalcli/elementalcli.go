@@ -27,6 +27,8 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 )
 
+const TempCloudInitDir = "/tmp/elemental/cloud-init"
+
 type Runner interface {
 	Install(elementalv1.Install) error
 	Reset(elementalv1.Reset) error
@@ -99,6 +101,7 @@ func mapToInstallEnv(conf elementalv1.Install) []string {
 	variables = append(variables, formatEV("ELEMENTAL_REBOOT", strconv.FormatBool(conf.Reboot)))
 	variables = append(variables, formatEV("ELEMENTAL_EJECT_CD", strconv.FormatBool(conf.EjectCD)))
 	variables = append(variables, formatEV("ELEMENTAL_SNAPSHOTTER_TYPE", conf.Snapshotter.Type))
+	variables = append(variables, formatEV("ELEMENTAL_CLOUD_INIT_PATHS", TempCloudInitDir))
 	return variables
 }
 
@@ -112,6 +115,7 @@ func mapToResetEnv(conf elementalv1.Reset) []string {
 	// See GetRunKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
 	variables = append(variables, formatEV("ELEMENTAL_POWEROFF", strconv.FormatBool(conf.PowerOff)))
 	variables = append(variables, formatEV("ELEMENTAL_REBOOT", strconv.FormatBool(conf.Reboot)))
+	variables = append(variables, formatEV("ELEMENTAL_CLOUD_INIT_PATHS", TempCloudInitDir))
 	return variables
 }
 
