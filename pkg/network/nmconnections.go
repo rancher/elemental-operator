@@ -87,7 +87,6 @@ func (n *networkManagerConfigurator) GetNetworkConfigApplicator(networkConfig el
 	configApplicator.Stages = map[string][]schema.Stage{
 		applicatorStage: {
 			schema.Stage{
-				If:    applicatorIf,
 				Files: yipFiles,
 			},
 		},

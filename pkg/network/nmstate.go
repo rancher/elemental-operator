@@ -94,7 +94,6 @@ func (n *nmstateConfigurator) GetNetworkConfigApplicator(networkConfig elemental
 	configApplicator.Stages = map[string][]schema.Stage{
 		applicatorStage: {
 			schema.Stage{
-				If:    applicatorIf,
 				Files: yipFiles,
 			},
 		},
