@@ -207,7 +207,7 @@ get_chart_val() {
     local local_fail=${3:-"true"}
     local local_condition="[[ \"\$$local_var\" == \"null\" ]]"
 
-    eval $local_var=$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)
+    eval $local_var='$(helm show values $CHART_NAME_OPERATOR | eval yq eval '.${local_val}' | sed s/\"//g 2>&1)'
     if eval $local_condition; then
         if [[ "$local_fail" == "false" ]]; then
             log_debug "cannot find $local_val in $CHART_NAME_OPERATOR"
@@ -357,7 +357,7 @@ pull_image() {
 
 build_os_channel() {
     local channel_img
-    local channel_tag
+    local channel_tag="latest"
     local channel_repo
     local channel_list
 
@@ -367,32 +367,44 @@ build_os_channel() {
         CHANNEL_IMAGE_NAME="rancher/elemental-channel-${LOCAL_REGISTRY%:*}"
     fi
 
-    # channel.repository was changed to channel.image around 1.4 - 1.5 versions
-    # channel.image contains the full URL (with registry) while channel.repository not (full URL by prepending with registryUrl)
-    # example, full image URL: registry.suse.com/rancher/elemental-channel
-    # - operator < v1.4
-    #   . channel.repository = "rancher/elemental-channel"
-    #   . registryUrl        = "registry.suse.com"
-    # - operator > v1.4
-    #   . channel.image = "registry.suse.com/rancher/elemental-channel"
-    #
-    # we want in channel_img the full image URL for both cases
-    get_chart_val channel_img "channel.image" "false"
+    # defaultChannels has been introduced in 1.7 version
+    # we can directly add the images in channel_list
+    get_chart_val channel_list "defaultChannels.*.image" "false"
 
-    if [[ -z "$channel_img" ]]; then
-        # legacy chart
-        get_chart_val channel_img "channel.repository"
-        get_chart_val channel_repo "registryUrl"
-        channel_img=${channel_repo}/${channel_img}
-        CHANNEL_IMAGE_VAR="channel.repository"
-        CHANNEL_IMAGE_VAL=${CHANNEL_IMAGE_NAME}
+    if [[ -z "$channel_list" ]]; then
+        # v1.4+ chart
+        #
+        # channel.repository was changed to channel.image around 1.4 - 1.5 versions
+        # channel.image contains the full URL (with registry) while channel.repository not (full URL by prepending with registryUrl)
+        # example, full image URL: registry.suse.com/rancher/elemental-channel
+        # - operator < v1.4
+        #   . channel.repository = "rancher/elemental-channel"
+        #   . registryUrl        = "registry.suse.com"
+        # - operator > v1.4
+        #   . channel.image = "registry.suse.com/rancher/elemental-channel"
+        #
+        # we want in channel_img the full image URL for both cases
+        get_chart_val channel_img "channel.image" "false"
+
+        if [[ -z "$channel_img" ]]; then
+            # legacy chart
+            get_chart_val channel_img "channel.repository"
+            get_chart_val channel_repo "registryUrl"
+            channel_img=${channel_repo}/${channel_img}
+            CHANNEL_IMAGE_VAR="channel.repository"
+            CHANNEL_IMAGE_VAL=${CHANNEL_IMAGE_NAME}
+        else
+            CHANNEL_IMAGE_VAR="channel.image"
+            CHANNEL_IMAGE_VAL=${LOCAL_REGISTRY}/${CHANNEL_IMAGE_NAME}
+        fi
+
+        get_chart_val channel_tag "channel.tag"
+        channel_list+="${channel_img}:${channel_tag} "
     else
+        # This defined the local channel image
         CHANNEL_IMAGE_VAR="channel.image"
         CHANNEL_IMAGE_VAL=${LOCAL_REGISTRY}/${CHANNEL_IMAGE_NAME}
     fi
-
-    get_chart_val channel_tag "channel.tag"
-    channel_list+="${channel_img}:${channel_tag} "
 
     # we can have OS channels added in templates, so we have to sync them if needed
     if [[ "$ALL_CHANNELS" == "true" ]]; then
@@ -413,13 +425,13 @@ build_os_channel() {
 
     # loop on the channel list
     for channel in ${channel_list}; do
-        channel_img=${channel%:*}
-        channel_tag=${channel#*:}
+        local_channel_img=${channel%:*}
+        local_channel_tag=${channel#*:}
 
-        log_info "Found channel image: ${channel_img}:${channel_tag}"
+        log_info "Found channel image: ${local_channel_img}:${local_channel_tag}"
 
         # extract the channel.json
-        if ! docker run --entrypoint busybox ${channel_img}:${channel_tag} cat channel.json > channel_${channel_img//\//_}.json; then
+        if ! docker run --entrypoint busybox ${local_channel_img}:${local_channel_tag} cat channel.json > channel_${local_channel_img//\//_}_${local_channel_tag}.json; then
             exit_error "cannot extract OS images"
         fi
     done
