@@ -19,6 +19,7 @@ package network
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -31,7 +32,7 @@ import (
 const (
 	// common
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
-	configApplicator     = "/oem/99-network-config-applicator.yaml"
+	configApplicator     = "/oem/elemental-network.yaml"
 	// nmc intermediate
 	nmcDesiredStatesDir = "/tmp/declarative-networking/nmc/desired-states"
 	nmcNewtorkConfigDir = "/tmp/declarative-networking/nmc/network-config"
@@ -41,7 +42,6 @@ const (
 	// yip Applicator config
 	applicatorName  = "Apply network config"
 	applicatorStage = "initramfs"
-	applicatorIf    = "[ ! -f /run/elemental/recovery_mode ]"
 )
 
 var (
@@ -116,6 +116,11 @@ func (c *configurator) ResetNetworkConfig() error {
 		return nil
 	}
 
+	// Delete the yip Network Applicator file, so that it's not going to be re-evaluated when rebooting in Recovery for reset
+	if err := c.fs.Remove(configApplicator); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("deleting file '%s': %w", configApplicator, err)
+	}
+
 	// Delete all .nmconnection files. This will also delete any "static" connection that the user defined in the base image for example.
 	// Which means maybe that is not supported anymore, or if we want to support it we should make sure we only delete the ones created by elemental,
 	// for example prefixing all files with "elemental-" or just parsing the network config again at this stage to determine the file names.
@@ -123,9 +128,6 @@ func (c *configurator) ResetNetworkConfig() error {
 	if err := c.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
 	}
-
-	//TODO: Here is where we can create "first boot" connections, for example by parsing the network config from the remote registration.
-	//      In this way we can always reset to a deterministic network configuration, rather than simply delete all connections and revert on default (dhcp)
 
 	// We need to invoke nmcli connection reload to tell NetworkManager to reload connections from disk.
 	// NetworkManager won't reload them alone with a simple restart.

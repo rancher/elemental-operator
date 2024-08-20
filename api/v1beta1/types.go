@@ -133,7 +133,7 @@ type Config struct {
 	// +optional
 	Elemental Elemental `json:"elemental,omitempty" yaml:"elemental"`
 	// +optional
-	Network NetworkTemplate `json:"network,omitempty" yaml:"network"`
+	Network NetworkTemplate `json:"network,omitempty" yaml:"network,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional

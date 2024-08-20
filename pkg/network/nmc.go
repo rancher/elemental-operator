@@ -103,7 +103,6 @@ func (n *nmcConfigurator) GetNetworkConfigApplicator(networkConfig elementalv1.N
 	configApplicator.Stages = map[string][]schema.Stage{
 		applicatorStage: {
 			schema.Stage{
-				If:    applicatorIf,
 				Files: yipFiles,
 			},
 		},

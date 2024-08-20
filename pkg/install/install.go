@@ -50,14 +50,22 @@ const (
 	registrationState = "/oem/registration/state.yaml"
 )
 
-// Temporary cloud-init configuration files.
-// These paths will be passed to the `elemental` cli as additional `config-urls`.
 const (
-	tempRegistrationConf  = "/tmp/elemental-registration-conf.yaml"
-	tempRegistrationState = "/tmp/elemental-registration-state.yaml"
-	tempCloudInit         = "/tmp/elemental-cloud-init.yaml"
-	tempSystemAgent       = "/tmp/elemental-system-agent.yaml"
-	tempNetworkConfig     = "/tmp/elemental-network-config.yaml"
+	afterInstallStage = "after-install"
+	afterResetStage   = "after-reset"
+	// Used in after-{install|reset} stages
+	elementalAfterHook = "elemental-after-hook.yaml"
+
+	// Deterministic Elemental yip paths
+	registrationConfigPath = "elemental-registration.yaml"
+	stateConfigPath        = "elemental-state.yaml"
+	cloudInitConfigPath    = "elemental-cloud-init.yaml"
+	systemAgentConfigPath  = "elemental-system-agent.yaml"
+	networkConfigPath      = "elemental-network.yaml"
+
+	// OEM is mounted on different paths depending if we are resetting (from recovery) or installing (from live media)
+	installOEMMount = "/run/elemental/oem"
+	resetOEMMount   = "/oem"
 )
 
 type Installer interface {
@@ -101,12 +109,9 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
-	if err != nil {
-		return fmt.Errorf("generating additional cloud configs: %w", err)
+	if err := i.writeAfterHookConfigurator(afterInstallStage, installOEMMount, config, state, networkConfig); err != nil {
+		return fmt.Errorf("writing %s configurator: %w", afterInstallStage, err)
 	}
-
-	config.Elemental.Install.ConfigURLs = append(config.Elemental.Install.ConfigURLs, additionalConfigs...)
 
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
 		return fmt.Errorf("failed to install elemental: %w", err)
@@ -121,11 +126,9 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	additionalConfigs, err := i.getCloudInitConfigs(config, state, networkConfig)
-	if err != nil {
-		return fmt.Errorf("generating additional cloud configs: %w", err)
+	if err := i.writeAfterHookConfigurator(afterResetStage, resetOEMMount, config, state, networkConfig); err != nil {
+		return fmt.Errorf("writing %s configurator: %w", afterResetStage, err)
 	}
-	config.Elemental.Reset.ConfigURLs = append(config.Elemental.Reset.ConfigURLs, additionalConfigs...)
 
 	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
 		return fmt.Errorf("failed to reset elemental: %w", err)
@@ -239,66 +242,96 @@ func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 	return diskSize.Cmp(keySize) == 1, nil
 }
 
-// getCloudInitConfigs creates cloud-init configuration files that can be passed as additional `config-urls`
-// to the `elemental` cli. We exploit this mechanism to persist information during `elemental install`
-// or `elemental reset` calls into the newly installed or resetted system.
-func (i *installer) getCloudInitConfigs(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) ([]string, error) {
-	configs := []string{}
-	agentConfPath, err := i.writeSystemAgentConfig(config.Elemental)
+func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
+	afterHookConfigurator := schema.YipConfig{}
+	afterHookConfigurator.Name = "Elemental Finalize System"
+	afterHookConfigurator.Stages = map[string][]schema.Stage{
+		stage: {},
+	}
+
+	// Registration
+	registrationYipBytes, err := i.registrationConfigYip(config.Elemental.Registration)
 	if err != nil {
-		return nil, fmt.Errorf("writing system agent configuration: %w", err)
+		return fmt.Errorf("getting registration config yip: %w", err)
 	}
-	configs = append(configs, agentConfPath)
+	registrationYip := yipAfterHookWrap(string(registrationYipBytes), filepath.Join(oemMount, registrationConfigPath), "Registration Config")
+	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], registrationYip)
 
-	if len(config.CloudConfig) > 0 {
-		cloudInitPath, err := i.writeCloudInit(config.CloudConfig)
-		if err != nil {
-			return nil, fmt.Errorf("writing custom cloud-init file: %w", err)
-		}
-		configs = append(configs, cloudInitPath)
-	}
-
-	registrationConfPath, err := i.writeRegistrationYAML(config.Elemental.Registration)
+	// State
+	stateYipBytes, err := i.registrationStateYip(state)
 	if err != nil {
-		return nil, fmt.Errorf("writing registration conf plan: %w", err)
+		return fmt.Errorf("getting registration state config yip: %w", err)
 	}
-	configs = append(configs, registrationConfPath)
+	stateYip := yipAfterHookWrap(string(stateYipBytes), filepath.Join(oemMount, stateConfigPath), "Registration State Config")
+	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], stateYip)
 
-	registrationStatePath, err := i.writeRegistrationState(state)
+	// Cloud Init
+	cloudInitYipBytes, err := i.cloudInitYip(config.CloudConfig)
 	if err != nil {
-		return nil, fmt.Errorf("writing registration state plan: %w", err)
+		return fmt.Errorf("getting cloud-init config yip: %w", err)
 	}
-	configs = append(configs, registrationStatePath)
+	cloudInitYip := yipAfterHookWrap(string(cloudInitYipBytes), filepath.Join(oemMount, cloudInitConfigPath), "Cloud Init Config")
+	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], cloudInitYip)
 
-	networkConfigPath, err := i.writeNetworkConfig(networkConfig)
-	if errors.Is(err, network.ErrEmptyConfig) {
-		// Nothing to do on an empty network config.
-		return configs, nil
-	}
+	// Elemental System Agent
+	systemAgentYipBytes, err := i.elementalSystemAgentYip(config.Elemental)
 	if err != nil {
-		return nil, fmt.Errorf("writing temporary network config: %w", err)
+		return fmt.Errorf("getting elemental system agent config yip: %w", err)
 	}
-	configs = append(configs, networkConfigPath)
+	systemAgentYip := yipAfterHookWrap(string(systemAgentYipBytes), filepath.Join(oemMount, systemAgentConfigPath), "Elemental System Agent Config")
+	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], systemAgentYip)
 
-	return configs, nil
-}
+	// Network Config
+	networkConfigYipBytes, err := i.networkConfigYip(networkConfig)
+	if err != nil && !errors.Is(err, network.ErrEmptyConfig) {
+		return fmt.Errorf("getting network config yip: %w", err)
+	}
+	if !errors.Is(err, network.ErrEmptyConfig) {
+		networkConfigYip := yipAfterHookWrap(string(networkConfigYipBytes), filepath.Join(oemMount, networkConfigPath), "Network Config")
+		afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], networkConfigYip)
+	}
 
-func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string, error) {
-	f, err := i.fs.Create(tempRegistrationConf)
+	// Create dir if not exist
+	if err := vfs.MkdirAll(i.fs, elementalcli.TempCloudInitDir, 0700); err != nil {
+		return fmt.Errorf("creating directory '%s': %w", elementalcli.TempCloudInitDir, err)
+	}
+	// Create the after hook configurator yip
+	f, err := i.fs.Create(filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook))
 	if err != nil {
-		return "", fmt.Errorf("creating temporary registration conf plan file: %w", err)
+		return fmt.Errorf("creating file '%s': %w", filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook), err)
 	}
 	defer f.Close()
+
+	if err := yaml.NewEncoder(f).Encode(afterHookConfigurator); err != nil {
+		return fmt.Errorf("writing encoded after hook configurator: %w", err)
+	}
+
+	return nil
+}
+
+func yipAfterHookWrap(content string, path string, name string) schema.Stage {
+	config := schema.Stage{Name: name}
+	config.Files = []schema.File{
+		{
+			Path:        path,
+			Content:     content,
+			Permissions: 0600,
+		},
+	}
+	return config
+}
+
+func (i *installer) registrationConfigYip(reg elementalv1.Registration) ([]byte, error) {
 	registrationInBytes, err := yaml.Marshal(elementalv1.Config{
 		Elemental: elementalv1.Elemental{
 			Registration: reg,
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("marshalling registration config: %w", err)
+		return nil, fmt.Errorf("marshalling registration config: %w", err)
 	}
 
-	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
+	yipConfig := schema.YipConfig{
 		Name: "Include registration config into installed system",
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
@@ -319,24 +352,23 @@ func (i *installer) writeRegistrationYAML(reg elementalv1.Registration) (string,
 				},
 			},
 		},
-	}); err != nil {
-		return "", fmt.Errorf("writing encoded registration config config: %w", err)
 	}
-	return f.Name(), nil
+
+	yipConfigBytes, err := yaml.Marshal(yipConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling yip registration config: %w", err)
+	}
+
+	return yipConfigBytes, nil
 }
 
-func (i *installer) writeRegistrationState(state register.State) (string, error) {
-	f, err := i.fs.Create(tempRegistrationState)
-	if err != nil {
-		return "", fmt.Errorf("creating temporary registration state plan file: %w", err)
-	}
-	defer f.Close()
+func (i *installer) registrationStateYip(state register.State) ([]byte, error) {
 	stateBytes, err := yaml.Marshal(state)
 	if err != nil {
-		return "", fmt.Errorf("marshalling registration state: %w", err)
+		return nil, fmt.Errorf("marshalling registration state: %w", err)
 	}
 
-	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
+	yipConfig := schema.YipConfig{
 		Name: "Include registration state into installed system",
 		Stages: map[string][]schema.Stage{
 			"initramfs": {
@@ -357,47 +389,37 @@ func (i *installer) writeRegistrationState(state register.State) (string, error)
 				},
 			},
 		},
-	}); err != nil {
-		return "", fmt.Errorf("writing encoded registration state config: %w", err)
 	}
-	return f.Name(), nil
+
+	yipConfigBytes, err := yaml.Marshal(yipConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling yip state config: %w", err)
+	}
+
+	return yipConfigBytes, nil
 }
 
-func (i *installer) writeCloudInit(cloudConfig map[string]runtime.RawExtension) (string, error) {
-	f, err := i.fs.Create(tempCloudInit)
-	if err != nil {
-		return "", fmt.Errorf("creating temporary cloud init file: %w", err)
-	}
-	defer f.Close()
-
+func (i *installer) cloudInitYip(cloudConfig map[string]runtime.RawExtension) ([]byte, error) {
 	bytes, err := util.MarshalCloudConfig(cloudConfig)
 	if err != nil {
-		return "", fmt.Errorf("mashalling cloud config: %w", err)
+		return nil, fmt.Errorf("mashalling cloud config: %w", err)
 	}
 
-	log.Debugf("Decoded CloudConfig:\n%s\n", string(bytes))
-	if _, err = f.Write(bytes); err != nil {
-		return "", fmt.Errorf("writing cloud config: %w", err)
-	}
-	return f.Name(), nil
+	return bytes, nil
 }
 
-func (i *installer) writeNetworkConfig(networkConfig elementalv1.NetworkConfig) (string, error) {
+func (i *installer) networkConfigYip(networkConfig elementalv1.NetworkConfig) ([]byte, error) {
 	networkYipConfig, err := i.networkConfigurator.GetNetworkConfigApplicator(networkConfig)
 	if err != nil {
-		return "", fmt.Errorf("getting network config applicator: %w", err)
+		return nil, fmt.Errorf("getting network config applicator: %w", err)
 	}
 
-	f, err := i.fs.Create(tempNetworkConfig)
+	yipConfigBytes, err := yaml.Marshal(networkYipConfig)
 	if err != nil {
-		return "", fmt.Errorf("creating temporary network-config file: %w", err)
+		return nil, fmt.Errorf("marshalling yip network config: %w", err)
 	}
-	defer f.Close()
 
-	if err := yaml.NewEncoder(f).Encode(networkYipConfig); err != nil {
-		return "", fmt.Errorf("writing encoded network-config: %w", err)
-	}
-	return f.Name(), nil
+	return yipConfigBytes, nil
 }
 
 func (i *installer) getConnectionInfoBytes(config elementalv1.Elemental) ([]byte, error) {
@@ -492,15 +514,14 @@ func (i *installer) WriteLocalSystemAgentConfig(config elementalv1.Elemental) er
 	return nil
 }
 
-// Write system agent cloud-init config to be consumed by install
-func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string, error) {
+func (i *installer) elementalSystemAgentYip(config elementalv1.Elemental) ([]byte, error) {
 	connectionInfoBytes, err := i.getConnectionInfoBytes(config)
 	if err != nil {
-		return "", fmt.Errorf("getting connection info: %w", err)
+		return nil, fmt.Errorf("getting connection info: %w", err)
 	}
 	agentConfigBytes, err := i.getAgentConfigBytes()
 	if err != nil {
-		return "", fmt.Errorf("getting agent config: %w", err)
+		return nil, fmt.Errorf("getting agent config: %w", err)
 	}
 
 	var stages []schema.Stage
@@ -520,21 +541,19 @@ func (i *installer) writeSystemAgentConfig(config elementalv1.Elemental) (string
 		},
 	})
 
-	f, err := i.fs.Create(tempSystemAgent)
-	if err != nil {
-		return "", fmt.Errorf("creating temporary elemental-system-agent file: %w", err)
-	}
-	defer f.Close()
-
-	if err := yaml.NewEncoder(f).Encode(schema.YipConfig{
+	yipConfig := schema.YipConfig{
 		Name: "Elemental System Agent Configuration",
 		Stages: map[string][]schema.Stage{
 			"initramfs": stages,
 		},
-	}); err != nil {
-		return "", fmt.Errorf("writing encoded system agent config: %w", err)
 	}
-	return f.Name(), nil
+
+	yipConfigBytes, err := yaml.Marshal(yipConfig)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling yip system agent config: %w", err)
+	}
+
+	return yipConfigBytes, nil
 }
 
 func (i *installer) cleanupResetPlan() error {
