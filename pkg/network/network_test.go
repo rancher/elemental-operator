@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rancher/elemental-operator/api/v1beta1"
 	utilmocks "github.com/rancher/elemental-operator/pkg/util/mocks"
+	"github.com/rancher/yip/pkg/schema"
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -33,7 +34,7 @@ import (
 	"github.com/twpayne/go-vfs/vfst"
 )
 
-func TestInstall(t *testing.T) {
+func TestNetwork(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Network Suite")
 }
@@ -75,6 +76,18 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 				},
 			},
 		}
+		wantFiles := []schema.File{
+			{
+				Content:     "[connection]\nid=Wired connection 1\n[ipv4]\naddress1=192.168.122.10",
+				Path:        filepath.Join(systemConnectionsDir, "eth0.nmconnection"),
+				Permissions: 0600,
+			},
+			{
+				Content:     "[connection]\nid=Wired connection 2\n[ipv4]\naddress1=192.168.122.11",
+				Path:        filepath.Join(systemConnectionsDir, "eth1.nmconnection"),
+				Permissions: 0600,
+			},
+		}
 
 		applicator, err := networkConfigurator.GetNetworkConfigApplicator(wantNetworkConfig)
 		Expect(err).ShouldNot(HaveOccurred())
@@ -83,10 +96,7 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
 
 		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
-		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n[ipv4]\naddress1=192.168.122.10"))
-		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "eth0.nmconnection")))
-		Expect(stage[0].Files[1].Content).To(Equal("[connection]\nid=Wired connection 2\n[ipv4]\naddress1=192.168.122.11"))
-		Expect(stage[0].Files[1].Path).To(Equal(filepath.Join(systemConnectionsDir, "eth1.nmconnection")))
+		Expect(stage[0].Files).To(ContainElements(wantFiles))
 	})
 	It("should return nmstate yip config applicator", func() {
 		wantNetworkConfig := v1beta1.NetworkConfig{
@@ -102,6 +112,19 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 				"bar": {
 					Raw: []byte(`"{bar}"`),
 				},
+			},
+		}
+
+		wantFiles := []schema.File{
+			{
+				Content:     "[connection]\nid=Wired connection 1\n",
+				Path:        filepath.Join(systemConnectionsDir, "wired1.nmconnection"),
+				Permissions: 0600,
+			},
+			{
+				Content:     "[connection]\nid=Wired connection 2\n",
+				Path:        filepath.Join(systemConnectionsDir, "wired2.nmconnection"),
+				Permissions: 0600,
 			},
 		}
 
@@ -121,10 +144,7 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
 
 		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
-		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n"))
-		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired1.nmconnection")))
-		Expect(stage[0].Files[1].Content).To(Equal("[connection]\nid=Wired connection 2\n"))
-		Expect(stage[0].Files[1].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired2.nmconnection")))
+		Expect(stage[0].Files).To(ContainElements(wantFiles))
 	})
 	It("should return nmc yip config applicator", func() {
 		wantNetworkConfig := v1beta1.NetworkConfig{
@@ -140,6 +160,18 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 				"bar": {
 					Raw: []byte(`"{bar}"`),
 				},
+			},
+		}
+		wantFiles := []schema.File{
+			{
+				Content:     "[connection]\nid=Wired connection 1\n",
+				Path:        filepath.Join(systemConnectionsDir, "wired1.nmconnection"),
+				Permissions: 0600,
+			},
+			{
+				Content:     "[connection]\nid=Wired connection 2\n",
+				Path:        filepath.Join(systemConnectionsDir, "wired2.nmconnection"),
+				Permissions: 0600,
 			},
 		}
 
@@ -160,10 +192,7 @@ var _ = Describe("configurator", Label("network", "configurator"), func() {
 		Expect(found).To(BeTrue(), "Config should be applied at initramfs stage")
 
 		Expect(len(stage[0].Files)).To(Equal(2), "Two nmconnection files must have been copied")
-		Expect(stage[0].Files[0].Content).To(Equal("[connection]\nid=Wired connection 1\n"))
-		Expect(stage[0].Files[0].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired1.nmconnection")))
-		Expect(stage[0].Files[1].Content).To(Equal("[connection]\nid=Wired connection 2\n"))
-		Expect(stage[0].Files[1].Path).To(Equal(filepath.Join(systemConnectionsDir, "wired2.nmconnection")))
+		Expect(stage[0].Files).To(ContainElements(wantFiles))
 	})
 	It("should reset network", func() {
 		//prepare a dummy nmconnection file to highlight the need to reset network
