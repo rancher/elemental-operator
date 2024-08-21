@@ -317,7 +317,7 @@ func (r *SeedImageReconciler) reconcileConfigMapObject(ctx context.Context, seed
 		return fmt.Errorf("failed marshalling cloud-config: %w", err)
 	}
 
-	outputName := fmt.Sprintf("elemental-%s-%s.%s", seedImg.Spec.MachineRegistrationRef.Name, time.Now().Format(time.RFC3339), seedImg.Spec.Type)
+	outputName := fmt.Sprintf("%s-%s.%s", mRegistration.Name, time.Now().Format(time.RFC3339), seedImg.Spec.Type)
 
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      seedImg.Name,
@@ -448,13 +448,21 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 			return errMsg
 		}
 
-		// Use the registration name or else default to "elemental" for the image file name
-		imageName := "elemental"
-		if seedImg.Spec.MachineRegistrationRef != nil && len(seedImg.Spec.MachineRegistrationRef.Name) > 0 {
-			imageName = seedImg.Spec.MachineRegistrationRef.Name
+		podConfigMap := &corev1.ConfigMap{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      seedImg.Name,
+			Namespace: seedImg.Namespace,
+		}, podConfigMap); err != nil {
+			return fmt.Errorf("getting ConfigMap '%s': %w", seedImg.Name, err)
 		}
+		outputName, found := podConfigMap.Data[configMapKeyOutputName]
+		if !found {
+			return fmt.Errorf("Could not find '%s' value in ConfigMap '%s'", configMapKeyOutputName, seedImg.Name)
+		}
+
 		seedImg.Status.DownloadToken = token
-		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s/%s.%s", rancherURL, token, imageName, seedImg.Spec.Type)
+		seedImg.Status.DownloadURL = fmt.Sprintf("https://%s/elemental/seedimage/%s/%s", rancherURL, token, outputName)
+		seedImg.Status.ChecksumURL = fmt.Sprintf("%s.sha256", seedImg.Status.DownloadURL)
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
 			Status:  metav1.ConditionTrue,
@@ -482,6 +490,7 @@ func (r *SeedImageReconciler) updateStatusFromPod(ctx context.Context, seedImg *
 			return errMsg
 		}
 		seedImg.Status.DownloadURL = ""
+		seedImg.Status.ChecksumURL = ""
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
 			Status:  metav1.ConditionTrue,
@@ -519,6 +528,7 @@ func (r *SeedImageReconciler) deleteChildResources(ctx context.Context, seedImg 
 		}
 	}
 	seedImg.Status.DownloadURL = ""
+	seedImg.Status.ChecksumURL = ""
 
 	foundSvc := &corev1.Service{}
 	svcName := seedImg.Name
@@ -593,14 +603,13 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 							ContainerPort: 80,
 						},
 					},
-					Args: []string{"-d", "$(ELEMENTAL_OUTPUT_NAME)", "-t", fmt.Sprintf("%d", deadline*60)},
+					Args: []string{"-d", "/srv", "-t", fmt.Sprintf("%d", deadline*60)},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "iso-storage",
 							MountPath: "/srv",
 						},
 					},
-					WorkingDir: "/srv",
 					Env: []corev1.EnvVar{
 						{
 							Name: "ELEMENTAL_OUTPUT_NAME",
@@ -672,6 +681,8 @@ func defaultRawInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
         --system $(ELEMENTAL_BASE_IMAGE)`, platformArg),
 
 		"mv /iso/elemental.raw /iso/$(ELEMENTAL_OUTPUT_NAME)",
+
+		"cd /iso && sha256sum $(ELEMENTAL_OUTPUT_NAME) > $(ELEMENTAL_OUTPUT_NAME).sha256 && cd ../",
 	}
 
 	return []corev1.Container{
@@ -734,6 +745,8 @@ func defaultIsoInitContainers(seedImg *elementalv1.SeedImage, buildImg string, p
 			},
 		)
 	}
+
+	buildCommands = append(buildCommands, "cd /iso && sha256sum $(ELEMENTAL_OUTPUT_NAME) > $(ELEMENTAL_OUTPUT_NAME).sha256 && cd ../")
 
 	containers = append(
 		containers, corev1.Container{

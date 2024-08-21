@@ -52,12 +52,12 @@ func TestApiSeedImage(t *testing.T) {
 		t.Logf("Testing token %s\n", test.token)
 		req := httptest.NewRequest(
 			"GET",
-			fmt.Sprintf("%s/%s", "http://localhost/elemental/seedimage/", test.token),
+			fmt.Sprintf("%s/%s/foo.bar", "http://localhost/elemental/seedimage/", test.token),
 			nil)
 		resp := httptest.NewRecorder()
 		splittedPath := test.splittedPath
 		if splittedPath == nil {
-			splittedPath = []string{"seedimage", test.token}
+			splittedPath = []string{"seedimage", test.token, "foo.bar"}
 		}
 
 		err := server.apiSeedImage(resp, req, splittedPath)
