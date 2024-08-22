@@ -35,12 +35,13 @@ func (i *InventoryServer) apiSeedImage(resp http.ResponseWriter, req *http.Reque
 	var seedImg *elementalv1.SeedImage
 
 	// expected splittedPath = {"seedimage", {token}, {imgName.imgType}}
-	if len(splittedPath) < 2 {
+	if len(splittedPath) < 3 {
 		err = fmt.Errorf("unexpected path: %v", splittedPath)
 		http.Error(resp, err.Error(), http.StatusNotFound)
 		return err
 	}
 	token := splittedPath[1]
+	fileName := splittedPath[2]
 
 	if seedImg, err = i.getSeedImage(token); err != nil {
 		http.Error(resp, err.Error(), http.StatusNotFound)
@@ -54,7 +55,7 @@ func (i *InventoryServer) apiSeedImage(resp http.ResponseWriter, req *http.Reque
 		return errMsg
 	}
 
-	rawURL := fmt.Sprintf("http://%s", svc.Spec.ClusterIP)
+	rawURL := fmt.Sprintf("http://%s/%s", svc.Spec.ClusterIP, fileName)
 	seedImgURL, err := url.Parse(rawURL)
 	if err != nil {
 		errMsg := fmt.Errorf("failed to parse url '%s'", rawURL)

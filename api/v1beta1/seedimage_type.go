@@ -114,6 +114,9 @@ type SeedImageStatus struct {
 	// DownloadURL the URL from which the SeedImage can be downloaded once built.
 	// +optional
 	DownloadURL string `json:"downloadURL,omitempty"`
+	// ChecksumURL the URL from which the SeedImage checksum can be downloaded once the image is built.
+	// +optional
+	ChecksumURL string `json:"checksumURL,omitempty"`
 	// State reflect the state of the seed image build process.
 	// +kubebuilder:validation:Enum=Initialized;Started;Completed;Failed;NotStarted
 	// +optional
