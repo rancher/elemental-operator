@@ -159,6 +159,10 @@ spec:
             type: object
           status:
             properties:
+              checksumURL:
+                description: ChecksumURL the URL from which the SeedImage checksum
+                  can be downloaded once the image is built.
+                type: string
               conditions:
                 description: Conditions describe the state of the machine registration
                   object.
