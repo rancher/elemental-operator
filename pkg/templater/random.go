@@ -38,6 +38,11 @@ const (
 	tmplIntKey    = "Int"
 )
 
+// IsRandomLabel returns true if s contains a $Random template variable
+func IsRandomLabel(s string) bool {
+	return strings.Contains(s, "${"+tmplRandomKey)
+}
+
 func isRandomTemplate(tmplVal []string) bool {
 	if tmplVal[0] != tmplRandomKey {
 		return false
