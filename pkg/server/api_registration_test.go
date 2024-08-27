@@ -477,6 +477,10 @@ func assertSystemDataLabels(t *testing.T, inventory *elementalv1.MachineInventor
 func TestUpdateInventoryLabels(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
 	inventory.Name = "${System Data/Runtime/Hostname}"
+	inventory.Labels = map[string]string{
+		"elemental.cattle.io/Random01": "alreadyFilled",
+		"elemental.cattle.io/Random02": "",
+	}
 
 	registration := &elementalv1.MachineRegistration{
 		Spec: elementalv1.MachineRegistrationSpec{
@@ -496,6 +500,9 @@ func TestUpdateInventoryLabels(t *testing.T) {
 				"elemental.cattle.io/BlockDevice0-Removable": "${System Data/Block Devices/testdisk1/Removable}",
 				"elemental.cattle.io/BlockDevice1-Removable": "${System Data/Block Devices/testdisk2/Removable}",
 				"elemental.cattle.io/UnexistingTemplate":     "${System Data/Not Existing Value}",
+				"elemental.cattle.io/Random01":               "my-random-value-${Random/Int/1000}",
+				"elemental.cattle.io/Random02":               "${Random/UUID}",
+				"elemental.cattle.io/Random03":               "my-random-value-${Random/Hex/5}",
 			},
 		},
 	}
@@ -572,6 +579,10 @@ func TestUpdateInventoryLabels(t *testing.T) {
 	// Check values were sanitized
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuModel"])), 0)
 	assert.Equal(t, len(validation.IsValidLabelValue(inventory.Labels["elemental.cattle.io/CpuVendor"])), 0)
+	// Check Random label templates
+	assert.Equal(t, inventory.Labels["elemental.cattle.io/Random01"], "alreadyFilled")
+	assert.Equal(t, len(inventory.Labels["elemental.cattle.io/Random02"]), len("e511d5ca-a765-42f2-82b7-264f37ffb329"))
+	assert.Equal(t, len(inventory.Labels["elemental.cattle.io/Random03"]), 5+len("my-random-value-"))
 }
 
 func TestUpdateInventoryName(t *testing.T) {
