@@ -76,13 +76,20 @@ func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInv
 		inv.Labels = map[string]string{}
 	}
 	for k, v := range reg.Spec.MachineInventoryLabels {
+		// Random templated labels should not be overwritten
+		if invLabel, ok := inv.Labels[k]; ok && invLabel != "" {
+			if templater.IsRandomLabel(v) {
+				log.Debugf("Random label %q is already rendered (%q)", v, invLabel)
+				continue
+			}
+		}
 		decodedLabel, err := tmpl.Decode(v)
 		if err != nil {
 			if templater.IsValueNotFoundError(err) {
-				log.Warningf("Templater cannot decode label '%q': %s", v, err.Error())
+				log.Warningf("Templater cannot decode label %q: %s", v, err.Error())
 				continue
 			}
-			log.Errorf("Templater failed decoding label '%q': %s", v, err.Error())
+			log.Errorf("Templater failed decoding label %q: %s", v, err.Error())
 			return err
 		}
 		decodedLabel = sanitizeLabel(decodedLabel)
