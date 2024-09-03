@@ -47,6 +47,10 @@ type ManagedOSVersionChannelSpec struct {
 	// +optional
 	// +kubebuilder:default:=true
 	Enabled bool `json:"enabled"`
+	// Registry defines a common registry to be prepended to the 'uri' or 'upgradeImage'
+	// of each extracted ManagedOSVersion resource.
+	// +optional
+	Registry string `json:"registry,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
