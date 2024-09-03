@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
@@ -355,6 +357,29 @@ func (r *ManagedOSVersionChannelReconciler) createManagedOSVersions(ctx context.
 
 		if ch.Spec.UpgradeContainer != nil {
 			vcpy.Spec.UpgradeContainer = ch.Spec.UpgradeContainer
+		}
+
+		if len(ch.Spec.Registry) > 0 {
+			registry := ch.Spec.Registry
+			urlField := ""
+			switch {
+			case vcpy.IsContainerImage():
+				urlField = "upgradeImage"
+			case vcpy.IsISOImage():
+				urlField = "uri"
+			default:
+				err := fmt.Errorf("unexpected ManagedOSVersion type %s", vcpy.Spec.Type)
+				logger.Error(err, "failed to concatenate managedosversion with registry", "registry", ch.Spec.Registry)
+				return err
+			}
+
+			val := strings.Trim(string(vcpy.Spec.Metadata[urlField].Raw), "\"")
+			if !strings.HasSuffix(ch.Spec.Registry, "/") && !strings.HasPrefix(val, "/") {
+				registry += "/"
+			}
+			vcpy.Spec.Metadata[urlField] = runtime.RawExtension{
+				Raw: []byte(fmt.Sprintf("\"%s%s\"", registry, val)),
+			}
 		}
 
 		if cv, ok := curVersions[v.Name]; ok {
