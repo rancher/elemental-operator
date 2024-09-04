@@ -24,8 +24,8 @@ runs:
     - name: Pull chart from OBS
       env:
         B_REPO: ${{ steps.set_repo.outputs.build_repo }}
-        OPERATOR_CHART: rancher/elemental-operator-chart
-        CRDS_CHART: rancher/elemental-operator-crds-chart
+        OPERATOR_CHART: rancher/elemental-operator
+        CRDS_CHART: rancher/elemental-operator-crds
       shell: bash
       run: |
         mkdir -p build

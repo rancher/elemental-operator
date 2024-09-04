@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-#!BuildTag: rancher/elemental-operator-chart:latest
-#!BuildTag: rancher/elemental-operator-chart:%VERSION%
-#!BuildTag: rancher/elemental-operator-chart:%VERSION%-%RELEASE%
+#!BuildTag: rancher/elemental-operator:latest
+#!BuildTag: rancher/elemental-operator:%VERSION%
+#!BuildTag: rancher/elemental-operator:%VERSION%-%RELEASE%
 apiVersion: v2
 name: elemental-operator
 description: Elemental provides Cloud Native OS Management for Cluster Nodes.

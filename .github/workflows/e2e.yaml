@@ -65,8 +65,8 @@ jobs:
       - name: Pull chart for PR
         env:
           PR_NUMBER: ${{ github.event.number }}
-          OPERATOR_CHART: rancher/elemental-operator-chart
-          CRDS_CHART: rancher/elemental-operator-crds-chart
+          OPERATOR_CHART: rancher/elemental-operator
+          CRDS_CHART: rancher/elemental-operator-crds
         run: |
           set -x
           B_REPO=registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/charts
@@ -77,7 +77,7 @@ jobs:
         id: chart
         run: |
           set -x
-          FILE=$(find . -type f  -name "elemental-operator-chart-[1-9]*.tgz" -print)
+          FILE=$(find . -type f  -name "elemental-operator-[1-9]*.tgz" -print)
           CHART=$(basename $FILE)
           echo "chart_name=$CHART" >> $GITHUB_OUTPUT
       - name: Upload chart

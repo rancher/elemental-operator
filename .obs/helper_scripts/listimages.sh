@@ -47,6 +47,6 @@ if [ ${REGISTRY} != "registry.suse.com" ]; then
   REGISTRY="$(dirname ${REGISTRY})/charts"
 fi
 
-echo "${REGISTRY}/rancher/elemental-operator-crds-chart:${OPERATOR}"
-echo "${REGISTRY}/rancher/elemental-operator-chart:${OPERATOR}"
+echo "${REGISTRY}/rancher/elemental-operator-crds:${OPERATOR}"
+echo "${REGISTRY}/rancher/elemental-operator:${OPERATOR}"
 
