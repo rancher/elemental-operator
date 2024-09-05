@@ -71,6 +71,10 @@ func main() {
 	stateHandler := register.NewFileStateHandler(fs)
 	client := register.NewClient()
 	cmd := newCommand(fs, client, stateHandler, installer)
+	cmd.AddCommand(
+		newVersionCommand(),
+		newDumpDataCommand(),
+	)
 	if err := cmd.Execute(); err != nil {
 		log.Fatalf("FATAL: %s", err)
 	}
