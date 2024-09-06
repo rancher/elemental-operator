@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/baseboard"
@@ -151,8 +153,124 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	return ExtractLabels(*systemData)
 }
 
+func isBaseReflectKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Bool, reflect.String, reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+// Core function to translate hostdata (passed as a reflect.Value) to map[string]interface{} containing
+// the Template Labels values
+func reflectValToInterface(v reflect.Value) interface{} {
+	mapData := map[string]interface{}{}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			// Skip exported fields
+			if !v.Type().Field(i).IsExported() {
+				continue
+			}
+			// Skip also disabled fields from json serialization.
+			// This is needed to avoid loops, like the one in systemData.Block (Disks and Partitions refer to
+			// each other)... :-/
+			if v.Type().Field(i).Tag == "json:\"-\"" {
+				continue
+			}
+
+			fieldName := v.Type().Field(i).Name
+			fieldVal := v.Field(i)
+
+			if !fieldVal.IsValid() {
+				continue
+			}
+			if v.Type().Field(i).Anonymous {
+				return reflectValToInterface(fieldVal)
+			}
+
+			mapData[fieldName] = reflectValToInterface(fieldVal)
+		}
+
+	case reflect.Pointer:
+		if v.IsNil() {
+			return ""
+		}
+		return reflectValToInterface(v.Elem())
+
+	case reflect.Slice:
+		if v.Len() == 0 {
+			return ""
+		}
+
+		if isBaseReflectKind(v.Index(0).Kind()) {
+			txt := fmt.Sprintf("%v", v.Index(0))
+			for j := 1; j < v.Len(); j++ {
+				txt += fmt.Sprintf(", %v", v.Index(j))
+			}
+			return txt
+		}
+
+		for k := 0; k < v.Len(); k++ {
+			mapData[strconv.Itoa(k)] = reflectValToInterface(v.Index(k))
+		}
+
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+	return mapData
+}
+
+// ExtractFullData returns all the available hostinfo data without any check
+// or post elaboration as a map[string]interface{}, where the interface{} is
+// either a string or an embedded map[string]interface{}
+func ExtractFullData(systemData HostInfo) (map[string]interface{}, error) {
+	labels := reflectValToInterface(reflect.ValueOf(systemData)).(map[string]interface{})
+
+	return labels, nil
+}
+
+// Some data from HostInfo are invalid: drop them
+func sanitizeHostInfoVal(data string) string {
+	if strings.HasPrefix(data, "Unknown!") {
+		return ""
+	}
+	return data
+}
+
 func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
-	memory := map[string]interface{}{}
+	labels := map[string]interface{}{}
+
+	// SMBIOS DATA
+	bios := reflectValToInterface(reflect.ValueOf(systemData.BIOS)).(map[string]interface{})
+	baseboard := reflectValToInterface(reflect.ValueOf(systemData.Baseboard)).(map[string]interface{})
+	chassis := reflectValToInterface(reflect.ValueOf(systemData.Chassis)).(map[string]interface{})
+	product := reflectValToInterface(reflect.ValueOf(systemData.Product)).(map[string]interface{})
+	// Legacy SMBIOS names support
+	if systemData.Product != nil {
+		product["Serial Number"] = systemData.Product.SerialNumber
+		product["Manufacturer"] = systemData.Product.Vendor
+		product["SKU Number"] = systemData.Product.SKU
+		product["Product Name"] = systemData.Product.Name
+	}
+	if systemData.Baseboard != nil {
+		product["Serial Number"] = systemData.Baseboard.SerialNumber
+	}
+	if systemData.Chassis != nil {
+		product["Serial Number"] = systemData.Chassis.SerialNumber
+	}
+
+	labels["System Information"] = product
+	labels["BIOS Information"] = bios
+	labels["Base Board Information"] = baseboard
+	labels["Chassis Information"] = chassis
+
+	// System Data
+	memory := reflectValToInterface(reflect.ValueOf(systemData.Memory)).(map[string]interface{})
+	// Legacy names (with spaces) support
 	if systemData.Memory != nil {
 		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
 		memory["Total Usable Bytes"] = strconv.Itoa(int(systemData.Memory.TotalUsableBytes))
@@ -163,20 +281,26 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 	// tracking bug: https://github.com/jaypipes/ghw/issues/199
 	cpu := map[string]interface{}{}
 	if systemData.CPU != nil {
-		if systemData.CPU.TotalCores > 0 {
-			cpu["Total Cores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
-		}
-		if systemData.CPU.TotalThreads > 0 {
-			cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
-		}
+		cpu["Total Cores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+		cpu["Total Threads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
 		// This should never happen but just in case
 		if len(systemData.CPU.Processors) > 0 {
 			// Model still looks weird, maybe there is a way of getting it differently as we need to sanitize a lot of data in there?
 			// Currently, something like "Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz" ends up being:
 			// "Intel-R-Core-TM-i7-7700K-CPU-4-20GHz"
+			cpu["Number Processors"] = strconv.Itoa(len(systemData.CPU.Processors))
 			cpu["Model"] = systemData.CPU.Processors[0].Model
 			cpu["Vendor"] = systemData.CPU.Processors[0].Vendor
-			cpu["Capabilities"] = systemData.CPU.Processors[0].Capabilities
+			cpu["Capabilities"] = strings.Join(systemData.CPU.Processors[0].Capabilities, ",")
+
+			for i, c := range systemData.CPU.Processors {
+				cpuNum := strconv.Itoa(i)
+				cpu[cpuNum] = map[string]interface{}{
+					"Model":        c.Model,
+					"Vendor":       c.Vendor,
+					"Capabilities": strings.Join(c.Capabilities, ","),
+				}
+			}
 		}
 	}
 
@@ -189,14 +313,25 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 
 	network := map[string]interface{}{}
 	if systemData.Network != nil {
+		// number of not-virtual cards found
+		nicNum := 0
 		network["Number Interfaces"] = strconv.Itoa(len(systemData.Network.NICs))
-		for _, iface := range systemData.Network.NICs {
-			network[iface.Name] = map[string]interface{}{
-				"Name":       iface.Name,
-				"MacAddress": iface.MacAddress,
-				"IsVirtual":  strconv.FormatBool(iface.IsVirtual),
-				// Capabilities available here at iface.Capabilities
-				// interesting to store anything in here or show it on the docs? Difficult to use it afterwards as its a list...
+		for i, iface := range systemData.Network.NICs {
+			ifaceNum := strconv.Itoa(i)
+			network[ifaceNum] = map[string]interface{}{
+				"Name":                iface.Name,
+				"MacAddress":          iface.MacAddress,
+				"IsVirtual":           strconv.FormatBool(iface.IsVirtual),
+				"Duplex":              sanitizeHostInfoVal(iface.Duplex),
+				"Speed":               sanitizeHostInfoVal(iface.Speed),
+				"AdvertisedLinkModes": strings.Join(iface.AdvertisedLinkModes, ","),
+				"SupportedLinkModes":  strings.Join(iface.SupportedLinkModes, ","),
+				"SupportedPorts":      strings.Join(iface.SupportedPorts, ","),
+			}
+			network[iface.Name] = network[ifaceNum]
+			if !iface.IsVirtual {
+				network[fmt.Sprintf("NIC%d", nicNum)] = network[ifaceNum]
+				nicNum++
 			}
 		}
 	}
@@ -204,15 +339,18 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 	block := map[string]interface{}{}
 	if systemData.Block != nil {
 		block["Number Devices"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
-		for _, disk := range systemData.Block.Disks {
-			block[disk.Name] = map[string]interface{}{
+		for i, disk := range systemData.Block.Disks {
+			blockNum := strconv.Itoa(i)
+			block[blockNum] = map[string]interface{}{
 				"Size":               strconv.Itoa(int(disk.SizeBytes)),
 				"Name":               disk.Name,
 				"Drive Type":         disk.DriveType.String(),
 				"Storage Controller": disk.StorageController.String(),
 				"Removable":          strconv.FormatBool(disk.IsRemovable),
+				"Model":              disk.Model,
+				// "Partitions":         reflectValToInterface(reflect.ValueOf(disk.Partitions)),
 			}
-			// Vendor and model also available here, useful?
+			block[disk.Name] = block[blockNum]
 		}
 	}
 
@@ -221,7 +359,6 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 		runtime["Hostname"] = systemData.Runtime.Hostname
 	}
 
-	labels := map[string]interface{}{}
 	labels["System Data"] = map[string]interface{}{
 		"Memory":        memory,
 		"CPU":           cpu,
@@ -230,12 +367,7 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 		"Block Devices": block,
 		"Runtime":       runtime,
 	}
-
 	// Also available but not used:
-	// systemData.Product -> name, vendor, serial,uuid,sku,version. Kind of smbios data
-	// systemData.BIOS -> info about the bios. Useless IMO
-	// systemData.Baseboard -> asset, serial, vendor,version,product. Kind of useless?
-	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
 	return labels, nil
