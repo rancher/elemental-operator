@@ -436,9 +436,7 @@ func TestUpdateInventoryFromSystemDataNG(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
 	tmpl := templater.NewTemplater()
 
-	data, err := hostinfo.ExtractLabels(hostInfoFixture)
-	assert.NilError(t, err)
-
+	data := hostinfo.ExtractLabelsLegacy(hostInfoFixture)
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
 

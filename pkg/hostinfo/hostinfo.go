@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/baseboard"
@@ -148,10 +150,111 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	if err := json.Unmarshal(data, &systemData); err != nil {
 		return nil, fmt.Errorf("unmarshalling system data payload: %w", err)
 	}
-	return ExtractLabels(*systemData)
+	return ExtractLabelsLegacy(*systemData), nil
 }
 
-func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
+func isBaseReflectKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Bool, reflect.String, reflect.Float32, reflect.Float64:
+		return true
+	}
+	return false
+}
+
+// reflectValToInterface() converts the passed value to either a string or to a map[string]interface{},
+// where the interface{} part could be either a string or an embedded map[string]interface{}.
+// This is the core function to translate hostdata (passed as a reflect.Value) to map[string]interface{}
+// containing the Template Labels values.
+func reflectValToInterface(v reflect.Value) interface{} {
+	mapData := map[string]interface{}{}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			// Skip exported fields
+			if !v.Type().Field(i).IsExported() {
+				continue
+			}
+			// Skip also disabled fields from json serialization.
+			// This is needed to avoid loops, like the one in systemData.Block (Disks and Partitions refer to
+			// each other)... :-/
+			if v.Type().Field(i).Tag == "json:\"-\"" {
+				continue
+			}
+
+			fieldName := v.Type().Field(i).Name
+			fieldVal := v.Field(i)
+
+			if !fieldVal.IsValid() {
+				continue
+			}
+			if v.Type().Field(i).Anonymous {
+				return reflectValToInterface(fieldVal)
+			}
+
+			mapData[fieldName] = reflectValToInterface(fieldVal)
+		}
+
+	case reflect.Pointer:
+		if v.IsNil() {
+			return ""
+		}
+		return reflectValToInterface(v.Elem())
+
+	case reflect.Slice:
+		if v.Len() == 0 {
+			return ""
+		}
+
+		if isBaseReflectKind(v.Index(0).Kind()) {
+			txt := fmt.Sprintf("%v", v.Index(0))
+			for j := 1; j < v.Len(); j++ {
+				txt += fmt.Sprintf(", %v", v.Index(j))
+			}
+			return txt
+		}
+
+		for k := 0; k < v.Len(); k++ {
+			mapData[strconv.Itoa(k)] = reflectValToInterface(v.Index(k))
+		}
+
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+	return mapData
+}
+
+// dataToLabelMap ensures the value returned by reflectValToInterface() is a map,
+// otherwise returns an empty map (mainly to filter out empty vals returned as empty
+// strings)
+func dataToLabelMap(val interface{}) map[string]interface{} {
+	refVal := reflectValToInterface(reflect.ValueOf(val))
+	if labelMap, ok := refVal.(map[string]interface{}); ok {
+		return labelMap
+	}
+	return map[string]interface{}{}
+}
+
+// ExtractFullData returns all the available hostinfo data without any check
+// or post elaboration as a map[string]interface{}, where the interface{} is
+// either a string or an embedded map[string]interface{}
+func ExtractFullData(systemData HostInfo) map[string]interface{} {
+	labels := dataToLabelMap(systemData)
+
+	return labels
+}
+
+// Some data from HostInfo are invalid: drop them
+func sanitizeHostInfoVal(data string) string {
+	if strings.HasPrefix(data, "Unknown!") {
+		return ""
+	}
+	return data
+}
+
+func ExtractLabelsLegacy(systemData HostInfo) map[string]interface{} {
 	memory := map[string]interface{}{}
 	if systemData.Memory != nil {
 		memory["Total Physical Bytes"] = strconv.Itoa(int(systemData.Memory.TotalPhysicalBytes))
@@ -238,7 +341,145 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 	// systemData.Chassis -> asset, serial, vendor,version,product, type. Maybe be useful depending on the provider.
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
-	return labels, nil
+	return labels
+}
+
+func ExtractLabels(systemData HostInfo) map[string]interface{} {
+	labels := map[string]interface{}{}
+
+	// SMBIOS DATA
+	bios := dataToLabelMap(systemData.BIOS)
+	baseboard := dataToLabelMap(systemData.Baseboard)
+	chassis := dataToLabelMap(systemData.Chassis)
+	product := dataToLabelMap(systemData.Product)
+	memory := dataToLabelMap(systemData.Memory)
+
+	// CPU raw data includes extended Cores info, pick all the other values
+	cpu := map[string]interface{}{}
+	if systemData.CPU != nil {
+		if len(systemData.CPU.Processors) > 0 {
+			cpuProcsMap := map[string]interface{}{}
+			cpu["Processors"] = cpuProcsMap
+			for i, processor := range systemData.CPU.Processors {
+				cpuProcsMap[strconv.Itoa(i)] = map[string]interface{}{
+					"Capabilities": strings.Join(processor.Capabilities, ","),
+					"ID":           strconv.Itoa(processor.ID),
+					"Model":        processor.Model,
+					"NumCores":     strconv.Itoa((int(processor.NumCores))),
+					"NumThreads":   strconv.Itoa((int(processor.NumThreads))),
+					"Vendor":       processor.Vendor,
+				}
+			}
+			// Handy label for single processor machines (e.g., ${CPU/Processor/Model} vs ${CPU/Processors/0/Model})
+			cpu["Processor"] = cpuProcsMap["0"]
+		}
+	}
+	cpu["TotalCores"] = strconv.Itoa(int(systemData.CPU.TotalCores))
+	cpu["TotalThreads"] = strconv.Itoa(int(systemData.CPU.TotalThreads))
+	cpu["TotalProcessors"] = strconv.Itoa(len(systemData.CPU.Processors))
+
+	// GPU raw data could be huge, just pick few interesting values.
+	gpu := map[string]interface{}{}
+	if systemData.GPU != nil {
+		if len(systemData.GPU.GraphicsCards) > 0 {
+			cardNum := 0
+			graphCrdsMap := map[string]interface{}{}
+			gpu["GraphicsCards"] = graphCrdsMap
+			for _, card := range systemData.GPU.GraphicsCards {
+				if card.DeviceInfo != nil {
+					cardNumMap := map[string]interface{}{
+						"Driver": card.DeviceInfo.Driver,
+					}
+					graphCrdsMap[strconv.Itoa(cardNum)] = cardNumMap
+
+					if card.DeviceInfo.Product != nil {
+						cardNumMap["ProductName"] = card.DeviceInfo.Product.Name
+					}
+					if card.DeviceInfo.Vendor != nil {
+						cardNumMap["VendorName"] = card.DeviceInfo.Vendor.Name
+					}
+					// Handy label for single GPU machines
+					// (e.g., ${GPU/Driver} vs ${GPU/GraphicsCards/0/Driver})
+					if _, ok := graphCrdsMap["Driver"]; !ok {
+						for key, val := range cardNumMap {
+							graphCrdsMap[key] = val
+						}
+					}
+					cardNum++
+				}
+			}
+			gpu["TotalCards"] = strconv.Itoa(cardNum)
+		}
+	}
+
+	// NICs data have capabilities as array items, we don't want them, just pick few values.
+	network := map[string]interface{}{}
+	if systemData.Network != nil {
+		network["TotalNICs"] = strconv.Itoa(len(systemData.Network.NICs))
+
+		nicsMap := map[string]interface{}{}
+		network["NICs"] = nicsMap
+		for i, iface := range systemData.Network.NICs {
+			ifaceNum := strconv.Itoa(i)
+			nicsMap[ifaceNum] = map[string]interface{}{
+				"AdvertisedLinkModes": strings.Join(iface.AdvertisedLinkModes, ","),
+				"Duplex":              sanitizeHostInfoVal(iface.Duplex),
+				"IsVirtual":           strconv.FormatBool(iface.IsVirtual),
+				"MacAddress":          iface.MacAddress,
+				"Name":                iface.Name,
+				"PCIAddress":          iface.PCIAddress,
+				"Speed":               sanitizeHostInfoVal(iface.Speed),
+				"SupportedLinkModes":  strings.Join(iface.SupportedLinkModes, ","),
+				"SupportedPorts":      strings.Join(iface.SupportedPorts, ","),
+			}
+			// handy reference by interface name
+			// (e.g., "${Network/NICs/eth0/MacAddress} vs "${Network/NICs/0/MacAddress})
+			nicsMap[iface.Name] = nicsMap[ifaceNum]
+		}
+	}
+
+	// Block data carry extended partitions information for each Disk we don't want.
+	// Manually pick the other items.
+	block := map[string]interface{}{}
+	if systemData.Block != nil {
+		block["TotalDisks"] = strconv.Itoa(len(systemData.Block.Disks)) // This includes removable devices like cdrom/usb
+
+		disksMap := map[string]interface{}{}
+		block["Disks"] = disksMap
+		for i, disk := range systemData.Block.Disks {
+			blockNum := strconv.Itoa(i)
+			disksMap[blockNum] = map[string]interface{}{
+				"Size":               strconv.Itoa(int(disk.SizeBytes)),
+				"Name":               disk.Name,
+				"Drive Type":         disk.DriveType.String(),
+				"Storage Controller": disk.StorageController.String(),
+				"Removable":          strconv.FormatBool(disk.IsRemovable),
+				"Model":              disk.Model,
+				// "Partitions":         reflectValToInterface(reflect.ValueOf(disk.Partitions)),
+			}
+			// handy reference by disk name
+			// (e.g., "${Block/Disks/1/Model} vs "${Block/Disks/sda/Model}"")
+			disksMap[disk.Name] = disksMap[blockNum]
+		}
+	}
+
+	runtime := dataToLabelMap(systemData.Runtime)
+
+	labels["Product"] = product
+	labels["BIOS"] = bios
+	labels["BaseBoard"] = baseboard
+	labels["Chassis"] = chassis
+	labels["Memory"] = memory
+	labels["CPU"] = cpu
+	labels["GPU"] = gpu
+	labels["Network"] = network
+	labels["Storage"] = block
+	labels["Runtime"] = runtime
+
+	// Also available but not used:
+	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
+
+	return labels
 }
 
 // Deprecated. Remove me together with 'MsgSystemData' type.
