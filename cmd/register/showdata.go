@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/spf13/cobra"
@@ -45,12 +44,9 @@ func newDumpDataCommand() *cobra.Command {
 		Aliases: []string{"dump"},
 		Short:   "Show host data sent during the registration phase",
 		Long: "Prints to stdout the data sent by the registering client " +
-			"to the Elemental Operator.\nTakes the type of host data to dump " +
-			"as argument, be it '" + DUMPHW + "' or '" + DUMPSMBIOS + "'.",
-		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
-		ValidArgs: []string{DUMPHW, DUMPSMBIOS},
-		RunE: func(_ *cobra.Command, args []string) error {
-			return dumpdata(args, output, full)
+			"to the Elemental Operator.",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return dumpdata(output, full)
 		},
 	}
 
@@ -62,45 +58,24 @@ func newDumpDataCommand() *cobra.Command {
 	return cmd
 }
 
-func dumpdata(args []string, output string, full bool) error {
-	dataType := "hardware"
-	if len(args) > 0 {
-		dataType = args[0]
-	}
-
+func dumpdata(output string, full bool) error {
 	var hostData interface{}
 
-	switch dataType {
-	case DUMPHW:
-		hwData, err := hostinfo.Host()
-		if err != nil {
-			log.Fatalf("Cannot retrieve host data: %s", err)
-		}
+	hwData, err := hostinfo.Host()
+	if err != nil {
+		log.Fatalf("Cannot retrieve host data: %s", err)
+	}
 
-		if full {
-			hostData, err = hostinfo.ExtractFullData(hwData)
-		} else {
-			hostData, err = hostinfo.ExtractLabels(hwData)
-		}
-		if err != nil {
-			log.Fatalf("Cannot convert host data to labels: %s", err)
-		}
-
-	case DUMPSMBIOS:
-		smbiosData, err := dmidecode.Decode()
-		if err != nil {
-			log.Fatalf("Cannot retrieve SMBIOS data: %s", err)
-		}
-
-		hostData = smbiosData
-
-	default:
-		// Should never happen but manage it anyway
-		log.Fatalf("Unsupported data type: %s", dataType)
+	if full {
+		hostData, err = hostinfo.ExtractFullData(hwData)
+	} else {
+		hostData, err = hostinfo.ExtractLabels(hwData)
+	}
+	if err != nil {
+		log.Fatalf("Cannot convert host data to labels: %s", err)
 	}
 
 	var serializedData []byte
-	var err error
 
 	switch output {
 	case OUTJSON:

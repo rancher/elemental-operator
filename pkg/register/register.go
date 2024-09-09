@@ -33,7 +33,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	"github.com/rancher/elemental-operator/pkg/dmidecode"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/plainauth"
@@ -102,12 +101,9 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *St
 	}
 
 	if !reg.NoSMBIOS {
-		log.Infof("Send SMBIOS data")
-		if err := sendSMBIOSData(conn); err != nil {
-			return nil, fmt.Errorf("failed to send SMBIOS data: %w", err)
-		}
+		log.Infof("Send Template Labels System Data")
 		if err := sendSystemData(conn, protoVersion); err != nil {
-			return nil, fmt.Errorf("failed to send system data: %w", err)
+			return nil, fmt.Errorf("failed to send Template Labels System Data: %w", err)
 		}
 	}
 
@@ -248,19 +244,6 @@ func negotiateProtoVersion(conn *websocket.Conn) (MessageType, error) {
 		return MsgUndefined, fmt.Errorf("failed to decode protocol version, got %v (%s)", data, data)
 	}
 	return MessageType(data[0]), err
-}
-
-func sendSMBIOSData(conn *websocket.Conn) error {
-	data, err := dmidecode.Decode()
-	if err != nil {
-		return fmt.Errorf("reading dmidecode data: %w", err)
-	}
-	err = SendJSONData(conn, MsgSmbios, data)
-	if err != nil {
-		log.Debugf("SMBIOS data:\n%s", litter.Sdump(data))
-		return err
-	}
-	return nil
 }
 
 func sendSystemData(conn *websocket.Conn, protoVersion MessageType) error {
