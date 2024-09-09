@@ -25,15 +25,20 @@ import (
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/yaml"
 )
 
 const (
-	DUMPHW     = "hardware"
-	DUMPSMBIOS = "smbios"
+	DUMPHW         = "hardware"
+	DUMPSMBIOS     = "smbios"
+	OUTJSON        = "json"
+	OUTJSONCOMPACT = "json-compact"
+	OUTYAML        = "yaml"
 )
 
 func newDumpDataCommand() *cobra.Command {
-	var raw bool
+	var full bool
+	var output string
 
 	cmd := &cobra.Command{
 		Use:     "dumpdata",
@@ -45,18 +50,19 @@ func newDumpDataCommand() *cobra.Command {
 		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
 		ValidArgs: []string{DUMPHW, DUMPSMBIOS},
 		RunE: func(_ *cobra.Command, args []string) error {
-			return dumpdata(args, raw)
+			return dumpdata(args, output, full)
 		},
 	}
 
 	viper.AutomaticEnv()
-	cmd.Flags().BoolVarP(&raw, "raw", "r", false, "dump raw data before conversion to label templates' variables")
-	_ = viper.BindPFlag("raw", cmd.Flags().Lookup("raw"))
-
+	cmd.Flags().BoolVarP(&full, "full", "f", false, "dump full, raw data before postprocessing to refine available label templates variables")
+	_ = viper.BindPFlag("full", cmd.Flags().Lookup("full"))
+	cmd.Flags().StringVarP(&output, "output", "o", "json", "output format ['"+OUTYAML+"', '"+OUTJSON+"', '"+OUTJSONCOMPACT+"']")
+	_ = viper.BindPFlag("output", cmd.Flags().Lookup("output"))
 	return cmd
 }
 
-func dumpdata(args []string, raw bool) error {
+func dumpdata(args []string, output string, full bool) error {
 	dataType := "hardware"
 	if len(args) > 0 {
 		dataType = args[0]
@@ -71,14 +77,13 @@ func dumpdata(args []string, raw bool) error {
 			log.Fatalf("Cannot retrieve host data: %s", err)
 		}
 
-		if raw {
-			hostData = hwData
+		if full {
+			hostData, err = hostinfo.ExtractFullData(hwData)
 		} else {
-			dataMap, err := hostinfo.ExtractLabels(hwData)
-			if err != nil {
-				log.Fatalf("Cannot convert host data to labels: %s", err)
-			}
-			hostData = dataMap
+			hostData, err = hostinfo.ExtractLabels(hwData)
+		}
+		if err != nil {
+			log.Fatalf("Cannot convert host data to labels: %s", err)
 		}
 
 	case DUMPSMBIOS:
@@ -94,11 +99,25 @@ func dumpdata(args []string, raw bool) error {
 		log.Fatalf("Unsupported data type: %s", dataType)
 	}
 
-	jsonData, err := json.MarshalIndent(hostData, "", "  ")
-	if err != nil {
-		log.Fatalf("Cannot convert host data to json: %s", err)
+	var serializedData []byte
+	var err error
+
+	switch output {
+	case OUTJSON:
+		serializedData, err = json.MarshalIndent(hostData, "", "  ")
+	case OUTJSONCOMPACT:
+		serializedData, err = json.Marshal(hostData)
+	case OUTYAML:
+		serializedData, err = yaml.Marshal(hostData)
+	default:
+		// Should never happen but manage it anyway
+		log.Fatalf("Unsupported output type: %s", output)
 	}
-	fmt.Printf("%s\n", string(jsonData))
+
+	if err != nil {
+		log.Fatalf("Cannot convert host data to %s: %s", output, err)
+	}
+	fmt.Printf("%s\n", string(serializedData))
 
 	return nil
 }
