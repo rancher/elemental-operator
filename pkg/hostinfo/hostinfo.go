@@ -150,7 +150,7 @@ func FillData(data []byte) (map[string]interface{}, error) {
 	if err := json.Unmarshal(data, &systemData); err != nil {
 		return nil, fmt.Errorf("unmarshalling system data payload: %w", err)
 	}
-	return ExtractLabels(*systemData)
+	return ExtractLabels(*systemData), nil
 }
 
 func isBaseReflectKind(k reflect.Kind) bool {
@@ -163,8 +163,10 @@ func isBaseReflectKind(k reflect.Kind) bool {
 	return false
 }
 
-// Core function to translate hostdata (passed as a reflect.Value) to map[string]interface{} containing
-// the Template Labels values
+// reflectValToInterface() converts the passed value to either a string or to a map[string]interface{},
+// where the interface{} part could be either a string or an embedded map[string]interface{}.
+// This is the core function to translate hostdata (passed as a reflect.Value) to map[string]interface{}
+// containing the Template Labels values.
 func reflectValToInterface(v reflect.Value) interface{} {
 	mapData := map[string]interface{}{}
 
@@ -224,13 +226,24 @@ func reflectValToInterface(v reflect.Value) interface{} {
 	return mapData
 }
 
+// dataToLabelMap ensures the value returned by reflectValToInterface() is a map,
+// otherwise returns an empty map (mainly to filter out empty vals returned as empty
+// strings)
+func dataToLabelMap(val interface{}) map[string]interface{} {
+	refVal := reflectValToInterface(reflect.ValueOf(val))
+	if labelMap, ok := refVal.(map[string]interface{}); ok {
+		return labelMap
+	}
+	return map[string]interface{}{}
+}
+
 // ExtractFullData returns all the available hostinfo data without any check
 // or post elaboration as a map[string]interface{}, where the interface{} is
 // either a string or an embedded map[string]interface{}
-func ExtractFullData(systemData HostInfo) (map[string]interface{}, error) {
-	labels := reflectValToInterface(reflect.ValueOf(systemData)).(map[string]interface{})
+func ExtractFullData(systemData HostInfo) map[string]interface{} {
+	labels := dataToLabelMap(systemData)
 
-	return labels, nil
+	return labels
 }
 
 // Some data from HostInfo are invalid: drop them
@@ -241,14 +254,14 @@ func sanitizeHostInfoVal(data string) string {
 	return data
 }
 
-func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
+func ExtractLabels(systemData HostInfo) map[string]interface{} {
 	labels := map[string]interface{}{}
 
 	// SMBIOS DATA
-	bios := reflectValToInterface(reflect.ValueOf(systemData.BIOS)).(map[string]interface{})
-	baseboard := reflectValToInterface(reflect.ValueOf(systemData.Baseboard)).(map[string]interface{})
-	chassis := reflectValToInterface(reflect.ValueOf(systemData.Chassis)).(map[string]interface{})
-	product := reflectValToInterface(reflect.ValueOf(systemData.Product)).(map[string]interface{})
+	bios := dataToLabelMap(systemData.BIOS)
+	baseboard := dataToLabelMap(systemData.Baseboard)
+	chassis := dataToLabelMap(systemData.Chassis)
+	product := dataToLabelMap(systemData.Product)
 	// Legacy SMBIOS names support
 	if systemData.Product != nil {
 		product["Serial Number"] = systemData.Product.SerialNumber
@@ -370,7 +383,7 @@ func ExtractLabels(systemData HostInfo) (map[string]interface{}, error) {
 	// Also available but not used:
 	// systemData.Topology -> CPU/memory and cache topology. No idea if useful.
 
-	return labels, nil
+	return labels
 }
 
 // Deprecated. Remove me together with 'MsgSystemData' type.

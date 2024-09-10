@@ -67,9 +67,9 @@ func dumpdata(output string, full bool) error {
 	}
 
 	if full {
-		hostData, err = hostinfo.ExtractFullData(hwData)
+		hostData = hostinfo.ExtractFullData(hwData)
 	} else {
-		hostData, err = hostinfo.ExtractLabels(hwData)
+		hostData = hostinfo.ExtractLabels(hwData)
 	}
 	if err != nil {
 		log.Fatalf("Cannot convert host data to labels: %s", err)

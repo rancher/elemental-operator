@@ -256,7 +256,7 @@ func sendSystemData(conn *websocket.Conn, protoVersion MessageType) error {
 
 	if protoVersion >= MsgSystemDataV2 {
 		log.Info("Sending System Data")
-		labels, err := hostinfo.ExtractLabels(data)
+		labels := hostinfo.ExtractLabels(data)
 		if err != nil {
 			return fmt.Errorf("extracting labels from system data: %w", err)
 		}
