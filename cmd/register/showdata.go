@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
@@ -30,6 +31,7 @@ import (
 const (
 	DUMPHW            = "hardware"
 	DUMPSMBIOS        = "smbios"
+	FORMATLABELS      = "labels"
 	FORMATJSON        = "json"
 	FORMATJSONCOMPACT = "json-compact"
 	FORMATYAML        = "yaml"
@@ -53,7 +55,7 @@ func newDumpDataCommand() *cobra.Command {
 	viper.AutomaticEnv()
 	cmd.Flags().BoolVarP(&raw, "raw", "r", false, "dump all collected raw data before postprocessing to refine available label templates variables")
 	_ = viper.BindPFlag("raw", cmd.Flags().Lookup("raw"))
-	cmd.Flags().StringVarP(&format, "format", "f", "json", "ouput format ['"+FORMATYAML+"', '"+FORMATJSON+"', '"+FORMATJSONCOMPACT+"']")
+	cmd.Flags().StringVarP(&format, "format", "f", FORMATLABELS, "ouput format ['"+FORMATYAML+"', '"+FORMATJSON+"', '"+FORMATJSONCOMPACT+"']")
 	_ = viper.BindPFlag("format", cmd.Flags().Lookup("format"))
 	return cmd
 }
@@ -78,6 +80,18 @@ func dumpdata(format string, raw bool) error {
 	var serializedData []byte
 
 	switch format {
+	case FORMATLABELS:
+		labels := printLabels("", hostData)
+		keys := make([]string, 0, len(labels))
+		for k := range labels {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			fmt.Printf("%-52s: %q\n", k, labels[k])
+		}
+		return nil
 	case FORMATJSON:
 		serializedData, err = json.MarshalIndent(hostData, "", "  ")
 	case FORMATJSONCOMPACT:
@@ -95,4 +109,26 @@ func dumpdata(format string, raw bool) error {
 	fmt.Printf("%s\n", string(serializedData))
 
 	return nil
+}
+
+func printLabels(rootKey string, data map[string]interface{}) map[string]string {
+	ret := map[string]string{}
+
+	for key, val := range data {
+		lbl := key
+		if len(rootKey) > 0 {
+			lbl = rootKey + "/" + lbl
+		}
+		if _, ok := val.(string); ok {
+			lbl = "${" + lbl + "}"
+			ret[lbl] = fmt.Sprintf("%s", val)
+			//	fmt.Printf("%-52s: %q\n", lbl, val)
+			continue
+		}
+		//printLabels(lbl, val.(map[string]interface{}))
+		for k, v := range printLabels(lbl, val.(map[string]interface{})) {
+			ret[k] = v
+		}
+	}
+	return ret
 }
