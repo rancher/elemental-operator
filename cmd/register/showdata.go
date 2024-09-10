@@ -28,16 +28,16 @@ import (
 )
 
 const (
-	DUMPHW         = "hardware"
-	DUMPSMBIOS     = "smbios"
-	OUTJSON        = "json"
-	OUTJSONCOMPACT = "json-compact"
-	OUTYAML        = "yaml"
+	DUMPHW            = "hardware"
+	DUMPSMBIOS        = "smbios"
+	FORMATJSON        = "json"
+	FORMATJSONCOMPACT = "json-compact"
+	FORMATYAML        = "yaml"
 )
 
 func newDumpDataCommand() *cobra.Command {
-	var full bool
-	var output string
+	var raw bool
+	var format string
 
 	cmd := &cobra.Command{
 		Use:     "dumpdata",
@@ -46,27 +46,27 @@ func newDumpDataCommand() *cobra.Command {
 		Long: "Prints to stdout the data sent by the registering client " +
 			"to the Elemental Operator.",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return dumpdata(output, full)
+			return dumpdata(format, raw)
 		},
 	}
 
 	viper.AutomaticEnv()
-	cmd.Flags().BoolVarP(&full, "full", "f", false, "dump full, raw data before postprocessing to refine available label templates variables")
-	_ = viper.BindPFlag("full", cmd.Flags().Lookup("full"))
-	cmd.Flags().StringVarP(&output, "output", "o", "json", "output format ['"+OUTYAML+"', '"+OUTJSON+"', '"+OUTJSONCOMPACT+"']")
-	_ = viper.BindPFlag("output", cmd.Flags().Lookup("output"))
+	cmd.Flags().BoolVarP(&raw, "raw", "r", false, "dump all collected raw data before postprocessing to refine available label templates variables")
+	_ = viper.BindPFlag("raw", cmd.Flags().Lookup("raw"))
+	cmd.Flags().StringVarP(&format, "format", "f", "json", "ouput format ['"+FORMATYAML+"', '"+FORMATJSON+"', '"+FORMATJSONCOMPACT+"']")
+	_ = viper.BindPFlag("format", cmd.Flags().Lookup("format"))
 	return cmd
 }
 
-func dumpdata(output string, full bool) error {
-	var hostData interface{}
+func dumpdata(format string, raw bool) error {
+	var hostData map[string]interface{}
 
 	hwData, err := hostinfo.Host()
 	if err != nil {
 		log.Fatalf("Cannot retrieve host data: %s", err)
 	}
 
-	if full {
+	if raw {
 		hostData = hostinfo.ExtractFullData(hwData)
 	} else {
 		hostData = hostinfo.ExtractLabels(hwData)
@@ -77,20 +77,20 @@ func dumpdata(output string, full bool) error {
 
 	var serializedData []byte
 
-	switch output {
-	case OUTJSON:
+	switch format {
+	case FORMATJSON:
 		serializedData, err = json.MarshalIndent(hostData, "", "  ")
-	case OUTJSONCOMPACT:
+	case FORMATJSONCOMPACT:
 		serializedData, err = json.Marshal(hostData)
-	case OUTYAML:
+	case FORMATYAML:
 		serializedData, err = yaml.Marshal(hostData)
 	default:
 		// Should never happen but manage it anyway
-		log.Fatalf("Unsupported output type: %s", output)
+		log.Fatalf("Unsupported output type: %s", format)
 	}
 
 	if err != nil {
-		log.Fatalf("Cannot convert host data to %s: %s", output, err)
+		log.Fatalf("Cannot convert host data to %s: %s", format, err)
 	}
 	fmt.Printf("%s\n", string(serializedData))
 
