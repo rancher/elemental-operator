@@ -274,6 +274,10 @@ func sendSystemData(conn *websocket.Conn, protoVersion MessageType) error {
 	if protoVersion >= MsgSystemDataV2 {
 		log.Info("Sending System Data")
 		labels := hostinfo.ExtractLabels(data)
+		// Add legacy labels too (to be deprecated and removed sooner or later)
+		for k, v := range hostinfo.ExtractLabelsLegacy(data) {
+			labels[k] = v
+		}
 		if err != nil {
 			return fmt.Errorf("extracting labels from system data: %w", err)
 		}
