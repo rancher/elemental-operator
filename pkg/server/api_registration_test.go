@@ -77,7 +77,29 @@ var (
 			},
 		},
 	}
-
+	hostinfoDataLabelsRegistrationFixture = &elementalv1.MachineRegistration{
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineInventoryLabels: map[string]string{
+				"elemental.cattle.io/Hostname":               "${Runtime/Hostname}",
+				"elemental.cattle.io/TotalMemory":            "${Memory/TotalPhysicalBytes}",
+				"elemental.cattle.io/AvailableMemory":        "${Memory/TotalUsableBytes}",
+				"elemental.cattle.io/CpuTotalCores":          "${CPU/TotalCores}",
+				"elemental.cattle.io/CpuTotalThreads":        "${CPU/TotalThreads}",
+				"elemental.cattle.io/NetIfacesNumber":        "${Network/TotalNICs}",
+				"elemental.cattle.io/NetIface0-Name":         "${Network/NICs/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-MAC":          "${Network/NICs/myNic1/MacAddress}",
+				"elemental.cattle.io/NetIface0-IsVirtual":    "${Network/NICs/myNic1/IsVirtual}",
+				"elemental.cattle.io/NetIface1-Name":         "${Network/NICs/myNic2/Name}",
+				"elemental.cattle.io/BlockDevicesNumber":     "${Storage/TotalDisks}",
+				"elemental.cattle.io/BlockDevice0-Name":      "${Storage/Disks/testdisk1/Name}",
+				"elemental.cattle.io/BlockDevice1-Name":      "${Storage/Disks/testdisk2/Name}",
+				"elemental.cattle.io/BlockDevice0-Size":      "${Storage/Disks/testdisk1/Size}",
+				"elemental.cattle.io/BlockDevice1-Size":      "${Storage/Disks/testdisk2/Size}",
+				"elemental.cattle.io/BlockDevice0-Removable": "${Storage/Disks/testdisk1/Removable}",
+				"elemental.cattle.io/BlockDevice1-Removable": "${Storage/Disks/testdisk2/Removable}",
+			},
+		},
+	}
 	hostInfoFixture = hostinfo.HostInfo{
 		Block: &block.Info{
 			Disks: []*block.Disk{
@@ -436,9 +458,7 @@ func TestUpdateInventoryFromSystemDataNG(t *testing.T) {
 	inventory := &elementalv1.MachineInventory{}
 	tmpl := templater.NewTemplater()
 
-	data, err := hostinfo.ExtractLabels(hostInfoFixture)
-	assert.NilError(t, err)
-
+	data := hostinfo.ExtractLabelsLegacy(hostInfoFixture)
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
 
@@ -448,6 +468,24 @@ func TestUpdateInventoryFromSystemDataNG(t *testing.T) {
 
 	tmpl.Fill(systemData)
 	err = updateInventoryLabels(tmpl, inventory, systemDataLabelsRegistrationFixture)
+	assert.NilError(t, err)
+	assertSystemDataLabels(t, inventory)
+}
+
+func TestUpdateInventoryFromHostinfoData(t *testing.T) {
+	inventory := &elementalv1.MachineInventory{}
+	tmpl := templater.NewTemplater()
+
+	data := hostinfo.ExtractLabels(hostInfoFixture)
+	encodedData, err := json.Marshal(data)
+	assert.NilError(t, err)
+
+	hostinfoData := map[string]interface{}{}
+	err = json.Unmarshal(encodedData, &hostinfoData)
+	assert.NilError(t, err)
+	fmt.Printf("%+v\n", hostinfoData)
+	tmpl.Fill(hostinfoData)
+	err = updateInventoryLabels(tmpl, inventory, hostinfoDataLabelsRegistrationFixture)
 	assert.NilError(t, err)
 	assertSystemDataLabels(t, inventory)
 }
