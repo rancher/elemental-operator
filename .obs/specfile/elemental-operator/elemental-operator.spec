@@ -15,6 +15,8 @@
 # Please submit bugfixes or comments via https://bugs.opensuse.org/
 #
 
+%define commit _replaceme_
+%define c_date _replaceme_
 
 Name:           elemental-operator
 Version:        0
@@ -23,8 +25,7 @@ Summary:        Kubernetes operator to support OS management
 License:        Apache-2.0
 Group:          System/Management
 URL:            https://github.com/rancher/%{name}
-Source:         %{name}-%{version}.tar
-Source1:        %{name}.obsinfo
+Source:         %{name}.tar.xz
 
 # go-tpm-tools aren't _that_ portable :-(
 ExclusiveArch:  x86_64 aarch64
@@ -59,8 +60,6 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 %package -n elemental-register
 Summary: The registration client
 
-Recommends: dmidecode
-
 %description
 The Elemental operator is responsible for managing the OS
 versions and maintaining a machine inventory to assist with edge or
@@ -90,8 +89,7 @@ Summary: Hooks used in SeedImage builder
 Hooks used in SeedImage builder to copy firmware when building disk-images.
 
 %prep
-%setup -q -n %{name}-%{version}
-cp %{S:1} .
+%setup -q -n %{name}
 
 %build
 %if 0%{?suse_version}
@@ -103,11 +101,20 @@ if [ "$(uname)" = "Linux" ]; then
     OTHER_LINKFLAGS="-extldflags -static -s"
 fi
 
-export GIT_TAG=`echo "%{version}" | cut -d "+" -f 1`
-GIT_COMMIT=$(cat %{name}.obsinfo | grep commit: | cut -d" " -f 2)
+if [ "%{commit}" = "_replaceme_" ]; then
+  echo "No commit hash provided"
+  exit 1
+fi
+
+if [ "%{c_date}" = "_replaceme_" ]; then
+  echo "No commit date provided"
+  exit 1
+fi
+
+export GIT_TAG=$(echo "%{version}" | cut -d "+" -f 1)
+GIT_COMMIT=$(echo "%{commit}")
 export GIT_COMMIT=${GIT_COMMIT:0:8}
-MTIME=$(cat %{name}.obsinfo | grep mtime: | cut -d" " -f 2)
-export COMMITDATE=$(date -d @${MTIME} +%Y%m%d)
+export COMMITDATE="%{c_date}"
 
 # build binaries
 CGO_ENABLED=0 make operator
