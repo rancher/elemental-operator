@@ -129,14 +129,14 @@ build-docker-push-seedimage-builder: build-docker-seedimage-builder
 .PHONY: chart
 chart: build-manifests
 	mkdir -p  $(ROOT_DIR)/build
-	cp -rf $(ROOT_DIR)/.obs/chartfile/crds $(ROOT_DIR)/build/crds
+	cp -rf $(ROOT_DIR)/.obs/chartfile/elemental-operator-crds-helm $(ROOT_DIR)/build/crds
 	mv $(ROOT_DIR)/build/crds/_helmignore $(ROOT_DIR)/build/crds/.helmignore
 	yq -i '.version = "${CHART_VERSION}"' $(ROOT_DIR)/build/crds/Chart.yaml
 	yq -i '.appVersion = "${GIT_TAG}"' $(ROOT_DIR)/build/crds/Chart.yaml
 	ls -R $(ROOT_DIR)/build/crds
 	helm package -d $(ROOT_DIR)/build/ $(ROOT_DIR)/build/crds
 	rm -Rf $(ROOT_DIR)/build/crds
-	cp -rf $(ROOT_DIR)/.obs/chartfile/operator $(ROOT_DIR)/build/operator
+	cp -rf $(ROOT_DIR)/.obs/chartfile/elemental-operator-helm $(ROOT_DIR)/build/operator
 	mv $(ROOT_DIR)/build/operator/_helmignore $(ROOT_DIR)/build/operator/.helmignore
 	yq -i '.version = "${CHART_VERSION}"' $(ROOT_DIR)/build/operator/Chart.yaml
 	yq -i '.appVersion = "${GIT_TAG}"' $(ROOT_DIR)/build/operator/Chart.yaml
@@ -246,10 +246,10 @@ generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the opera
 	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/crd > .obs/chartfile/crds/templates/crds.yaml
+	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm/templates/crds.yaml
 
 build-rbac: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/rbac > .obs/chartfile/operator/templates/cluster_role.yaml
+	$(KUSTOMIZE) build config/rbac > .obs/chartfile/elemental-operator-helm/templates/cluster_role.yaml
 
 build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds
