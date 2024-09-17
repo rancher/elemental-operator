@@ -449,12 +449,12 @@ func ExtractLabels(systemData HostInfo) map[string]interface{} {
 		for i, disk := range systemData.Block.Disks {
 			blockNum := strconv.Itoa(i)
 			disksMap[blockNum] = map[string]interface{}{
-				"Size":               strconv.Itoa(int(disk.SizeBytes)),
-				"Name":               disk.Name,
-				"Drive Type":         disk.DriveType.String(),
-				"Storage Controller": disk.StorageController.String(),
-				"Removable":          strconv.FormatBool(disk.IsRemovable),
-				"Model":              disk.Model,
+				"Size":              strconv.Itoa(int(disk.SizeBytes)),
+				"Name":              disk.Name,
+				"DriveType":         disk.DriveType.String(),
+				"StorageController": disk.StorageController.String(),
+				"Removable":         strconv.FormatBool(disk.IsRemovable),
+				"Model":             disk.Model,
 				// "Partitions":         reflectValToInterface(reflect.ValueOf(disk.Partitions)),
 			}
 			// handy reference by disk name
