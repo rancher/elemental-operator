@@ -107,6 +107,12 @@ var (
 		CPU: &cpu.Info{
 			TotalCores:   300,
 			TotalThreads: 300,
+			Processors: []*cpu.Processor{
+				{
+					Vendor: "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
+					Model:  "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
+				},
+			},
 		},
 		Network: &net.Info{
 			NICs: []*net.NIC{
@@ -232,51 +238,7 @@ func TestUpdateInventoryLabels(t *testing.T) {
 			},
 		},
 	}
-	data := hostinfo.HostInfo{
-		Block: &block.Info{
-			Disks: []*block.Disk{
-				{
-					Name:        "testdisk1",
-					SizeBytes:   300,
-					IsRemovable: true,
-				},
-				{
-					Name:        "testdisk2",
-					SizeBytes:   600,
-					IsRemovable: false,
-				},
-			},
-			Partitions: nil,
-		},
-		Memory: &memory.Info{
-			Area: memory.Area{
-				TotalPhysicalBytes: 100,
-			},
-		},
-		CPU: &cpu.Info{
-			TotalCores:   300,
-			TotalThreads: 300,
-			Processors: []*cpu.Processor{
-				{
-					Vendor: "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
-					Model:  "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬",
-				},
-			},
-		},
-		Network: &net.Info{
-			NICs: []*net.NIC{
-				{
-					Name: "myNic1",
-				},
-				{
-					Name: "myNic2",
-				},
-			},
-		},
-		Runtime: &elementalruntime.Info{
-			Hostname: "machine-1",
-		},
-	}
+	data := hostInfoFixture
 	encodedData, err := json.Marshal(data)
 	assert.NilError(t, err)
 	systemData, err := hostinfo.FillData(encodedData)
@@ -287,7 +249,7 @@ func TestUpdateInventoryLabels(t *testing.T) {
 	assert.NilError(t, err)
 	err = updateInventoryLabels(tmpl, inventory, registration)
 	assert.NilError(t, err)
-	// Check that the labels we properly added to the inventory
+	// Check that the labels were properly added to the inventory
 	assert.Equal(t, inventory.Name, "machine-1")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/TotalMemory"], "100")
 	assert.Equal(t, inventory.Labels["elemental.cattle.io/CpuTotalCores"], "300")
