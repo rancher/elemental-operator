@@ -18,7 +18,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -177,7 +176,6 @@ func TestUpdateInventoryFromHostinfoData(t *testing.T) {
 	hostinfoData := map[string]interface{}{}
 	err = json.Unmarshal(encodedData, &hostinfoData)
 	assert.NilError(t, err)
-	fmt.Printf("%+v\n", hostinfoData)
 	tmpl.Fill(hostinfoData)
 	err = updateInventoryLabels(tmpl, inventory, hostinfoDataLabelsRegistrationFixture)
 	assert.NilError(t, err)
