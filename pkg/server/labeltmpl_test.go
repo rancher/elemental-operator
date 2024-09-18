@@ -338,3 +338,74 @@ func TestUpdateInventoryName(t *testing.T) {
 		assert.Equal(t, inv.Name, tc.expName)
 	}
 }
+
+func TestUpdateInventoryAnnotations(t *testing.T) {
+	tmpl := templater.NewTemplater()
+	inventory := &elementalv1.MachineInventory{}
+	inventory.Annotations = map[string]string{
+		"elemental.cattle.io/Random01": "alreadyFilled",
+		"elemental.cattle.io/Random02": "",
+	}
+
+	registration := &elementalv1.MachineRegistration{
+		Spec: elementalv1.MachineRegistrationSpec{
+			MachineInventoryAnnotations: map[string]string{
+				"elemental.cattle.io/Hostname":               "${Runtime/Hostname}",
+				"elemental.cattle.io/TotalMemory":            "${Memory/TotalPhysicalBytes}",
+				"elemental.cattle.io/AvailableMemory":        "${Memory/TotalUsableBytes}",
+				"elemental.cattle.io/CpuTotalCores":          "${CPU/TotalCores}",
+				"elemental.cattle.io/CpuTotalThreads":        "${CPU/TotalThreads}",
+				"elemental.cattle.io/ProcessorModel":         "${CPU/Processor/Model}",
+				"elemental.cattle.io/NetIfacesNumber":        "${Network/TotalNICs}",
+				"elemental.cattle.io/NetIface0-Name":         "${Network/NICs/myNic1/Name}",
+				"elemental.cattle.io/NetIface0-MAC":          "${Network/NICs/myNic1/MacAddress}",
+				"elemental.cattle.io/NetIface0-IsVirtual":    "${Network/NICs/myNic1/IsVirtual}",
+				"elemental.cattle.io/NetIface1-Name":         "${Network/NICs/myNic2/Name}",
+				"elemental.cattle.io/BlockDevicesNumber":     "${Storage/TotalDisks}",
+				"elemental.cattle.io/BlockDevice0-Name":      "${Storage/Disks/testdisk1/Name}",
+				"elemental.cattle.io/BlockDevice1-Name":      "${Storage/Disks/testdisk2/Name}",
+				"elemental.cattle.io/BlockDevice0-Size":      "${Storage/Disks/testdisk1/Size}",
+				"elemental.cattle.io/BlockDevice1-Size":      "${Storage/Disks/testdisk2/Size}",
+				"elemental.cattle.io/BlockDevice0-Removable": "${Storage/Disks/testdisk1/Removable}",
+				"elemental.cattle.io/UnexistingTemplate":     "${Storage/NotExistingValue}",
+				"elemental.cattle.io/Random01":               "my-random-value-${Random/Int/1000}",
+				"elemental.cattle.io/Random02":               "${Random/UUID}",
+				"elemental.cattle.io/Random03":               "my-random-value-${Random/Hex/5}",
+			},
+		},
+	}
+
+	data := hostinfo.ExtractLabels(hostInfoFixture)
+	encodedData, err := json.Marshal(data)
+	assert.NilError(t, err)
+
+	hostinfoData := map[string]interface{}{}
+	err = json.Unmarshal(encodedData, &hostinfoData)
+	assert.NilError(t, err)
+	tmpl.Fill(hostinfoData)
+
+	err = updateInventoryAnnotations(tmpl, inventory, registration)
+	assert.NilError(t, err)
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/Hostname"], "machine-1")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/TotalMemory"], "100")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/AvailableMemory"], "90")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/CpuTotalCores"], "300")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/CpuTotalThreads"], "300")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/ProcessorModel"], "-this_is@broken?TM-][{¬{$h4yh46Ŋ£$⅝ŋg46¬~{~←ħ¬")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/NetIfacesNumber"], "2")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/NetIface0-Name"], "myNic1")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/NetIface0-MAC"], "02:00:00:00:00:01")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/NetIface0-IsVirtual"], "true")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/NetIface1-Name"], "myNic2")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevicesNumber"], "2")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevice0-Name"], "testdisk1")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevice1-Name"], "testdisk2")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevice0-Size"], "300")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevice1-Size"], "600")
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/BlockDevice0-Removable"], "true")
+	_, ok := inventory.Annotations["elemental.cattle.io/UnexistingTemplate"]
+	assert.Equal(t, ok, false)
+	assert.Equal(t, inventory.Annotations["elemental.cattle.io/Random01"], "alreadyFilled")
+	assert.Equal(t, len(inventory.Annotations["elemental.cattle.io/Random02"]), len("e511d5ca-a765-42f2-82b7-264f37ffb329"))
+	assert.Equal(t, len(inventory.Annotations["elemental.cattle.io/Random03"]), len("my-random-value-12345"))
+}
