@@ -40,6 +40,9 @@ func updateInventoryWithTemplates(tmpl templater.Templater, inv *elementalv1.Mac
 	if err := updateInventoryLabels(tmpl, inv, reg); err != nil {
 		return fmt.Errorf("failed to update inventory labels: %w", err)
 	}
+	if err := updateInventoryAnnotations(tmpl, inv, reg); err != nil {
+		return fmt.Errorf("failed to update inventory annotations: %w", err)
+	}
 	return nil
 }
 
@@ -96,6 +99,35 @@ func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInv
 
 		log.Debugf("Decoded %s into %s, setting it to label %s", v, decodedLabel, k)
 		inv.Labels[k] = decodedLabel
+	}
+	return nil
+}
+
+func updateInventoryAnnotations(tmpl templater.Templater, inv *elementalv1.MachineInventory, reg *elementalv1.MachineRegistration) error {
+	log.Debugf("Adding registration annotations")
+	if inv.Annotations == nil {
+		inv.Annotations = map[string]string{}
+	}
+	for k, v := range reg.Spec.MachineInventoryAnnotations {
+		// Random templated annotations should not be overwritten
+		if invAnnotation, ok := inv.Annotations[k]; ok && invAnnotation != "" {
+			if templater.IsRandomLabel(v) {
+				log.Debugf("Random annotation %q is already rendered (%q)", v, invAnnotation)
+				continue
+			}
+		}
+		decodedAnnotation, err := tmpl.Decode(v)
+		if err != nil {
+			if templater.IsValueNotFoundError(err) {
+				log.Warningf("Templater cannot decode annotation %q: %s", v, err.Error())
+				continue
+			}
+			log.Errorf("Templater failed decoding annotation %q: %s", v, err.Error())
+			return err
+		}
+
+		log.Debugf("Decoded %s into %s, setting it to annotation %s", v, decodedAnnotation, k)
+		inv.Annotations[k] = decodedAnnotation
 	}
 	return nil
 }
