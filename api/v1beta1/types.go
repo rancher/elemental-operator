@@ -53,15 +53,20 @@ type Install struct {
 	// +optional
 	ConfigDir string `json:"config-dir,omitempty" yaml:"config-dir,omitempty"`
 	// +optional
-	// +kubebuilder:default:={"type": "loopdevice"}
+	// +kubebuilder:default:={"type": "loopdevice", "maxSnaps": 2}
 	Snapshotter SnapshotterConfig `json:"snapshotter,omitempty" yaml:"snapshotter,omitempty"`
 }
 
 type SnapshotterConfig struct {
-	// Type sets the snapshotter type a new installation, available options are 'loopdevice' and 'btrfs'
+	// Type sets the snapshotter type for a new installation, available options are 'loopdevice' and 'btrfs'
 	// +optional
 	// +kubebuilder:default:=loopdevice
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+	// MaxSnaps sets the maximum amount of snapshots to keep
+	// +optional
+	// +kubebuilder:default:=2
+	// +kubebuilder:validation:Minimum:=2
+	MaxSnaps int `json:"maxSnaps,omitempty" yaml:"maxSnaps,omitempty"`
 }
 
 type Reset struct {
