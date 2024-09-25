@@ -97,12 +97,19 @@ spec:
                             type: boolean
                           snapshotter:
                             default:
+                              maxSnaps: 2
                               type: loopdevice
                             properties:
+                              maxSnaps:
+                                default: 2
+                                description: MaxSnaps sets the maximum amount of snapshots
+                                  to keep
+                                minimum: 2
+                                type: integer
                               type:
                                 default: loopdevice
-                                description: Type sets the snapshotter type a new
-                                  installation, available options are 'loopdevice'
+                                description: Type sets the snapshotter type for a
+                                  new installation, available options are 'loopdevice'
                                   and 'btrfs'
                                 type: string
                             type: object
