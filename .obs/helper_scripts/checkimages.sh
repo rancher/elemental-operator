@@ -58,3 +58,6 @@ channels=$(findChannels "${OPERATOR_IMAGES}")
 for channel in ${channels}; do
   checkChannel ${channel}
 done
+
+echo "All images successfully checked!"
+exit 0

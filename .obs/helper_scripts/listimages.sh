@@ -38,8 +38,14 @@ done
 echo "${REGISTRY}/rancher/elemental-operator:${OPERATOR}"
 echo "${REGISTRY}/rancher/seedimage-builder:${OPERATOR}"
 
-echo "${REGISTRY}/rancher/elemental-channel:${OPERATOR}"
-echo "${REGISTRY}/rancher/elemental-rt-channel:${OPERATOR}"
+# Note sort -V is a natural numbering sort, not semver
+higher_ver=$(printf '%s\n' "${OPERATOR}" "1.6.0" | sort -rV | head -n1)
+if [ "${higher_ver}" == "1.6.0" ]; then
+  echo "${REGISTRY}/rancher/elemental-channel:${OPERATOR}"
+  echo "${REGISTRY}/rancher/elemental-rt-channel:${OPERATOR}"
+else
+  echo "${REGISTRY}/rancher/elemental-channel/sl-micro:6.0-baremetal"
+fi
 
 # Assume if not registry.suse.com it should be some OBS path, hence
 # charts require a different repository than containers
