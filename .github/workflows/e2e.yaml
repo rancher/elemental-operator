@@ -23,7 +23,7 @@ jobs:
       KUBE_VERSION: ${{ matrix.kubernetes }}
       NGINX_VERSION: controller-v1.9.1
       CERT_MANAGER_VERSION: v1.13.1
-      SYSTEM_UPGRADE_CONTROLLER_VERSION: v0.13.1
+      SYSTEM_UPGRADE_CONTROLLER_VERSION: v0.13.4
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

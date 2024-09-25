@@ -205,7 +205,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 				),
 			)
 
-			By("checking Planv version")
+			By("checking plan version")
 			Eventually(func() string {
 				up, err := getPlan("os-upgrader-update-osversion")
 				if err == nil {
