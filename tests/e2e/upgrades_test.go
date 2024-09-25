@@ -211,6 +211,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 				if err == nil {
 					return up.Spec.Version
 				}
+				fmt.Println(err)
 				return ""
 			}, 3*time.Minute, 2*time.Second).Should(Equal("v1.0"))
 
