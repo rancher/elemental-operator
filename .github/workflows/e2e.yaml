@@ -7,86 +7,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare-build:
-    name: Wait for the PR project to build
-    runs-on: ubuntu-latest
-    outputs:
-      chart_name: ${{ steps.chart.outputs.chart_name }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Wait for OBS crds chart
-        uses: "./.github/actions/wait-commit-status"
-        with:
-          repository: ${{ github.repository }}
-          commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS: elemental-operator-crds-helm - charts/x86_64"
-          status: "success"
-          interval: 60
-          retries: 10
-      - name: Wait for OBS operator chart
-        uses: "./.github/actions/wait-commit-status"
-        with:
-          repository: ${{ github.repository }}
-          commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS: elemental-operator-helm - charts/x86_64"
-          status: "success"
-          interval: 60
-          retries: 10
-      - name: Wait for OBS elemental-operator package
-        uses: "./.github/actions/wait-commit-status"
-        with:
-          repository: ${{ github.repository }}
-          commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS: elemental-operator - standard/x86_64"
-          status: "success"
-          interval: 60
-          retries: 30
-      - name: Wait for OBS seedimage-builder build
-        uses: "./.github/actions/wait-commit-status"
-        with:
-          repository: ${{ github.repository }}
-          commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS: seedimage-builder - containers/x86_64"
-          status: "success"
-          interval: 60
-          retries: 30
-      - name: Wait for OBS operator-image build
-        uses: "./.github/actions/wait-commit-status"
-        with:
-          repository: ${{ github.repository }}
-          commit: ${{ github.event.pull_request.head.sha }}
-          context: "OBS: operator-image - containers/x86_64"
-          status: "success"
-          interval: 60
-          retries: 30
-      - name: Pull chart for PR
-        env:
-          PR_NUMBER: ${{ github.event.number }}
-          OPERATOR_CHART: rancher/elemental-operator-chart
-          CRDS_CHART: rancher/elemental-operator-crds-chart
-        run: |
-          set -x
-          B_REPO=registry.opensuse.org/isv/rancher/elemental/pr/rancher/elemental-operator/pr-${PR_NUMBER}/charts
-          mkdir -p build
-          helm pull -d build oci://${B_REPO}/${CRDS_CHART}
-          helm pull -d build oci://${B_REPO}/${OPERATOR_CHART}
-      - name: Set chart output
-        id: chart
-        run: |
-          set -x
-          FILE=$(find . -type f  -name "elemental-operator-chart-[1-9]*.tgz" -print)
-          CHART=$(basename $FILE)
-          echo "chart_name=$CHART" >> $GITHUB_OUTPUT
-      - name: Upload chart
-        uses: actions/upload-artifact@v4
-        with:
-          name: chart
-          path: build/*.tgz
-          overwrite: true
-
   e2e-tests:
     continue-on-error: true
     strategy:
@@ -96,39 +16,27 @@ jobs:
         replicas: ["1"]
         rancherVersion : ["2.8.5"]
     runs-on: ubuntu-latest
-    needs: prepare-build
     name: k8s ${{ matrix.kubernetes }} - Rancher ${{ matrix.rancherVersion }} - ${{ matrix.replicas }} replicas
     env:
-      CHART: ${{ github.workspace }}/build/${{ needs.prepare-build.outputs.chart_name }}
       OPERATOR_REPLICAS: ${{ matrix.replicas }}
       RANCHER_VERSION: ${{ matrix.rancherVersion }}
+      KUBE_VERSION: ${{ matrix.kubernetes }}
       NGINX_VERSION: controller-v1.9.1
       CERT_MANAGER_VERSION: v1.13.1
       SYSTEM_UPGRADE_CONTROLLER_VERSION: v0.13.1
     steps:
-      - uses: actions/checkout@v4
-      - name: Download chart
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup full cluster
+        run: LOCAL_BUILD=true make setup-full-cluster
+      - name: Upload chart
+        uses: actions/upload-artifact@v4
         with:
           name: chart
-          path: build
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-test-go-${{ hashFiles('**/go.sum') }}
-      - name: Install kind
-        uses: helm/kind-action@v1
-        with:
-          cluster_name: operator-e2e
-          node_image: kindest/node:${{ matrix.kubernetes }}
+          path: build/*.tgz
+          overwrite: true
       - name: e2e tests
         run: make e2e-tests
       - name: Archive artifacts
