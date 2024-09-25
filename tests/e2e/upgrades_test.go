@@ -74,6 +74,7 @@ func upgradePod(k *kubectl.Kubectl) string {
 }
 
 func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.GomegaMatcher) {
+	By("checking upgrade pod")
 	// Wait for the upgrade pod to appear
 	k.EventuallyPodMatch(
 		cattleSystemNamespace,
@@ -154,6 +155,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 		})
 
 		createsCorrectPlan := func(meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
+			By("creating a new ManagedOSVersion")
 			ov := catalog.NewManagedOSVersion(
 				fleetNamespace, osVersion, "v1.0", "0.0.0",
 				meta,
@@ -164,6 +166,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 				return k.ApplyJSON("", osVersion, ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
+			By("creating a new ManagedOSImage")
 			ui := catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
@@ -176,6 +179,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 				return k.ApplyJSON("", osImage, ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
+			By("fetching bundle content")
 			EventuallyWithOffset(1, func() string {
 				r, err := kubectl.GetData(fleetNamespace, "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
@@ -201,6 +205,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 				),
 			)
 
+			By("checking Planv version")
 			Eventually(func() string {
 				up, err := getPlan("os-upgrader-update-osversion")
 				if err == nil {
