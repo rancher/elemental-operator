@@ -106,7 +106,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	ExpectWithOffset(1, mounts).To(mm)
 }
 
-var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
+var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 	k := kubectl.New()
 
 	Context("Using ManagedOSVersion reference", func() {

@@ -31,7 +31,7 @@ import (
 const stableCRDSChart = "oci://registry.suse.com/rancher/elemental-operator-crds-chart"
 const stableChart = "oci://registry.suse.com/rancher/elemental-operator-chart"
 
-var _ = Describe("Elemental Operator downgrade/upgrade test", func() {
+var _ = Describe("Elemental Operator downgrade/upgrade test", Ordered, func() {
 	var k *kubectl.Kubectl
 	var downgradeCfg config.E2EConfig
 	var channelName string

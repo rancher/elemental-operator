@@ -35,7 +35,7 @@ import (
 
 const channelName = "testchannel"
 
-var _ = Describe("ManagedOSVersionChannel e2e tests", func() {
+var _ = Describe("ManagedOSVersionChannel e2e tests", Ordered, func() {
 	var versions []elementalv1.ManagedOSVersion
 
 	AfterEach(func() {

@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var _ = Describe("ManagedOSImage e2e tests", func() {
+var _ = Describe("ManagedOSImage e2e tests", Ordered, func() {
 	Context("Using OSImage reference", func() {
 		var ui *elementalv1.ManagedOSImage
 
