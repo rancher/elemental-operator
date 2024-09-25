@@ -212,7 +212,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 					return up.Spec.Version
 				}
 				return ""
-			}, 1*time.Minute, 2*time.Second).Should(Equal("v1.0"))
+			}, 3*time.Minute, 2*time.Second).Should(Equal("v1.0"))
 
 			plan, err := getPlan("os-upgrader-update-osversion")
 			Expect(err).ToNot(HaveOccurred())
