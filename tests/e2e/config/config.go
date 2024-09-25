@@ -48,6 +48,7 @@ type E2EConfig struct {
 
 	SystemUpgradeControllerVersion string `yaml:"systemUpgradeControllerVersion"`
 	SystemUpgradeControllerURL     string `yaml:"systemUpgradeControllerURL"`
+	SystemUpgradeControllerCRDsURL string `yaml:"systemUpgradeControllerCRDsURL"`
 }
 
 // ReadE2EConfig read config from yaml and substitute variables using envsubst.
@@ -139,6 +140,10 @@ func ReadE2EConfig(configPath string) (*E2EConfig, error) { //nolint:gocyclo
 		config.SystemUpgradeControllerVersion = sysUpgradeControllerURL
 	}
 
+	if sysUpgradeControllerCRDsURL := os.Getenv("SYSTEM_UPGRADE_CONTROLLER_CRDS_URL"); sysUpgradeControllerCRDsURL != "" {
+		config.SystemUpgradeControllerCRDsURL = sysUpgradeControllerCRDsURL
+	}
+
 	if err := substituteVersions(config); err != nil {
 		return nil, err
 	}
@@ -178,6 +183,14 @@ func substituteVersions(config *E2EConfig) error {
 		return fmt.Errorf("failed to substiture system upgrade controller url: %w", err)
 	}
 	config.SystemUpgradeControllerURL = sysUpgradeControllerURL
+
+	sysUpgradeControllerCRDsURL, err := envsubst.Eval(config.SystemUpgradeControllerCRDsURL, func(_ string) string {
+		return config.SystemUpgradeControllerVersion
+	})
+	if err != nil {
+		return fmt.Errorf("failed to substiture system upgrade controller url: %w", err)
+	}
+	config.SystemUpgradeControllerCRDsURL = sysUpgradeControllerCRDsURL
 
 	return nil
 }
