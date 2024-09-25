@@ -58,6 +58,10 @@ KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
 
+MOCKGEN_PKG := go.uber.org/mock/mockgen
+MOCKGEN_VER := v0.4.0
+MOCKGEN := $(ABS_TOOLS_DIR)/mockgen-$(MOCKGEN_VER)
+
 $(CONTROLLER_GEN): 
 	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) controller-gen $(CONTROLLER_GEN_VER)
 
@@ -69,6 +73,9 @@ $(SETUP_ENVTEST):
 
 $(KUSTOMIZE):
 	CGO_ENABLED=0 GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) kustomize $(KUSTOMIZE_VER)
+
+$(MOCKGEN):
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(MOCKGEN_PKG) mockgen $(MOCKGEN_VER)	
 
 .PHONY: build
 build: operator register support
@@ -238,12 +245,20 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g
 		output:webhook:dir=./config/webhook \
 		webhook
 
+.PHONY: generate-mocks
+generate-mocks: $(MOCKGEN)
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/register/mocks/client.go -package=mocks github.com/rancher/elemental-operator/pkg/register Client
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/register/mocks/state.go -package=mocks github.com/rancher/elemental-operator/pkg/register StateHandler
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/install/mocks/install.go -package=mocks github.com/rancher/elemental-operator/pkg/install Installer
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/elementalcli/mocks/elementalcli.go -package=mocks github.com/rancher/elemental-operator/pkg/elementalcli Runner
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/network/mocks/network.go -package=mocks github.com/rancher/elemental-operator/pkg/network Configurator
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/util/mocks/command_runner.go -package=mocks github.com/rancher/elemental-operator/pkg/util CommandRunner
+
 .PHONY: generate-go
-generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator
+generate-go: generate-mocks $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator
 	$(CONTROLLER_GEN) \
 		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
 		paths=./api/...
-	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm/templates/crds.yaml
