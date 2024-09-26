@@ -598,13 +598,13 @@ func GetObject(name, namespace, resourceType string, obj interface{}) (err error
 
 // EventuallyPodMatch uses ginkgo/gomega matcher to satisfy against a namespace/label pod
 func (k *Kubectl) EventuallyPodMatch(namespace, label string, timeout, poll time.Duration, mm gomega.OmegaMatcher) {
-	gomega.Eventually(func() []string {
+	gomega.EventuallyWithOffset(1, func() []string {
 		pods, err := k.GetPodNames(namespace, label)
 		if err != nil {
 			fmt.Println(err)
 		}
 		return pods
-	}).WithOffset(1).WithTimeout(timeout).WithPolling(poll).Should(mm)
+	}, timeout, poll).Should(mm)
 }
 
 // ApplyYAML applies arbitrary interfaces with kubectl.
