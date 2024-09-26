@@ -249,7 +249,6 @@ var _ = BeforeSuite(func() {
 
 		By("installing system-upgrade-controller: "+e2eCfg.SystemUpgradeControllerVersion, func() {
 			// Install CRDs first
-			fmt.Println("Using " + e2eCfg.SystemUpgradeControllerCRDsURL)
 			crdResp, err := http.Get(e2eCfg.SystemUpgradeControllerCRDsURL)
 			Expect(err).ToNot(HaveOccurred())
 			defer crdResp.Body.Close()
