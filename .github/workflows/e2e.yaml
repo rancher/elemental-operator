@@ -1,6 +1,7 @@
 name: e2e tests
-on:
-  pull_request:
+on: workflow_dispatch
+# This workflow is still not working on Github Actions.
+#  pull_request:
 
 concurrency:
   group: e2e-tests=full-${{ github.head_ref || github.ref }}-${{ github.repository }}
