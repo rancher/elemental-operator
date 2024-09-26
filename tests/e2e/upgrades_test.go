@@ -129,29 +129,25 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 			k.Delete("managedosversionchannel", "--all", "--wait", "-n", fleetNamespace)
 
 			// delete dangling upgrade pods
-			EventuallyWithOffset(1, func() []string {
-				pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
-				if err != nil {
-					fmt.Println(err)
-				}
-				fmt.Println(pods)
+			pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(pods)
 
-				applyPods := []string{}
-				for _, p := range pods {
-					if !strings.HasPrefix(p, "system-upgrade-controller") {
-						applyPods = append(applyPods, p)
-					}
-
-					if strings.Contains(p, "apply-os-upgrader") {
-						By("deleting " + p)
-						k.Delete("pod", "-n", cattleSystemNamespace, "--wait", "--force", p)
-						err = k.WaitForPodDelete(cattleSystemNamespace, p)
-						Expect(err).ToNot(HaveOccurred())
-					}
+			applyPods := []string{}
+			for _, p := range pods {
+				if !strings.HasPrefix(p, "system-upgrade-controller") {
+					applyPods = append(applyPods, p)
 				}
 
-				return applyPods
-			}, 3*time.Minute, 2*time.Second).Should(Equal([]string{}))
+				if strings.Contains(p, "apply-os-upgrader") {
+					By("deleting " + p)
+					k.Delete("pod", "-n", cattleSystemNamespace, "--wait", "--force", p)
+					err = k.WaitForPodDelete(cattleSystemNamespace, p)
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}
 		})
 
 		createsCorrectPlan := func(meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
