@@ -725,8 +725,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/pseudomuto/protoc-gen-doc v1.4.1/go.mod h1:exDTOVwqpp30eV/EDPFLZy3Pwr2sn6hBC1WIYH/UbIg=
 github.com/pseudomuto/protoc-gen-doc v1.5.0/go.mod h1:exDTOVwqpp30eV/EDPFLZy3Pwr2sn6hBC1WIYH/UbIg=
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240227152220-1b9250417c8d h1:uWhUciLoSxKDYdW87Ir4BeQQdv7OzeZ74GO+R3gSSDM=
-github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240227152220-1b9250417c8d/go.mod h1:Ex+a/ng4u2BvcGQdQjTHI48h88bQ6k2a7q8rnvU0XbQ=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21 h1:HiCx5MUE8Y3o9K+YV8fMPPbzqSm7r6klDQ8erJbIw9E=
+github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21/go.mod h1:Ex+a/ng4u2BvcGQdQjTHI48h88bQ6k2a7q8rnvU0XbQ=
 github.com/rancher-sandbox/go-tpm v0.0.0-20230111102523-ee25b94d1912 h1:XcxZmGLOTk+9QCUJl/hCwMeOzkaA+nFY2Z04inD3wtc=
 github.com/rancher-sandbox/go-tpm v0.0.0-20230111102523-ee25b94d1912/go.mod h1:knpgv9J5TouY2g4C3AqhDn7x8kCcyIUUjFFxgPolJys=
 github.com/rancher/aks-operator v1.3.0-rc5 h1:4yiTDMmPVZbp+Uy8WQprwElJ6R8yKA0aZema5VDMQo4=

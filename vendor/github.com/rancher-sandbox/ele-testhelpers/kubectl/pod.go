@@ -74,7 +74,7 @@ type ContainerStatus struct {
 	Image                string         `yaml:"image"`
 	ImageID              string         `yaml:"imageID"`
 	ContainerID          string         `yaml:"containerID,omitempty"`
-	Started              *bool          `yaml:"started,omitempty"`
+	Started              bool           `yaml:"started,omitempty"`
 }
 
 // PodCondition is the pod condition status
