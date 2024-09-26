@@ -179,7 +179,7 @@ unit-tests: $(SETUP_ENVTEST) $(GINKGO)
 airgap-script-test:
 	scripts/elemental-airgap-test.sh
 
-e2e-tests: $(GINKGO)
+e2e-tests: $(GINKGO) build-docker-operator build-docker-seedimage-builder chart setup-kind
 	kubectl cluster-info --context kind-$(CLUSTER_NAME)
 	kubectl label nodes --all --overwrite ingress-ready=true
 	kubectl label nodes --all --overwrite node-role.kubernetes.io/master=
@@ -188,6 +188,8 @@ e2e-tests: $(GINKGO)
 	export CHART=$(CHART) && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
 
 # Only setups the kind cluster
