@@ -286,9 +286,13 @@ fetch_charts() {
     for c in $charts; do
         local chart=""
         local chart_ver=""
+        local opts=""
 
         # helm pull only supports semver tags: for the "latest" tag just don't put the version.
         [[ "$CHART_VERSION" != "latest" ]] && chart_ver="--version $CHART_VERSION"
+
+        # helm pull needs to be aware of development versions
+        [[ "${CHART_NAME_OPERATOR}" =~ (Dev|dev|DEV|Staging|staging|STAGING) ]] && opts="--devel"
 
         # 'c' var holds the name (e.g., CHART_NAME_OPERATOR),
         # 'chart' var holds the value (e.g., elemental-operator-chart-1.4.tgz)
@@ -296,7 +300,7 @@ fetch_charts() {
         case $chart in
             "oci://"*|"https//"*)
             log_debug "fetching chart '$chart' $chart_ver"
-            if ! outstr=$(helm pull ${chart} $chart_ver 2>&1); then
+            if ! outstr=$(helm pull ${opts} ${chart} $chart_ver 2>&1); then
                 exit_error "downloading ${chart}:\n $outstr"
             fi
             eval $c=$(ls -t1 | head -n 1)
