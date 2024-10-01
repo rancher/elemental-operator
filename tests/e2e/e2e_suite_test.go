@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -199,7 +200,49 @@ var _ = BeforeSuite(func() {
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
-		By("installing rancher: "+e2eCfg.RancherVersion, func() {
+		By("creating cattle-system namespace", func() {
+			Expect(kubectl.Apply(testRegistryNamespace, "../manifests/cattle-system-namespace.yaml")).To(Succeed())
+		})
+
+		By("installing a self-signed CA", func() {
+			Expect(kubectl.Apply("cattle-system", "../manifests/test-private-ca.yaml")).To(Succeed())
+
+			Eventually(func() bool {
+				return doesSecretExist("cattle-system", "tls-ca")
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			Eventually(func() bool {
+				return doesSecretExist("cattle-system", "tls-rancher-ingress")
+			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+
+			// We need to cope with the arbitrary and hardcoded `cacerts.pem` secret key
+			// See https://github.com/rancher/rancher/issues/36994
+
+			// For this reason we fetch the cert-manager generated data['tls.crt'] from the tls-ca secret,
+			// and we copy its value to  data['cacerts.pem'] where Rancher expects it.
+			// See the rancher Deployment in cattle-system namespace for more info on how this is mounted.
+
+			printCA := "-n cattle-system get secret tls-ca -o jsonpath=\"{.data['tls\\.crt']}\""
+			caCert, err := kubectl.Run(strings.Split(printCA, " ")...)
+			caCert = strings.ReplaceAll(caCert, `"`, "")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			//patch := fmt.Sprintf(`-n cattle-system patch secret tls-ca -p "{\"data\":{\"cacerts.pem\":\"%s\"}}"`, caCert)
+			//_, err = kubectl.Run(strings.Split(patch, " ")...)
+			//Expect(err).ShouldNot(HaveOccurred())
+
+			// If you wonder what the heck is happening here with the bash script, uncomment the lines above and knock yourself out.
+			// It has been a long day.
+			patchScript := fmt.Sprintf(`kubectl -n cattle-system patch secret tls-ca -p '{"data":{"cacerts.pem":"%s"}}'`, caCert)
+			Expect(os.WriteFile("/tmp/kubectl-patch-tls-ca.sh", []byte(patchScript), os.ModePerm)).Should(Succeed())
+			cmd := exec.Command("bash", "/tmp/kubectl-patch-tls-ca.sh")
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				fmt.Printf("Failed to patch tls-ca: %s\n", string(output))
+			}
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		By("installing rancher"+e2eCfg.RancherVersion, func() {
 			if isAlreadyInstalled(cattleSystemNamespace) {
 				By("already installed")
 				return
@@ -218,8 +261,8 @@ var _ = BeforeSuite(func() {
 				"--set", "extraEnv[0].value=https://"+hostname,
 				"--set", "extraEnv[1].name=CATTLE_BOOTSTRAP_PASSWORD",
 				"--set", "extraEnv[1].value="+password,
+				"--set", "privateCA=true",
 				"--namespace", cattleSystemNamespace,
-				"--create-namespace",
 			)).To(Succeed())
 
 			Eventually(func() bool {
@@ -378,6 +421,20 @@ func isDeploymentReady(namespace, name string) bool {
 	}
 
 	return false
+}
+
+func doesSecretExist(namespace, name string) bool {
+	secret := &corev1.Secret{}
+	if err := cl.Get(ctx,
+		runtimeclient.ObjectKey{
+			Namespace: namespace,
+			Name:      name,
+		},
+		secret,
+	); err != nil {
+		return false
+	}
+	return true
 }
 
 func collectArtifacts() {
