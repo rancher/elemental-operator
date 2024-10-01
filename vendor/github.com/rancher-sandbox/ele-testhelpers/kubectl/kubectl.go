@@ -112,6 +112,12 @@ func (k *Kubectl) NamespaceWithReadyPod(namespace string, labelName string) (boo
 			if !s.Ready {
 				return false, nil
 			}
+			if !s.Started {
+				return false, nil
+			}
+			if s.State.Running == nil {
+				return false, nil
+			}
 		}
 	}
 	return true, nil
@@ -291,7 +297,7 @@ func (k *Kubectl) Wait(namespace string, requiredStatus string, resourceName str
 	})
 
 	if err != nil {
-		return errors.Wrapf(err, string(debug.Stack()))
+		return errors.Wrap(err, string(debug.Stack()))
 	}
 
 	return nil
@@ -525,7 +531,7 @@ func RunCommandWithOutput(namespace string, podName string, commandInPod string)
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		return "", errors.Wrapf(err, stderr.String())
+		return "", errors.Wrap(err, stderr.String())
 	}
 	if len(out.String()) > 0 {
 		return out.String(), nil

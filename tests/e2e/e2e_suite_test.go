@@ -162,7 +162,7 @@ var _ = BeforeSuite(func() {
 	}
 
 	By("Deploying elemental-operator chart dependencies", func() {
-		By("installing nginx", func() {
+		By("installing nginx: "+e2eCfg.NginxVersion, func() {
 			if isAlreadyInstalled(nginxNamespace) {
 				By("already installed")
 				return
@@ -175,7 +175,7 @@ var _ = BeforeSuite(func() {
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
-		By("installing cert-manager", func() {
+		By("installing cert-manager: "+e2eCfg.CertManagerVersion, func() {
 			if isAlreadyInstalled(certManagerNamespace) {
 				By("already installed")
 				return
@@ -199,7 +199,7 @@ var _ = BeforeSuite(func() {
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
-		By("installing rancher", func() {
+		By("installing rancher: "+e2eCfg.RancherVersion, func() {
 			if isAlreadyInstalled(cattleSystemNamespace) {
 				By("already installed")
 				return
@@ -247,7 +247,24 @@ var _ = BeforeSuite(func() {
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 		})
 
-		By("installing system-upgrade-controller", func() {
+		By("installing system-upgrade-controller: "+e2eCfg.SystemUpgradeControllerVersion, func() {
+			// Install CRDs first
+			crdResp, err := http.Get(e2eCfg.SystemUpgradeControllerCRDsURL)
+			Expect(err).ToNot(HaveOccurred())
+			defer crdResp.Body.Close()
+			crdData := bytes.NewBuffer([]byte{})
+
+			_, err = io.Copy(crdData, crdResp.Body)
+			Expect(err).ToNot(HaveOccurred())
+
+			temp, err := os.CreateTemp("", "temp")
+			Expect(err).ToNot(HaveOccurred())
+
+			defer os.RemoveAll(temp.Name())
+			Expect(os.WriteFile(temp.Name(), crdData.Bytes(), os.ModePerm)).To(Succeed())
+			Expect(kubectl.Apply(cattleSystemNamespace, temp.Name())).To(Succeed())
+
+			// Install system upgrade controller
 			resp, err := http.Get(e2eCfg.SystemUpgradeControllerURL)
 			Expect(err).ToNot(HaveOccurred())
 			defer resp.Body.Close()
@@ -259,7 +276,7 @@ var _ = BeforeSuite(func() {
 			// It needs to look over cattle-system ns to be functional
 			toApply := strings.ReplaceAll(data.String(), "namespace: system-upgrade", "namespace: "+cattleSystemNamespace)
 
-			temp, err := os.CreateTemp("", "temp")
+			temp, err = os.CreateTemp("", "temp")
 			Expect(err).ToNot(HaveOccurred())
 
 			defer os.RemoveAll(temp.Name())

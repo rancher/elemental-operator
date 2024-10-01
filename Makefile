@@ -58,6 +58,10 @@ KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
 
+MOCKGEN_PKG := go.uber.org/mock/mockgen
+MOCKGEN_VER := v0.4.0
+MOCKGEN := $(ABS_TOOLS_DIR)/mockgen-$(MOCKGEN_VER)
+
 $(CONTROLLER_GEN): 
 	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) controller-gen $(CONTROLLER_GEN_VER)
 
@@ -69,6 +73,9 @@ $(SETUP_ENVTEST):
 
 $(KUSTOMIZE):
 	CGO_ENABLED=0 GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) kustomize $(KUSTOMIZE_VER)
+
+$(MOCKGEN):
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(MOCKGEN_PKG) mockgen $(MOCKGEN_VER)	
 
 .PHONY: build
 build: operator register support
@@ -172,7 +179,7 @@ unit-tests: $(SETUP_ENVTEST) $(GINKGO)
 airgap-script-test:
 	scripts/elemental-airgap-test.sh
 
-e2e-tests: $(GINKGO)
+e2e-tests: $(GINKGO) build-docker-operator build-docker-seedimage-builder chart setup-kind
 	kubectl cluster-info --context kind-$(CLUSTER_NAME)
 	kubectl label nodes --all --overwrite ingress-ready=true
 	kubectl label nodes --all --overwrite node-role.kubernetes.io/master=
@@ -181,6 +188,8 @@ e2e-tests: $(GINKGO)
 	export CHART=$(CHART) && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CONFIG_PATH=$(E2E_CONF_FILE) && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO}:${CHART_VERSION} && \
+	kind load docker-image --name $(CLUSTER_NAME) ${REGISTRY_HEADER}${REPO_SEEDIMAGE}:${TAG_SEEDIMAGE} && \
 	cd $(ROOT_DIR)/tests && $(GINKGO) -r -v ./e2e
 
 # Only setups the kind cluster
@@ -193,7 +202,7 @@ setup-kind:
 # and run a test that does nothing but installs everything for
 # the elemental operator (nginx, rancher, operator, etc..) as part of the BeforeSuite
 # So you end up with a clean cluster in which nothing has run
-setup-full-cluster: build-docker-operator build-docker-seedimage-builder chart setup-kind
+setup-full-cluster: $(GINKGO) build-docker-operator build-docker-seedimage-builder chart setup-kind
 	@export EXTERNAL_IP=$$(kubectl get nodes -o jsonpath='{.items[].status.addresses[?(@.type == "InternalIP")].address}') && \
 	export BRIDGE_IP="172.18.0.1" && \
 	export CHART=$(CHART) && \
@@ -238,12 +247,20 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests for the operator e.g
 		output:webhook:dir=./config/webhook \
 		webhook
 
+.PHONY: generate-mocks
+generate-mocks: $(MOCKGEN)
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/register/mocks/client.go -package=mocks github.com/rancher/elemental-operator/pkg/register Client
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/register/mocks/state.go -package=mocks github.com/rancher/elemental-operator/pkg/register StateHandler
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/install/mocks/install.go -package=mocks github.com/rancher/elemental-operator/pkg/install Installer
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/elementalcli/mocks/elementalcli.go -package=mocks github.com/rancher/elemental-operator/pkg/elementalcli Runner
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/network/mocks/network.go -package=mocks github.com/rancher/elemental-operator/pkg/network Configurator
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/util/mocks/command_runner.go -package=mocks github.com/rancher/elemental-operator/pkg/util CommandRunner
+
 .PHONY: generate-go
-generate-go: $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator
+generate-go: generate-mocks $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator
 	$(CONTROLLER_GEN) \
 		object:headerFile=$(ROOT)scripts/boilerplate.go.txt \
 		paths=./api/...
-	./scripts/generate_mocks.sh
 
 build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm/templates/crds.yaml

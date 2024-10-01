@@ -18,7 +18,7 @@ require (
 	github.com/jaypipes/ghw v0.12.0
 	github.com/onsi/ginkgo/v2 v2.17.0
 	github.com/onsi/gomega v1.32.0
-	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240227152220-1b9250417c8d
+	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21
 	github.com/rancher-sandbox/go-tpm v0.0.0-20230111102523-ee25b94d1912
 	github.com/rancher/fleet/pkg/apis v0.10.0-rc.4
 	github.com/rancher/lasso v0.0.0-20240123150939-7055397d6dfa

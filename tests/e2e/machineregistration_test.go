@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("MachineRegistration e2e tests", func() {
+var _ = Describe("MachineRegistration e2e tests", Ordered, func() {
 	Context("registration", func() {
 		var mRegistration *elementalv1.MachineRegistration
 

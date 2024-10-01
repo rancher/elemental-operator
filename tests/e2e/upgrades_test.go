@@ -74,6 +74,7 @@ func upgradePod(k *kubectl.Kubectl) string {
 }
 
 func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.GomegaMatcher) {
+	By("checking upgrade pod")
 	// Wait for the upgrade pod to appear
 	k.EventuallyPodMatch(
 		cattleSystemNamespace,
@@ -106,7 +107,7 @@ func checkUpgradePod(k *kubectl.Kubectl, env, image, command, args, mm types.Gom
 	ExpectWithOffset(1, mounts).To(mm)
 }
 
-var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
+var _ = Describe("ManagedOSImage Upgrade e2e tests", Ordered, func() {
 	k := kubectl.New()
 
 	Context("Using ManagedOSVersion reference", func() {
@@ -128,32 +129,29 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 			k.Delete("managedosversionchannel", "--all", "--wait", "-n", fleetNamespace)
 
 			// delete dangling upgrade pods
-			EventuallyWithOffset(1, func() []string {
-				pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
-				if err != nil {
-					fmt.Println(err)
-				}
-				fmt.Println(pods)
+			pods, err := k.GetPodNames(cattleSystemNamespace, "upgrade.cattle.io/controller=system-upgrade-controller")
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(pods)
 
-				applyPods := []string{}
-				for _, p := range pods {
-					if !strings.HasPrefix(p, "system-upgrade-controller") {
-						applyPods = append(applyPods, p)
-					}
-
-					if strings.Contains(p, "apply-os-upgrader") {
-						By("deleting " + p)
-						k.Delete("pod", "-n", cattleSystemNamespace, "--wait", "--force", p)
-						err = k.WaitForPodDelete(cattleSystemNamespace, p)
-						Expect(err).ToNot(HaveOccurred())
-					}
+			applyPods := []string{}
+			for _, p := range pods {
+				if !strings.HasPrefix(p, "system-upgrade-controller") {
+					applyPods = append(applyPods, p)
 				}
 
-				return applyPods
-			}, 3*time.Minute, 2*time.Second).Should(Equal([]string{}))
+				if strings.Contains(p, "apply-os-upgrader") {
+					By("deleting " + p)
+					k.Delete("pod", "-n", cattleSystemNamespace, "--wait", "--force", p)
+					err = k.WaitForPodDelete(cattleSystemNamespace, p)
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}
 		})
 
 		createsCorrectPlan := func(meta map[string]runtime.RawExtension, c *upgradev1.ContainerSpec, m types.GomegaMatcher) {
+			By("creating a new ManagedOSVersion")
 			ov := catalog.NewManagedOSVersion(
 				fleetNamespace, osVersion, "v1.0", "0.0.0",
 				meta,
@@ -164,6 +162,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				return k.ApplyJSON("", osVersion, ov)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
+			By("creating a new ManagedOSImage")
 			ui := catalog.NewManagedOSImage(
 				fleetNamespace,
 				osImage,
@@ -176,6 +175,7 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				return k.ApplyJSON("", osImage, ui)
 			}, 2*time.Minute, 2*time.Second).ShouldNot(HaveOccurred())
 
+			By("fetching bundle content")
 			EventuallyWithOffset(1, func() string {
 				r, err := kubectl.GetData(fleetNamespace, "bundle", "mos-update-osversion", `jsonpath={.spec.resources[*].content}`)
 				if err != nil {
@@ -201,13 +201,15 @@ var _ = Describe("ManagedOSImage Upgrade e2e tests", func() {
 				),
 			)
 
+			By("checking plan version")
 			Eventually(func() string {
 				up, err := getPlan("os-upgrader-update-osversion")
 				if err == nil {
 					return up.Spec.Version
 				}
+				fmt.Println(err)
 				return ""
-			}, 1*time.Minute, 2*time.Second).Should(Equal("v1.0"))
+			}, 3*time.Minute, 2*time.Second).Should(Equal("v1.0"))
 
 			plan, err := getPlan("os-upgrader-update-osversion")
 			Expect(err).ToNot(HaveOccurred())
