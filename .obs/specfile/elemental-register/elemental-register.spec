@@ -1,7 +1,7 @@
 #
-# spec file for package elemental-operator
+# spec file for package elemental-register
 #
-# Copyright (c) 2022 SUSE LLC
+# Copyright (c) 2024 SUSE LLC
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -18,13 +18,13 @@
 %define commit _replaceme_
 %define c_date _replaceme_
 
-Name:           elemental-operator
+Name:           elemental-register
 Version:        0
 Release:        0
-Summary:        Kubernetes operator to support OS management
+Summary:        The Elemental Operator registration client
 License:        Apache-2.0
 Group:          System/Management
-URL:            https://github.com/rancher/%{name}
+URL:            https://github.com/rancher/elemental-operator
 Source:         %{name}.tar.xz
 
 # go-tpm-tools aren't _that_ portable :-(
@@ -54,25 +54,16 @@ BuildRequires:  compiler(go-compiler) >= 1.22
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 
-%define systemdir /system
-%define oemdir %{systemdir}/oem
-
 %description
-The Elemental operator is responsible for managing the OS
-versions and maintaining a machine inventory to assist with edge or
-baremetal installations.
+The elemental-register command is responsible of the node registration
+against an elemental-operator instance running under Rancher.
 
-%package -n elemental-httpfy
-Summary: Simple http server
+%package -n elemental-support
+Summary: Collect important logs for support
 
-%description -n elemental-httpfy
-httpfy starts a simple http server, serving files from the current dir.
-
-%package -n elemental-seedimage-hooks
-Summary: Hooks used in SeedImage builder
-
-%description -n elemental-seedimage-hooks
-Hooks used in SeedImage builder to copy firmware when building disk-images.
+%description -n elemental-support
+This collects essential configuration files and logs to improve issue
+resolution.
 
 %prep
 %setup -q -n %{name}
@@ -103,8 +94,9 @@ export GIT_COMMIT=${GIT_COMMIT:0:8}
 export COMMITDATE="%{c_date}"
 
 # build binaries
-CGO_ENABLED=0 make operator
-make httpfy
+CGO_ENABLED=1 make register
+make support
+
 
 %install
 %if 0%{?suse_version}
@@ -114,30 +106,19 @@ make httpfy
 # /usr/sbin
 %{__install} -d -m 755 %{buildroot}/%{_sbindir}
 
-
 # binary
-%{__install} -m 755 build/elemental-operator %{buildroot}%{_sbindir}
-%{__install} -m 755 build/elemental-httpfy %{buildroot}%{_sbindir}
-
-# hooks
-mkdir -p %{buildroot}%{oemdir}
-%{__install} -m 755 hooks/*.yaml %{buildroot}%{oemdir}/
+%{__install} -m 755 build/elemental-register %{buildroot}%{_sbindir}
+%{__install} -m 755 build/elemental-support %{buildroot}%{_sbindir}
 
 %files
 %defattr(-,root,root,-)
 %license LICENSE
-%{_sbindir}/%{name}
+%{_sbindir}/elemental-register
 
-%files -n elemental-httpfy
+%files -n elemental-support
 %defattr(-,root,root,-)
 %license LICENSE
-%{_sbindir}/elemental-httpfy
+%{_sbindir}/elemental-support
 
-%files -n elemental-seedimage-hooks
-%defattr(-,root,root,-)
-%license LICENSE
-%dir %{systemdir}
-%dir %{oemdir}
-%{oemdir}/*
 
 %changelog
