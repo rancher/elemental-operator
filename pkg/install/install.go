@@ -476,6 +476,10 @@ func (i *installer) getAgentConfigBytes() ([]byte, error) {
 	return agentConfigBytes, nil
 }
 
+func (i *installer) getAgentConfigEnvs(config elementalv1.Elemental) []byte {
+	return []byte(fmt.Sprintf("CATTLE_AGENT_STRICT_VERIFY=\"%t\"", config.SystemAgent.StrictTLSMode))
+}
+
 // Write system agent config files to local filesystem
 func (i *installer) WriteLocalSystemAgentConfig(config elementalv1.Elemental) error {
 	connectionInfoBytes, err := i.getConnectionInfoBytes(config)
@@ -494,6 +498,13 @@ func (i *installer) WriteLocalSystemAgentConfig(config elementalv1.Elemental) er
 		return fmt.Errorf("writing connection info file: %w", err)
 	}
 	log.Infof("connection info file '%s' written.", connectionInfoFile)
+
+	elementalAgentEnvsFile := filepath.Join(agentConfDir, "envs")
+	err = os.WriteFile(elementalAgentEnvsFile, i.getAgentConfigEnvs(config), 0600)
+	if err != nil {
+		return fmt.Errorf("writing agent envs file: %w", err)
+	}
+	log.Infof("agent envs file '%s' written.", elementalAgentEnvsFile)
 
 	agentConfigBytes, err := i.getAgentConfigBytes()
 	if err != nil {
@@ -523,6 +534,7 @@ func (i *installer) elementalSystemAgentYip(config elementalv1.Elemental) ([]byt
 	if err != nil {
 		return nil, fmt.Errorf("getting agent config: %w", err)
 	}
+	agentEnvsBytes := i.getAgentConfigEnvs(config)
 
 	var stages []schema.Stage
 
@@ -536,6 +548,11 @@ func (i *installer) elementalSystemAgentYip(config elementalv1.Elemental) ([]byt
 			{
 				Path:        filepath.Join(agentConfDir, "config.yaml"),
 				Content:     string(agentConfigBytes),
+				Permissions: 0600,
+			},
+			{
+				Path:        filepath.Join(agentConfDir, "envs"),
+				Content:     string(agentEnvsBytes),
 				Permissions: 0600,
 			},
 		},

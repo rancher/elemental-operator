@@ -106,6 +106,13 @@ stages:
                                 connectionInfoFile: /var/lib/elemental/agent/elemental_connection.json
                               encoding: ""
                               ownerstring: ""
+                            - path: /etc/rancher/elemental/agent/envs
+                              permissions: 384
+                              owner: 0
+                              group: 0
+                              content: CATTLE_AGENT_STRICT_VERIFY="true"
+                              encoding: ""
+                              ownerstring: ""
               encoding: ""
               ownerstring: ""
           name: Elemental System Agent Config
