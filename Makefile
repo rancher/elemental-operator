@@ -266,7 +266,7 @@ build-crds: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm/templates/crds.yaml
 
 build-rbac: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/rbac > .obs/chartfile/elemental-operator-helm/templates/cluster_role.yaml
+	$(KUSTOMIZE) build config/rbac > .obs/chartfile/elemental-operator-helm/templates/rbac.yaml
 
 build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds

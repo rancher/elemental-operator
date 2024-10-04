@@ -1,7 +1,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
   name: '{{ .Release.Name }}'
+  namespace: fleet-default
 rules:
 - apiGroups:
   - ""
@@ -18,6 +19,48 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: '{{ .Release.Name }}'
+rules:
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
@@ -31,19 +74,11 @@ rules:
   - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - ""
   resources:
   - pods/log
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
   verbs:
   - get
 - apiGroups:
@@ -77,15 +112,7 @@ rules:
   - delete
   - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - get
 - apiGroups:
   - cluster.x-k8s.io
   resources:
@@ -293,3 +320,31 @@ rules:
   - delete
   - list
   - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: '{{ .Release.Name }}'
+  namespace: fleet-default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: '{{ .Release.Name }}'
+  namespace: fleet-default
+subjects:
+- kind: ServiceAccount
+  name: '{{ .Release.Name }}'
+  namespace: '{{ .Release.Namespace }}'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: '{{ .Release.Name }}'
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: '{{ .Release.Name }}'
+subjects:
+- kind: ServiceAccount
+  name: '{{ .Release.Name }}'
+  namespace: '{{ .Release.Namespace }}'
