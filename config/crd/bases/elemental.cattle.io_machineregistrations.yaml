@@ -173,6 +173,8 @@ spec:
                             type: string
                           secret-namespace:
                             type: string
+                          strictTLSMode:
+                            type: boolean
                           token:
                             type: string
                           url:

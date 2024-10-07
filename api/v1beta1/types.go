@@ -113,6 +113,8 @@ type Registration struct {
 
 type SystemAgent struct {
 	// +optional
+	StrictTLSMode bool `json:"strictTLSMode,omitempty" yaml:"strictTLSMode,omitempty"`
+	// +optional
 	URL string `json:"url,omitempty" yaml:"url,omitempty"`
 	// +optional
 	Token string `json:"token,omitempty" yaml:"token,omitempty"`
