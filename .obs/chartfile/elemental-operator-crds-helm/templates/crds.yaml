@@ -150,7 +150,7 @@ spec:
                       nmstate, or nmconnections formats)
                     x-kubernetes-preserve-unknown-fields: true
                   configurator:
-                    default: nmc
+                    default: nmconnections
                     description: Configurator
                     enum:
                     - nmc
@@ -956,7 +956,7 @@ spec:
                           nmstate, or nmconnections formats)
                         x-kubernetes-preserve-unknown-fields: true
                       configurator:
-                        default: nmc
+                        default: nmconnections
                         description: Configurator
                         enum:
                         - nmc
