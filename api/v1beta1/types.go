@@ -179,7 +179,7 @@ const (
 type NetworkTemplate struct {
 	// Configurator
 	// +kubebuilder:validation:Enum=nmc;nmstate;nmconnections
-	// +kubebuilder:default:=nmc
+	// +kubebuilder:default:=nmconnections
 	Configurator string `json:"configurator,omitempty" yaml:"configurator,omitempty"`
 	// IPAddresses contains a map of IPPools references
 	IPAddresses map[string]*corev1.TypedLocalObjectReference `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
@@ -203,7 +203,7 @@ type NetworkTemplate struct {
 type NetworkConfig struct {
 	// Configurator
 	// +kubebuilder:validation:Enum=nmc;nmstate;nmconnections
-	// +kubebuilder:default:=nmc
+	// +kubebuilder:default:=nmconnections
 	Configurator string `json:"configurator,omitempty" yaml:"configurator,omitempty"`
 	// IPAddresses contains a map of claimed IPAddresses
 	IPAddresses map[string]string `json:"ipAddresses,omitempty" yaml:"ipAddresses,omitempty"`
