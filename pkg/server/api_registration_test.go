@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -685,6 +686,51 @@ func TestRegistrationDynamicLabels(t *testing.T) {
 		assert.NilError(t, err)
 		assert.Equal(t, register.MsgReady, msgType)
 	})
+}
+
+func TestAgentTLSMode(t *testing.T) {
+	type test struct {
+		name              string
+		agentTLSModeValue *string
+		wantStrictTLSMode bool
+	}
+
+	tests := []test{
+		{
+			name:              "missing agent-tls-mode",
+			agentTLSModeValue: nil,
+			wantStrictTLSMode: true,
+		},
+		{
+			name:              "strict agent-tls-mode",
+			agentTLSModeValue: ptr.To("strict"),
+			wantStrictTLSMode: true,
+		},
+		{
+			name:              "system-store agent-tls-mode",
+			agentTLSModeValue: ptr.To("system-store"),
+			wantStrictTLSMode: false,
+		},
+	}
+
+	for _, tt := range tests {
+		server := NewInventoryServer(&FakeAuthServer{})
+
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.agentTLSModeValue != nil {
+				server.Client.Create(context.Background(), &managementv3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "agent-tls-mode",
+					},
+
+					Value: *tt.agentTLSModeValue,
+				})
+			}
+
+			assert.Equal(t, server.isAgentTLSModeStrict(), tt.wantStrictTLSMode)
+		})
+	}
+
 }
 
 func NewInventoryServer(auth authenticator) *InventoryServer {
