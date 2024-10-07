@@ -162,6 +162,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return err
 	}
 	config.Elemental.SystemAgent = elementalv1.SystemAgent{
+		StrictTLSMode:   i.isAgentTLSModeStrict(),
 		URL:             fmt.Sprintf("%s/k8s/clusters/local", serverURL),
 		Token:           string(secret.Data["token"]),
 		SecretName:      inventory.Name,
@@ -219,6 +220,23 @@ func (i *InventoryServer) getRancherCACert() string {
 		}
 	}
 	return cacert
+}
+
+// Support for agent-tls-mode
+func (i *InventoryServer) isAgentTLSModeStrict() bool {
+	agentTLSMode, err := i.getValue("agent-tls-mode")
+	if err != nil {
+		log.Errorf("Error getting agent-tls-mode: %s", err.Error())
+	}
+	switch agentTLSMode {
+	case "strict":
+		return true
+	case "system-store":
+		return false
+	default:
+		// Historically the default has been strict TLS verification
+		return true
+	}
 }
 
 func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error { //nolint: gocyclo

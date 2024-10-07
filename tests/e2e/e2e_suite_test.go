@@ -242,7 +242,7 @@ var _ = BeforeSuite(func() {
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
-		By("installing rancher"+e2eCfg.RancherVersion, func() {
+		By("installing rancher: "+e2eCfg.RancherVersion, func() {
 			if isAlreadyInstalled(cattleSystemNamespace) {
 				By("already installed")
 				return
@@ -262,6 +262,7 @@ var _ = BeforeSuite(func() {
 				"--set", "extraEnv[1].name=CATTLE_BOOTSTRAP_PASSWORD",
 				"--set", "extraEnv[1].value="+password,
 				"--set", "privateCA=true",
+				"--set", "agentTLSMode=system-store",
 				"--namespace", cattleSystemNamespace,
 			)).To(Succeed())
 
@@ -269,17 +270,27 @@ var _ = BeforeSuite(func() {
 				return isDeploymentReady(cattleSystemNamespace, rancherName)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
 
-			Eventually(func() bool {
-				return isDeploymentReady(cattleFleetNamespace, fleetAgent)
-			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-
-			// capi-controller exists only since Rancher Manager v2.7.8
-			refVer, err := checkver.NewVersion("2.7.8")
-			Expect(err).ToNot(HaveOccurred())
 			rancherVer, err := checkver.NewVersion(e2eCfg.RancherVersion)
 			Expect(err).ToNot(HaveOccurred())
 
-			if rancherVer.GreaterThanOrEqual(refVer) {
+			// fleet is deployed as statefulSet since 2.9
+			fleetStatefulSetVer, err := checkver.NewVersion("2.9.0")
+			Expect(err).ToNot(HaveOccurred())
+			if rancherVer.GreaterThanOrEqual(fleetStatefulSetVer) {
+				Eventually(func() bool {
+					return isStatefulSetReady(cattleFleetNamespace, fleetAgent)
+				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			} else {
+				Eventually(func() bool {
+					return isDeploymentReady(cattleFleetNamespace, fleetAgent)
+				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
+			}
+
+			// capi-controller exists only since Rancher Manager v2.7.8
+			nonCapiVer, err := checkver.NewVersion("2.7.8")
+			Expect(err).ToNot(HaveOccurred())
+
+			if rancherVer.GreaterThanOrEqual(nonCapiVer) {
 				Eventually(func() bool {
 					return isDeploymentReady(cattleCapiNamespace, capiController)
 				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
@@ -417,6 +428,25 @@ func isDeploymentReady(namespace, name string) bool {
 	}
 
 	if deployment.Status.AvailableReplicas == *deployment.Spec.Replicas {
+		return true
+	}
+
+	return false
+}
+
+func isStatefulSetReady(namespace, name string) bool {
+	statefulSet := &appsv1.StatefulSet{}
+	if err := cl.Get(ctx,
+		runtimeclient.ObjectKey{
+			Namespace: namespace,
+			Name:      name,
+		},
+		statefulSet,
+	); err != nil {
+		return false
+	}
+
+	if statefulSet.Status.AvailableReplicas == *statefulSet.Spec.Replicas {
 		return true
 	}
 
