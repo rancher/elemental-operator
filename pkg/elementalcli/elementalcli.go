@@ -22,16 +22,46 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"gopkg.in/yaml.v3"
 )
 
-const TempCloudInitDir = "/tmp/elemental/cloud-init"
+const (
+	TempCloudInitDir   = "/tmp/elemental/cloud-init"
+	UpgradeLockFile    = "/run/elemental/upgrade.lock"
+	UpgradeLockTimeout = 60 * time.Second
+)
+
+type UpgradeConfig struct {
+	Debug          bool
+	Recovery       bool
+	RecoveryOnly   bool
+	System         string
+	Bootloader     bool
+	SnapshotLabels map[string]string
+}
+
+type State struct {
+	StatePartition PartitionState `yaml:"state,omitempty"`
+}
+
+type PartitionState struct {
+	Snapshots map[int]*Snapshot `yaml:"snapshots,omitempty"`
+}
+
+type Snapshot struct {
+	Active bool              `yaml:"active,omitempty"`
+	Labels map[string]string `yaml:"labels,omitempty"`
+}
 
 type Runner interface {
 	Install(elementalv1.Install) error
 	Reset(elementalv1.Reset) error
+	Upgrade(UpgradeConfig) error
+	GetState() (State, error)
 }
 
 func NewRunner() Runner {
@@ -86,6 +116,59 @@ func (r *runner) Reset(conf elementalv1.Reset) error {
 	return cmd.Run()
 }
 
+func (r *runner) Upgrade(conf UpgradeConfig) error {
+	installerOpts := []string{"elemental"}
+	// There are no env var bindings in elemental-cli for elemental root options
+	// so root flags should be passed within the command line
+	if conf.Debug {
+		installerOpts = append(installerOpts, "--debug")
+	}
+
+	// Actual subcommand
+	if conf.RecoveryOnly {
+		installerOpts = append(installerOpts, "upgrade-recovery")
+	} else {
+		installerOpts = append(installerOpts, "upgrade")
+	}
+
+	if conf.Bootloader {
+		installerOpts = append(installerOpts, "--bootloader")
+	}
+
+	cmd := exec.Command("elemental")
+	environmentVariables := mapToUpgradeEnv(conf)
+	cmd.Env = append(os.Environ(), environmentVariables...)
+	cmd.Stdout = os.Stdout
+	cmd.Args = installerOpts
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	log.Debugf("running: %s\n with ENV:\n%s", strings.Join(installerOpts, " "), strings.Join(environmentVariables, "\n"))
+	return cmd.Run()
+}
+
+func (r *runner) GetState() (State, error) {
+	state := State{}
+
+	log.Debug("Getting elemental state")
+	installerOpts := []string{"elemental", "state"}
+	cmd := exec.Command("elemental")
+	cmd.Args = installerOpts
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	log.Debugf("running: %s", strings.Join(installerOpts, " "))
+
+	var commandOutput []byte
+	var err error
+	if commandOutput, err = cmd.Output(); err != nil {
+		return state, fmt.Errorf("running elemental state: %w", err)
+	}
+	if err := yaml.Unmarshal(commandOutput, &state); err != nil {
+		return state, fmt.Errorf("unmarshalling elemental state: %w", err)
+	}
+
+	return state, nil
+}
+
 func mapToInstallEnv(conf elementalv1.Install) []string {
 	var variables []string
 	// See GetInstallKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
@@ -120,6 +203,27 @@ func mapToResetEnv(conf elementalv1.Reset) []string {
 	return variables
 }
 
+func mapToUpgradeEnv(conf UpgradeConfig) []string {
+	var variables []string
+	// See GetUpgradeKeyEnvMap() in https://github.com/rancher/elemental-toolkit/blob/main/pkg/constants/constants.go
+	variables = append(variables, formatEV("ELEMENTAL_UPGRADE_RECOVERY", strconv.FormatBool(conf.Recovery)))
+	variables = append(variables, formatEV("ELEMENTAL_UPGRADE_SNAPSHOT_LABELS", formatSnapshotLabels(conf.SnapshotLabels)))
+	if conf.RecoveryOnly {
+		variables = append(variables, formatEV("ELEMENTAL_UPGRADE_RECOVERY_SYSTEM", conf.System))
+	} else {
+		variables = append(variables, formatEV("ELEMENTAL_UPGRADE_SYSTEM", conf.System))
+	}
+	return variables
+}
+
 func formatEV(key string, value string) string {
 	return fmt.Sprintf("%s=%s", key, value)
+}
+
+func formatSnapshotLabels(labels map[string]string) string {
+	formattedLabels := []string{}
+	for key, value := range labels {
+		formattedLabels = append(formattedLabels, fmt.Sprintf("%s=%s", key, value))
+	}
+	return strings.Join(formattedLabels, ",")
 }
