@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -49,15 +50,15 @@ import (
 
 func TestUnauthenticatedResponse(t *testing.T) {
 	testCase := []struct {
-		config *elementalv1.Config
+		config elementalv1.Config
 		regUrl string
 	}{
 		{
-			config: nil,
+			config: elementalv1.Config{},
 			regUrl: "https://rancher/url1",
 		},
 		{
-			config: &elementalv1.Config{
+			config: elementalv1.Config{
 				Elemental: elementalv1.Elemental{
 					Registration: elementalv1.Registration{
 						EmulateTPM:      true,
@@ -103,7 +104,7 @@ func TestUnauthenticatedResponse(t *testing.T) {
 
 		confReg := conf.Elemental.Registration
 		testReg := elementalv1.Registration{}
-		if test.config != nil {
+		if !reflect.DeepEqual(test.config, elementalv1.Config{}) {
 			testReg = test.config.Elemental.Registration
 		}
 		assert.Equal(t, confReg.EmulateTPM, testReg.EmulateTPM)

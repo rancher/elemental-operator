@@ -42,7 +42,7 @@ var _ = Describe("MachineRegistration e2e tests", Ordered, func() {
 			mRegistration = catalog.NewMachineRegistration(
 				fleetNamespace,
 				"machine-registration",
-				&elementalv1.Config{})
+				elementalv1.Config{})
 		})
 
 		AfterEach(func() {
@@ -77,7 +77,7 @@ var _ = Describe("MachineRegistration e2e tests", Ordered, func() {
 			mRegistration = catalog.NewMachineRegistration(
 				fleetNamespace,
 				"machine-registration",
-				&elementalv1.Config{
+				elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{
 							Device: "/dev/vda",

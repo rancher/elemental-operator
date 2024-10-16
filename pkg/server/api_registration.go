@@ -153,10 +153,6 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return fmt.Errorf("server-url is not set")
 	}
 
-	if registration.Spec.Config == nil {
-		registration.Spec.Config = &elementalv1.Config{}
-	}
-
 	config, err := registration.GetClientRegistrationConfig(i.getRancherCACert())
 	if err != nil {
 		return err
