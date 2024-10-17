@@ -31,12 +31,12 @@ func TestInitNewInventory(t *testing.T) {
 	// e.g., m-66588488-3eb6-4a6d-b642-c994f128c6f1
 
 	testCase := []struct {
-		config       *elementalv1.Config
+		config       elementalv1.Config
 		initName     string
 		expectedName string
 	}{
 		{
-			config: &elementalv1.Config{
+			config: elementalv1.Config{
 				Elemental: elementalv1.Elemental{
 					Registration: elementalv1.Registration{
 						NoSMBIOS: false,
@@ -48,7 +48,7 @@ func TestInitNewInventory(t *testing.T) {
 		},
 
 		{
-			config: &elementalv1.Config{
+			config: elementalv1.Config{
 				Elemental: elementalv1.Elemental{
 					Registration: elementalv1.Registration{
 						NoSMBIOS: false,
@@ -57,7 +57,7 @@ func TestInitNewInventory(t *testing.T) {
 			},
 		},
 		{
-			config: &elementalv1.Config{
+			config: elementalv1.Config{
 				Elemental: elementalv1.Elemental{
 					Registration: elementalv1.Registration{
 						NoSMBIOS: true,
@@ -66,7 +66,7 @@ func TestInitNewInventory(t *testing.T) {
 			},
 		},
 		{
-			config: nil,
+			config: elementalv1.Config{},
 		},
 	}
 

@@ -39,7 +39,7 @@ type MachineRegistrationSpec struct {
 	MachineInventoryAnnotations map[string]string `json:"machineInventoryAnnotations,omitempty"`
 	// Config the cloud config that will be used to provision the node.
 	// +optional
-	Config *Config `json:"config,omitempty"`
+	Config Config `json:"config,omitempty"`
 }
 
 type MachineRegistrationStatus struct {
@@ -80,13 +80,7 @@ type MachineRegistrationList struct {
 // GetClientRegistrationConfig returns the configuration required by the elemental-register
 // to register itself against this MachineRegistration instance.
 func (m MachineRegistration) GetClientRegistrationConfig(cacert string) (*Config, error) {
-	conf := m.Spec.Config
-
-	if conf == nil {
-		conf = &Config{}
-	}
-
-	mRegistration := conf.Elemental.Registration
+	mRegistration := m.Spec.Config.Elemental.Registration
 
 	if !meta.IsStatusConditionTrue(m.Status.Conditions, ReadyCondition) {
 		return nil, fmt.Errorf("machine registration is not ready")
