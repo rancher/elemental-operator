@@ -144,9 +144,6 @@ func (i *InventoryServer) authMachine(conn *websocket.Conn, req *http.Request, r
 func initInventory(inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) {
 	const namePrefix = "m-"
 
-	if registration.Spec.Config == nil {
-		registration.Spec.Config = &elementalv1.Config{}
-	}
 	inventory.Name = registration.Spec.MachineName
 	if inventory.Name == "" {
 		inventory.Name = namePrefix + uuid.NewString()

@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewMachineRegistration(namespace string, name string, config *elementalv1.Config) *elementalv1.MachineRegistration {
+func NewMachineRegistration(namespace string, name string, config elementalv1.Config) *elementalv1.MachineRegistration {
 	return &elementalv1.MachineRegistration{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "elemental.cattle.io/v1beta1",

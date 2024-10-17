@@ -70,7 +70,7 @@ var _ = Describe("reconcile seed image", func() {
 				},
 			},
 			Spec: elementalv1.MachineRegistrationSpec{
-				Config: &elementalv1.Config{
+				Config: elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{},
 					},
@@ -208,7 +208,7 @@ var _ = Describe("validate seed image", func() {
 				},
 			},
 			Spec: elementalv1.MachineRegistrationSpec{
-				Config: &elementalv1.Config{
+				Config: elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{},
 					},
@@ -302,7 +302,7 @@ var _ = Describe("reconcile seed image build container", func() {
 				},
 			},
 			Spec: elementalv1.MachineRegistrationSpec{
-				Config: &elementalv1.Config{
+				Config: elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{},
 					},
@@ -426,7 +426,7 @@ var _ = Describe("reconcileBuildImagePod", func() {
 				},
 			},
 			Spec: elementalv1.MachineRegistrationSpec{
-				Config: &elementalv1.Config{
+				Config: elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{},
 					},
@@ -623,7 +623,7 @@ var _ = Describe("createConfigMapObject", func() {
 				},
 			},
 			Spec: elementalv1.MachineRegistrationSpec{
-				Config: &elementalv1.Config{
+				Config: elementalv1.Config{
 					Elemental: elementalv1.Elemental{
 						Install: elementalv1.Install{},
 					},
