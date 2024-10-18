@@ -424,10 +424,39 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context, resetNetw
 		return "", nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
 
-	registerArgs := []string{"--debug"}
+	resetInstructions := []systemagent.OneTimeInstruction{}
+
 	if resetNetwork {
-		registerArgs = append(registerArgs, "--reset-network")
+		resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+			CommonInstruction: systemagent.CommonInstruction{
+				Name:    "restore first boot config",
+				Command: "elemental-register",
+				Args:    []string{"--debug", "--reset-network"},
+			},
+		})
 	}
+
+	resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+		CommonInstruction: systemagent.CommonInstruction{
+			Name:    "configure next boot to recovery mode",
+			Command: "grub2-editenv",
+			Args: []string{
+				"/oem/grubenv",
+				"set",
+				"next_entry=recovery",
+			},
+		},
+	})
+	resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+		CommonInstruction: systemagent.CommonInstruction{
+			Name:    "schedule reboot",
+			Command: "shutdown",
+			Args: []string{
+				"-r",
+				"+1", // Need to have time to confirm plan execution before rebooting
+			},
+		},
+	})
 
 	// This is the remote plan that should trigger the reboot into recovery and reset
 	resetPlan := systemagent.Plan{
@@ -438,36 +467,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context, resetNetw
 				Permissions: "0600",
 			},
 		},
-		OneTimeInstructions: []systemagent.OneTimeInstruction{
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "restore first boot config",
-					Command: "elemental-register",
-					Args:    registerArgs,
-				},
-			},
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "configure next boot to recovery mode",
-					Command: "grub2-editenv",
-					Args: []string{
-						"/oem/grubenv",
-						"set",
-						"next_entry=recovery",
-					},
-				},
-			},
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "schedule reboot",
-					Command: "shutdown",
-					Args: []string{
-						"-r",
-						"+1", // Need to have time to confirm plan execution before rebooting
-					},
-				},
-			},
-		},
+		OneTimeInstructions: resetInstructions,
 	}
 
 	var buf bytes.Buffer

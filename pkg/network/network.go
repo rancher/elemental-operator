@@ -122,8 +122,7 @@ func (c *configurator) ResetNetworkConfig() error {
 	}
 
 	// Delete all .nmconnection files. This will also delete any "static" connection that the user defined in the base image for example.
-	// Which means maybe that is not supported anymore, or if we want to support it we should make sure we only delete the ones created by elemental,
-	// for example prefixing all files with "elemental-" or just parsing the network config again at this stage to determine the file names.
+	// Note that ResetNetworkConfig() is only called when the network config is Elemental driven, hence we not expect any other custom connection defined.
 	log.Debug("Deleting all .nmconnection configs")
 	if err := c.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
