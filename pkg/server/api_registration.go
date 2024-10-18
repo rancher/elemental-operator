@@ -192,7 +192,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return err
 	}
 
-	if netConf.Configurator != network.ConfiguratorNone {
+	if netConf.Configurator != network.ConfiguratorNone && netConf.Configurator != "" {
 		netData, err := yaml.Marshal(netConf)
 		if err != nil {
 			log.Errorf("error marshalling network config: %v", err)
