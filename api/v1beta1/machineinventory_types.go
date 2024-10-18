@@ -51,6 +51,7 @@ type MachineInventorySpec struct {
 	// IPAddressPools is a list of IPAddressPool associated to this machine.
 	IPAddressPools map[string]*corev1.TypedLocalObjectReference `json:"ipAddressPools,omitempty"`
 	// NetworkConfig is the final NetworkConfig.
+	// +optional
 	Network NetworkConfig `json:"network,omitempty"`
 }
 
