@@ -173,6 +173,9 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 		inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
 		inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
 	}
+	if registration.Spec.Config.Network.Configurator == "" {
+		inventory.Spec.Network.Configurator = network.ConfiguratorNone
+	}
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {

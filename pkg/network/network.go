@@ -77,6 +77,10 @@ func NewConfigurator(fs vfs.FS) Configurator {
 
 func (c *configurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
 	switch networkConfig.Configurator {
+	case "":
+		return schema.YipConfig{}, nil
+	case ConfiguratorNone:
+		return schema.YipConfig{}, nil
 	case ConfiguratorNmc:
 		nc := nmcConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
