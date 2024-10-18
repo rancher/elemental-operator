@@ -36,6 +36,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/hostinfo"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/templater"
 )
@@ -191,7 +192,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return err
 	}
 
-	if len(netConf.Config) > 0 {
+	if netConf.Configurator != network.ConfiguratorNone {
 		netData, err := yaml.Marshal(netConf)
 		if err != nil {
 			log.Errorf("error marshalling network config: %v", err)

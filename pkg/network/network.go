@@ -30,6 +30,13 @@ import (
 )
 
 const (
+	ConfiguratorNone          = "none"
+	ConfiguratorNmc           = "nmc"
+	ConfiguratorNmstate       = "nmstate"
+	ConfiguratorNmconnections = "nmconnections"
+)
+
+const (
 	// common
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/elemental-network.yaml"
@@ -70,13 +77,13 @@ func NewConfigurator(fs vfs.FS) Configurator {
 
 func (c *configurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
 	switch networkConfig.Configurator {
-	case "nmc":
+	case ConfiguratorNmc:
 		nc := nmcConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
-	case "nmstate":
+	case ConfiguratorNmstate:
 		nc := nmstateConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
-	case "nmconnections":
+	case ConfiguratorNmconnections:
 		nc := networkManagerConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
 	default:

@@ -47,6 +47,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
@@ -267,7 +268,7 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	var resetPlan []byte
 	var err error
 
-	networkNeedsReset := len(mInventory.Spec.Network.Config) > 0
+	networkNeedsReset := mInventory.Spec.Network.Configurator != network.ConfiguratorNone
 
 	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
 	if unmanagedFound && unmanaged == "true" {
