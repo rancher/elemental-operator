@@ -475,7 +475,7 @@ var _ = Describe("handle finalizer", func() {
 			Namespace: mInventory.Namespace,
 		}, mInventory)).To(Succeed())
 
-		wantChecksum, wantPlan, err := r.newResetPlan(ctx)
+		wantChecksum, wantPlan, err := r.newResetPlan(ctx, false)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check Plan status

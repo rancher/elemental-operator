@@ -267,11 +267,13 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	var resetPlan []byte
 	var err error
 
+	networkNeedsReset := len(mInventory.Spec.Network.Config) > 0
+
 	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
 	if unmanagedFound && unmanaged == "true" {
 		checksum, resetPlan, err = r.newUnmanagedResetPlan(ctx)
 	} else {
-		checksum, resetPlan, err = r.newResetPlan(ctx)
+		checksum, resetPlan, err = r.newResetPlan(ctx, networkNeedsReset)
 	}
 
 	if err != nil {
@@ -396,7 +398,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, []byte, error) {
+func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context, resetNetwork bool) (string, []byte, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Creating new Reset plan secret")
@@ -422,6 +424,11 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 		return "", nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
 
+	registerArgs := []string{"--debug"}
+	if resetNetwork {
+		registerArgs = append(registerArgs, "--reset-network")
+	}
+
 	// This is the remote plan that should trigger the reboot into recovery and reset
 	resetPlan := systemagent.Plan{
 		Files: []systemagent.File{
@@ -436,10 +443,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 				CommonInstruction: systemagent.CommonInstruction{
 					Name:    "restore first boot config",
 					Command: "elemental-register",
-					Args: []string{
-						"--debug",
-						"--reset-network",
-					},
+					Args:    registerArgs,
 				},
 			},
 			{
