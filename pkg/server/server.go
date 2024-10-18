@@ -167,9 +167,11 @@ func initInventory(inventory *elementalv1.MachineInventory, registration *elemen
 	}
 
 	// Forward network config from Registration
-	inventory.Spec.Network.Configurator = registration.Spec.Config.Network.Configurator
-	inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
-	inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
+	if len(registration.Spec.Config.Network.Config) > 0 {
+		inventory.Spec.Network.Configurator = registration.Spec.Config.Network.Configurator
+		inventory.Spec.Network.Config = registration.Spec.Config.Network.Config
+		inventory.Spec.IPAddressPools = registration.Spec.Config.Network.IPAddresses
+	}
 }
 
 func (i *InventoryServer) createMachineInventory(inventory *elementalv1.MachineInventory) (*elementalv1.MachineInventory, error) {
