@@ -125,7 +125,7 @@ func (i *InventoryServer) unauthenticatedResponse(registration *elementalv1.Mach
 		Encode(config)
 }
 
-func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration, netConf *elementalv1.NetworkConfig) error {
+func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration, netConf elementalv1.NetworkConfig) error {
 	sa := &corev1.ServiceAccount{}
 
 	if err := i.Get(i, types.NamespacedName{
@@ -191,7 +191,7 @@ func (i *InventoryServer) writeMachineInventoryCloudConfig(conn *websocket.Conn,
 		return err
 	}
 
-	if netConf != nil {
+	if len(netConf.Config) > 0 {
 		netData, err := yaml.Marshal(netConf)
 		if err != nil {
 			log.Errorf("error marshalling network config: %v", err)
@@ -317,19 +317,19 @@ func (i *InventoryServer) handleUpdate(conn *websocket.Conn, protoVersion regist
 	return nil
 }
 
-func (i *InventoryServer) handleGetNetworkConfig(inventory *elementalv1.MachineInventory) (*elementalv1.NetworkConfig, error) {
+func (i *InventoryServer) handleGetNetworkConfig(inventory *elementalv1.MachineInventory) (elementalv1.NetworkConfig, error) {
 	ctx, cancel := context.WithTimeout(context.TODO(), register.RegistrationDeadlineSeconds*time.Second)
 	defer cancel()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("NewtworkConfig not ready")
+			return elementalv1.NetworkConfig{}, fmt.Errorf("NewtworkConfig not ready")
 		default:
 			time.Sleep(time.Second)
 		}
 		if err := i.Get(ctx, client.ObjectKeyFromObject(inventory), inventory); err != nil {
-			return nil, fmt.Errorf("getting machine inventory: %w", err)
+			return elementalv1.NetworkConfig{}, fmt.Errorf("getting machine inventory: %w", err)
 		}
 		conditionFound := false
 		for _, condition := range inventory.Status.Conditions {
@@ -348,12 +348,12 @@ func (i *InventoryServer) handleGetNetworkConfig(inventory *elementalv1.MachineI
 		break
 	}
 
-	return &inventory.Spec.Network, nil
+	return inventory.Spec.Network, nil
 }
 
 func (i *InventoryServer) handleGet(conn *websocket.Conn, protoVersion register.MessageType, inventory *elementalv1.MachineInventory, registration *elementalv1.MachineRegistration) error {
 	var err error
-	var netConf *elementalv1.NetworkConfig
+	var netConf elementalv1.NetworkConfig
 
 	inventory, err = i.commitMachineInventory(inventory)
 	if err != nil {
