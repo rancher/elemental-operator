@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -33,6 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/test"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -226,6 +229,69 @@ var _ = Describe("createPlanSecret", func() {
 			Message: "plan successfully applied",
 		})
 		Expect(r.createPlanSecret(ctx, mInventory)).To(Succeed())
+	})
+
+	It("should not reset network if configurator none", func() {
+		inventoryWithNoneNetwork := &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-network-none",
+				Namespace: "default",
+			},
+			Spec: elementalv1.MachineInventorySpec{
+				Network: elementalv1.NetworkConfig{
+					Configurator: network.ConfiguratorNone,
+				},
+			},
+		}
+		Expect(r.Create(ctx, inventoryWithNoneNetwork)).Should(Succeed())
+		Expect(r.createPlanSecret(ctx, inventoryWithNoneNetwork)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{Namespace: inventoryWithNoneNetwork.Namespace, Name: inventoryWithNoneNetwork.Name}, planSecret)).To(Succeed())
+		Expect(r.updatePlanSecretWithReset(ctx, inventoryWithNoneNetwork, planSecret)).Should(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{Namespace: inventoryWithNoneNetwork.Namespace, Name: inventoryWithNoneNetwork.Name}, planSecret)).To(Succeed())
+		planData, found := planSecret.Data["plan"]
+		Expect(found).To(BeTrue(), "Secret should contain reset plan data")
+
+		plan := &systemagent.Plan{}
+		Expect(json.Unmarshal(planData, plan)).Should(Succeed())
+		Expect(len(plan.OneTimeInstructions)).Should(Equal(2), "Should contain 2 reset instructions")
+		Expect(plan.OneTimeInstructions).ShouldNot(ContainElement(systemagent.OneTimeInstruction{
+			CommonInstruction: systemagent.CommonInstruction{
+				Name:    "restore first boot config",
+				Command: "elemental-register",
+				Args:    []string{"--debug", "--reset-network"},
+			}}))
+		Expect(test.CleanupAndWait(ctx, cl, inventoryWithNoneNetwork)).To(Succeed())
+	})
+
+	It("should reset network if configurator not none", func() {
+		inventoryWithNetwork := &elementalv1.MachineInventory{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-inventory-network-nmc",
+				Namespace: "default",
+			},
+			Spec: elementalv1.MachineInventorySpec{
+				Network: elementalv1.NetworkConfig{
+					Configurator: network.ConfiguratorNmc,
+				},
+			},
+		}
+		Expect(r.Create(ctx, inventoryWithNetwork)).Should(Succeed())
+		Expect(r.createPlanSecret(ctx, inventoryWithNetwork)).To(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{Namespace: inventoryWithNetwork.Namespace, Name: inventoryWithNetwork.Name}, planSecret)).To(Succeed())
+		Expect(r.updatePlanSecretWithReset(ctx, inventoryWithNetwork, planSecret)).Should(Succeed())
+		Expect(r.Get(ctx, types.NamespacedName{Namespace: inventoryWithNetwork.Namespace, Name: inventoryWithNetwork.Name}, planSecret)).To(Succeed())
+		planData, found := planSecret.Data["plan"]
+		Expect(found).To(BeTrue(), "Secret should contain reset plan data")
+
+		plan := &systemagent.Plan{}
+		Expect(json.Unmarshal(planData, plan)).Should(Succeed())
+		Expect(plan.OneTimeInstructions).Should(ContainElement(systemagent.OneTimeInstruction{
+			CommonInstruction: systemagent.CommonInstruction{
+				Name:    "restore first boot config",
+				Command: "elemental-register",
+				Args:    []string{"--debug", "--reset-network"},
+			}}))
+		Expect(test.CleanupAndWait(ctx, cl, inventoryWithNetwork)).To(Succeed())
 	})
 })
 
@@ -475,7 +541,7 @@ var _ = Describe("handle finalizer", func() {
 			Namespace: mInventory.Namespace,
 		}, mInventory)).To(Succeed())
 
-		wantChecksum, wantPlan, err := r.newResetPlan(ctx)
+		wantChecksum, wantPlan, err := r.newResetPlan(ctx, false)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Check Plan status
