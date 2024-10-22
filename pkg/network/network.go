@@ -30,6 +30,13 @@ import (
 )
 
 const (
+	ConfiguratorNone          = "none"
+	ConfiguratorNmc           = "nmc"
+	ConfiguratorNmstate       = "nmstate"
+	ConfiguratorNmconnections = "nmconnections"
+)
+
+const (
 	// common
 	systemConnectionsDir = "/etc/NetworkManager/system-connections"
 	configApplicator     = "/oem/elemental-network.yaml"
@@ -70,13 +77,17 @@ func NewConfigurator(fs vfs.FS) Configurator {
 
 func (c *configurator) GetNetworkConfigApplicator(networkConfig elementalv1.NetworkConfig) (schema.YipConfig, error) {
 	switch networkConfig.Configurator {
-	case "nmc":
+	case "":
+		return schema.YipConfig{}, nil
+	case ConfiguratorNone:
+		return schema.YipConfig{}, nil
+	case ConfiguratorNmc:
 		nc := nmcConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
-	case "nmstate":
+	case ConfiguratorNmstate:
 		nc := nmstateConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
-	case "nmconnections":
+	case ConfiguratorNmconnections:
 		nc := networkManagerConfigurator{fs: c.fs, runner: c.runner}
 		return nc.GetNetworkConfigApplicator(networkConfig)
 	default:
@@ -122,8 +133,7 @@ func (c *configurator) ResetNetworkConfig() error {
 	}
 
 	// Delete all .nmconnection files. This will also delete any "static" connection that the user defined in the base image for example.
-	// Which means maybe that is not supported anymore, or if we want to support it we should make sure we only delete the ones created by elemental,
-	// for example prefixing all files with "elemental-" or just parsing the network config again at this stage to determine the file names.
+	// Note that ResetNetworkConfig() is only called when the network config is Elemental driven, hence we not expect any other custom connection defined.
 	log.Debug("Deleting all .nmconnection configs")
 	if err := c.runner.Run("find", systemConnectionsDir, "-name", "*.nmconnection", "-type", "f", "-delete"); err != nil {
 		return fmt.Errorf("deleting all %s/*.nmconnection: %w", systemConnectionsDir, err)
