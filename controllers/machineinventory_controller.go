@@ -47,6 +47,7 @@ import (
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"
 	"github.com/rancher/elemental-operator/pkg/log"
+	"github.com/rancher/elemental-operator/pkg/network"
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
@@ -267,11 +268,13 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	var resetPlan []byte
 	var err error
 
+	networkNeedsReset := mInventory.Spec.Network.Configurator != network.ConfiguratorNone
+
 	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
 	if unmanagedFound && unmanaged == "true" {
 		checksum, resetPlan, err = r.newUnmanagedResetPlan(ctx)
 	} else {
-		checksum, resetPlan, err = r.newResetPlan(ctx)
+		checksum, resetPlan, err = r.newResetPlan(ctx, networkNeedsReset)
 	}
 
 	if err != nil {
@@ -396,7 +399,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, []byte, error) {
+func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context, resetNetwork bool) (string, []byte, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	logger.Info("Creating new Reset plan secret")
@@ -422,6 +425,40 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 		return "", nil, fmt.Errorf("marshalling local reset cloud-config to yaml: %w", err)
 	}
 
+	resetInstructions := []systemagent.OneTimeInstruction{}
+
+	if resetNetwork {
+		resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+			CommonInstruction: systemagent.CommonInstruction{
+				Name:    "restore first boot config",
+				Command: "elemental-register",
+				Args:    []string{"--debug", "--reset-network"},
+			},
+		})
+	}
+
+	resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+		CommonInstruction: systemagent.CommonInstruction{
+			Name:    "configure next boot to recovery mode",
+			Command: "grub2-editenv",
+			Args: []string{
+				"/oem/grubenv",
+				"set",
+				"next_entry=recovery",
+			},
+		},
+	})
+	resetInstructions = append(resetInstructions, systemagent.OneTimeInstruction{
+		CommonInstruction: systemagent.CommonInstruction{
+			Name:    "schedule reboot",
+			Command: "shutdown",
+			Args: []string{
+				"-r",
+				"+1", // Need to have time to confirm plan execution before rebooting
+			},
+		},
+	})
+
 	// This is the remote plan that should trigger the reboot into recovery and reset
 	resetPlan := systemagent.Plan{
 		Files: []systemagent.File{
@@ -431,39 +468,7 @@ func (r *MachineInventoryReconciler) newResetPlan(ctx context.Context) (string, 
 				Permissions: "0600",
 			},
 		},
-		OneTimeInstructions: []systemagent.OneTimeInstruction{
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "restore first boot config",
-					Command: "elemental-register",
-					Args: []string{
-						"--debug",
-						"--reset-network",
-					},
-				},
-			},
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "configure next boot to recovery mode",
-					Command: "grub2-editenv",
-					Args: []string{
-						"/oem/grubenv",
-						"set",
-						"next_entry=recovery",
-					},
-				},
-			},
-			{
-				CommonInstruction: systemagent.CommonInstruction{
-					Name:    "schedule reboot",
-					Command: "shutdown",
-					Args: []string{
-						"-r",
-						"+1", // Need to have time to confirm plan execution before rebooting
-					},
-				},
-			},
-		},
+		OneTimeInstructions: resetInstructions,
 	}
 
 	var buf bytes.Buffer
