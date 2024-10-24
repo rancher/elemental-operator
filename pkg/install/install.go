@@ -17,11 +17,14 @@ limitations under the License.
 package install
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/block"
@@ -66,13 +69,30 @@ const (
 	// OEM is mounted on different paths depending if we are resetting (from recovery) or installing (from live media)
 	installOEMMount = "/run/elemental/oem"
 	resetOEMMount   = "/oem"
+
+	// Upgrade constants
+	upgradeCloudConfigPath = "/oem/90_operator.yaml"
+	correlationIDLabelKey  = "correlationID"
+	upgradeRunDir          = "/run/elemental"
 )
+
+var (
+	upgradeMounts = []string{"/dev", "/run"}
+)
+
+type UpgradeContext struct {
+	Config          elementalcli.UpgradeConfig
+	HostDir         string
+	CloudConfigPath string
+	CorrelationID   string
+}
 
 type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
 	ResetElementalNetwork() error
 	InstallElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
 	WriteLocalSystemAgentConfig(config elementalv1.Elemental) error
+	UpgradeElemental(context UpgradeContext) (bool, error)
 }
 
 func NewInstaller(fs vfs.FS, disks []*block.Disk, networkConfigurator network.Configurator) Installer {
@@ -583,4 +603,127 @@ func (i *installer) cleanupResetPlan() error {
 		return nil
 	}
 	return i.fs.Remove(controllers.LocalResetPlanPath)
+}
+
+func (i *installer) UpgradeElemental(context UpgradeContext) (bool, error) {
+	log.Infof("Applying upgrade: %s", context.CorrelationID)
+
+	runDir := filepath.Join(context.HostDir, upgradeRunDir)
+	if err := vfs.MkdirAll(i.fs, runDir, os.ModePerm); err != nil {
+		return false, fmt.Errorf("creating directory '%s': %w", runDir, err)
+	}
+
+	if err := i.applyCloudConfig(context.HostDir, context.CloudConfigPath); err != nil {
+		return false, fmt.Errorf("applying upgrade cloud config: %w", err)
+	}
+
+	if err := i.mountDirs(upgradeMounts, context.HostDir); err != nil {
+		return false, fmt.Errorf("mounting host directories: %w", err)
+	}
+
+	runner := elementalcli.NewRunner()
+	elementalState, err := runner.GetState()
+	if err != nil {
+		return false, fmt.Errorf("reading installation state: %w", err)
+	}
+
+	if i.isCorrelationIDFound(elementalState, context.CorrelationID) {
+		log.Infof("Upgrade '%s' successfully applied", context.CorrelationID)
+		return false, nil
+	}
+
+	// Prepare Snapshot labels
+	context.Config.SnapshotLabels = map[string]string{correlationIDLabelKey: context.CorrelationID}
+
+	log.Infof("Applying upgrade %s", context.CorrelationID)
+	if err := runner.Upgrade(context.Config); err != nil {
+		return false, fmt.Errorf("applying upgrade '%s': %w", context.CorrelationID, err)
+	}
+	return true, nil
+}
+
+func (i *installer) applyCloudConfig(hostDir string, cloudConfigPath string) error {
+	hostCloudConfigPath := filepath.Join(hostDir, upgradeCloudConfigPath)
+
+	cloudConfigBytes, err := os.ReadFile(cloudConfigPath)
+	if os.IsNotExist(err) {
+		log.Infof("Upgrade cloud config '%s' is missing. Removing previously applied config in '%s', if any.", cloudConfigPath, hostCloudConfigPath)
+		if err := os.Remove(hostCloudConfigPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing file '%s': %w", hostCloudConfigPath, err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading file '%s': %w", cloudConfigPath, err)
+	}
+
+	hostCloudConfigBytes, err := os.ReadFile(hostCloudConfigPath)
+	if os.IsNotExist(err) || err == nil {
+		if !bytes.Equal(hostCloudConfigBytes, cloudConfigBytes) {
+			log.Infof("Applying upgrade cloud config to: %s", hostCloudConfigPath)
+			if err := os.WriteFile(hostCloudConfigPath, cloudConfigBytes, os.ModePerm); err != nil {
+				return fmt.Errorf("writing file '%s': %w", hostCloudConfigPath, err)
+			}
+		}
+	} else {
+		return fmt.Errorf("reading file '%s': %w", hostCloudConfigPath, err)
+	}
+
+	return nil
+}
+
+func (i *installer) isCorrelationIDFound(elementalState elementalcli.State, correlationID string) bool {
+	// This is normally not supposed to happen, as we expect at least the first snapshot to be present after install.
+	// However we can still try to upgrade in this case, hoping the upgrade snapshot will be created after that.
+	if elementalState.StatePartition.Snapshots == nil {
+		log.Info("Could not find correlationID in empty snapshots list")
+		return false
+	}
+
+	correlationIDFound := false
+	correlationIDFoundInActiveSnapshot := false
+	for _, snapshot := range elementalState.StatePartition.Snapshots {
+		if snapshot.Labels[correlationIDLabelKey] == correlationID {
+			correlationIDFound = true
+			correlationIDFoundInActiveSnapshot = snapshot.Active
+			break
+		}
+	}
+
+	// If the upgrade was already applied, but somehow the system was reverted to a different snapshot,
+	// do not apply the upgrade again. This will prevent a cascade loop effect, for example when the
+	// revert is automatically applied by the boot assessment mechanism.
+	if correlationIDFound && !correlationIDFoundInActiveSnapshot {
+		log.Infof("CorrelationID %s found on a passive snapshot. Not upgrading again.", correlationID)
+		return true
+	}
+
+	// Found on the active snapshot. All good, nothing to do.
+	if correlationIDFound && correlationIDFoundInActiveSnapshot {
+		return true
+	}
+
+	log.Infof("Could not find snapshot with correlationID %s", correlationID)
+	return false
+}
+
+func (i *installer) mountDirs(mounts []string, hostDir string) error {
+	if hostDir == "/" {
+		return nil
+	}
+
+	for _, mount := range mounts {
+		hostMount := filepath.Join(hostDir, mount)
+		cmd := exec.Command("mount")
+		cmd.Stdout = os.Stdout
+		cmd.Stdin = os.Stdin
+		cmd.Stderr = os.Stderr
+		cmd.Args = []string{"mount", "--rbind", hostMount, mount}
+		log.Debugf("running: mount %s", strings.Join(cmd.Args, " "))
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("mounting '%s': %w", hostMount, err)
+		}
+	}
+
+	return nil
 }

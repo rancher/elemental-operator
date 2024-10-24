@@ -260,6 +260,12 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	// we just do a safe name conversion here.
 	uniqueName = toDNSLabel(uniqueName)
 
+	// Use the plan name as correlation ID that will be applied as snapshot label on the machine.
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, corev1.EnvVar{
+		Name:  "ELEMENTAL_REGISTER_UPGRADE_CORRELATION_ID",
+		Value: uniqueName,
+	})
+
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
@@ -333,6 +339,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 				Tolerations: []corev1.Toleration{{
 					Operator: corev1.TolerationOpExists,
 				}},
+				Exclusive:          true,
 				ServiceAccountName: uniqueName,
 				NodeSelector:       selector,
 				Cordon:             cordon,

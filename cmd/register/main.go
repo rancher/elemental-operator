@@ -74,6 +74,7 @@ func main() {
 	cmd.AddCommand(
 		newVersionCommand(),
 		newDumpDataCommand(),
+		newUpgradeCommand(),
 	)
 	if err := cmd.Execute(); err != nil {
 		log.Fatalf("FATAL: %s", err)

@@ -31,6 +31,7 @@ import (
 	reflect "reflect"
 
 	v1beta1 "github.com/rancher/elemental-operator/api/v1beta1"
+	install "github.com/rancher/elemental-operator/pkg/install"
 	register "github.com/rancher/elemental-operator/pkg/register"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -98,6 +99,21 @@ func (m *MockInstaller) ResetElementalNetwork() error {
 func (mr *MockInstallerMockRecorder) ResetElementalNetwork() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetElementalNetwork", reflect.TypeOf((*MockInstaller)(nil).ResetElementalNetwork))
+}
+
+// UpgradeElemental mocks base method.
+func (m *MockInstaller) UpgradeElemental(arg0 install.UpgradeContext) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpgradeElemental", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpgradeElemental indicates an expected call of UpgradeElemental.
+func (mr *MockInstallerMockRecorder) UpgradeElemental(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpgradeElemental", reflect.TypeOf((*MockInstaller)(nil).UpgradeElemental), arg0)
 }
 
 // WriteLocalSystemAgentConfig mocks base method.
