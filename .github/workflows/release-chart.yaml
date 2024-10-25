@@ -35,6 +35,3 @@ jobs:
         with:
           build_env: stable
           keep_previous: yes
-      - name: create release
-        if: inputs.release == true
-        run: gh release create ${{ inputs.tag }} --prerelease --generate-notes ./build/*
