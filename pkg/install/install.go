@@ -68,6 +68,12 @@ const (
 	resetOEMMount   = "/oem"
 )
 
+type UpgradeContext struct {
+	Config          elementalcli.UpgradeConfig
+	HostDir         string `mapstructure:"host-dir,omitempty"`
+	CloudConfigPath string `mapstructure:"cloud-config,omitempty"`
+}
+
 type Installer interface {
 	ResetElemental(config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error
 	ResetElementalNetwork() error

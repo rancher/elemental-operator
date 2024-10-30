@@ -260,6 +260,12 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	// we just do a safe name conversion here.
 	uniqueName = toDNSLabel(uniqueName)
 
+	upgradeContainerSpecCopy := *upgradeContainerSpec.DeepCopy()
+	correlationID, err := applyCorrelationLabels(managedOSImage, version, &upgradeContainerSpecCopy)
+	if err != nil {
+		return nil, fmt.Errorf("applying upgrade environment variables: %w", err)
+	}
+
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
@@ -326,6 +332,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      uniqueName,
 				Namespace: rancherSystemNamespace,
+				Labels:    map[string]string{elementalv1.ElementalUpgradeCorrelationIDLabel: correlationID},
 			},
 			Spec: upgradev1.PlanSpec{
 				Concurrency: concurrency,
@@ -333,6 +340,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 				Tolerations: []corev1.Toleration{{
 					Operator: corev1.TolerationOpExists,
 				}},
+				Exclusive:          true,
 				ServiceAccountName: uniqueName,
 				NodeSelector:       selector,
 				Cordon:             cordon,
@@ -342,7 +350,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 					Name: uniqueName,
 					Path: "/run/data",
 				}},
-				Upgrade: upgradeContainerSpec,
+				Upgrade: &upgradeContainerSpecCopy,
 			},
 		},
 	}
@@ -582,10 +590,65 @@ func metadataEnv(m map[string]runtime.RawExtension) []corev1.EnvVar {
 	return envs
 }
 
+func applyCorrelationLabels(managedOSImage *elementalv1.ManagedOSImage, imageVersion string, upgradeContainerSpec *upgradev1.ContainerSpec) (string, error) {
+	// Include additional snapshot labels
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, corev1.EnvVar{
+		Name:  "ELEMENTAL_REGISTER_UPGRADE_SNAPSHOT_LABELS",
+		Value: formatSnapshotLabels(*managedOSImage, imageVersion, *upgradeContainerSpec),
+	})
+
+	// Calculate the managedOSImage.Spec after all changes
+	correlationID, err := managedOSImageHash(managedOSImage.Spec)
+	if err != nil {
+		return "", fmt.Errorf("calculating ManagedOSImage hash: %w", err)
+	}
+	// Tag this ManagedOSImage with the correlation ID label
+	if managedOSImage.Labels == nil {
+		managedOSImage.Labels = map[string]string{}
+	}
+	managedOSImage.Labels[elementalv1.ElementalUpgradeCorrelationIDLabel] = correlationID
+	// Use the hash as correlation ID that will be applied as snapshot label on the machine.
+	upgradeContainerSpec.Env = append(upgradeContainerSpec.Env, corev1.EnvVar{
+		Name:  "ELEMENTAL_REGISTER_UPGRADE_CORRELATION_ID",
+		Value: correlationID,
+	})
+
+	return correlationID, nil
+}
+
 // This converts any string to RFC 1123 DNS label standard by replacing invalid characters with "-"
 func toDNSLabel(input string) string {
 	output := dnsLabelRegex.ReplaceAllString(input, "-")
 	output = strings.TrimPrefix(output, "-")
 	output = strings.TrimSuffix(output, "-")
 	return output
+}
+
+func managedOSImageHash(spec elementalv1.ManagedOSImageSpec) (string, error) {
+	// Do not calculate a new hash if target changes.
+	spec.Targets = []fleetv1.BundleTarget{}
+
+	specData, err := json.Marshal(spec)
+	if err != nil {
+		return "", fmt.Errorf("unmarshalling ManagedOSImage.Spec: %w", err)
+	}
+	hash := sha256.New224() //sha256 produces 64 chars (max label value is 63). Use sha224 instead.
+	if _, err := hash.Write(specData); err != nil {
+		return "", fmt.Errorf("writing hash: %w", err)
+	}
+
+	result := hash.Sum(nil)
+	return fmt.Sprintf("%x", result), nil
+}
+
+// formatSnapshotLabels formats the *_SNAPSHOT_LABELS environment variable: "managedOSImage=foo,image=bar:v1.2.3"
+// It is required for this function to always generate the same value in a predictable way, in order to keep the computed Plan hash the same at every loop.
+func formatSnapshotLabels(managedOSImage elementalv1.ManagedOSImage, imageVersion string, upgradeContainerSpec upgradev1.ContainerSpec) string {
+	imageWithVersion := fmt.Sprintf("%s:%s", upgradeContainerSpec.Image, imageVersion)
+
+	formattedLabels := fmt.Sprintf("managedOSImage=%s,image=%s", managedOSImage.Name, imageWithVersion)
+	if len(managedOSImage.Spec.ManagedOSVersionName) > 0 {
+		formattedLabels = fmt.Sprintf("%s,managedOSVersion=%s", formattedLabels, managedOSImage.Spec.ManagedOSVersionName)
+	}
+	return formattedLabels
 }

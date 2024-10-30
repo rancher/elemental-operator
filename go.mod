@@ -16,6 +16,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/hashicorp/go-version v1.6.0
 	github.com/jaypipes/ghw v0.12.0
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/onsi/ginkgo/v2 v2.17.0
 	github.com/onsi/gomega v1.32.0
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21
@@ -40,7 +41,7 @@ require (
 	k8s.io/apimachinery v0.29.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog/v2 v2.110.1
-	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
+	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6
 	sigs.k8s.io/cluster-api v1.6.3
 	sigs.k8s.io/controller-runtime v0.17.2
 	sigs.k8s.io/yaml v1.4.0
@@ -96,7 +97,6 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

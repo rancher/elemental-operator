@@ -31,6 +31,7 @@ import (
 	reflect "reflect"
 
 	v1beta1 "github.com/rancher/elemental-operator/api/v1beta1"
+	elementalcli "github.com/rancher/elemental-operator/pkg/elementalcli"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -55,6 +56,21 @@ func NewMockRunner(ctrl *gomock.Controller) *MockRunner {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockRunner) EXPECT() *MockRunnerMockRecorder {
 	return m.recorder
+}
+
+// GetState mocks base method.
+func (m *MockRunner) GetState() (elementalcli.State, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetState")
+	ret0, _ := ret[0].(elementalcli.State)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetState indicates an expected call of GetState.
+func (mr *MockRunnerMockRecorder) GetState() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockRunner)(nil).GetState))
 }
 
 // Install mocks base method.
@@ -83,4 +99,18 @@ func (m *MockRunner) Reset(arg0 v1beta1.Reset) error {
 func (mr *MockRunnerMockRecorder) Reset(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockRunner)(nil).Reset), arg0)
+}
+
+// Upgrade mocks base method.
+func (m *MockRunner) Upgrade(arg0 elementalcli.UpgradeConfig) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upgrade", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upgrade indicates an expected call of Upgrade.
+func (mr *MockRunnerMockRecorder) Upgrade(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upgrade", reflect.TypeOf((*MockRunner)(nil).Upgrade), arg0)
 }

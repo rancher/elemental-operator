@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +28,6 @@ import (
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/rancher/wrangler/v2/pkg/genericcondition"
 	"github.com/rancher/wrangler/v2/pkg/name"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,13 +71,15 @@ var _ = Describe("reconcile managed os image", func() {
 	It("should reconcile managed os image object", func() {
 		Expect(cl.Create(ctx, managedOSImage)).To(Succeed())
 
-		_, err := r.Reconcile(ctx, reconcile.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: managedOSImage.Namespace,
-				Name:      managedOSImage.Name,
-			},
-		})
-		Expect(err).ToNot(HaveOccurred())
+		Eventually(func() error {
+			_, err := r.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: managedOSImage.Namespace,
+					Name:      managedOSImage.Name,
+				},
+			})
+			return err
+		}).WithTimeout(time.Minute).ShouldNot(HaveOccurred())
 
 		Expect(cl.Get(ctx, client.ObjectKey{
 			Name:      managedOSImage.Name,
@@ -117,8 +119,9 @@ var _ = Describe("newFleetBundleResources", func() {
 			},
 			Spec: elementalv1.ManagedOSVersionSpec{
 				Type: "container",
-				UpgradeContainer: &upgradev1.ContainerSpec{
-					Image: "foo/bar:image",
+				Metadata: map[string]runtime.RawExtension{
+					"upgradeImage": {Raw: []byte(`"foo/bar:image"`)},
+					"displayName":  {Raw: []byte(`"Unit Test Image"`)},
 				},
 			},
 		}
@@ -138,7 +141,7 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
 		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
 		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
-		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-24d63a562894.yaml"))
+		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-b3e84b45c9e0.yaml"))
 	})
 
 	It("should create fleet bundle when managedOSVersion exists", func() {
@@ -150,8 +153,9 @@ var _ = Describe("newFleetBundleResources", func() {
 
 		Expect(bundleResources).To(HaveLen(5))
 		plan := &upgradev1.Plan{}
-		Expect(yaml.Unmarshal([]byte(bundleResources[4].Content), plan)).To(Succeed())
-		Expect(plan.Spec.Upgrade.Image).To(Equal("foo/bar:image"))
+		Expect(json.Unmarshal([]byte(bundleResources[4].Content), plan)).To(Succeed())
+		Expect(plan.Spec.Upgrade.Image).To(Equal("foo/bar"))
+		Expect(plan.Spec.Version).To(Equal("image"))
 	})
 
 	It("return error of managedOSVersion doesn't exist", func() {
@@ -170,7 +174,36 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
 		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
 		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
-		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-24d63a562894.yaml"))
+		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-8130169de1eb.yaml"))
+	})
+	It("should add correlation id and snapshot labels", func() {
+		wantLabelsEnv := corev1.EnvVar{
+			Name:  "ELEMENTAL_REGISTER_UPGRADE_SNAPSHOT_LABELS",
+			Value: "managedOSImage=test-name,image=foo/bar:image,managedOSVersion=test",
+		}
+		wantCorrelationIDEnv := corev1.EnvVar{
+			Name:  "ELEMENTAL_REGISTER_UPGRADE_CORRELATION_ID",
+			Value: "6c18cee8fa6945d5661a39aee878c8035780b5d2e62e1509d154a2bd",
+		}
+
+		Expect(r.Create(ctx, managedOSVersion)).To(Succeed())
+		managedOSImage.Spec.ManagedOSVersionName = "test"
+		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(bundleResources).To(HaveLen(5))
+		plan := &upgradev1.Plan{}
+		Expect(json.Unmarshal([]byte(bundleResources[4].Content), plan)).To(Succeed())
+		Expect(plan.Spec.Upgrade.Env).Should(ContainElement(wantLabelsEnv))
+		Expect(plan.Spec.Upgrade.Env).Should(ContainElement(wantCorrelationIDEnv))
+
+		value, found := plan.Labels[elementalv1.ElementalUpgradeCorrelationIDLabel]
+		Expect(found).Should(BeTrue(), "Plan should have correlation ID as label")
+		Expect(value).Should(Equal("6c18cee8fa6945d5661a39aee878c8035780b5d2e62e1509d154a2bd"))
+
+		value, found = managedOSImage.Labels[elementalv1.ElementalUpgradeCorrelationIDLabel]
+		Expect(found).Should(BeTrue(), "ManagedOSImage should have correlation ID as label")
+		Expect(value).Should(Equal("6c18cee8fa6945d5661a39aee878c8035780b5d2e62e1509d154a2bd"))
 	})
 })
 
