@@ -1,24 +1,24 @@
 questions:
-- variable: defaultChannels.slMicro60Baremetal.included
-  show_if: "defaultChannels.slMicro60Baremetal"
+- variable: defaultChannels.slMicro61Baremetal.included
+  show_if: "defaultChannels.slMicro61Baremetal"
   default: true
   description: "Default channel that can be used for any generic baremetal workload."
   type: boolean
-  label: SL Micro 6.0 Baremetal
+  label: SL Micro 6.1 Baremetal
   group: "Default Elemental OS Channels"
-- variable: defaultChannels.slMicro60KVM.included
-  show_if: "defaultChannels.slMicro60KVM"
+- variable: defaultChannels.slMicro61KVM.included
+  show_if: "defaultChannels.slMicro61KVM"
   default: true
   description: "Ready to be used with KVM. Contains QEMU Guest agent by default."
   type: boolean
-  label: SL Micro 6.0 KVM
+  label: SL Micro 6.1 KVM
   group: "Default Elemental OS Channels"
-- variable: defaultChannels.slMicro60RT.included
-  show_if: "defaultChannels.slMicro60RT"
+- variable: defaultChannels.slMicro61RT.included
+  show_if: "defaultChannels.slMicro61RT"
   default: true
   description: "Channel that can be used for any generic workload with a Real-Time kernel."
   type: boolean
-  label: SL Micro 6.0 RT
+  label: SL Micro 6.1 RT
   group: "Default Elemental OS Channels"
 - variable: channel.defaultChannel
   default: "false"
