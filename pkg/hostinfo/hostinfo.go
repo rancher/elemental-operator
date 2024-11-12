@@ -39,6 +39,7 @@ import (
 
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/runtime"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 var ErrCouldNotReadHostInfo = errors.New("could not read host info")
@@ -254,6 +255,7 @@ func sanitizeHostInfoVal(data string) string {
 	return data
 }
 
+// ExtractLabelsLegacy provides the old (<= 1.7.0) syntax of Label Templates for backward compatibility
 func ExtractLabelsLegacy(systemData HostInfo) map[string]interface{} {
 	memory := map[string]interface{}{}
 	if systemData.Memory != nil {
@@ -344,6 +346,7 @@ func ExtractLabelsLegacy(systemData HostInfo) map[string]interface{} {
 	return labels
 }
 
+// ExtractLabels provide the new (>= 1.8.x) syntax of the Label Templates
 func ExtractLabels(systemData HostInfo) map[string]interface{} {
 	labels := map[string]interface{}{}
 
@@ -425,6 +428,7 @@ func ExtractLabels(systemData HostInfo) map[string]interface{} {
 				"AdvertisedLinkModes": strings.Join(iface.AdvertisedLinkModes, ","),
 				"Duplex":              sanitizeHostInfoVal(iface.Duplex),
 				"IsVirtual":           strconv.FormatBool(iface.IsVirtual),
+				"IPAddress":           util.GetIPByIfName(iface.Name),
 				"MacAddress":          iface.MacAddress,
 				"Name":                iface.Name,
 				"PCIAddress":          iface.PCIAddress,
