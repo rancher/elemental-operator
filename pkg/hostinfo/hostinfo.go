@@ -424,11 +424,31 @@ func ExtractLabels(systemData HostInfo) map[string]interface{} {
 		network["NICs"] = nicsMap
 		for i, iface := range systemData.Network.NICs {
 			ifaceNum := strconv.Itoa(i)
+			ipv4, ipv6 := util.GetIPsByIfName(iface.Name)
+			ipv4add := ""
+			ipv4map := map[string]interface{}{}
+			for i, ip := range ipv4 {
+				ipv4map[strconv.Itoa(i)] = ip
+				if ipv4add == "" {
+					ipv4add = ip
+				}
+			}
+			ipv6add := ""
+			ipv6map := map[string]interface{}{}
+			for i, ip := range ipv6 {
+				ipv6map[strconv.Itoa(i)] = ip
+				if ipv6add == "" {
+					ipv6add = ip
+				}
+			}
 			nicsMap[ifaceNum] = map[string]interface{}{
 				"AdvertisedLinkModes": strings.Join(iface.AdvertisedLinkModes, ","),
 				"Duplex":              sanitizeHostInfoVal(iface.Duplex),
 				"IsVirtual":           strconv.FormatBool(iface.IsVirtual),
-				"IPAddress":           util.GetIPByIfName(iface.Name),
+				"IPv4Address":         ipv4add,
+				"IPv4Addresses":       ipv4map,
+				"IPv6Address":         ipv6add,
+				"IPv6Addresses":       ipv6map,
 				"MacAddress":          iface.MacAddress,
 				"Name":                iface.Name,
 				"PCIAddress":          iface.PCIAddress,
