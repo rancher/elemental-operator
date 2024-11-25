@@ -17,14 +17,11 @@ limitations under the License.
 package util
 
 import (
-	"bytes"
 	"net"
-	"os/exec"
 )
 
 type NetController interface {
 	GetInterfaceAddresses(ifName string) [](net.IPNet)
-	GetNMDeviceState() (*bytes.Buffer, error)
 }
 
 func NewNetController() NetController {
@@ -57,46 +54,25 @@ func (un *unixNet) GetInterfaceAddresses(ifName string) (res []net.IPNet) {
 	return
 }
 
-func (un *unixNet) GetNMDeviceState() (buf *bytes.Buffer, err error) {
-	buf = &bytes.Buffer{}
-	cmd := exec.Command("nmcli", "-g", "DEVICE,STATE", "device")
-	cmd.Stdout = buf
+// GetIPByIfName returns two slices containing the IPv4 and the IPv6 addresses of
+// the network interface name (ifName) passed as argument.
+// This function cannot fail: if no address can be retrieved two empty slices are
+// returned.
+func GetIPsByIfName(ifName string) ([]string, []string) {
+	return getIPsByIfName(ifName, NewNetController())
+}
 
-	err = cmd.Run()
+func getIPsByIfName(ifName string, nc NetController) (ipv4, ipv6 []string) {
+	ipv4 = []string{}
+	ipv6 = []string{}
 
+	ipNets := nc.GetInterfaceAddresses(ifName)
+	for _, ip := range ipNets {
+		if ip2v4 := ip.IP.To4(); ip2v4 != nil {
+			ipv4 = append(ipv4, ip2v4.String())
+		} else if ip2v6 := ip.IP.To16(); ip2v6 != nil {
+			ipv6 = append(ipv6, ip2v6.String())
+		}
+	}
 	return
-}
-
-// GetIPByIfName returns a string containing the IP address of the network
-// interface name (ifName) passed as argument.
-// The returned IP address is the IPv4 one but the IPv6 one is returned if
-// the IPv4 address is not available.
-// This function cannot fail: if no address can be retrieved an empty string
-// is returned.
-func GetIPByIfName(ifName string) string {
-	return getIPByIfName(ifName, NewNetController())
-}
-
-func getIPByIfName(ifName string, nc NetController) string {
-	var (
-		ips  []net.IPNet
-		ipv6 net.IP
-	)
-	if ips = nc.GetInterfaceAddresses(ifName); len(ips) == 0 {
-		return ""
-	}
-	for _, ip := range ips {
-		if ipv4 := ip.IP.To4(); ipv4 != nil {
-			return ipv4.String()
-		}
-
-		// Let's keep an IPv6 address as fallback if the interface has no IPv4 addresses
-		if ipv6 == nil {
-			ipv6 = ip.IP.To16()
-		}
-	}
-	if ipv6 != nil {
-		return ipv6.String()
-	}
-	return ""
 }
