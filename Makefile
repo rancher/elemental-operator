@@ -255,6 +255,7 @@ generate-mocks: $(MOCKGEN)
 	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/elementalcli/mocks/elementalcli.go -package=mocks github.com/rancher/elemental-operator/pkg/elementalcli Runner
 	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/network/mocks/network.go -package=mocks github.com/rancher/elemental-operator/pkg/network Configurator
 	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/util/mocks/command_runner.go -package=mocks github.com/rancher/elemental-operator/pkg/util CommandRunner
+	$(MOCKGEN) -copyright_file=scripts/boilerplate.go.txt -destination=pkg/util/mocks/net_controller.go -package=mocks github.com/rancher/elemental-operator/pkg/util NetController
 
 .PHONY: generate-go
 generate-go: generate-mocks $(CONTROLLER_GEN) ## Runs Go related generate targets for the operator

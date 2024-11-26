@@ -79,7 +79,7 @@ func JSONObjectToYamlBytes(object map[string]runtime.RawExtension) ([]byte, erro
 	// This creates a parent "root" key to facilitate parsing the schemaless map
 	mapSlice := yaml.JSONObjectToYAMLObject(map[string]interface{}{"root": object})
 	if len(mapSlice) <= 0 {
-		return nil, errors.New("Could not convert json object to yaml")
+		return nil, errors.New("could not convert json object to yaml")
 	}
 
 	// Just marshal the value of the "root" key
