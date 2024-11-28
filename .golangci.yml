@@ -6,7 +6,7 @@ issues:
     - "zz_generated_*"
 output:
   formats: 
-    - format: github-actions
+    - format: colored-line-number
 linters:
   enable:
     - revive # replacement for golint
