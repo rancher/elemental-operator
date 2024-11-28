@@ -81,7 +81,10 @@ func (m *ManagedOSVersion) MetadataObject(v interface{}) error {
 
 // ImageCommons is the basic set of data every single image type has
 type ImageCommons struct {
+	// DisplayName is the human readable name for this image. It should include flavor, release version and type ('OS' or 'ISO').
 	DisplayName string `json:"displayName,omitempty"`
+	// Created displays the image creation date in Unix time format (ex. 1732636343).
+	Created int `json:"created,omitempty"`
 }
 
 // ISO is the basic set of data to refer to an specific ISO
