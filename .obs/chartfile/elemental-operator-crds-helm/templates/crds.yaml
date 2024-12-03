@@ -3827,8 +3827,7 @@ spec:
                   can be downloaded once the image is built.
                 type: string
               conditions:
-                description: Conditions describe the state of the machine registration
-                  object.
+                description: Conditions describe the state of the seedimage object.
                 items:
                   description: "Condition contains details for one aspect of the current
                     state of this API Resource.\n---\nThis struct is intended for
