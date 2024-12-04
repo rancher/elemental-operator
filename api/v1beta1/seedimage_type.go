@@ -105,7 +105,7 @@ const (
 )
 
 type SeedImageStatus struct {
-	// Conditions describe the state of the machine registration object.
+	// Conditions describe the state of the seedimage object.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 	// DownloadToken a token to identify the seed image to download.
