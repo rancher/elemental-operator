@@ -324,4 +324,10 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersion")
 		os.Exit(1)
 	}
+	if err := (&controllers.ManagedOSChangelogReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Unable to create reconciler", "controller", "ManagedOSChangelog")
+		os.Exit(1)
+	}
 }
