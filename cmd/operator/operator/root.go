@@ -325,7 +325,10 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		os.Exit(1)
 	}
 	if err := (&controllers.ManagedOSChangelogReconciler{
-		Client: mgr.GetClient(),
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		WorkerPodImage:           config.seedimageImage,
+		WorkerPodImagePullPolicy: corev1.PullPolicy(config.seedimageImagePullPolicy),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Unable to create reconciler", "controller", "ManagedOSChangelog")
 		os.Exit(1)

@@ -163,6 +163,25 @@ const (
 	ResourcesSuccessfullyCreatedReason = "ResourcesSuccessfullyCreated"
 )
 
+// Managed OS Changelog conditions
+const (
+	// WorkerPodReadyCondition is the condition type tracking the state of the worked pod.
+	WorkerPodReadyCondition = "WorkerPodReady"
+	// WorkerPodNotStartedReason documents worker pod not being started.
+	WorkerPodNotStartedReason = "WorkerPodNotStarted"
+	// WorkerPodInitializing documents worker pod being initialized.
+	WorkerPodInitReason = "WorkerPodInitializing"
+	// WorkerPodCompletionFailureReason documents failure to successfully complete the worker pod tasks.
+	WorkerPodCompletionFailureReason = "WorkerPodCompletionFailure"
+	// WorkerPodCompletionSuccessReason documents worker pod completed its tasks and is successfully running.
+	WorkerPodCompletionSuccessReason = "WorkerPodCompletionSuccess"
+	// WorkerPodDeadline documents worker pod deadline has elapsed.
+	WorkerPodDeadline = "WorkerPodDeadline"
+	// WorkerPodUnknown documents worker pod in an unknown status.
+	WorkerPodUnknown = "WorkerPodUnknown"
+)
+
+// Seed Image conditions
 const (
 	// SeedImageConditionReady is the condition type tracking the state of the seed image build pod.
 	SeedImageConditionReady = "SeedImageReady"

@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,6 +37,8 @@ type ManagedOSChangelog struct {
 }
 
 type ManagedOSChangelogSpec struct {
+	// ManagedOSVersionChannelRef a referemce to the related ManagedOSVersionChannel.
+	ManagedOSVersionChannelRef *corev1.ObjectReference `json:"channelRef"`
 	// ManagedOSVersion the name of the ManagedOSVersion resource for which the changelog
 	// should be generated.
 	ManagedOSVersion string `json:"osVersion,omitempty"`
