@@ -37,7 +37,7 @@ defaultChannels:
     deleteNoLongerInSyncVersions: true
   slMicro60RT:
     included: true
-    name: sle-micro-6.1-rt
+    name: sl-micro-6.1-rt
     enabled: false
     image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.1-rt"
     deleteNoLongerInSyncVersions: true
