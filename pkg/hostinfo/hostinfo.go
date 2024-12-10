@@ -39,6 +39,7 @@ import (
 
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/rancher/elemental-operator/pkg/runtime"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 var ErrCouldNotReadHostInfo = errors.New("could not read host info")
@@ -254,6 +255,7 @@ func sanitizeHostInfoVal(data string) string {
 	return data
 }
 
+// ExtractLabelsLegacy provides the old (<= 1.7.0) syntax of Label Templates for backward compatibility
 func ExtractLabelsLegacy(systemData HostInfo) map[string]interface{} {
 	memory := map[string]interface{}{}
 	if systemData.Memory != nil {
@@ -344,6 +346,7 @@ func ExtractLabelsLegacy(systemData HostInfo) map[string]interface{} {
 	return labels
 }
 
+// ExtractLabels provide the new (>= 1.8.x) syntax of the Label Templates
 func ExtractLabels(systemData HostInfo) map[string]interface{} {
 	labels := map[string]interface{}{}
 
@@ -421,10 +424,31 @@ func ExtractLabels(systemData HostInfo) map[string]interface{} {
 		network["NICs"] = nicsMap
 		for i, iface := range systemData.Network.NICs {
 			ifaceNum := strconv.Itoa(i)
+			ipv4, ipv6 := util.GetIPsByIfName(iface.Name)
+			ipv4add := ""
+			ipv4map := map[string]interface{}{}
+			for i, ip := range ipv4 {
+				ipv4map[strconv.Itoa(i)] = ip
+				if ipv4add == "" {
+					ipv4add = ip
+				}
+			}
+			ipv6add := ""
+			ipv6map := map[string]interface{}{}
+			for i, ip := range ipv6 {
+				ipv6map[strconv.Itoa(i)] = ip
+				if ipv6add == "" {
+					ipv6add = ip
+				}
+			}
 			nicsMap[ifaceNum] = map[string]interface{}{
 				"AdvertisedLinkModes": strings.Join(iface.AdvertisedLinkModes, ","),
 				"Duplex":              sanitizeHostInfoVal(iface.Duplex),
 				"IsVirtual":           strconv.FormatBool(iface.IsVirtual),
+				"IPv4Address":         ipv4add,
+				"IPv4Addresses":       ipv4map,
+				"IPv6Address":         ipv6add,
+				"IPv6Addresses":       ipv6map,
 				"MacAddress":          iface.MacAddress,
 				"Name":                iface.Name,
 				"PCIAddress":          iface.PCIAddress,
