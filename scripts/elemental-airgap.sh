@@ -373,7 +373,10 @@ build_os_channel() {
 
     # defaultChannels has been introduced in 1.7 version
     # we can directly add the images in channel_list
-    get_chart_val channel_list "defaultChannels.*.image" "false"
+    get_chart_val channel_list "defaultChannels" "false"
+    if [ -n "$channel_list" ]; then
+        get_chart_val channel_list "defaultChannels[].image" "false"
+    fi
 
     if [[ -z "$channel_list" ]]; then
         # v1.4+ chart
