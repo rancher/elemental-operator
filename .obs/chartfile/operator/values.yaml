@@ -10,9 +10,9 @@ seedImage:
   imagePullPolicy: IfNotPresent
 
 channel:
-  name: "sl-micro-6.0-baremetal-channel"
+  name: "sl-micro-6.1-baremetal-channel"
   image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro"
-  tag: "6.0-baremetal"
+  tag: "6.1-baremetal"
 
 # number of operator replicas to deploy
 replicas: 1
