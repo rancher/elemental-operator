@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.22 AS build
+FROM registry.suse.com/bci/golang:1.23 AS build
 RUN zypper -n install -l openssl-devel
 WORKDIR /src
 COPY go.mod go.sum /src/
