@@ -272,7 +272,7 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 					Resources: []string{"nodes"},
 				},
 				{
-					Verbs:     []string{"list"},
+					Verbs:     []string{"get", "list"},
 					APIGroups: []string{""},
 					Resources: []string{"pods"},
 				},
