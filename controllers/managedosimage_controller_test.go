@@ -134,7 +134,7 @@ var _ = Describe("newFleetBundleResources", func() {
 
 		Expect(bundleResources).To(HaveLen(5))
 
-		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-28ceb391618a.yaml"))
+		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-d5689b3c1cd3.yaml"))
 		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
 		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
 		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
