@@ -93,7 +93,7 @@ func updateInventoryLabels(tmpl templater.Templater, inv *elementalv1.MachineInv
 				continue
 			}
 			log.Errorf("Templater failed decoding label %q: %s", v, err.Error())
-			return err
+			continue
 		}
 		decodedLabel = sanitizeLabel(decodedLabel)
 
