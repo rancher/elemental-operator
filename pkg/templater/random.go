@@ -44,10 +44,12 @@ func IsRandomLabel(s string) bool {
 }
 
 func isRandomTemplate(tmplVal []string) bool {
+	if len(tmplVal) < 2 {
+		return false
+	}
 	if tmplVal[0] != tmplRandomKey {
 		return false
 	}
-
 	switch tmplVal[1] {
 	case tmplUUIDKey:
 	case tmplHexKey:
