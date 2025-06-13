@@ -1,5 +1,5 @@
 FROM ghcr.io/rancher/elemental-toolkit/elemental-cli:v1.1.0 AS toolkit
-FROM registry.suse.com/bci/golang:1.22 AS build
+FROM registry.suse.com/bci/golang:1.24 AS build
 WORKDIR /src
 COPY utils/httpfy/httpfy.go /src/
 ENV CGO_ENABLED=0
