@@ -20,7 +20,7 @@ defaultChannels:
   slMicro60Baremetal:
     included: true 
     name: sl-micro-6.1-baremetal
-    enabled: false
+    enabled: true
     image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.1-baremetal"
     deleteNoLongerInSyncVersions: true
   slMicro60Base:
