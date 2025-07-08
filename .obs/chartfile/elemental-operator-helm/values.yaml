@@ -17,25 +17,25 @@ seedImage:
 
 # default Elemental channels
 defaultChannels:
-  slMicro60Baremetal:
+  slMicro61Baremetal:
     included: true
     name: sl-micro-6.1-baremetal-channel
     enabled: true
     image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.1-baremetal"
     deleteNoLongerInSyncVersions: false
-  slMicro60Base:
+  slMicro61Base:
     included: true
     name: sl-micro-6.1-base-channel
     enabled: false
     image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.1-base"
     deleteNoLongerInSyncVersions: false
-  slMicro60KVM:
+  slMicro61KVM:
     included: true
     name: sl-micro-6.1-kvm-channel
     enabled: false
     image: "%%IMG_REPO%%/rancher/elemental-channel/sl-micro:6.1-kvm"
     deleteNoLongerInSyncVersions: false
-  slMicro60RT:
+  slMicro61RT:
     included: true
     name: sl-micro-6.1-rt-channel
     enabled: false
