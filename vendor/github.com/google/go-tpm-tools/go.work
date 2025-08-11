@@ -1,9 +1,0 @@
-go 1.20
-
-use (
-	.
-	./cmd
-	./launcher
-)
-
-replace github.com/google/go-tpm-tools v0.3.12 => ./
