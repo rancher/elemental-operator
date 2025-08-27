@@ -5,9 +5,9 @@
 #!BuildTag: rancher/elemental-operator:%VERSION%-%RELEASE%
 #!UseOBSRepositories
 
-ARG SLMICRO_VERSION
+ARG SL_VERSION
 
-FROM suse/sl-micro/$SLMICRO_VERSION/toolbox as BASE
+FROM bci/bci-base:${SL_VERSION} as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
