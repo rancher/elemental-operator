@@ -161,6 +161,12 @@ parse_parameters() {
         [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
             CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-crds-chart"
         ;;
+        Maintenance|maintenance|MAINTENANCE)
+        # For now, we have to hardcode the 6.0 path, we will have to add a parameter to choose between 6.0 and 6.1
+        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/maintenance/6.0/charts/rancher/elemental-operator-chart"
+        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
+            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/maintenance/6.0/charts/rancher/elemental-operator-crds-chart"
+        ;;
         Staging|staging|STAGING)
         CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart"
         [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
