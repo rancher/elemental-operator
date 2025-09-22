@@ -7,6 +7,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
@@ -20,11 +32,19 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - ""
   resources:
   - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
   verbs:
   - get
 - apiGroups:
@@ -58,7 +78,15 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
 - apiGroups:
   - cluster.x-k8s.io
   resources:
@@ -266,58 +294,3 @@ rules:
   - delete
   - list
   - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: manager-role
-  namespace: fleet-default
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - get
