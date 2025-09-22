@@ -25,7 +25,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.10.0-rc.4
 	github.com/rancher/lasso v0.0.0-20240123150939-7055397d6dfa
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240319172647-a6bb9619c947
-	github.com/rancher/steve v0.0.0-20240319185837-a1ef5a94d3c9
+	github.com/rancher/steve v0.1.0
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240308073002-4a643535e6ea
 	github.com/rancher/wrangler/v2 v2.1.4
 	github.com/rancher/yip v1.4.11
@@ -115,6 +115,7 @@ require (
 	github.com/rancher/remotedialer v0.3.0 // indirect
 	github.com/rancher/rke v1.5.3 // indirect
 	github.com/rancher/wrangler v1.1.1 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/sagikazarmark/locafero v0.3.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
