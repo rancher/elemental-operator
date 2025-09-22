@@ -1,9 +1,0 @@
-- op: replace
-  path: /metadata/name
-  value: "{{ .Release.Name }}"
-- op: replace
-  path: /subjects/0/name
-  value: "{{ .Release.Name }}"
-- op: replace
-  path: /subjects/0/namespace
-  value: "{{ .Release.Namespace }}"

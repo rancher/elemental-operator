@@ -2,37 +2,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - bases/role.yaml
-- bases/role_binding.yaml
-- bases/cluster_role_binding.yaml
 
-patches:
-- path: patches/name_in_role.yaml
-  target:
-    group: rbac.authorization.k8s.io
-    kind: ClusterRole
-    name: manager-role
-    version: v1
-- path: patches/name_in_role.yaml
-  target:
-    group: rbac.authorization.k8s.io
-    kind: ClusterRoleBinding
-    name: manager-role
-    version: v1
-- path: patches/name_in_role.yaml
-  target:
-    group: rbac.authorization.k8s.io
-    kind: Role
-    name: manager-role
-    version: v1
-- path: patches/name_in_rolebinding.yaml
-  target:
-    group: rbac.authorization.k8s.io
-    kind: RoleBinding
-    name: manager-role
-    version: v1
-- path: patches/name_in_rolebinding.yaml
-  target:
-    group: rbac.authorization.k8s.io
-    kind: ClusterRoleBinding
-    name: manager-role
-    version: v1
+patchesJson6902: ## this is used to patch role name so we can use in helm chart template
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRole
+      name: manager-role
+    path: patches/name_in_role.yaml
