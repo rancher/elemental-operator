@@ -33,14 +33,14 @@ jobs:
       - name: e2e tests
         run: LOCAL_BUILD=true make e2e-tests
       - name: Upload chart
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: chart
           path: build/*.tgz
           overwrite: true
       - name: Archive artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ci-artifacts
           path: _artifacts
