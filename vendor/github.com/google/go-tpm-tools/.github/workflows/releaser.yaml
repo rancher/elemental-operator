@@ -5,22 +5,32 @@ on:
     branches:
     tags:
       - 'v*'
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      refToBuild:
+        description: 'Branch, tag or commit SHA1 to build'
+        required: false
+        type: string
 
 jobs:
   release:
+    permissions:
+      contents: write
     strategy:
       matrix:
-        go-version: [1.20.x]
-        os: [macos-latest, ubuntu-latest]
+        # We can cross-compile from Linux to macOS and Windows. See .goreleaser.yaml
+        # So running just on ubuntu is sufficient.
+        go-version: [1.21.x]
+        os: [ubuntu-latest]
 
     name: Release (${{ matrix.os}}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v3
+          ref: ${{ inputs.refToBuild }}
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -34,17 +44,11 @@ jobs:
       - name: Install Linux packages
         run: sudo apt-get -y install libssl-dev
         if: runner.os == 'Linux'
-      - name: Install Mac packages
-        run: brew install openssl
-        if: runner.os == 'macOS'
-      - name: Install Windows packages
-        run: choco install openssl
-        if: runner.os == 'Windows'
       - name: Build all modules
-        run: go build -v ./... ./cmd/... ./launcher/...
+        run: go build -v ./... ./cmd/... ./launcher/... ./verifier/...
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v3
-        if: success() && startsWith(github.ref, 'refs/tags/') && steps.cache.outputs.cache-hit != 'true'
+        uses: goreleaser/goreleaser-action@v6
+        if: success() && (startsWith(github.ref, 'refs/tags/') || startsWith(inputs.refToBuild, 'refs/tags/')) && steps.cache.outputs.cache-hit != 'true'
         with:
           version: latest
           args: release --clean

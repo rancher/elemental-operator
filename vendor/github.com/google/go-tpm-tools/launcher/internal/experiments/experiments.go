@@ -11,8 +11,10 @@ import (
 // Failure to unmarshal the experiment JSON data will result in an empty object being returned
 // to treat experiment flags as their default value. The error should still be checked.
 type Experiments struct {
-	EnableTestFeatureForImage  bool
-	EnableSignedContainerImage bool
+	EnableTestFeatureForImage bool
+	EnableHealthMonitoring    bool
+	EnableItaVerifier         bool
+	EnableVerifyCS            bool
 }
 
 // New takes a filepath, opens the file, and calls ReadJsonInput with the contents
