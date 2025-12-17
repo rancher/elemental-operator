@@ -146,7 +146,7 @@ var _ = Describe("installer install elemental", Label("installer", "install"), f
 		cliRunner.EXPECT().Install(configFixture.Elemental.Install).Return(nil)
 		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
 		Expect(install.InstallElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
-		compareFiles(fs, filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook), "_testdata/after-hook-config-install.yaml")
+		compareFiles(fs, filepath.Join(elementalcli.TempCloudInitDir, elementalBeforeHook), "_testdata/before-hook-config-install.yaml")
 	})
 })
 
@@ -297,7 +297,7 @@ var _ = Describe("installer reset elemental", Label("installer", "reset"), func(
 		cliRunner.EXPECT().Reset(configFixture.Elemental.Reset).Return(nil)
 		networkConfigurator.EXPECT().GetNetworkConfigApplicator(networkConfigFixture).Return(networkConfigApplicatorFixture, nil)
 		Expect(install.ResetElemental(configFixture, stateFixture, networkConfigFixture)).ToNot(HaveOccurred())
-		compareFiles(fs, filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook), "_testdata/after-hook-config-reset.yaml")
+		compareFiles(fs, filepath.Join(elementalcli.TempCloudInitDir, elementalBeforeHook), "_testdata/before-hook-config-reset.yaml")
 	})
 	It("should remove reset plan", func() {
 		Expect(fs.WriteFile(controllers.LocalResetPlanPath, []byte("{}\n"), os.FileMode(0600))).ToNot(HaveOccurred())
