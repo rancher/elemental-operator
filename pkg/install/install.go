@@ -51,10 +51,10 @@ const (
 )
 
 const (
-	afterInstallStage = "after-install"
-	afterResetStage   = "after-reset"
-	// Used in after-{install|reset} stages
-	elementalAfterHook = "elemental-after-hook.yaml"
+	beforeInstallStage = "before-install"
+	beforeResetStage   = "before-reset"
+	// Used in before-{install|reset} stages
+	elementalBeforeHook = "elemental-before-hook.yaml"
 
 	// Deterministic Elemental yip paths
 	registrationConfigPath = "elemental-registration.yaml"
@@ -109,8 +109,8 @@ func (i *installer) InstallElemental(config elementalv1.Config, state register.S
 		log.Warningf("Both device and device-selector set, using device-field '%s'", config.Elemental.Install.Device)
 	}
 
-	if err := i.writeAfterHookConfigurator(afterInstallStage, installOEMMount, config, state, networkConfig); err != nil {
-		return fmt.Errorf("writing %s configurator: %w", afterInstallStage, err)
+	if err := i.writeHookConfigurator(beforeInstallStage, installOEMMount, config, state, networkConfig); err != nil {
+		return fmt.Errorf("writing %s configurator: %w", beforeInstallStage, err)
 	}
 
 	if err := i.runner.Install(config.Elemental.Install); err != nil {
@@ -126,8 +126,8 @@ func (i *installer) ResetElemental(config elementalv1.Config, state register.Sta
 		config.Elemental.Reset.ConfigURLs = []string{}
 	}
 
-	if err := i.writeAfterHookConfigurator(afterResetStage, resetOEMMount, config, state, networkConfig); err != nil {
-		return fmt.Errorf("writing %s configurator: %w", afterResetStage, err)
+	if err := i.writeHookConfigurator(beforeResetStage, resetOEMMount, config, state, networkConfig); err != nil {
+		return fmt.Errorf("writing %s configurator: %w", beforeResetStage, err)
 	}
 
 	if err := i.runner.Reset(config.Elemental.Reset); err != nil {
@@ -242,7 +242,7 @@ func matchesGt(disk *block.Disk, req elementalv1.DeviceSelectorRequirement) (boo
 	return diskSize.Cmp(keySize) == 1, nil
 }
 
-func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
+func (i *installer) writeHookConfigurator(stage string, oemMount string, config elementalv1.Config, state register.State, networkConfig elementalv1.NetworkConfig) error {
 	afterHookConfigurator := schema.YipConfig{}
 	afterHookConfigurator.Name = "Elemental Finalize System"
 	afterHookConfigurator.Stages = map[string][]schema.Stage{
@@ -254,7 +254,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 	if err != nil {
 		return fmt.Errorf("getting registration config yip: %w", err)
 	}
-	registrationYip := yipAfterHookWrap(string(registrationYipBytes), filepath.Join(oemMount, registrationConfigPath), "Registration Config")
+	registrationYip := yipHookWrap(string(registrationYipBytes), filepath.Join(oemMount, registrationConfigPath), "Registration Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], registrationYip)
 
 	// State
@@ -262,7 +262,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 	if err != nil {
 		return fmt.Errorf("getting registration state config yip: %w", err)
 	}
-	stateYip := yipAfterHookWrap(string(stateYipBytes), filepath.Join(oemMount, stateConfigPath), "Registration State Config")
+	stateYip := yipHookWrap(string(stateYipBytes), filepath.Join(oemMount, stateConfigPath), "Registration State Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], stateYip)
 
 	// Cloud Init
@@ -270,7 +270,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 	if err != nil {
 		return fmt.Errorf("getting cloud-init config yip: %w", err)
 	}
-	cloudInitYip := yipAfterHookWrap(string(cloudInitYipBytes), filepath.Join(oemMount, cloudInitConfigPath), "Cloud Init Config")
+	cloudInitYip := yipHookWrap(string(cloudInitYipBytes), filepath.Join(oemMount, cloudInitConfigPath), "Cloud Init Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], cloudInitYip)
 
 	// Elemental System Agent
@@ -278,7 +278,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 	if err != nil {
 		return fmt.Errorf("getting elemental system agent config yip: %w", err)
 	}
-	systemAgentYip := yipAfterHookWrap(string(systemAgentYipBytes), filepath.Join(oemMount, systemAgentConfigPath), "Elemental System Agent Config")
+	systemAgentYip := yipHookWrap(string(systemAgentYipBytes), filepath.Join(oemMount, systemAgentConfigPath), "Elemental System Agent Config")
 	afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], systemAgentYip)
 
 	// Network Config
@@ -287,7 +287,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 		return fmt.Errorf("getting network config yip: %w", err)
 	}
 	if !errors.Is(err, network.ErrEmptyConfig) {
-		networkConfigYip := yipAfterHookWrap(string(networkConfigYipBytes), filepath.Join(oemMount, networkConfigPath), "Network Config")
+		networkConfigYip := yipHookWrap(string(networkConfigYipBytes), filepath.Join(oemMount, networkConfigPath), "Network Config")
 		afterHookConfigurator.Stages[stage] = append(afterHookConfigurator.Stages[stage], networkConfigYip)
 	}
 
@@ -296,9 +296,9 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 		return fmt.Errorf("creating directory '%s': %w", elementalcli.TempCloudInitDir, err)
 	}
 	// Create the after hook configurator yip
-	f, err := i.fs.Create(filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook))
+	f, err := i.fs.Create(filepath.Join(elementalcli.TempCloudInitDir, elementalBeforeHook))
 	if err != nil {
-		return fmt.Errorf("creating file '%s': %w", filepath.Join(elementalcli.TempCloudInitDir, elementalAfterHook), err)
+		return fmt.Errorf("creating file '%s': %w", filepath.Join(elementalcli.TempCloudInitDir, elementalBeforeHook), err)
 	}
 	defer f.Close()
 
@@ -309,7 +309,7 @@ func (i *installer) writeAfterHookConfigurator(stage string, oemMount string, co
 	return nil
 }
 
-func yipAfterHookWrap(content string, path string, name string) schema.Stage {
+func yipHookWrap(content string, path string, name string) schema.Stage {
 	config := schema.Stage{Name: name}
 	config.Files = []schema.File{
 		{
