@@ -1,6 +1,6 @@
 name: Elemental Finalize System
 stages:
-    after-install:
+    before-install:
         - files:
             - path: /run/elemental/oem/elemental-registration.yaml
               permissions: 384
