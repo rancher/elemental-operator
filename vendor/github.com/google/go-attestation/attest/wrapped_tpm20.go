@@ -30,12 +30,22 @@ import (
 	"github.com/google/go-tpm/tpmutil"
 )
 
+// The size of TPM2B_MAX_BUFFER is TPM-dependent. The value here is what all
+// TPMs support. See TPM 2.0 spec, part 2, section 10.4.8 TPM2B_MAX_BUFFER.
+const tpm2BMaxBufferSize = 1024
+
 // wrappedTPM20 interfaces with a TPM 2.0 command channel.
 type wrappedTPM20 struct {
 	interf           TPMInterface
 	rwc              CommandChannelTPM20
 	tpmRSAEkTemplate *tpm2.Public
 	tpmECCEkTemplate *tpm2.Public
+}
+
+// certifyingKey contains details of a TPM key that could certify other keys.
+type certifyingKey struct {
+	handle tpmutil.Handle
+	alg    Algorithm
 }
 
 func (t *wrappedTPM20) rsaEkTemplate() tpm2.Public {
@@ -72,10 +82,6 @@ func (t *wrappedTPM20) eccEkTemplate() tpm2.Public {
 	return *t.tpmECCEkTemplate
 }
 
-func (t *wrappedTPM20) tpmVersion() TPMVersion {
-	return TPMVersion20
-}
-
 func (t *wrappedTPM20) close() error {
 	return t.rwc.Close()
 }
@@ -84,14 +90,13 @@ func (t *wrappedTPM20) close() error {
 func (t *wrappedTPM20) info() (*TPMInfo, error) {
 	var (
 		tInfo = TPMInfo{
-			Version:   TPMVersion20,
 			Interface: t.interf,
 		}
-		t2Info tpm20Info
+		t2Info tpmInfo
 		err    error
 	)
 
-	if t2Info, err = readTPM2VendorAttributes(t.rwc); err != nil {
+	if t2Info, err = readVendorAttributes(t.rwc); err != nil {
 		return nil, err
 	}
 	tInfo.Manufacturer = t2Info.manufacturer
@@ -215,16 +220,13 @@ func (t *wrappedTPM20) eks() ([]EK, error) {
 
 	i, err := t.info()
 	if err != nil {
-		return nil, fmt.Errorf("Retrieving TPM info failed: %v", err)
+		return nil, fmt.Errorf("retrieving TPM info failed: %v", err)
 	}
 	ekPub := &rsa.PublicKey{
 		E: int(pub.RSAParameters.Exponent()),
 		N: pub.RSAParameters.Modulus(),
 	}
-	var certificateURL string
-	if i.Manufacturer.String() == manufacturerIntel {
-		certificateURL = intelEKURL(ekPub)
-	}
+	certificateURL := ekCertURL(ekPub, i.Manufacturer.String())
 	return []EK{
 		{
 			Public:         ekPub,
@@ -246,6 +248,16 @@ func (t *wrappedTPM20) newAK(opts *AKConfig) (*AK, error) {
 		return nil, fmt.Errorf("failed to get SRK handle: %v", err)
 	}
 
+	var akTemplate tpm2.Public
+	var sigScheme *tpm2.SigScheme
+	// The default is RSA.
+	if opts != nil && opts.Algorithm == ECDSA {
+		akTemplate = akTemplateECC
+		sigScheme = akTemplateECC.ECCParameters.Sign
+	} else {
+		akTemplate = akTemplateRSA
+		sigScheme = akTemplateRSA.RSAParameters.Sign
+	}
 	blob, pub, creationData, creationHash, tix, err := tpm2.CreateKey(t.rwc, srk, tpm2.PCRSelection{}, "", "", akTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("CreateKeyEx() failed: %v", err)
@@ -262,11 +274,24 @@ func (t *wrappedTPM20) newAK(opts *AKConfig) (*AK, error) {
 	}()
 
 	// We can only certify the creation immediately afterwards, so we cache the result.
-	attestation, sig, err := tpm2.CertifyCreation(t.rwc, "", keyHandle, keyHandle, nil, creationHash, tpm2.SigScheme{Alg: tpm2.AlgRSASSA, Hash: tpm2.AlgSHA256, Count: 0}, tix)
+	attestation, sig, err := tpm2.CertifyCreation(t.rwc, "", keyHandle, keyHandle, nil, creationHash, *sigScheme, tix)
 	if err != nil {
 		return nil, fmt.Errorf("CertifyCreation failed: %v", err)
 	}
-	return &AK{ak: newWrappedAK20(keyHandle, blob, pub, creationData, attestation, sig)}, nil
+
+	tpmPub, err := tpm2.DecodePublic(pub)
+	if err != nil {
+		return nil, fmt.Errorf("decode public key: %v", err)
+	}
+	pubKey, err := tpmPub.Key()
+	if err != nil {
+		return nil, fmt.Errorf("access public key: %v", err)
+	}
+
+	return &AK{
+		ak:  newWrappedAK20(keyHandle, blob, pub, creationData, attestation, sig),
+		pub: pubKey,
+	}, nil
 }
 
 func (t *wrappedTPM20) newKey(ak *AK, opts *KeyConfig) (*Key, error) {
@@ -275,6 +300,15 @@ func (t *wrappedTPM20) newKey(ak *AK, opts *KeyConfig) (*Key, error) {
 		return nil, fmt.Errorf("expected *wrappedKey20, got: %T", k)
 	}
 
+	kAlg, err := k.algorithm()
+	if err != nil {
+		return nil, fmt.Errorf("get algorithm: %v", err)
+	}
+	ck := certifyingKey{handle: k.hnd, alg: kAlg}
+	return t.newKeyCertifiedByKey(ck, opts)
+}
+
+func (t *wrappedTPM20) newKeyCertifiedByKey(ck certifyingKey, opts *KeyConfig) (*Key, error) {
 	parent, blob, pub, creationData, err := createKey(t, opts)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create key: %v", err)
@@ -292,9 +326,10 @@ func (t *wrappedTPM20) newKey(ak *AK, opts *KeyConfig) (*Key, error) {
 	}()
 
 	// Certify application key by AK
-	cp, err := k.certify(t, keyHandle)
+	certifyOpts := CertifyOpts{QualifyingData: opts.QualifyingData}
+	cp, err := certifyByKey(t, keyHandle, ck, certifyOpts)
 	if err != nil {
-		return nil, fmt.Errorf("ak.Certify() failed: %v", err)
+		return nil, fmt.Errorf("certifyByKey() failed: %v", err)
 	}
 	if !bytes.Equal(pub, cp.Public) {
 		return nil, fmt.Errorf("certified incorrect key, expected: %v, certified: %v", pub, cp.Public)
@@ -385,7 +420,7 @@ func templateFromConfig(opts *KeyConfig) (tpm2.Public, error) {
 }
 
 func (t *wrappedTPM20) deserializeAndLoad(opaqueBlob []byte, parent ParentKeyConfig) (tpmutil.Handle, *serializedKey, error) {
-	sKey, err := deserializeKey(opaqueBlob, TPMVersion20)
+	sKey, err := deserializeKey(opaqueBlob)
 	if err != nil {
 		return 0, nil, fmt.Errorf("deserializeKey() failed: %v", err)
 	}
@@ -436,18 +471,26 @@ func (t *wrappedTPM20) loadKeyWithParent(opaqueBlob []byte, parent ParentKeyConf
 	return &Key{key: newWrappedKey20(hnd, sKey.Blob, sKey.Public, sKey.CreateData, sKey.CreateAttestation, sKey.CreateSignature), pub: pub, tpm: t}, nil
 }
 
+func (t *wrappedTPM20) pcrbanks() ([]HashAlg, error) {
+	return pcrbanks(t.rwc)
+}
+
 func (t *wrappedTPM20) pcrs(alg HashAlg) ([]PCR, error) {
-	PCRs, err := readAllPCRs20(t.rwc, alg.goTPMAlg())
+	PCRs, err := readAllPCRs(t.rwc, alg.goTPMAlg())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PCRs: %v", err)
 	}
 
 	out := make([]PCR, len(PCRs))
 	for index, digest := range PCRs {
+		digestAlg, err := alg.cryptoHash()
+		if err != nil {
+			return nil, fmt.Errorf("unknown algorithm ID %x: %v", alg, err)
+		}
 		out[int(index)] = PCR{
 			Index:     int(index),
 			Digest:    digest,
-			DigestAlg: alg.cryptoHash(),
+			DigestAlg: digestAlg,
 		}
 	}
 
@@ -456,6 +499,56 @@ func (t *wrappedTPM20) pcrs(alg HashAlg) ([]PCR, error) {
 
 func (t *wrappedTPM20) measurementLog() ([]byte, error) {
 	return t.rwc.MeasurementLog()
+}
+
+func tpmHash(rwc CommandChannelTPM20, msg []byte, h crypto.Hash) ([]byte, *tpm2.Ticket, error) {
+	alg, err := tpm2.HashToAlgorithm(h)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to convert hash algorithm: %v", err)
+	}
+
+	hnd, err := tpm2.HashSequenceStart(rwc, "", alg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start hash sequence: %v", err)
+	}
+	flushHandle := true
+	defer func() {
+		if flushHandle {
+			tpm2.FlushContext(rwc, hnd)
+		}
+	}()
+
+	i := 0
+	// Handle all but the last chunk.
+	for {
+		end := i + tpm2BMaxBufferSize
+		if end >= len(msg) {
+			break
+		}
+		if err := tpm2.SequenceUpdate(rwc, "", hnd, msg[i:end]); err != nil {
+			return nil, nil, fmt.Errorf("failed to update hash sequence: %v", err)
+		}
+		i = end
+	}
+
+	// Handle the last chunk.
+	//
+	// Hardcoding tpm2.HandleOwner here should be fine --- "The hierarchy
+	// parameter is not related to the signing key hierarchy". See TPM 2.0
+	// spec, Part 3, Section 17.6 TPM2_SequenceComplete.
+	digest, validation, err := tpm2.SequenceComplete(rwc, "", hnd, tpm2.HandleOwner, msg[i:])
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to complete hash sequence: %v", err)
+	}
+	// "If this command completes successfully, the sequenceHandle object will
+	// be flushed." --- we don't need to flush it ourselves.
+	flushHandle = false
+
+	if validation.Hierarchy == tpm2.HandleNull {
+		return nil, nil, fmt.Errorf("validation ticket has a null hierarchy. msg might be too short or starts with TPM_GENERATED_VALUE")
+	}
+
+	return digest, validation, nil
 }
 
 // wrappedKey20 represents a key manipulated through a *wrappedTPM20.
@@ -494,7 +587,7 @@ func newWrappedKey20(hnd tpmutil.Handle, blob, public, createData, createAttesta
 func (k *wrappedKey20) marshal() ([]byte, error) {
 	return (&serializedKey{
 		Encoding:   keyEncodingEncrypted,
-		TPMVersion: TPMVersion20,
+		TPMVersion: 2,
 
 		Blob:              k.blob,
 		Public:            k.public,
@@ -556,7 +649,36 @@ func (k *wrappedKey20) activateCredential(tb tpmBase, in EncryptedCredential, ek
 	}, k.hnd, ekHnd, credential, secret)
 }
 
-func (k *wrappedKey20) certify(tb tpmBase, handle interface{}) (*CertificationParameters, error) {
+func sigSchemeFromAlgorithm(alg Algorithm) (tpm2.SigScheme, error) {
+	switch alg {
+	case RSA:
+		return tpm2.SigScheme{
+			Alg:  tpm2.AlgRSASSA,
+			Hash: tpm2.AlgSHA256,
+		}, nil
+	case ECDSA:
+		return tpm2.SigScheme{
+			Alg:  tpm2.AlgECDSA,
+			Hash: tpm2.AlgSHA256,
+		}, nil
+	default:
+		return tpm2.SigScheme{}, fmt.Errorf("algorithm %v not supported", alg)
+	}
+}
+
+func (k *wrappedKey20) certify(tb tpmBase, handle any, opts CertifyOpts) (*CertificationParameters, error) {
+	kAlg, err := k.algorithm()
+	if err != nil {
+		return nil, fmt.Errorf("unknown algorithm: %v", err)
+	}
+	ck := certifyingKey{
+		handle: k.hnd,
+		alg:    kAlg,
+	}
+	return certifyByKey(tb, handle, ck, opts)
+}
+
+func certifyByKey(tb tpmBase, handle any, ck certifyingKey, opts CertifyOpts) (*CertificationParameters, error) {
 	t, ok := tb.(*wrappedTPM20)
 	if !ok {
 		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
@@ -565,11 +687,11 @@ func (k *wrappedKey20) certify(tb tpmBase, handle interface{}) (*CertificationPa
 	if !ok {
 		return nil, fmt.Errorf("expected tpmutil.Handle, got %T", handle)
 	}
-	scheme := tpm2.SigScheme{
-		Alg:  tpm2.AlgRSASSA,
-		Hash: tpm2.AlgSHA256,
+	scheme, err := sigSchemeFromAlgorithm(ck.alg)
+	if err != nil {
+		return nil, fmt.Errorf("get signature scheme: %v", err)
 	}
-	return certify(t.rwc, hnd, k.hnd, scheme)
+	return certify(t.rwc, hnd, ck.handle, opts.QualifyingData, scheme)
 }
 
 func (k *wrappedKey20) quote(tb tpmBase, nonce []byte, alg HashAlg, selectedPCRs []int) (*Quote, error) {
@@ -597,21 +719,41 @@ func (k *wrappedKey20) certificationParameters() CertificationParameters {
 	}
 }
 
+func (k *wrappedKey20) signMsg(tb tpmBase, msg []byte, pub crypto.PublicKey, opts crypto.SignerOpts) ([]byte, error) {
+	t, ok := tb.(*wrappedTPM20)
+	if !ok {
+		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
+	}
+	digest, validation, err := tpmHash(t.rwc, msg, opts.HashFunc())
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash message: %v", err)
+	}
+
+	return k.signWithValidation(tb, digest, pub, opts, validation)
+}
+
 func (k *wrappedKey20) sign(tb tpmBase, digest []byte, pub crypto.PublicKey, opts crypto.SignerOpts) ([]byte, error) {
+	return k.signWithValidation(tb, digest, pub, opts, nil)
+}
+
+func (k *wrappedKey20) signWithValidation(tb tpmBase, digest []byte, pub crypto.PublicKey, opts crypto.SignerOpts, validation *tpm2.Ticket) ([]byte, error) {
 	t, ok := tb.(*wrappedTPM20)
 	if !ok {
 		return nil, fmt.Errorf("expected *wrappedTPM20, got %T", tb)
 	}
 	switch p := pub.(type) {
 	case *ecdsa.PublicKey:
-		return signECDSA(t.rwc, k.hnd, digest, p.Curve)
+		return signECDSA(t.rwc, k.hnd, digest, p.Curve, opts, validation)
 	case *rsa.PublicKey:
-		return signRSA(t.rwc, k.hnd, digest, opts)
+		return signRSA(t.rwc, k.hnd, digest, opts, validation)
 	}
 	return nil, fmt.Errorf("unsupported signing key type: %T", pub)
 }
 
-func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, curve elliptic.Curve) ([]byte, error) {
+func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, curve elliptic.Curve, opts crypto.SignerOpts, validation *tpm2.Ticket) ([]byte, error) {
+	if _, ok := opts.(*rsa.PSSOptions); ok {
+		return nil, fmt.Errorf("cannot use rsa.PSSOptions with ECDSA key")
+	}
 	// https://cs.opensource.google/go/go/+/refs/tags/go1.19.2:src/crypto/ecdsa/ecdsa.go;l=181
 	orderBits := curve.Params().N.BitLen()
 	orderBytes := (orderBits + 7) / 8
@@ -627,7 +769,7 @@ func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, curve ellipt
 	// that may have been dropped when converting the digest to an integer
 	digest = ret.FillBytes(digest)
 
-	sig, err := tpm2.Sign(rw, key, "", digest, nil, nil)
+	sig, err := tpm2.Sign(rw, key, "", digest, validation, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot sign: %v", err)
 	}
@@ -640,7 +782,7 @@ func signECDSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, curve ellipt
 	}{sig.ECC.R, sig.ECC.S})
 }
 
-func signRSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func signRSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, opts crypto.SignerOpts, validation *tpm2.Ticket) ([]byte, error) {
 	h, err := tpm2.HashToAlgorithm(opts.HashFunc())
 	if err != nil {
 		return nil, fmt.Errorf("incorrect hash algorithm: %v", err)
@@ -652,13 +794,13 @@ func signRSA(rw io.ReadWriter, key tpmutil.Handle, digest []byte, opts crypto.Si
 	}
 
 	if pss, ok := opts.(*rsa.PSSOptions); ok {
-		if pss.SaltLength != rsa.PSSSaltLengthAuto && pss.SaltLength != len(digest) {
-			return nil, fmt.Errorf("PSS salt length %d is incorrect, expected rsa.PSSSaltLengthAuto or %d", pss.SaltLength, len(digest))
+		if pss.SaltLength != rsa.PSSSaltLengthAuto && pss.SaltLength != rsa.PSSSaltLengthEqualsHash && pss.SaltLength != len(digest) {
+			return nil, fmt.Errorf("PSS salt length %d is incorrect, expected rsa.PSSSaltLengthAuto, rsa.PSSSaltLengthEqualsHash or %d", pss.SaltLength, len(digest))
 		}
 		scheme.Alg = tpm2.AlgRSAPSS
 	}
 
-	sig, err := tpm2.Sign(rw, key, "", digest, nil, scheme)
+	sig, err := tpm2.Sign(rw, key, "", digest, validation, scheme)
 	if err != nil {
 		return nil, fmt.Errorf("cannot sign: %v", err)
 	}
@@ -674,4 +816,19 @@ func (k *wrappedKey20) decrypt(tb tpmBase, ctxt []byte) ([]byte, error) {
 
 func (k *wrappedKey20) blobs() ([]byte, []byte, error) {
 	return k.public, k.blob, nil
+}
+
+func (k *wrappedKey20) algorithm() (Algorithm, error) {
+	tpmPub, err := tpm2.DecodePublic(k.public)
+	if err != nil {
+		return "", fmt.Errorf("decode public key: %v", err)
+	}
+	switch tpmPub.Type {
+	case tpm2.AlgRSA:
+		return RSA, nil
+	case tpm2.AlgECC:
+		return ECDSA, nil
+	default:
+		return "", fmt.Errorf("unsupported key type: %v", tpmPub.Type)
+	}
 }
