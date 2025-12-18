@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-#!BuildTag: rancher/elemental-operator-crds-chart:latest
 #!BuildTag: rancher/elemental-operator-crds-chart:%VERSION%
 #!BuildTag: rancher/elemental-operator-crds-chart:%VERSION%-%RELEASE%
 apiVersion: v2
