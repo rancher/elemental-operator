@@ -66,12 +66,24 @@ configure_cloud_logging() {
   cp fluent-bit-cs.conf "${CS_PATH}"
 }
 
+configure_node_problem_detector() {
+  # Copy CS-specific node-problem-detector configs to OEM partition.
+  cp nodeproblemdetector/system-stats-monitor-cs.json "${CS_PATH}"
+  cp nodeproblemdetector/boot-disk-size-consistency-monitor-cs.json "${CS_PATH}"
+  cp nodeproblemdetector/docker-monitor-cs.json "${CS_PATH}"
+  cp nodeproblemdetector/kernel-monitor-cs.json "${CS_PATH}"
+}
+
 configure_systemd_units_for_debug() {
   configure_cloud_logging
+  configure_node_problem_detector
+
+  disable_unit "konlet-startup.service"
 }
 configure_systemd_units_for_hardened() {
   configure_necessary_systemd_units
   configure_cloud_logging
+  configure_node_problem_detector
   # Make entrypoint (via cloud-init) the default unit.
   set_default_boot_target "cloud-final.service"
 
@@ -85,7 +97,6 @@ configure_systemd_units_for_hardened() {
   disable_unit "konlet-startup.service"
   disable_unit "crash-reporter.service"
   disable_unit "device_policy_manager.service"
-  disable_unit "node-problem-detector.service"
   disable_unit "docker-events-collector-fluent-bit.service"
   disable_unit "sshd.service"
   disable_unit "var-lib-toolbox.mount"
@@ -102,7 +113,9 @@ main() {
   # Install container launcher.
   copy_launcher
   setup_launcher_systemd_unit
-  append_cmdline "cos.protected_stateful_partition=e"
+  # Minimum required COS version for 'e': cos-dev-105-17222-0-0.
+  # Minimum required COS version for 'm': cos-dev-113-18203-0-0.
+  append_cmdline "cos.protected_stateful_partition=m"
   # Increase wait timeout of the protected stateful partition.
   append_cmdline "systemd.default_timeout_start_sec=900s"
 
@@ -117,6 +130,16 @@ main() {
          "Only 'debug' and 'hardened' are supported."
     exit 1
   fi
+
+  # Make sure cache is flushed for the OEM partition.
+  sync ${OEM_PATH}
+
+  # Remount as read-only to avoid unexpected changes
+  mount -o remount,ro ${OEM_PATH}
+
+  # Verify the content before the OEM sealing step.
+  ls -lh ${CS_PATH}
+  ls -lh ${OEM_PATH}
 }
 
 main

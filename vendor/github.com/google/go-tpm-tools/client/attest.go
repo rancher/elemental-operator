@@ -1,27 +1,22 @@
 package client
 
 import (
-	"crypto/x509"
 	"fmt"
-	"io"
 	"net/http"
 
 	sabi "github.com/google/go-sev-guest/abi"
 	sg "github.com/google/go-sev-guest/client"
 	tg "github.com/google/go-tdx-guest/client"
 	tabi "github.com/google/go-tdx-guest/client/linuxabi"
+	tpb "github.com/google/go-tdx-guest/proto/tdx"
+	"github.com/google/go-tpm-tools/internal"
 	pb "github.com/google/go-tpm-tools/proto/attest"
 )
 
-const (
-	maxIssuingCertificateURLs = 3
-	maxCertChainLength        = 4
-)
-
 // TEEDevice is an interface to add an attestation report from a TEE technology's
-// attestation driver.
+// attestation driver or quote provider.
 type TEEDevice interface {
-	// AddAttestation uses the TEE device's attestation driver to collect an
+	// AddAttestation uses the TEE device's attestation driver or quote provider to collect an
 	// attestation report, then adds it to the correct field of `attestation`.
 	AddAttestation(attestation *pb.Attestation, options AttestOpts) error
 	// Close finalizes any resources in use by the TEEDevice.
@@ -48,6 +43,7 @@ type AttestOpts struct {
 	// Currently, we only support PCR replay for PCRs orthogonal to those in the
 	// firmware event log, where PCRs 0-9 and 14 are often measured. If the two
 	// logs overlap, server-side verification using this library may fail.
+	// Deprecated: Manually populate the pb.Attestation instead.
 	CanonicalEventLog []byte
 	// If non-nil, will be used to fetch the AK certificate chain for validation.
 	// Key.Attest() will construct the certificate chain by making GET requests to
@@ -63,105 +59,34 @@ type AttestOpts struct {
 	// depending on the technology's size. Leaving this nil is not recommended. If
 	// nil, then TEEDevice must be nil.
 	TEENonce []byte
+
+	// Setting this skips attaching the TEE attestation
+	SkipTeeAttestation bool
 }
 
-// Given a certificate, iterates through its IssuingCertificateURLs and returns
-// the certificate that signed it. If the certificate lacks an
-// IssuingCertificateURL, return nil. If fetching the certificates fails or the
-// cert chain is malformed, return an error.
-func fetchIssuingCertificate(client *http.Client, cert *x509.Certificate) (*x509.Certificate, error) {
-	// Check if we should event attempt fetching.
-	if cert == nil || len(cert.IssuingCertificateURL) == 0 {
-		return nil, nil
-	}
-	// For each URL, fetch and parse the certificate, then verify whether it signed cert.
-	// If successful, return the parsed certificate. If any step in this process fails, try the next url.
-	// If all the URLs fail, return the last error we got.
-	// TODO(Issue #169): Return a multi-error here
-	var lastErr error
-	for i, url := range cert.IssuingCertificateURL {
-		// Limit the number of attempts.
-		if i >= maxIssuingCertificateURLs {
-			break
-		}
-		resp, err := client.Get(url)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to retrieve certificate at %v: %w", url, err)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("certificate retrieval from %s returned non-OK status: %v", url, resp.StatusCode)
-			continue
-		}
-		certBytes, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body from %s: %w", url, err)
-			continue
-		}
-
-		parsedCert, err := x509.ParseCertificate(certBytes)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to parse response from %s into a certificate: %w", url, err)
-			continue
-		}
-
-		// Check if the parsed certificate signed the current one.
-		if err = cert.CheckSignatureFrom(parsedCert); err != nil {
-			lastErr = fmt.Errorf("parent certificate from %s did not sign child: %w", url, err)
-			continue
-		}
-		return parsedCert, nil
-	}
-	return nil, lastErr
-}
-
-// Constructs the certificate chain for the key's certificate.
-// If an error is encountered in the process, return what has been constructed so far.
-func (k *Key) getCertificateChain(client *http.Client) ([][]byte, error) {
-	var certs [][]byte
-	currentCert := k.cert
-	for len(certs) <= maxCertChainLength {
-		issuingCert, err := fetchIssuingCertificate(client, currentCert)
-		if err != nil {
-			return nil, err
-		}
-		if issuingCert == nil {
-			return certs, nil
-		}
-		certs = append(certs, issuingCert.Raw)
-		currentCert = issuingCert
-	}
-	return nil, fmt.Errorf("max certificate chain length (%v) exceeded", maxCertChainLength)
-}
-
-// SevSnpDevice encapsulates the SEV-SNP attestation device to add its attestation report
+// SevSnpQuoteProvider encapsulates the SEV-SNP attestation device to add its attestation report
 // to a pb.Attestation.
-type SevSnpDevice struct {
-	Device sg.Device
+type SevSnpQuoteProvider struct {
+	QuoteProvider sg.QuoteProvider
 }
 
 // TdxDevice encapsulates the TDX attestation device to add its attestation quote
 // to a pb.Attestation.
+// Deprecated: TdxDevice is deprecated. It is recommended to use TdxQuoteProvider.
 type TdxDevice struct {
 	Device tg.Device
 }
 
-// CreateSevSnpDevice opens the SEV-SNP attestation driver and wraps it with behavior
-// that allows it to add an attestation report to pb.Attestation.
-func CreateSevSnpDevice() (*SevSnpDevice, error) {
-	d, err := sg.OpenDevice()
-	if err != nil {
-		return nil, err
-	}
-	return &SevSnpDevice{Device: d}, nil
+// TdxQuoteProvider encapsulates the TDX attestation device to add its attestation quote
+// to a pb.Attestation.
+type TdxQuoteProvider struct {
+	QuoteProvider tg.QuoteProvider
 }
 
 // AddAttestation will get the SEV-SNP attestation report given opts.TEENonce with
 // associated certificates and add them to `attestation`. If opts.TEENonce is empty,
 // then uses contents of opts.Nonce.
-func (d *SevSnpDevice) AddAttestation(attestation *pb.Attestation, opts AttestOpts) error {
+func (d *SevSnpQuoteProvider) AddAttestation(attestation *pb.Attestation, opts AttestOpts) error {
 	var snpNonce [sabi.ReportDataSize]byte
 	if len(opts.TEENonce) == 0 {
 		copy(snpNonce[:], opts.Nonce)
@@ -170,7 +95,11 @@ func (d *SevSnpDevice) AddAttestation(attestation *pb.Attestation, opts AttestOp
 	} else {
 		copy(snpNonce[:], opts.TEENonce)
 	}
-	extReport, err := sg.GetExtendedReport(d.Device, snpNonce)
+	raw, err := d.QuoteProvider.GetRawQuote(snpNonce)
+	if err != nil {
+		return err
+	}
+	extReport, err := sabi.ReportCertsToProto(raw)
 	if err != nil {
 		return err
 	}
@@ -180,19 +109,28 @@ func (d *SevSnpDevice) AddAttestation(attestation *pb.Attestation, opts AttestOp
 	return nil
 }
 
-// Close will free the device handle held by the SevSnpDevice. Calling more
-// than once has no effect.
-func (d *SevSnpDevice) Close() error {
-	if d.Device != nil {
-		err := d.Device.Close()
-		d.Device = nil
-		return err
-	}
+// Close is a no-op.
+func (d *SevSnpQuoteProvider) Close() error {
 	return nil
+}
+
+// CreateSevSnpQuoteProvider creates the SEV-SNP quote provider and wraps it with behavior
+// that allows it to add an attestation quote to pb.Attestation.
+func CreateSevSnpQuoteProvider() (TEEDevice, error) {
+	qp, err := sg.GetQuoteProvider()
+	if err != nil {
+		return nil, err
+	}
+	if !qp.IsSupported() {
+		return nil, fmt.Errorf("sev-snp attestation reports not available")
+	}
+	return &SevSnpQuoteProvider{QuoteProvider: qp}, nil
 }
 
 // CreateTdxDevice opens the TDX attestation driver and wraps it with behavior
 // that allows it to add an attestation quote to pb.Attestation.
+// Deprecated: TdxDevice is deprecated, and use of CreateTdxQuoteProvider is
+// recommended to create a TEEDevice.
 func CreateTdxDevice() (*TdxDevice, error) {
 	d, err := tg.OpenDevice()
 	if err != nil {
@@ -206,21 +144,15 @@ func CreateTdxDevice() (*TdxDevice, error) {
 // contents of opts.Nonce.
 func (d *TdxDevice) AddAttestation(attestation *pb.Attestation, opts AttestOpts) error {
 	var tdxNonce [tabi.TdReportDataSize]byte
-	if len(opts.TEENonce) == 0 {
-		copy(tdxNonce[:], opts.Nonce)
-	} else if len(opts.TEENonce) != tabi.TdReportDataSize {
-		return fmt.Errorf("the TEENonce size is %d. Intel TDX device requires %d", len(opts.TEENonce), tabi.TdReportDataSize)
-	} else {
-		copy(tdxNonce[:], opts.TEENonce)
+	err := fillTdxNonce(opts, tdxNonce[:])
+	if err != nil {
+		return err
 	}
 	quote, err := tg.GetQuote(d.Device, tdxNonce)
 	if err != nil {
 		return err
 	}
-	attestation.TeeAttestation = &pb.Attestation_TdxAttestation{
-		TdxAttestation: quote,
-	}
-	return nil
+	return setTeeAttestationTdxQuote(quote, attestation)
 }
 
 // Close will free the device handle held by the TdxDevice. Calling more
@@ -234,9 +166,79 @@ func (d *TdxDevice) Close() error {
 	return nil
 }
 
+// CreateTdxQuoteProvider creates the TDX quote provider and wraps it with behavior
+// that allows it to add an attestation quote to pb.Attestation.
+func CreateTdxQuoteProvider() (*TdxQuoteProvider, error) {
+	qp, err := tg.GetQuoteProvider()
+	if err != nil {
+		return nil, err
+	}
+	if qp.IsSupported() != nil {
+		// TDX quote provider has a fallback mechanism to fetch attestation quote
+		// via device driver in case ConfigFS is not supported, so checking for TDX
+		// device availability here. Once Device interface is fully removed from
+		// subsequent go-tdx-guest versions, then below OpenDevice call should be
+		// removed as well.
+		d, err2 := tg.OpenDevice()
+		if err2 != nil {
+			return nil, fmt.Errorf("neither TDX device, nor quote provider is supported")
+		}
+		d.Close()
+	}
+
+	return &TdxQuoteProvider{QuoteProvider: qp}, nil
+}
+
+// AddAttestation will get the TDX attestation quote given opts.TEENonce
+// and add them to `attestation`. If opts.TEENonce is empty, then uses
+// contents of opts.Nonce.
+func (qp *TdxQuoteProvider) AddAttestation(attestation *pb.Attestation, opts AttestOpts) error {
+	var tdxNonce [tabi.TdReportDataSize]byte
+	err := fillTdxNonce(opts, tdxNonce[:])
+	if err != nil {
+		return err
+	}
+	quote, err := tg.GetQuote(qp.QuoteProvider, tdxNonce)
+	if err != nil {
+		return err
+	}
+	return setTeeAttestationTdxQuote(quote, attestation)
+}
+
+// Close will free resources held by QuoteProvider.
+func (qp *TdxQuoteProvider) Close() error {
+	return nil
+}
+
+func fillTdxNonce(opts AttestOpts, tdxNonce []byte) error {
+	if len(opts.TEENonce) == 0 {
+		copy(tdxNonce[:], opts.Nonce)
+	} else if len(opts.TEENonce) != tabi.TdReportDataSize {
+		return fmt.Errorf("the TEENonce size is %d. Intel TDX device requires %d", len(opts.TEENonce), tabi.TdReportDataSize)
+	} else {
+		copy(tdxNonce[:], opts.TEENonce)
+	}
+	return nil
+}
+
+func setTeeAttestationTdxQuote(quote any, attestation *pb.Attestation) error {
+	switch q := quote.(type) {
+	case *tpb.QuoteV4:
+		attestation.TeeAttestation = &pb.Attestation_TdxAttestation{
+			TdxAttestation: q,
+		}
+	default:
+		return fmt.Errorf("unsupported quote type: %T", quote)
+	}
+	return nil
+}
+
 // Does best effort to get a TEE hardware rooted attestation, but won't fail fatally
 // unless the user provided a TEEDevice object.
 func getTEEAttestationReport(attestation *pb.Attestation, opts AttestOpts) error {
+	if opts.SkipTeeAttestation {
+		return nil
+	}
 	device := opts.TEEDevice
 	if device != nil {
 		return device.AddAttestation(attestation, opts)
@@ -248,20 +250,19 @@ func getTEEAttestationReport(attestation *pb.Attestation, opts AttestOpts) error
 	}
 
 	// Try SEV-SNP.
-	if device, err := CreateSevSnpDevice(); err == nil {
+	if sevqp, err := CreateSevSnpQuoteProvider(); err == nil {
 		// Don't return errors if the attestation collection fails, since
 		// the user didn't specify a TEEDevice.
-		device.AddAttestation(attestation, opts)
-		device.Close()
+		sevqp.AddAttestation(attestation, opts)
 		return nil
 	}
 
 	// Try TDX.
-	if device, err := CreateTdxDevice(); err == nil {
+	if quoteProvider, err := CreateTdxQuoteProvider(); err == nil {
 		// Don't return errors if the attestation collection fails, since
 		// the user didn't specify a TEEDevice.
-		device.AddAttestation(attestation, opts)
-		device.Close()
+		quoteProvider.AddAttestation(attestation, opts)
+		quoteProvider.Close()
 		return nil
 	}
 	// Add more devices here.
@@ -281,7 +282,7 @@ func (k *Key) Attest(opts AttestOpts) (*pb.Attestation, error) {
 	if len(opts.Nonce) == 0 {
 		return nil, fmt.Errorf("provided nonce must not be empty")
 	}
-	sels, err := allocatedPCRs(k.rw)
+	sels, err := AllocatedPCRs(k.rw)
 	if err != nil {
 		return nil, err
 	}
@@ -312,12 +313,13 @@ func (k *Key) Attest(opts AttestOpts) (*pb.Attestation, error) {
 	// Attempt to construct certificate chain. fetchIssuingCertificate checks if
 	// AK cert is present and contains intermediate cert URLs.
 	if opts.CertChainFetcher != nil {
-		attestation.IntermediateCerts, err = k.getCertificateChain(opts.CertChainFetcher)
+		attestation.IntermediateCerts, err = internal.GetCertificateChain(k.cert, opts.CertChainFetcher)
 		if err != nil {
 			return nil, fmt.Errorf("fetching certificate chain: %w", err)
 		}
 	}
 
+	// TODO: issues/504 this should be outside of this function, not related to TPM attestation
 	if err := getTEEAttestationReport(&attestation, opts); err != nil {
 		return nil, fmt.Errorf("collecting TEE attestation report: %w", err)
 	}

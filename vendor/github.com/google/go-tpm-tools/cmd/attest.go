@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 
 	"cloud.google.com/go/compute/metadata"
@@ -52,7 +54,7 @@ by default rsa is used.
 hardware and guarantees a fresh quote.
 `,
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(*cobra.Command, []string) error {
 
 		rwc, err := openTpm()
 		if err != nil {
@@ -82,15 +84,15 @@ hardware and guarantees a fresh quote.
 		// Add logic to open other hardware devices when required.
 		switch teeTechnology {
 		case SevSnp:
-			attestOpts.TEEDevice, err = client.CreateSevSnpDevice()
+			attestOpts.TEEDevice, err = client.CreateSevSnpQuoteProvider()
 			if err != nil {
 				return fmt.Errorf("failed to open %s device: %v", SevSnp, err)
 			}
 			attestOpts.TEENonce = teeNonce
 		case Tdx:
-			attestOpts.TEEDevice, err = client.CreateTdxDevice()
+			attestOpts.TEEDevice, err = client.CreateTdxQuoteProvider()
 			if err != nil {
-				return fmt.Errorf("failed to open %s device: %v", Tdx, err)
+				return fmt.Errorf("failed to create %s quote provider: %v", Tdx, err)
 			}
 			attestOpts.TEENonce = teeNonce
 		case "":
@@ -115,7 +117,7 @@ hardware and guarantees a fresh quote.
 		if key == "gceAK" {
 			instanceInfo, err := getInstanceInfoFromMetadata()
 			if err != nil {
-				return err
+				log.Printf("Could not get GCE instance info, continuing without it: %v", err)
 			}
 			attestation.InstanceInfo = instanceInfo
 		}
@@ -137,16 +139,16 @@ hardware and guarantees a fresh quote.
 }
 
 func getInstanceInfoFromMetadata() (*attest.GCEInstanceInfo, error) {
-
+	ctx := context.Background()
 	var err error
 	instanceInfo := &attest.GCEInstanceInfo{}
 
-	instanceInfo.ProjectId, err = metadata.ProjectID()
+	instanceInfo.ProjectId, err = metadata.ProjectIDWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	projectNumber, err := metadata.NumericProjectID()
+	projectNumber, err := metadata.NumericProjectIDWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +157,12 @@ func getInstanceInfoFromMetadata() (*attest.GCEInstanceInfo, error) {
 		return nil, err
 	}
 
-	instanceInfo.Zone, err = metadata.Zone()
+	instanceInfo.Zone, err = metadata.ZoneWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	instanceID, err := metadata.InstanceID()
+	instanceID, err := metadata.InstanceIDWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +171,7 @@ func getInstanceInfoFromMetadata() (*attest.GCEInstanceInfo, error) {
 		return nil, err
 	}
 
-	instanceInfo.InstanceName, err = metadata.InstanceName()
+	instanceInfo.InstanceName, err = metadata.InstanceNameWithContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -194,4 +196,5 @@ func init() {
 	addOutputFlag(attestCmd)
 	addFormatFlag(attestCmd)
 	addTeeTechnology(attestCmd)
+	attestCmd.AddCommand(attestSVSMCmd)
 }
