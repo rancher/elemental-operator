@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/google/go-sev-guest/verify/trust"
 	pb "github.com/google/go-tpm-tools/proto/attest"
 )
 
@@ -13,7 +15,26 @@ import (
 // will describe in what way the state failed. See the Policy documentation for
 // more information about the specifics of different policies.
 func EvaluatePolicy(state *pb.MachineState, policy *pb.Policy) error {
-	return evaluatePlatformPolicy(state.GetPlatform(), policy.GetPlatform())
+	if err := evaluatePlatformPolicy(state.GetPlatform(), policy.GetPlatform()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// PolicyOptions provides extra options for evaluating policy.
+type PolicyOptions struct {
+	// Getter allows the policy evaluator to download reference materials if needed.
+	Getter trust.HTTPSGetter
+	// Now is the time to evaluate time-based constraints against.
+	Now time.Time
+}
+
+// DefaultPolicyOptions returns a useful default for PolicyOptions.
+func DefaultPolicyOptions() *PolicyOptions {
+	return &PolicyOptions{
+		Getter: trust.DefaultHTTPSGetter(),
+		Now:    time.Now(),
+	}
 }
 
 func evaluatePlatformPolicy(state *pb.PlatformState, policy *pb.PlatformPolicy) error {

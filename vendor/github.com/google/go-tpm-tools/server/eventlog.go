@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 
 	"github.com/google/go-attestation/attest"
+	"github.com/google/go-eventlog/register"
 	"github.com/google/go-tpm-tools/cel"
 	pb "github.com/google/go-tpm-tools/proto/attest"
 	tpmpb "github.com/google/go-tpm-tools/proto/tpm"
@@ -41,7 +43,7 @@ var (
 // It is the caller's responsibility to ensure that the passed PCR values can be
 // trusted. Users can establish trust in PCR values by either calling
 // client.ReadPCRs() themselves or by verifying the values via a PCR quote.
-func parsePCClientEventLog(rawEventLog []byte, pcrs *tpmpb.PCRs, loader Bootloader) (*pb.MachineState, error) {
+func parsePCClientEventLog(rawEventLog []byte, pcrs *tpmpb.PCRs, opts VerifyOpts) (*pb.MachineState, error) {
 	var errors []error
 	events, err := parseReplayHelper(rawEventLog, pcrs)
 	if err != nil {
@@ -59,14 +61,14 @@ func parsePCClientEventLog(rawEventLog []byte, pcrs *tpmpb.PCRs, loader Bootload
 	if err != nil {
 		errors = append(errors, err)
 	}
-	efiState, err := getEfiState(cryptoHash, rawEvents)
+	efiState, err := getEfiState(cryptoHash, rawEvents, opts)
 	if err != nil {
 		errors = append(errors, err)
 	}
 
 	var grub *pb.GrubState
 	var kernel *pb.LinuxKernelState
-	if loader == GRUB {
+	if opts.Loader == GRUB {
 		grub, err = getGrubState(cryptoHash, rawEvents)
 		if err != nil {
 			errors = append(errors, err)
@@ -88,24 +90,34 @@ func parsePCClientEventLog(rawEventLog []byte, pcrs *tpmpb.PCRs, loader Bootload
 	}, createGroupedError("failed to fully parse MachineState:", errors)
 }
 
-func parseCanonicalEventLog(rawCanonicalEventLog []byte, pcrs *tpmpb.PCRs) (*pb.MachineState, error) {
+// ParseCosCELPCR takes an encoded COS CEL and PCR bank, replays the CEL against the PCRs,
+// and returns the AttestedCosState
+func ParseCosCELPCR(cosEventLog []byte, p register.PCRBank) (*pb.AttestedCosState, error) {
+	return getCosStateFromCEL(cosEventLog, p, cel.PCRTypeValue)
+}
+
+// ParseCosCELRTMR takes in a raw COS CEL and a RTMR bank, validates and returns it's
+// COS states as parts of the MachineState.
+func ParseCosCELRTMR(cosEventLog []byte, r register.RTMRBank) (*pb.AttestedCosState, error) {
+	return getCosStateFromCEL(cosEventLog, r, cel.CCMRTypeValue)
+}
+
+func getCosStateFromCEL(rawCanonicalEventLog []byte, register register.MRBank, trustingRegisterType uint8) (*pb.AttestedCosState, error) {
 	decodedCEL, err := cel.DecodeToCEL(bytes.NewBuffer(rawCanonicalEventLog))
 	if err != nil {
 		return nil, err
 	}
 	// Validate the COS event log first.
-	if err := decodedCEL.Replay(pcrs); err != nil {
+	if err := decodedCEL.Replay(register); err != nil {
 		return nil, err
 	}
 
-	cosState, err := getVerifiedCosState(decodedCEL)
+	cosState, err := getVerifiedCosState(decodedCEL, trustingRegisterType)
 	if err != nil {
 		return nil, err
 	}
 
-	return &pb.MachineState{
-		Cos: cosState,
-	}, err
+	return cosState, err
 }
 
 func contains(set [][]byte, value []byte) bool {
@@ -117,18 +129,34 @@ func contains(set [][]byte, value []byte) bool {
 	return false
 }
 
-func getVerifiedCosState(coscel cel.CEL) (*pb.AttestedCosState, error) {
+// getVerifiedCosState takes in CEL and a register type (can be PCR or CCELMR), and returns the state
+// in the CEL. It will only include events using the correct registerType.
+func getVerifiedCosState(coscel cel.CEL, registerType uint8) (*pb.AttestedCosState, error) {
 	cosState := &pb.AttestedCosState{}
 	cosState.Container = &pb.ContainerState{}
+	cosState.HealthMonitoring = &pb.HealthMonitoringState{}
+	cosState.GpuDeviceState = &pb.GpuDeviceState{}
 	cosState.Container.Args = make([]string, 0)
 	cosState.Container.EnvVars = make(map[string]string)
 	cosState.Container.OverriddenEnvVars = make(map[string]string)
 
 	seenSeparator := false
 	for _, record := range coscel.Records {
-		// COS State only comes from the CosEventPCR
-		if record.PCR != cel.CosEventPCR {
-			return nil, fmt.Errorf("found unexpected PCR %d in CEL log", record.PCR)
+		if record.IndexType != registerType {
+			return nil, fmt.Errorf("expect registerType: %d, but get %d in a CEL record", registerType, record.IndexType)
+		}
+
+		switch record.IndexType {
+		case cel.PCRTypeValue:
+			if record.Index != cel.CosEventPCR {
+				return nil, fmt.Errorf("found unexpected PCR %d in COS CEL log", record.Index)
+			}
+		case cel.CCMRTypeValue:
+			if record.Index != cel.CosCCELMRIndex {
+				return nil, fmt.Errorf("found unexpected CCELMR %d in COS CEL log", record.Index)
+			}
+		default:
+			return nil, fmt.Errorf("unknown COS CEL log index type %d", record.IndexType)
 		}
 
 		// The Content.Type is not verified at this point, so we have to fail
@@ -198,6 +226,19 @@ func getVerifiedCosState(coscel cel.CEL) (*pb.AttestedCosState, error) {
 			cosState.Container.OverriddenEnvVars[envName] = envVal
 		case cel.LaunchSeparatorType:
 			seenSeparator = true
+		case cel.MemoryMonitorType:
+			enabled := false
+			if len(cosTlv.EventContent) == 1 && cosTlv.EventContent[0] == uint8(1) {
+				enabled = true
+			}
+			cosState.HealthMonitoring.MemoryEnabled = &enabled
+		case cel.GpuCCModeType:
+			ccMode, ok := pb.GPUDeviceCCMode_value[string(cosTlv.EventContent)]
+			if !ok {
+				return nil, fmt.Errorf("unknown GPU device CC mode in COS eventlog: %s", string(cosTlv.EventContent))
+			}
+			cosState.GpuDeviceState.CcMode = pb.GPUDeviceCCMode(ccMode)
+
 		default:
 			return nil, fmt.Errorf("found unknown COS Event Type %v", cosTlv.EventType)
 		}
@@ -309,7 +350,7 @@ func getPlatformState(hash crypto.Hash, events []*pb.Event) (*pb.PlatformState, 
 // Separate helper function so we can use attest.ParseSecurebootState without
 // needing to reparse the entire event log.
 func parseReplayHelper(rawEventLog []byte, pcrs *tpmpb.PCRs) ([]attest.Event, error) {
-	// Similar to parseCanonicalEventLog, just return an empty array of events for an empty log
+	// Similar to ParseCosCanonicalEventLogPCR, just return an empty array of events for an empty log
 	if len(rawEventLog) == 0 {
 		return nil, nil
 	}
@@ -390,6 +431,12 @@ func matchWellKnown(cert x509.Certificate) (pb.WellKnownCertificate, error) {
 	if bytes.Equal(MicrosoftUEFICA2011Cert, cert.Raw) {
 		return pb.WellKnownCertificate_MS_THIRD_PARTY_UEFI_CA_2011, nil
 	}
+	if bytes.Equal(MicrosoftKEKCA2011Cert, cert.Raw) {
+		return pb.WellKnownCertificate_MS_THIRD_PARTY_KEK_CA_2011, nil
+	}
+	if bytes.Equal(GceDefaultPKCert, cert.Raw) {
+		return pb.WellKnownCertificate_GCE_DEFAULT_PK, nil
+	}
 	return pb.WellKnownCertificate_UNKNOWN, errors.New("failed to find matching well known certificate")
 }
 
@@ -406,6 +453,8 @@ func getSecureBootState(attestEvents []attest.Event) (*pb.SecureBootState, error
 		Db:        convertToPbDatabase(attestSbState.PermittedKeys, attestSbState.PermittedHashes),
 		Dbx:       convertToPbDatabase(attestSbState.ForbiddenKeys, attestSbState.ForbiddenHashes),
 		Authority: convertToPbDatabase(attestSbState.PostSeparatorAuthority, nil),
+		Pk:        convertToPbDatabase(attestSbState.PlatformKeys, attestSbState.PlatformKeyHashes),
+		Kek:       convertToPbDatabase(attestSbState.ExchangeKeys, attestSbState.ExchangeKeyHashes),
 	}, nil
 }
 
@@ -413,8 +462,14 @@ func getGrubState(hash crypto.Hash, events []*pb.Event) (*pb.GrubState, error) {
 	var files []*pb.GrubFile
 	var commands []string
 	for idx, event := range events {
+		hasher := hash.New()
 		index := event.GetPcrIndex()
 		if index != 8 && index != 9 {
+			continue
+		}
+
+		// Skip parsing EV_EVENT_TAG event since it likely comes from Linux.
+		if event.GetUntrustedType() == EventTag {
 			continue
 		}
 
@@ -426,7 +481,6 @@ func getGrubState(hash crypto.Hash, events []*pb.Event) (*pb.GrubState, error) {
 			files = append(files, &pb.GrubFile{Digest: event.GetDigest(),
 				UntrustedFilename: event.GetData()})
 		} else if index == 8 {
-			hasher := hash.New()
 			suffixAt := -1
 			rawData := event.GetData()
 			for _, prefix := range validPrefixes {
@@ -438,14 +492,16 @@ func getGrubState(hash crypto.Hash, events []*pb.Event) (*pb.GrubState, error) {
 			if suffixAt == -1 {
 				return nil, fmt.Errorf("invalid prefix seen for PCR%d event: %s", index, rawData)
 			}
-			hasher.Write(rawData[suffixAt : len(rawData)-1])
-			if !bytes.Equal(event.Digest, hasher.Sum(nil)) {
-				// Older GRUBs measure "grub_cmd " with the null terminator.
-				// However, "grub_kernel_cmdline " measurements also ignore the null terminator.
-				hasher.Reset()
-				hasher.Write(rawData[suffixAt:])
-				if !bytes.Equal(event.Digest, hasher.Sum(nil)) {
-					return nil, fmt.Errorf("invalid digest seen for GRUB event log in event %d: %s", idx, hex.EncodeToString(event.Digest))
+
+			// Check the slice is not empty after the suffix, which ensures rawData[len(rawData)-1] is not part
+			// of the suffix.
+			if len(rawData[suffixAt:]) > 0 && rawData[len(rawData)-1] == '\x00' {
+				if err := verifyNullTerminatedDataDigest(hasher, rawData[suffixAt:], event.Digest); err != nil {
+					return nil, fmt.Errorf("invalid GRUB event (null-terminated) #%d: %v", idx, err)
+				}
+			} else {
+				if err := verifyDataDigest(hasher, rawData[suffixAt:], event.Digest); err != nil {
+					return nil, fmt.Errorf("invalid GRUB event #%d: %v", idx, err)
 				}
 			}
 			hasher.Reset()
@@ -458,7 +514,34 @@ func getGrubState(hash crypto.Hash, events []*pb.Event) (*pb.GrubState, error) {
 	return &pb.GrubState{Files: files, Commands: commands}, nil
 }
 
-func getEfiState(hash crypto.Hash, events []*pb.Event) (*pb.EfiState, error) {
+// verifyNullTerminatedRawData checks the digest of the data.
+// Returns nil if digest match the hash of the data or the data without the last bytes (\x00).
+// The caller needs to make sure len(data) is at least 1, and data is ended with '\x00',
+// otherwise this function will return an error.
+func verifyNullTerminatedDataDigest(hasher hash.Hash, data []byte, digest []byte) error {
+	if len(data) == 0 || data[len(data)-1] != '\x00' {
+		return errors.New("given data is not null-terminated")
+	}
+	if err := verifyDataDigest(hasher, data, digest); err != nil {
+		if err := verifyDataDigest(hasher, data[:len(data)-1], digest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verifyDataDigest checks the digest of the data.
+func verifyDataDigest(hasher hash.Hash, data []byte, digest []byte) error {
+	hasher.Reset()
+	hasher.Write(data)
+	defer hasher.Reset()
+	if !bytes.Equal(digest, hasher.Sum(nil)) {
+		return fmt.Errorf("invalid digest: %s", hex.EncodeToString(digest))
+	}
+	return nil
+}
+
+func getEfiState(hash crypto.Hash, events []*pb.Event, opts VerifyOpts) (*pb.EfiState, error) {
 	// We pre-compute various event digests, and check if those event type have
 	// been modified. We only trust events that come before the
 	// ExitBootServices() request.
@@ -507,7 +590,7 @@ func getEfiState(hash crypto.Hash, events []*pb.Event) (*pb.EfiState, error) {
 			}
 
 			if evtType == EFIBootServicesApplication {
-				if !seenCallingEfiApp {
+				if !opts.AllowEFIAppBeforeCallingEvent && !seenCallingEfiApp {
 					return nil, fmt.Errorf("found EFIBootServicesApplication in PCR%d before CallingEFIApp event", index)
 				}
 				efiAppStates = append(efiAppStates, &pb.EfiApp{Digest: event.GetDigest()})
