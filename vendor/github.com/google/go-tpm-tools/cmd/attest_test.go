@@ -14,6 +14,7 @@ import (
 	tgtestclient "github.com/google/go-tdx-guest/testing/client"
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal/test"
+	"github.com/google/go-tpm-tools/verifier/util"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
@@ -55,6 +56,8 @@ func GCEAKTemplateRSA() tpm2.Public {
 // Need to call tpm2.NVUndefinespace on the handle with authHandle tpm2.HandlePlatform.
 // e.g defer tpm2.NVUndefineSpace(rwc, "", tpm2.HandlePlatform, tpmutil.Handle(client.GceAKTemplateNVIndexRSA))
 func setGCEAKTemplate(tb testing.TB, rwc io.ReadWriteCloser, algo string, data []byte) error {
+	// Since this mutates the TPM, any tests using real TPMs must skip.
+	test.SkipForRealTPM(tb)
 	var err error
 	idx := tpmutil.Handle(getIndex[algo])
 	if err := tpm2.NVDefineSpace(rwc, tpm2.HandlePlatform, idx,
@@ -203,8 +206,8 @@ func TestFormatFlagFail(t *testing.T) {
 }
 
 func TestMetadataPass(t *testing.T) {
-	var dummyInstance = Instance{ProjectID: "test-project", ProjectNumber: "1922337278274", Zone: "us-central-1a", InstanceID: "12345678", InstanceName: "default"}
-	mock, err := NewMetadataServer(dummyInstance)
+	var dummyInstance = util.Instance{ProjectID: "test-project", ProjectNumber: "1922337278274", Zone: "us-central-1a", InstanceID: "12345678", InstanceName: "default"}
+	mock, err := util.NewMetadataServer(dummyInstance)
 	if err != nil {
 		t.Error(err)
 	}
@@ -268,8 +271,8 @@ func TestAttestWithGCEAK(t *testing.T) {
 			}
 			defer tpm2.NVUndefineSpace(rwc, "", tpm2.HandlePlatform, tpmutil.Handle(getIndex[op.keyAlgo]))
 
-			var dummyInstance = Instance{ProjectID: "test-project", ProjectNumber: "1922337278274", Zone: "us-central-1a", InstanceID: "12345678", InstanceName: "default"}
-			mock, err := NewMetadataServer(dummyInstance)
+			var dummyInstance = util.Instance{ProjectID: "test-project", ProjectNumber: "1922337278274", Zone: "us-central-1a", InstanceID: "12345678", InstanceName: "default"}
+			mock, err := util.NewMetadataServer(dummyInstance)
 			if err != nil {
 				t.Error(err)
 			}
@@ -306,12 +309,11 @@ func TestSevAttestTeeNonceFail(t *testing.T) {
 	}
 
 	// TEENonce with length less than 64 bytes.
-	sevTestDevice, _, _, _ := sgtestclient.GetSevGuest([]sgtest.TestCase{
+	sevTestQp, _, _, _ := sgtestclient.GetSevQuoteProvider([]sgtest.TestCase{
 		{
 			Input: [64]byte{1, 2, 3, 4},
 		},
 	}, &sgtest.DeviceOptions{Now: time.Now()}, t)
-	defer sevTestDevice.Close()
 
 	ak, err := client.AttestationKeyRSA(rwc)
 	if err != nil {
@@ -321,7 +323,7 @@ func TestSevAttestTeeNonceFail(t *testing.T) {
 	attestopts := client.AttestOpts{
 		Nonce:     []byte{1, 2, 3, 4},
 		TEENonce:  []byte{1, 2, 3, 4},
-		TEEDevice: &client.SevSnpDevice{Device: sevTestDevice},
+		TEEDevice: &client.SevSnpQuoteProvider{QuoteProvider: sevTestQp},
 	}
 	_, err = ak.Attest(attestopts)
 	if err == nil {
@@ -341,12 +343,11 @@ func TestTdxAttestTeeNonceFail(t *testing.T) {
 	}
 
 	// TEENonce with length less than 64 bytes.
-	tdxTestDevice := tgtestclient.GetTdxGuest([]tgtest.TestCase{
+	mockTdxQuoteProvider := tgtestclient.GetMockTdxQuoteProvider([]tgtest.TestCase{
 		{
 			Input: [64]byte{1, 2, 3, 4},
 		},
 	}, t)
-	defer tdxTestDevice.Close()
 
 	ak, err := client.AttestationKeyRSA(rwc)
 	if err != nil {
@@ -356,7 +357,7 @@ func TestTdxAttestTeeNonceFail(t *testing.T) {
 	attestopts := client.AttestOpts{
 		Nonce:     []byte{1, 2, 3, 4},
 		TEENonce:  []byte{1, 2, 3, 4},
-		TEEDevice: &client.TdxDevice{Device: tdxTestDevice},
+		TEEDevice: &client.TdxQuoteProvider{QuoteProvider: mockTdxQuoteProvider},
 	}
 	_, err = ak.Attest(attestopts)
 	if err == nil {
@@ -380,7 +381,7 @@ func TestHardwareAttestationPass(t *testing.T) {
 		teetech string
 		wanterr string
 	}{
-		{"TdxPass", "1234", "tdx", "failed to open tdx device"},
+		{"TdxPass", "1234", "tdx", "failed to create tdx quote provider"},
 		{"SevSnpPass", "1234", "sev-snp", "failed to open sev-snp device"},
 	}
 	for _, op := range tests {

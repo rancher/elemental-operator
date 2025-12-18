@@ -14,14 +14,20 @@ read_serial() {
   echo "Reading serial console..."
   while [ -s /workspace/next_start.txt ]; do
     if [[ $(date -u +%s) -ge $endtime ]]; then
-      echo "timed out reading serial console" 
+      echo "timed out reading serial console, or the workload is running more than ${timeout}"
+      break
+    fi
+
+    # VM may already exit
+    if grep -qi 'Could not fetch serial port output' /workspace/next_start.txt; then
+      serial_out="$serial_out $1 VM stopped"
       break
     fi
 
     next=$(cat /workspace/next_start.txt | sed -n 2p | cut -d ' ' -f2)
     local next_cmd="${base_cmd} ${next}"
     
-    # sleeping 5s for the next serial console read"
+    # sleeping 5s for the next serial console read
     sleep 5
 
     local tmp=$(eval ${next_cmd})
