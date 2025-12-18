@@ -29,7 +29,7 @@ message Attestation {
   bytes event_log = 3;
   // Optional information about a GCE instance, unused outside of GCE
   GCEInstanceInfo instance_info = 4;
-  // A TCG Canonical Event Log.
+  // A COS event log using the TCG Canonical Event Log format
   bytes canonical_event_log = 5;
   // Attestation Key (AK) Certificate, encoded as ASN.1 DER.
   // Optional.
@@ -44,6 +44,20 @@ message Attestation {
     sevsnp.Attestation sev_snp_attestation = 8;
     tdx.QuoteV4 tdx_attestation = 9;
   }
+}
+
+// For VMs running SEV-SNP with an SVSM-based e-vTPM, this contains a TPM quote
+// and all the information needed to verify it.
+message SevSnpSvsmAttestation {
+  Attestation attestation = 1;
+  sevsnp.Attestation sev_snp_attestation = 2;
+  // vTPM service manifest is retrieved from configfs-tsm-report via manifest blob
+  // See https://github.com/torvalds/linux/blob/v6.16/Documentation/ABI/testing/configfs-tsm-report
+  // The manifest format is defined by the SVSM spec at https://www.amd.com/en/developer/sev.html
+  bytes vtpm_service_manifest = 3;
+  string vtpm_service_manifest_version = 4;
+  // This contains a launch endorsement for guest firmware that includes SVSM.
+  bytes launch_endorsement = 5;
 }
 
 // Type of hardware technology used to protect this instance
@@ -118,6 +132,11 @@ enum WellKnownCertificate {
   MS_WINDOWS_PROD_PCA_2011 = 1;
   // https://go.microsoft.com/fwlink/p/?linkid=321194
   MS_THIRD_PARTY_UEFI_CA_2011 = 2;
+  // https://go.microsoft.com/fwlink/p/?linkid=321185
+  MS_THIRD_PARTY_KEK_CA_2011 = 3;
+
+  // GCE certs:
+  GCE_DEFAULT_PK = 4;
 }
 
 message Certificate {
@@ -149,6 +168,10 @@ message SecureBootState {
   // Authority events post-separator. Pre-separator authorities
   // are currently not supported.
   Database authority = 4;
+  // The Secure Boot Platform key, used to sign key exchange keys.
+  Database pk = 5;
+  // The Secure Boot Key Exchange Keys, used to sign db and dbx updates.
+  Database kek = 6;
 }
 
 // The container's restart policy.
@@ -186,10 +209,34 @@ message SemanticVersion {
   uint32 patch = 3;
 }
 
+message HealthMonitoringState {
+  // Whether memory monitoring is enabled.
+  optional bool memory_enabled = 1;
+}
+
+// Confidential Computing mode for GPU device. Reference for these CC mode values: https://developer.nvidia.com/blog/confidential-computing-on-h100-gpus-for-secure-and-trustworthy-ai/#hardware_security_for_nvidia_h100_gpus
+enum GPUDeviceCCMode {
+  UNSET = 0;
+  // The NVIDIA H100 hardware, firmware, and software have fully activated all the confidential computing features.
+  ON = 1;
+  // None of the confidential computing-specific features are active.
+  OFF = 2;
+  // The GPU is in a partial CC mode that will match the workflows of CC mode ON, but with security protections disabled.
+  DEVTOOLS = 3;
+}
+
+message GpuDeviceState {
+  // Whether Confidential Computing mode is enabled for GPU.
+  GPUDeviceCCMode cc_mode = 1;
+}
+
+
 message AttestedCosState {
   ContainerState container = 1;
   SemanticVersion cos_version = 2;
   SemanticVersion launcher_version = 3;
+  HealthMonitoringState health_monitoring = 4;
+  GpuDeviceState gpu_device_state = 5;
 }
 
 message EfiApp {
@@ -228,6 +275,13 @@ message MachineState {
   AttestedCosState cos = 7;
 
   EfiState efi = 8;
+
+  // Attestation/Quote representations from TEEs whose signatures are already
+  // verified.
+  oneof tee_attestation {
+    sevsnp.Attestation sev_snp_attestation = 9;
+    tdx.QuoteV4 tdx_attestation = 10;
+  }
 }
 
 // A policy dictating which values of PlatformState to allow
@@ -244,9 +298,35 @@ message PlatformPolicy {
   GCEConfidentialTechnology minimum_technology = 3;
 }
 
+// A policy about what parts of a RIM to compare against machine state as
+// reflected in a quote or (verified) event log. Reference measurements for
+// a component are expected to be addressable by the machine state's reported
+// digest, or otherwise presented as cached collateral with the attestation
+// itself. The method of delivery is vendor-specific.
+message RIMPolicy {
+  // If true, the signed measurement must be available (by means that can be
+  // vendor-specific), and the target measurement must be among the listed
+  // signed measurements.  If false, then only error if there is a problem
+  // verifying the signed measurements when they are available.
+  bool require_signed = 1;
+  // x.509 certificates in ASN.1 DER format.
+  repeated bytes root_certs = 2;
+}
+
+// Represent minimal decisions about attestation fields until necessary to
+// add for policy reasons.
+message SevSnpPolicy {
+  // The policy for checking the signed reference values for the UEFI at launch.
+  RIMPolicy uefi = 1;
+}
+
 // A policy dictating which type of MachineStates to allow
 message Policy {
   PlatformPolicy platform = 1;
 
   // SecureBootPolicy secure_boot = 2;
+
+  // When the attestation is on SEV-SNP, this is the policy. Unset means no
+  // constraints.
+  SevSnpPolicy sev_snp = 3;
 }
