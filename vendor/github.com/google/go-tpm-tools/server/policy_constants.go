@@ -18,12 +18,17 @@ import (
 const (
 	NoAction                   uint32 = 0x00000003
 	Separator                  uint32 = 0x00000004
+	EventTag                   uint32 = 0x00000006
 	SCRTMVersion               uint32 = 0x00000008
 	IPL                        uint32 = 0x0000000D
 	NonhostInfo                uint32 = 0x00000011
 	EFIBootServicesApplication uint32 = 0x80000003
 	EFIAction                  uint32 = 0x80000007
 )
+
+// EventTagLoadedImageHex used with type "EV_EVENT_TAG".
+// This corresponds to a TLV struct of type LOAD_OPTIONS_EVENT_TAG_ID (0x8F3B22ED, reversed endian), length 0x1a (26), value `LOADED_IMAGE::LoadOptions\n`.
+const EventTagLoadedImageHex = "ed223b8f1a0000004c4f414445445f494d4147453a3a4c6f61644f7074696f6e7300"
 
 // Constant events used with type "EV_EFI_ACTION".
 // Taken from TCG PC Client Platform Firmware Profile Specification,
@@ -73,12 +78,18 @@ var (
 	RevokedCiscoCert []byte
 )
 
-// Known Privacy CA certs.
+// Known GCE EK CA certs.
 var (
 	//go:embed ca-certs/tpm_ek_root_1.cer
 	gceEKRootCA []byte
 	//go:embed ca-certs/tpm_ek_intermediate_2.crt
 	gceEKIntermediateCA2 []byte
+	//go:embed ca-certs/tpm_ek_intermediate_3.crt
+	gceEKIntermediateCA3 []byte
+	//go:embed ca-certs/gcp_ek_ak_ca_root.crt
+	gcpCASEKRootCA []byte
+	//go:embed ca-certs/gcp_ek_ak_ca_intermediate_v3.crt
+	gcpCASEKIntermediateCA3 []byte
 )
 
 // Certificates corresponding to the known CA certs for GCE.
@@ -135,7 +146,7 @@ func ConvertSCRTMVersionToGCEFirmwareVersion(version []byte) (uint32, error) {
 		asciiVersion = append(asciiVersion, b)
 	}
 
-	versionNum, err := strconv.Atoi(string(asciiVersion))
+	versionNum, err := strconv.ParseUint(string(asciiVersion), 10, 32)
 	if err != nil {
 		return 0, fmt.Errorf("when parsing GCE firmware version: %w", err)
 	}

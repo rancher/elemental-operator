@@ -42,6 +42,11 @@ type VerifyOpts struct {
 	// IntermediateCerts.
 	// Adding a specific TPM manufacturer's root and intermediate CAs means all
 	// TPMs signed by that CA will be trusted.
+	// To trust the MachineState's GCE instance_info, the caller MUST use
+	// authentic Google-signed certificates provided in server/ca-certs
+	// OR fetched via
+	// https://privateca-content-62d71773-0000-21da-852e-f4f5e80d7778.storage.googleapis.com/032bf9d39db4fa06aade/ca.crt
+	// https://pki.goog/cloud_integrity/tpm_ek_root_1.crt.
 	TrustedRootCerts  []*x509.Certificate
 	IntermediateCerts []*x509.Certificate
 	// Which bootloader the instance uses. Pick UNSUPPORTED to skip this
@@ -52,7 +57,15 @@ type VerifyOpts struct {
 	// or can be *VerifyTdxOpts if the TEEAttestation is a TdxAttestation
 	// If nil, uses Nonce for ReportData and the TEE's verification library's
 	// embedded root certs for its roots of trust.
+	//
+	// Deprecated: go-tpm-tools no longer verifies SNP or TDX attestation.
+	// Please use go-sev-guest and go-tdx-guest.
 	TEEOpts interface{}
+	// AllowEFIAppBeforeCallingEvent skips a check that requires
+	// EV_EFI_BOOT_SERVICES_APPLICATION to occur after a
+	// "Calling EFI Application from Boot Option". This option is useful when
+	// the host platform loads EFI Applications unrelated to OS boot.
+	AllowEFIAppBeforeCallingEvent bool
 }
 
 // Bootloader refers to the second-stage bootloader that loads and transfers
@@ -101,40 +114,9 @@ func VerifyAttestation(attestation *pb.Attestation, opts VerifyOpts) (*pb.Machin
 		return nil, fmt.Errorf("bad options: %w", err)
 	}
 
-	var akPubKey crypto.PublicKey
-	var machineState *pb.MachineState
-	if len(attestation.GetAkCert()) == 0 {
-		// If the AK Cert is not in the attestation, use the AK Public Area.
-		akPubArea, err := tpm2.DecodePublic(attestation.GetAkPub())
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode AK public area: %w", err)
-		}
-		akPubKey, err = akPubArea.Key()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get AK public key: %w", err)
-		}
-		machineState, err = validateAKPub(akPubKey, opts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate AK public key: %w", err)
-		}
-	} else {
-		// If AK Cert is presented, ignore the AK Public Area.
-		akCert, err := x509.ParseCertificate(attestation.GetAkCert())
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse AK certificate: %w", err)
-		}
-		// Use intermediate certs from the attestation if they exist.
-		certs, err := parseCerts(attestation.IntermediateCerts)
-		if err != nil {
-			return nil, fmt.Errorf("attestation intermediates: %w", err)
-		}
-		opts.IntermediateCerts = append(opts.IntermediateCerts, certs...)
-
-		machineState, err = validateAKCert(akCert, opts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate AK certificate: %w", err)
-		}
-		akPubKey = akCert.PublicKey.(crypto.PublicKey)
+	machineState, akPubKey, err := validateAK(attestation, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse and validate AK: %w", err)
 	}
 
 	// Attempt to replay the log against our PCRs in order of hash preference
@@ -148,20 +130,9 @@ func VerifyAttestation(attestation *pb.Attestation, opts VerifyOpts) (*pb.Machin
 
 		// Parse event logs and replay the events against the provided PCRs
 		pcrs := quote.GetPcrs()
-		state, err := parsePCClientEventLog(attestation.GetEventLog(), pcrs, opts.Loader)
+		tpmMachineState, err := parseMachineStateFromTPM(attestation, pcrs, opts)
 		if err != nil {
-			lastErr = fmt.Errorf("failed to validate the PCClient event log: %w", err)
-			continue
-		}
-
-		if err := VerifyGceTechnology(attestation, state.Platform.GetTechnology(), &opts); err != nil {
-			lastErr = fmt.Errorf("failed to verify memory encryption technology: %w", err)
-			continue
-		}
-
-		celState, err := parseCanonicalEventLog(attestation.GetCanonicalEventLog(), pcrs)
-		if err != nil {
-			lastErr = fmt.Errorf("failed to validate the Canonical event log: %w", err)
+			lastErr = fmt.Errorf("failed to parse machine state from TCG event log: %w", err)
 			continue
 		}
 
@@ -174,8 +145,7 @@ func VerifyAttestation(attestation *pb.Attestation, opts VerifyOpts) (*pb.Machin
 			continue
 		}
 
-		proto.Merge(machineState, celState)
-		proto.Merge(machineState, state)
+		proto.Merge(machineState, tpmMachineState)
 
 		return machineState, nil
 	}
@@ -186,10 +156,53 @@ func VerifyAttestation(attestation *pb.Attestation, opts VerifyOpts) (*pb.Machin
 	return nil, fmt.Errorf("attestation does not contain a supported quote")
 }
 
+// validateAK validates AK cert in the attestation, and returns AK cert (if exists) and public key.
+// It also pulls out the GCE Instance Info if it exists.
+func validateAK(attestation *pb.Attestation, opts VerifyOpts) (*pb.MachineState, crypto.PublicKey, error) {
+	if len(attestation.GetAkCert()) == 0 || len(opts.TrustedRootCerts) == 0 {
+		// If the AK Cert is not in the attestation, use the AK Public Area.
+		akPubArea, err := tpm2.DecodePublic(attestation.GetAkPub())
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decode AK public area: %w", err)
+		}
+		akPubKey, err := akPubArea.Key()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get AK public key: %w", err)
+		}
+		if err := validateAKPub(akPubKey, opts); err != nil {
+			return nil, nil, fmt.Errorf("failed to validate AK public key: %w", err)
+		}
+		return &pb.MachineState{}, akPubKey, nil
+	}
+
+	// If AK Cert is presented, ignore the AK Public Area.
+	akCert, err := x509.ParseCertificate(attestation.GetAkCert())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse AK certificate: %w", err)
+	}
+	// Use intermediate certs from the attestation if they exist.
+	certs, err := parseCerts(attestation.IntermediateCerts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("attestation intermediates: %w", err)
+	}
+	opts.IntermediateCerts = append(opts.IntermediateCerts, certs...)
+
+	if err := VerifyAKCert(akCert, opts.TrustedRootCerts, opts.IntermediateCerts); err != nil {
+		return nil, nil, fmt.Errorf("failed to validate AK certificate: %w", err)
+	}
+	instanceInfo, err := getInstanceInfoFromExtensions(akCert.Extensions)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting instance info: %v", err)
+	}
+
+	return &pb.MachineState{Platform: &pb.PlatformState{InstanceInfo: instanceInfo}}, akCert.PublicKey, nil
+}
+
 // GetGCEInstanceInfo takes a GCE-issued x509 EK/AK certificate and tries to
 // extract its GCE instance information. It returns an error if the cert is nil
 // or malformed, but it does not return an error if the cert does not contain
 // the GCE Instance OID.
+// The caller must first `ValidateAKCert` using a GCE EK Certificate root CA.
 func GetGCEInstanceInfo(cert *x509.Certificate) (*pb.GCEInstanceInfo, error) {
 	if cert == nil {
 		return nil, errors.New("cannot extract GCEInstanceInfo from a nil cert")
@@ -248,18 +261,23 @@ func validateOpts(opts VerifyOpts) error {
 	return nil
 }
 
-func validateAKPub(ak crypto.PublicKey, opts VerifyOpts) (*pb.MachineState, error) {
+func validateAKPub(ak crypto.PublicKey, opts VerifyOpts) error {
 	for _, trusted := range opts.TrustedAKs {
 		if internal.PubKeysEqual(ak, trusted) {
-			return &pb.MachineState{}, nil
+			return nil
 		}
 	}
-	return nil, fmt.Errorf("key not trusted")
+	return fmt.Errorf("key not trusted")
 }
 
-func validateAKCert(akCert *x509.Certificate, opts VerifyOpts) (*pb.MachineState, error) {
-	if len(opts.TrustedRootCerts) == 0 {
-		return validateAKPub(akCert.PublicKey.(crypto.PublicKey), opts)
+// VerifyAKCert checks a given Attestation Key certificate against the provided
+// root and intermediate CAs.
+func VerifyAKCert(akCert *x509.Certificate, trustedRootCerts []*x509.Certificate, intermediateCerts []*x509.Certificate) error {
+	if akCert == nil {
+		return errors.New("failed to validate AK Cert: received nil cert")
+	}
+	if len(trustedRootCerts) == 0 {
+		return errors.New("failed to validate AK Cert: received no trusted root certs")
 	}
 
 	// We manually handle the SAN extension because x509 marks it unhandled if
@@ -275,8 +293,8 @@ func validateAKCert(akCert *x509.Certificate, opts VerifyOpts) (*pb.MachineState
 	akCert.UnhandledCriticalExtensions = exts
 
 	x509Opts := x509.VerifyOptions{
-		Roots:         makePool(opts.TrustedRootCerts),
-		Intermediates: makePool(opts.IntermediateCerts),
+		Roots:         makePool(trustedRootCerts),
+		Intermediates: makePool(intermediateCerts),
 		// The default key usage (ExtKeyUsageServerAuth) is not appropriate for
 		// an Attestation Key: ExtKeyUsage of
 		// - https://oidref.com/2.23.133.8.1
@@ -285,15 +303,10 @@ func validateAKCert(akCert *x509.Certificate, opts VerifyOpts) (*pb.MachineState
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsage(x509.ExtKeyUsageAny)},
 	}
 	if _, err := akCert.Verify(x509Opts); err != nil {
-		return nil, fmt.Errorf("certificate did not chain to a trusted root: %v", err)
+		return fmt.Errorf("certificate did not chain to a trusted root: %v", err)
 	}
 
-	instanceInfo, err := getInstanceInfoFromExtensions(akCert.Extensions)
-	if err != nil {
-		return nil, fmt.Errorf("error getting instance info: %v", err)
-	}
-
-	return &pb.MachineState{Platform: &pb.PlatformState{InstanceInfo: instanceInfo}}, nil
+	return nil
 }
 
 // Retrieve the supported quotes in order of hash preference.
@@ -318,57 +331,14 @@ func makePool(certs []*x509.Certificate) *x509.CertPool {
 	return pool
 }
 
-// VerifyGceTechnology checks the GCE-specific GceNonHost event's Trusted Execution Technology (TEE)
-// claim using attestation reports if the technology supports them, and only then validates that a
-// particular technology has proven that it is in use.
-func VerifyGceTechnology(attestation *pb.Attestation, tech pb.GCEConfidentialTechnology, opts *VerifyOpts) error {
-	switch tech {
-	case pb.GCEConfidentialTechnology_NONE: // Nothing to verify
-		if opts.TEEOpts != nil {
-			return fmt.Errorf("memory encryption technology %v does not support TEEOpts", tech)
-		}
-		return nil
-	case pb.GCEConfidentialTechnology_AMD_SEV: // Not verifiable on GCE
-		if opts.TEEOpts != nil {
-			return fmt.Errorf("memory encryption technology %v does not support TEEOpts", tech)
-		}
-		return nil
-	case pb.GCEConfidentialTechnology_AMD_SEV_ES: // Not verifiable on GCE
-		if opts.TEEOpts != nil {
-			return fmt.Errorf("memory encryption technology %v does not support TEEOpts", tech)
-		}
-		return nil
-	case pb.GCEConfidentialTechnology_AMD_SEV_SNP:
-		var snpOpts *VerifySnpOpts
-		tee, ok := attestation.TeeAttestation.(*pb.Attestation_SevSnpAttestation)
-		if !ok {
-			return fmt.Errorf("TEE attestation is %T, expected a SevSnpAttestation", attestation.GetTeeAttestation())
-		}
-		if opts.TEEOpts == nil {
-			snpOpts = SevSnpDefaultOptions(opts.Nonce)
-		} else {
-			snpOpts, ok = opts.TEEOpts.(*VerifySnpOpts)
-			if !ok {
-				return fmt.Errorf("unexpected value for TEEOpts given a SEV-SNP attestation report: %v",
-					opts.TEEOpts)
-			}
-		}
-		return VerifySevSnpAttestation(tee.SevSnpAttestation, snpOpts)
-	case pb.GCEConfidentialTechnology_INTEL_TDX:
-		var tdxOpts *VerifyTdxOpts
-		tee, ok := attestation.TeeAttestation.(*pb.Attestation_TdxAttestation)
-		if !ok {
-			return fmt.Errorf("TEE attestation is %T, expected a TdxAttestation", attestation.GetTeeAttestation())
-		}
-		if opts.TEEOpts == nil {
-			tdxOpts = TdxDefaultOptions()
-		} else {
-			tdxOpts, ok = opts.TEEOpts.(*VerifyTdxOpts)
-			if !ok {
-				return fmt.Errorf("unexpected value for TEEOpts given a TDX attestation quote: %v", opts.TEEOpts)
-			}
-		}
-		return VerifyTdxAttestation(tee.TdxAttestation, tdxOpts)
+// parseMachineStateFromTPM is a wrapper function around `parsePCClientEventLog` method to:
+// 1. parse partial machine state from TPM TCG event logs.
+// 2. verify GceTechnology since the GCE Technology event is directly related to the TPM.
+// 3. populate the machineState TeeAttestatation field with the verified TDX/SNP attestation data.
+func parseMachineStateFromTPM(attestation *pb.Attestation, pcrs *tpmpb.PCRs, opts VerifyOpts) (*pb.MachineState, error) {
+	ms, err := parsePCClientEventLog(attestation.GetEventLog(), pcrs, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate the PCClient event log: %w", err)
 	}
-	return fmt.Errorf("unknown GCEConfidentialTechnology: %v", tech)
+	return ms, nil
 }
