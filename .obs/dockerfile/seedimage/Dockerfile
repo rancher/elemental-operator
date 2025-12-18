@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # Define the names/tags of the container
-#!BuildTag: rancher/seedimage-builder:latest
 #!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%
 #!BuildTag: rancher/seedimage-builder:%OPERATOR_VERSION%-%RELEASE%
 #!UseOBSRepositories
