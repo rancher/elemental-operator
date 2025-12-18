@@ -51,6 +51,10 @@ func encodeTPMLPCRSelection(sel ...PCRSelection) ([]byte, error) {
 		return tpmutil.Pack(uint32(0))
 	}
 
+	if len(sel) == 1 && len(sel[0].PCRs) == 0 && sel[0].Hash == 0 {
+		return tpmutil.Pack(uint32(0))
+	}
+
 	// PCR selection is a variable-size bitmask, where position of a set bit is
 	// the selected PCR index.
 	// Size of the bitmask in bytes is pre-pended. It should be at least
@@ -61,10 +65,6 @@ func encodeTPMLPCRSelection(sel ...PCRSelection) ([]byte, error) {
 	// 00000011 00000000 00000001 00000100
 	var retBytes []byte
 	for _, s := range sel {
-		if len(s.PCRs) == 0 {
-			return tpmutil.Pack(uint32(0))
-		}
-
 		ts := tpmsPCRSelection{
 			Hash: s.Hash,
 			Size: sizeOfPCRSelect,
@@ -1153,6 +1153,34 @@ func Clear(rw io.ReadWriter, handle tpmutil.Handle, auth AuthCommand) error {
 	return err
 }
 
+func encodePCRAllocate(handle tpmutil.Handle, auth AuthCommand, pcrSelection []PCRSelection) ([]byte, error) {
+	ah, err := tpmutil.Pack(handle)
+	if err != nil {
+		return nil, err
+	}
+	authEncoded, err := encodeAuthArea(auth)
+	if err != nil {
+		return nil, err
+	}
+
+	pcrEncoded, err := encodeTPMLPCRSelection(pcrSelection...)
+	if err != nil {
+		return nil, err
+	}
+	return concat(ah, authEncoded, pcrEncoded)
+}
+
+// PCRAllocate sets the desired PCR allocation of PCR and algorithms.
+// The changes take effect once the TPM is restarted.
+func PCRAllocate(rw io.ReadWriter, handle tpmutil.Handle, auth AuthCommand, pcrSelection []PCRSelection) error {
+	Cmd, err := encodePCRAllocate(handle, auth, pcrSelection)
+	if err != nil {
+		return err
+	}
+	_, err = runCommand(rw, TagSessions, CmdPCRAllocate, tpmutil.RawBytes(Cmd))
+	return err
+}
+
 func encodeHierarchyChangeAuth(handle tpmutil.Handle, auth AuthCommand, newAuth string) ([]byte, error) {
 	ah, err := tpmutil.Pack(handle)
 	if err != nil {
@@ -1276,7 +1304,6 @@ func NVDefineSpace(rw io.ReadWriter, owner, handle tpmutil.Handle, ownerAuth, au
 		Auth:       []byte(ownerAuth),
 	}
 	return NVDefineSpaceEx(rw, owner, authString, nvPub, authArea)
-
 }
 
 // NVDefineSpaceEx accepts NVPublic structure and AuthCommand, allowing more flexibility.
@@ -2121,12 +2148,12 @@ func RSAEncrypt(rw io.ReadWriter, key tpmutil.Handle, message []byte, scheme *As
 	return decodeRSAEncrypt(resp)
 }
 
-func encodeRSADecrypt(key tpmutil.Handle, password string, message tpmutil.U16Bytes, scheme *AsymScheme, label string) ([]byte, error) {
+func encodeRSADecrypt(sessionHandle, key tpmutil.Handle, password string, message tpmutil.U16Bytes, scheme *AsymScheme, label string) ([]byte, error) {
 	ha, err := tpmutil.Pack(key)
 	if err != nil {
 		return nil, err
 	}
-	auth, err := encodeAuthArea(AuthCommand{Session: HandlePasswordSession, Attributes: AttrContinueSession, Auth: []byte(password)})
+	auth, err := encodeAuthArea(AuthCommand{Session: sessionHandle, Attributes: AttrContinueSession, Auth: []byte(password)})
 	if err != nil {
 		return nil, err
 	}
@@ -2160,7 +2187,15 @@ func decodeRSADecrypt(resp []byte) ([]byte, error) {
 // label, a null byte is appended to the label and the null byte is included in the
 // padding scheme.
 func RSADecrypt(rw io.ReadWriter, key tpmutil.Handle, password string, message []byte, scheme *AsymScheme, label string) ([]byte, error) {
-	Cmd, err := encodeRSADecrypt(key, password, message, scheme, label)
+	return RSADecryptWithSession(rw, HandlePasswordSession, key, password, message, scheme, label)
+}
+
+// RSADecryptWithSession performs RSA decryption in the TPM according to RFC 3447. The key must be
+// a private RSA key in the TPM with FlagDecrypt set. Note that when using OAEP with a
+// label, a null byte is appended to the label and the null byte is included in the
+// padding scheme.
+func RSADecryptWithSession(rw io.ReadWriter, sessionHandle, key tpmutil.Handle, password string, message []byte, scheme *AsymScheme, label string) ([]byte, error) {
+	Cmd, err := encodeRSADecrypt(sessionHandle, key, password, message, scheme, label)
 	if err != nil {
 		return nil, err
 	}
