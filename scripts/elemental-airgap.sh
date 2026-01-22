@@ -13,6 +13,7 @@ IMAGES_TO_SAVE=""
 HAULER_REG_DIR=$(mktemp -d)
 HAULER_REG_PID=""
 HAULER_REG_DUMMY_FILE="hauler-registry.txt"
+typeset -l TEST_OPERATOR_NAME=""
 
 : ${CONTAINER_IMAGES_NAME:="elemental-images"}
 : ${CONTAINER_IMAGES_FILE:=$CONTAINER_IMAGES_NAME".txt"}
@@ -137,6 +138,7 @@ parse_parameters() {
             *)
             [[ -n "$CHART_NAME_OPERATOR" ]] && exit_error "unrecognized command: $1"
             CHART_NAME_OPERATOR="$1"
+            TEST_OPERATOR_NAME=${CHART_NAME_OPERATOR}
             shift
             ;;
         esac
@@ -155,24 +157,15 @@ parse_parameters() {
         echo ""
         exit_error "LOCAL_REGISTRY is required"
     fi
-    case "$CHART_NAME_OPERATOR" in
-        Dev|dev|DEV)
-        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-chart"
+    case "${TEST_OPERATOR_NAME}" in
+        dev|maintenance/*|staging)
+        # Save the old value to reuse it
+        V=${CHART_NAME_OPERATOR}
+        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/${V}/charts/rancher/elemental-operator-chart"
         [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
-            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/dev/charts/rancher/elemental-operator-crds-chart"
+            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/${V}/charts/rancher/elemental-operator-crds-chart"
         ;;
-        Maintenance|maintenance|MAINTENANCE)
-        # For now, we have to hardcode the 6.0 path, we will have to add a parameter to choose between 6.0 and 6.1
-        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/maintenance/6.0/charts/rancher/elemental-operator-chart"
-        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
-            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/maintenance/6.0/charts/rancher/elemental-operator-crds-chart"
-        ;;
-        Staging|staging|STAGING)
-        CHART_NAME_OPERATOR="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-chart"
-        [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
-            CHART_NAME_CRDS="oci://registry.opensuse.org/isv/rancher/elemental/staging/charts/rancher/elemental-operator-crds-chart"
-        ;;
-        Stable|stable|STABLE)
+        stable)
         CHART_NAME_OPERATOR="oci://registry.suse.com/rancher/elemental-operator-chart"
         [[ "$CHART_NAME_CRDS" == "$ELEMENTAL_OPERATOR_CRDS_CHART_NAME" ]] && \
             CHART_NAME_CRDS="oci://registry.suse.com/rancher/elemental-operator-crds-chart"
@@ -298,7 +291,7 @@ fetch_charts() {
         [[ "$CHART_VERSION" != "latest" ]] && chart_ver="--version $CHART_VERSION"
 
         # helm pull needs to be aware of development versions
-        [[ "${CHART_NAME_OPERATOR}" =~ (Dev|dev|DEV|Staging|staging|STAGING) ]] && opts="--devel"
+        [[ "${TEST_OPERATOR_NAME}" =~ (dev|maintenance/*|staging) ]] && opts="--devel"
 
         # 'c' var holds the name (e.g., CHART_NAME_OPERATOR),
         # 'chart' var holds the value (e.g., elemental-operator-chart-1.4.tgz)
