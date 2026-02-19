@@ -6,6 +6,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -38,6 +39,11 @@ func (h HandlerFunc) OnChange(key string, obj runtime.Object) error {
 	return h(key, obj)
 }
 
+type retryAfterError struct {
+	error
+	duration time.Duration
+}
+
 type Controller interface {
 	Enqueue(namespace, name string)
 	EnqueueAfter(namespace, name string, delay time.Duration)
@@ -50,6 +56,7 @@ type controller struct {
 	startLock sync.Mutex
 
 	name        string
+	ctxID       string
 	workqueue   workqueue.RateLimitingInterface
 	rateLimiter workqueue.RateLimiter
 	informer    cache.SharedIndexInformer
@@ -101,6 +108,10 @@ func applyDefaultOptions(opts *Options) *Options {
 	if opts != nil {
 		newOpts = *opts
 	}
+
+	// from failure 0 to 12: exponential growth in delays (5 ms * 2 ^ failures)
+	// from failure 13 to 30: 30s delay
+	// from failure 31 on: 120s delay (2 minutes)
 	if newOpts.RateLimiter == nil {
 		newOpts.RateLimiter = workqueue.NewMaxOfRateLimiter(
 			workqueue.NewItemFastSlowRateLimiter(time.Millisecond, maxTimeout2min, 30),
@@ -170,6 +181,7 @@ func (c *controller) Start(ctx context.Context, workers int) error {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
+	c.ctxID = metrics.ContextID(ctx)
 	go c.run(workers, ctx.Done())
 	c.started = true
 	return nil
@@ -211,6 +223,11 @@ func (c *controller) processSingleItem(obj interface{}) error {
 		return nil
 	}
 	if err := c.syncHandler(key); err != nil {
+		var retryAfter *retryAfterError
+		if errors.As(err, &retryAfter) {
+			c.workqueue.AddAfter(key, retryAfter.duration)
+			return retryAfter.error
+		}
 		c.workqueue.AddRateLimited(key)
 		return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 	}
@@ -222,7 +239,7 @@ func (c *controller) processSingleItem(obj interface{}) error {
 func (c *controller) syncHandler(key string) error {
 	obj, exists, err := c.informer.GetStore().GetByKey(key)
 	if err != nil {
-		metrics.IncTotalHandlerExecutions(c.name, "", true)
+		metrics.IncTotalHandlerExecutions(c.ctxID, c.name, "", true)
 		return err
 	}
 	if !exists {

@@ -1,13 +1,13 @@
 package v1alpha1
 
 import (
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func init() {
-	SchemeBuilder.Register(&Bundle{}, &BundleList{})
+	InternalSchemeBuilder.Register(&Bundle{}, &BundleList{})
 }
 
 const (
@@ -32,6 +32,17 @@ const (
 	// but there are some changes that were not made from the Git
 	// Repository.
 	Modified BundleState = "Modified"
+
+	// SecretTypeBundleValues is the secret type used to store the helm values
+	SecretTypeBundleValues = "fleet.cattle.io/bundle-values/v1alpha1"
+
+	// SecretTypeOCIStorage is the secret type used internally to store bundle resources in an OCI registry instead
+	// of etcd.
+	SecretTypeOCIStorage = "fleet.cattle.io/bundle-oci-storage/v1alpha1"
+
+	// InternalSecretLabel is a label added to any secret created by Fleet to propagate Bundle or
+	// BundleDeployment secrets storing credential details for OCI storage or HelmOps.
+	InternalSecretLabel = "fleet.cattle.io/bundle-internal-secret"
 )
 
 var (
@@ -98,6 +109,7 @@ type BundleSpec struct {
 
 	// Resources contains the resources that were read from the bundle's
 	// path. This includes the content of downloaded helm charts.
+	// +nullable
 	Resources []BundleResource `json:"resources,omitempty"`
 
 	// Targets refer to the clusters which will be deployed to.
@@ -110,6 +122,21 @@ type BundleSpec struct {
 	// DependsOn refers to the bundles which must be ready before this bundle can be deployed.
 	// +nullable
 	DependsOn []BundleRef `json:"dependsOn,omitempty"`
+
+	// ContentsID stores the contents id when deploying contents using an OCI registry.
+	// +nullable
+	ContentsID string `json:"contentsId,omitempty"`
+
+	// HelmOpOptions stores the options relative to HelmOp resources
+	// Non-nil HelmOpOptions indicate that the source of resources is a Helm chart,
+	// not a git repository.
+	// +nullable
+	HelmOpOptions *BundleHelmOptions `json:"helmOpOptions,omitempty"`
+
+	// ValuesHash is the hash of the values used to render the Helm chart.
+	// It changes when any values from fleet.yaml, values from ValuesFiles or values from target
+	// customization changes.
+	ValuesHash string `json:"valuesHash,omitempty"`
 }
 
 type BundleRef struct {
@@ -124,14 +151,17 @@ type BundleRef struct {
 // BundleResource represents the content of a single resource from the bundle, like a YAML manifest.
 type BundleResource struct {
 	// Name of the resource, can include the bundle's internal path.
+	// +nullable
 	Name string `json:"name,omitempty"`
 	// The content of the resource, can be compressed.
+	// +nullable
 	Content string `json:"content,omitempty"`
 	// Encoding is either empty or "base64+gz".
+	// +nullable
 	Encoding string `json:"encoding,omitempty"`
 }
 
-// RolloverStrategy controls the rollout of the bundle across clusters.
+// RolloutStrategy controls the rollout of the bundle across clusters.
 type RolloutStrategy struct {
 	// A number or percentage of clusters that can be unavailable during an update
 	// of a bundle. This follows the same basic approach as a deployment rollout
@@ -160,6 +190,7 @@ type RolloutStrategy struct {
 // Partition defines a separate rollout strategy for a set of clusters.
 type Partition struct {
 	// A user-friendly name given to the partition used for Display (optional).
+	// +nullable
 	Name string `json:"name,omitempty"`
 	// A number or percentage of clusters that can be unavailable in this
 	// partition before this partition is treated as done.
@@ -172,6 +203,7 @@ type Partition struct {
 	// A cluster group name to include in this partition
 	ClusterGroup string `json:"clusterGroup,omitempty"`
 	// Selector matching cluster group labels to include in this partition
+	// +nullable
 	ClusterGroupSelector *metav1.LabelSelector `json:"clusterGroupSelector,omitempty"`
 }
 
@@ -217,6 +249,12 @@ type BundleTarget struct {
 	ClusterGroupSelector *metav1.LabelSelector `json:"clusterGroupSelector,omitempty"`
 	// DoNotDeploy if set to true, will not deploy to this target.
 	DoNotDeploy bool `json:"doNotDeploy,omitempty"`
+	// NamespaceLabels are labels that will be appended to the namespace created by Fleet.
+	// +nullable
+	NamespaceLabels map[string]string `json:"namespaceLabels,omitempty"`
+	// NamespaceAnnotations are annotations that will be appended to the namespace created by Fleet.
+	// +nullable
+	NamespaceAnnotations map[string]string `json:"namespaceAnnotations,omitempty"`
 }
 
 // BundleSummary contains the number of bundle deployments in each state and a
@@ -254,6 +292,7 @@ type BundleSummary struct {
 	DesiredReady int `json:"desiredReady"`
 	// NonReadyClusters is a list of states, which is filled for a bundle
 	// that is not ready.
+	// +nullable
 	NonReadyResources []NonReadyResource `json:"nonReadyResources,omitempty"`
 }
 
@@ -271,8 +310,10 @@ type NonReadyResource struct {
 	// +nullable
 	Message string `json:"message,omitempty"`
 	// ModifiedStatus lists the state for each modified resource.
+	// +nullable
 	ModifiedStatus []ModifiedStatus `json:"modifiedStatus,omitempty"`
 	// NonReadyStatus lists the state for each non-ready resource.
+	// +nullable
 	NonReadyStatus []NonReadyStatus `json:"nonReadyStatus,omitempty"`
 }
 
@@ -287,9 +328,8 @@ const (
 	// BundleDeploymentConditionInstalled indicates the bundledeployment
 	// has been installed.
 	BundleDeploymentConditionInstalled = "Installed"
-	// BundleDeploymentConditionDeployed is used by the bundledeployment
-	// controller. It is true if the handler returns no error and false if
-	// an error is returned.
+	// BundleDeploymentConditionDeployed indicates whether the deployment
+	// succeeded.
 	BundleDeploymentConditionDeployed  = "Deployed"
 	BundleDeploymentConditionMonitored = "Monitored"
 )
@@ -333,8 +373,12 @@ type BundleStatus struct {
 	Display BundleDisplay `json:"display,omitempty"`
 	// ResourceKey lists resources, which will likely be deployed. The
 	// actual list of resources on a cluster might differ, depending on the
-	// helm chart, value templating, etc..
+	// helm chart, value templating, etc.. (deprecated to reduce bundle size)
+	// +nullable
 	ResourceKey []ResourceKey `json:"resourceKey,omitempty"`
+	// OCIReference is the OCI reference used to store contents, this is
+	// only for informational purposes.
+	OCIReference string `json:"ociReference,omitempty"`
 	// ObservedGeneration is the current generation of the bundle.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration"`
@@ -384,4 +428,13 @@ type PartitionStatus struct {
 	Unavailable int `json:"unavailable,omitempty"`
 	// Summary is a summary state for the partition, calculated over its non-ready resources.
 	Summary BundleSummary `json:"summary,omitempty"`
+}
+
+type BundleHelmOptions struct {
+	// SecretName stores the secret name for storing credentials when accessing
+	// a remote helm repository defined in a HelmOp resource
+	SecretName string `json:"helmOpSecretName,omitempty"`
+
+	// InsecureSkipTLSverify will use insecure HTTPS to clone the helm app resource.
+	InsecureSkipTLSverify bool `json:"helmOpInsecureSkipTLSVerify,omitempty"`
 }

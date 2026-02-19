@@ -4,21 +4,32 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
-	"github.com/rancher/wrangler/v2/pkg/summary"
+	"github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1/summary"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 )
 
-const BundleDeploymentResourceNamePlural = "bundledeployments"
-
 func init() {
-	SchemeBuilder.Register(&BundleDeployment{}, &BundleDeploymentList{})
+	InternalSchemeBuilder.Register(&BundleDeployment{}, &BundleDeploymentList{})
 }
 
-// MaxHelmReleaseNameLen is the maximum length of a Helm release name.
-// See https://github.com/helm/helm/blob/293b50c65d4d56187cd4e2f390f0ada46b4c4737/pkg/chartutil/validate_name.go#L54-L61
-const MaxHelmReleaseNameLen = 53
+const (
+	BundleDeploymentResourceNamePlural = "bundledeployments"
+
+	// MaxHelmReleaseNameLen is the maximum length of a Helm release name.
+	// See https://github.com/helm/helm/blob/293b50c65d4d56187cd4e2f390f0ada46b4c4737/pkg/chartutil/validate_name.go#L54-L61
+	MaxHelmReleaseNameLen = 53
+
+	// SecretTypeBundleDeploymentOptions is the type of the secret that stores the deployment values options.
+	SecretTypeBundleDeploymentOptions = "fleet.cattle.io/bundle-deployment/v1alpha1"
+
+	BundleDeploymentOwnershipLabel = "fleet.cattle.io/bundledeployment"
+)
+
+const IgnoreOp = "ignore"
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -52,6 +63,8 @@ type BundleDeploymentList struct {
 }
 
 type BundleDeploymentOptions struct {
+	GitOpsBundleDeploymentOptions `json:",inline"`
+
 	// DefaultNamespace is the namespace to use for resources that do not
 	// specify a namespace. This field is not used to enforce or lock down
 	// the deployment to a specific namespace.
@@ -64,13 +77,8 @@ type BundleDeploymentOptions struct {
 	// +nullable
 	TargetNamespace string `json:"namespace,omitempty"`
 
-	// Kustomize options for the deployment, like the dir containing the
-	// kustomization.yaml file.
-	// +nullable
-	Kustomize *KustomizeOptions `json:"kustomize,omitempty"`
-
 	// Helm options for the deployment, like the chart name, repo and values.
-	// +nullable
+	// +optional
 	Helm *HelmOptions `json:"helm,omitempty"`
 
 	// ServiceAccount which will be used to perform this deployment.
@@ -80,11 +88,6 @@ type BundleDeploymentOptions struct {
 	// ForceSyncGeneration is used to force a redeployment
 	ForceSyncGeneration int64 `json:"forceSyncGeneration,omitempty"`
 
-	// YAML options, if using raw YAML these are names that map to
-	// overlays/{name} files that will be used to replace or patch a resource.
-	// +nullable
-	YAML *YAMLOptions `json:"yaml,omitempty"`
-
 	// Diff can be used to ignore the modified state of objects which are amended at runtime.
 	// +nullable
 	Diff *DiffOptions `json:"diff,omitempty"`
@@ -92,26 +95,47 @@ type BundleDeploymentOptions struct {
 	// KeepResources can be used to keep the deployed resources when removing the bundle
 	KeepResources bool `json:"keepResources,omitempty"`
 
+	// DeleteNamespace can be used to delete the deployed namespace when removing the bundle
+	DeleteNamespace bool `json:"deleteNamespace,omitempty"`
+
 	//IgnoreOptions can be used to ignore fields when monitoring the bundle.
-	IgnoreOptions `json:"ignore,omitempty"`
+	// +nullable
+	IgnoreOptions *IgnoreOptions `json:"ignore,omitempty"`
 
 	// CorrectDrift specifies how drift correction should work.
 	CorrectDrift *CorrectDrift `json:"correctDrift,omitempty"`
 
 	// NamespaceLabels are labels that will be appended to the namespace created by Fleet.
 	// +nullable
-	NamespaceLabels *map[string]string `json:"namespaceLabels,omitempty"`
+	NamespaceLabels map[string]string `json:"namespaceLabels,omitempty"`
 
 	// NamespaceAnnotations are annotations that will be appended to the namespace created by Fleet.
 	// +nullable
-	NamespaceAnnotations *map[string]string `json:"namespaceAnnotations,omitempty"`
+	NamespaceAnnotations map[string]string `json:"namespaceAnnotations,omitempty"`
 
 	// DeleteCRDResources deletes CRDs. Warning! this will also delete all your Custom Resources.
 	DeleteCRDResources bool `json:"deleteCRDResources,omitempty"`
+
+	// DownstreamResources points to resources to be copied into downstream clusters, from the bundle's
+	// namespace.
+	DownstreamResources []DownstreamResource `json:"downstreamResources,omitempty"`
+}
+
+// GitOpsBundleDeploymentOptions contains options which only make sense for GitOps
+type GitOpsBundleDeploymentOptions struct {
+	// YAML options, if using raw YAML these are names that map to
+	// overlays/{name} files that will be used to replace or patch a resource.
+	// +nullable
+	YAML *YAMLOptions `json:"yaml,omitempty"`
+
+	// Kustomize options for the deployment, like the dir containing the
+	// kustomization.yaml file.
+	// +nullable
+	Kustomize *KustomizeOptions `json:"kustomize,omitempty"`
 }
 
 type DiffOptions struct {
-	// ComparePatches match a resource and remove fields from the check for modifications.
+	// ComparePatches match a resource and remove fields, or the resource itself from the check for modifications.
 	// +nullable
 	ComparePatches []ComparePatch `json:"comparePatches,omitempty"`
 }
@@ -138,12 +162,14 @@ type ComparePatch struct {
 	JsonPointers []string `json:"jsonPointers,omitempty"`
 }
 
-// Operation of a ComparePatch, usually "remove".
+// Operation of a ComparePatch, usually:
+// * "remove" to remove a specific path in a resource
+// * "ignore" to remove the entire resource from checks for modifications.
 type Operation struct {
-	// Op is usually "remove"
+	// Op is usually "remove" or "ignore"
 	// +nullable
 	Op string `json:"op,omitempty"`
-	// Path is the JSON path to remove.
+	// Path is the JSON path to remove. Not needed if Op is "ignore".
 	// +nullable
 	Path string `json:"path,omitempty"`
 	// Value is usually empty.
@@ -175,6 +201,8 @@ type KustomizeOptions struct {
 // used, otherwise some options are ignored. For example ReleaseName works with
 // all bundle types.
 type HelmOptions struct {
+	GitOpsHelmOptions `json:",inline"`
+
 	// Chart can refer to any go-getter URL or OCI registry based helm
 	// chart URL. The chart will be downloaded.
 	// +nullable
@@ -205,6 +233,14 @@ type HelmOptions struct {
 	// +kubebuilder:validation:XPreserveUnknownFields
 	Values *GenericMap `json:"values,omitempty"`
 
+	// Template Values passed to Helm. It is possible to specify the keys and values
+	// as go template strings. Unlike .values, content of each key will be templated
+	// first, before serializing to yaml. This allows to template complex values,
+	// like ranges and maps.
+	// templateValues keys have precedence over values keys in case of conflict.
+	// +nullable
+	TemplateValues map[string]string `json:"templateValues,omitempty"`
+
 	// +nullable
 	// ValuesFrom loads the values from configmaps and secrets.
 	ValuesFrom []ValuesFrom `json:"valuesFrom,omitempty"`
@@ -217,10 +253,6 @@ type HelmOptions struct {
 
 	// MaxHistory limits the maximum number of revisions saved per release by Helm.
 	MaxHistory int `json:"maxHistory,omitempty"`
-
-	// ValuesFiles is a list of files to load values from.
-	// +nullable
-	ValuesFiles []string `json:"valuesFiles,omitempty"`
 
 	// WaitForJobs if set and timeoutSeconds provided, will wait until all
 	// Jobs have been completed before marking the GitRepo as ready. It
@@ -241,6 +273,13 @@ type HelmOptions struct {
 
 	// DisableDependencyUpdate allows skipping chart dependencies update
 	DisableDependencyUpdate bool `json:"disableDependencyUpdate,omitempty"`
+}
+
+// GitOpsHelmOptions contains Helm options which only make sense for GitOps.
+type GitOpsHelmOptions struct {
+	// ValuesFiles is a list of files to load values from.
+	// +nullable
+	ValuesFiles []string `json:"valuesFiles,omitempty"`
 }
 
 // IgnoreOptions defines conditions to be ignored when monitoring the Bundle.
@@ -310,6 +349,21 @@ type BundleDeploymentSpec struct {
 	DependsOn []BundleRef `json:"dependsOn,omitempty"`
 	// CorrectDrift specifies how drift correction should work.
 	CorrectDrift *CorrectDrift `json:"correctDrift,omitempty"`
+	// OCIContents is true when this deployment's contents is stored in an oci registry
+	OCIContents bool `json:"ociContents,omitempty"`
+	// HelmChartOptions is not nil and has the helm chart config details when contents
+	// should be downloaded from a helm chart
+	HelmChartOptions *BundleHelmOptions `json:"helmChartOptions,omitempty"`
+	// ValuesHash is the hash of the values used to deploy the bundle.
+	// +nullable
+	ValuesHash string `json:"valuesHash,omitempty"`
+
+	// OffSchedule specifies if the BundleDeployment can be updated.
+	// If set to true, will stop any BundleDeployments from being
+	// updated.
+	// If true, BundleDeployments will be marked as out of sync
+	// when changes are detected.
+	OffSchedule bool `json:"offSchedule,omitempty"`
 }
 
 // BundleDeploymentResource contains the metadata of a deployed resource.
@@ -326,11 +380,19 @@ type BundleDeploymentResource struct {
 	CreatedAt metav1.Time `json:"createdAt,omitempty"`
 }
 
+// DownstreamResource contains identifiers for a resource to be copied from the parent bundle's namespace to each
+// downstream cluster.
+type DownstreamResource struct {
+	Kind string `json:"kind,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
 type BundleDeploymentStatus struct {
 	// +nullable
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 	// +nullable
 	AppliedDeploymentID string `json:"appliedDeploymentID,omitempty"`
+	// Release is the Helm release ID
 	// +nullable
 	Release     string `json:"release,omitempty"`
 	Ready       bool   `json:"ready,omitempty"`
@@ -339,6 +401,8 @@ type BundleDeploymentStatus struct {
 	NonReadyStatus []NonReadyStatus `json:"nonReadyStatus,omitempty"`
 	// +nullable
 	ModifiedStatus []ModifiedStatus `json:"modifiedStatus,omitempty"`
+	// IncompleteState is true if there are more than 10 non-ready or modified resources, meaning that the lists in those fields have been truncated.
+	IncompleteState bool `json:"incompleteState,omitempty"`
 	// +nullable
 	Display BundleDeploymentDisplay `json:"display,omitempty"`
 	// +nullable
@@ -347,6 +411,8 @@ type BundleDeploymentStatus struct {
 	// according to the helm release history.
 	// +nullable
 	Resources []BundleDeploymentResource `json:"resources,omitempty"`
+	// ResourceCounts contains the number of resources in each state.
+	ResourceCounts ResourceCounts `json:"resourceCounts,omitempty"`
 }
 
 type BundleDeploymentDisplay struct {
@@ -402,7 +468,9 @@ type ModifiedStatus struct {
 	// +nullable
 	Name   string `json:"name,omitempty"`
 	Create bool   `json:"missing,omitempty"`
-	Delete bool   `json:"delete,omitempty"`
+	// Exist is true if the resource exists but is not owned by us. This can happen if a resource was adopted by another bundle whereas the first bundle still exists and due to that reports that it does not own it.
+	Exist  bool `json:"exist,omitempty"`
+	Delete bool `json:"delete,omitempty"`
 	// +nullable
 	Patch string `json:"patch,omitempty"`
 }
@@ -410,7 +478,11 @@ type ModifiedStatus struct {
 func (in ModifiedStatus) String() string {
 	msg := name(in.APIVersion, in.Kind, in.Namespace, in.Name)
 	if in.Create {
-		return msg + " missing"
+		if in.Exist {
+			return msg + " is not owned by us"
+		} else {
+			return msg + " missing"
+		}
 	} else if in.Delete {
 		return msg + " extra"
 	}
