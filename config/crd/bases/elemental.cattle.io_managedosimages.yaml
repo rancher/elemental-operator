@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: managedosimages.elemental.cattle.io
 spec:
   group: elemental.cattle.io
@@ -40,7 +40,7 @@ spec:
               cloudConfig:
                 x-kubernetes-preserve-unknown-fields: true
               clusterRolloutStrategy:
-                description: RolloverStrategy controls the rollout of the bundle across
+                description: RolloutStrategy controls the rollout of the bundle across
                   clusters.
                 properties:
                   autoPartitionSize:
@@ -90,6 +90,7 @@ spec:
                         clusterGroupSelector:
                           description: Selector matching cluster group labels to include
                             in this partition
+                          nullable: true
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
@@ -117,11 +118,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -166,11 +169,13 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 required:
                                 - key
                                 - operator
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             matchLabels:
                               additionalProperties:
                                 type: string
@@ -193,6 +198,7 @@ spec:
                         name:
                           description: A user-friendly name given to the partition
                             used for Display (optional).
+                          nullable: true
                           type: string
                       type: object
                     nullable: true
@@ -240,11 +246,13 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                             required:
                             - key
                             - operator
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                         matchLabels:
                           additionalProperties:
                             type: string
@@ -296,11 +304,13 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                             required:
                             - key
                             - operator
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                         matchLabels:
                           additionalProperties:
                             type: string
@@ -339,6 +349,10 @@ spec:
                       description: DeleteCRDResources deletes CRDs. Warning! this
                         will also delete all your Custom Resources.
                       type: boolean
+                    deleteNamespace:
+                      description: DeleteNamespace can be used to delete the deployed
+                        namespace when removing the bundle
+                      type: boolean
                     diff:
                       description: Diff can be used to ignore the modified state of
                         objects which are amended at runtime.
@@ -346,7 +360,7 @@ spec:
                       properties:
                         comparePatches:
                           description: ComparePatches match a resource and remove
-                            fields from the check for modifications.
+                            fields, or the resource itself from the check for modifications.
                           items:
                             description: ComparePatch matches a resource and removes
                               fields from the check for modifications.
@@ -380,15 +394,18 @@ spec:
                                 description: Operations remove a JSON path from the
                                   resource.
                                 items:
-                                  description: Operation of a ComparePatch, usually
-                                    "remove".
+                                  description: |-
+                                    Operation of a ComparePatch, usually:
+                                    * "remove" to remove a specific path in a resource
+                                    * "ignore" to remove the entire resource from checks for modifications.
                                   properties:
                                     op:
-                                      description: Op is usually "remove"
+                                      description: Op is usually "remove" or "ignore"
                                       nullable: true
                                       type: string
                                     path:
                                       description: Path is the JSON path to remove.
+                                        Not needed if Op is "ignore".
                                       nullable: true
                                       type: string
                                     value:
@@ -406,6 +423,21 @@ spec:
                       description: DoNotDeploy if set to true, will not deploy to
                         this target.
                       type: boolean
+                    downstreamResources:
+                      description: |-
+                        DownstreamResources points to resources to be copied into downstream clusters, from the bundle's
+                        namespace.
+                      items:
+                        description: |-
+                          DownstreamResource contains identifiers for a resource to be copied from the parent bundle's namespace to each
+                          downstream cluster.
+                        properties:
+                          kind:
+                            type: string
+                          name:
+                            type: string
+                        type: object
+                      type: array
                     forceSyncGeneration:
                       description: ForceSyncGeneration is used to force a redeployment
                       format: int64
@@ -413,7 +445,6 @@ spec:
                     helm:
                       description: Helm options for the deployment, like the chart
                         name, repo and values.
-                      nullable: true
                       properties:
                         atomic:
                           description: Atomic sets the --atomic flag when Helm is
@@ -467,6 +498,17 @@ spec:
                           description: TakeOwnership makes helm skip the check for
                             its own annotations
                           type: boolean
+                        templateValues:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Template Values passed to Helm. It is possible to specify the keys and values
+                            as go template strings. Unlike .values, content of each key will be templated
+                            first, before serializing to yaml. This allows to template complex values,
+                            like ranges and maps.
+                            templateValues keys have precedence over values keys in case of conflict.
+                          nullable: true
+                          type: object
                         timeoutSeconds:
                           description: TimeoutSeconds is the time to wait for Helm
                             operations.
@@ -543,6 +585,7 @@ spec:
                     ignore:
                       description: IgnoreOptions can be used to ignore fields when
                         monitoring the bundle.
+                      nullable: true
                       properties:
                         conditions:
                           description: Conditions is a list of conditions to be ignored
@@ -682,11 +725,13 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           required:
                           - key
                           - operator
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       matchLabels:
                         additionalProperties:
                           type: string
@@ -741,11 +786,13 @@ spec:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                       required:
                       - key
                       - operator
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   matchLabels:
                     additionalProperties:
                       type: string
@@ -772,16 +819,19 @@ spec:
                   envFrom:
                     items:
                       description: EnvFromSource represents the source of a set of
-                        ConfigMaps
+                        ConfigMaps or Secrets
                       properties:
                         configMapRef:
                           description: The ConfigMap to select from
                           properties:
                             name:
+                              default: ""
                               description: |-
                                 Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
                                 More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                TODO: Add other useful fields. apiVersion, kind, uid?
                               type: string
                             optional:
                               description: Specify whether the ConfigMap must be defined
@@ -789,17 +839,21 @@ spec:
                           type: object
                           x-kubernetes-map-type: atomic
                         prefix:
-                          description: An optional identifier to prepend to each key
-                            in the ConfigMap. Must be a C_IDENTIFIER.
+                          description: |-
+                            Optional text to prepend to the name of each environment variable.
+                            May consist of any printable ASCII characters except '='.
                           type: string
                         secretRef:
                           description: The Secret to select from
                           properties:
                             name:
+                              default: ""
                               description: |-
                                 Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
                                 More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                TODO: Add other useful fields. apiVersion, kind, uid?
                               type: string
                             optional:
                               description: Specify whether the Secret must be defined
@@ -814,8 +868,9 @@ spec:
                         in a Container.
                       properties:
                         name:
-                          description: Name of the environment variable. Must be a
-                            C_IDENTIFIER.
+                          description: |-
+                            Name of the environment variable.
+                            May consist of any printable ASCII characters except '='.
                           type: string
                         value:
                           description: |-
@@ -840,10 +895,13 @@ spec:
                                   description: The key to select.
                                   type: string
                                 name:
+                                  default: ""
                                   description: |-
                                     Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
                                     More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind, uid?
                                   type: string
                                 optional:
                                   description: Specify whether the ConfigMap or its
@@ -868,6 +926,43 @@ spec:
                                   type: string
                               required:
                               - fieldPath
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            fileKeyRef:
+                              description: |-
+                                FileKeyRef selects a key of the env file.
+                                Requires the EnvFiles feature gate to be enabled.
+                              properties:
+                                key:
+                                  description: |-
+                                    The key within the env file. An invalid key will prevent the pod from starting.
+                                    The keys defined within a source may consist of any printable ASCII characters except '='.
+                                    During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                  type: string
+                                optional:
+                                  default: false
+                                  description: |-
+                                    Specify whether the file or its key must be defined. If the file or key
+                                    does not exist, then the env var is not published.
+                                    If optional is set to true and the specified key does not exist,
+                                    the environment variable will not be set in the Pod's containers.
+
+                                    If optional is set to false and the specified key does not exist,
+                                    an error will be returned during Pod creation.
+                                  type: boolean
+                                path:
+                                  description: |-
+                                    The path within the volume from which to select the file.
+                                    Must be relative and may not contain the '..' path or start with '..'.
+                                  type: string
+                                volumeName:
+                                  description: The name of the volume mount containing
+                                    the env file.
+                                  type: string
+                              required:
+                              - key
+                              - path
+                              - volumeName
                               type: object
                               x-kubernetes-map-type: atomic
                             resourceFieldRef:
@@ -903,10 +998,13 @@ spec:
                                     be a valid secret key.
                                   type: string
                                 name:
+                                  default: ""
                                   description: |-
                                     Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
                                     More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind, uid?
                                   type: string
                                 optional:
                                   description: Specify whether the Secret or its key
@@ -939,6 +1037,30 @@ spec:
                           2) has CAP_SYS_ADMIN
                           Note that this field cannot be set when spec.os.name is windows.
                         type: boolean
+                      appArmorProfile:
+                        description: |-
+                          appArmorProfile is the AppArmor options to use by this container. If set, this profile
+                          overrides the pod's appArmorProfile.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile loaded on the node that should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must match the loaded name of the profile.
+                              Must be set if and only if type is "Localhost".
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of AppArmor profile will be applied.
+                              Valid options are:
+                                Localhost - a profile pre-loaded on the node.
+                                RuntimeDefault - the container runtime's default profile.
+                                Unconfined - no AppArmor enforcement.
+                            type: string
+                        required:
+                        - type
+                        type: object
                       capabilities:
                         description: |-
                           The capabilities to add/drop when running containers.
@@ -952,6 +1074,7 @@ spec:
                                 type
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                           drop:
                             description: Removed capabilities
                             items:
@@ -959,6 +1082,7 @@ spec:
                                 type
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       privileged:
                         description: |-
@@ -970,7 +1094,7 @@ spec:
                       procMount:
                         description: |-
                           procMount denotes the type of proc mount to use for the containers.
-                          The default is DefaultProcMount which uses the container runtime defaults for
+                          The default value is Default which uses the container runtime defaults for
                           readonly paths and masked paths.
                           This requires the ProcMountType feature flag to be enabled.
                           Note that this field cannot be set when spec.os.name is windows.
@@ -1051,7 +1175,6 @@ spec:
                             description: |-
                               type indicates which kind of seccomp profile will be applied.
                               Valid options are:
-
 
                               Localhost - a profile defined in a file on the node should be used.
                               RuntimeDefault - the container runtime default profile should be used.
@@ -1119,16 +1242,19 @@ spec:
                   envFrom:
                     items:
                       description: EnvFromSource represents the source of a set of
-                        ConfigMaps
+                        ConfigMaps or Secrets
                       properties:
                         configMapRef:
                           description: The ConfigMap to select from
                           properties:
                             name:
+                              default: ""
                               description: |-
                                 Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
                                 More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                TODO: Add other useful fields. apiVersion, kind, uid?
                               type: string
                             optional:
                               description: Specify whether the ConfigMap must be defined
@@ -1136,17 +1262,21 @@ spec:
                           type: object
                           x-kubernetes-map-type: atomic
                         prefix:
-                          description: An optional identifier to prepend to each key
-                            in the ConfigMap. Must be a C_IDENTIFIER.
+                          description: |-
+                            Optional text to prepend to the name of each environment variable.
+                            May consist of any printable ASCII characters except '='.
                           type: string
                         secretRef:
                           description: The Secret to select from
                           properties:
                             name:
+                              default: ""
                               description: |-
                                 Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
                                 More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                TODO: Add other useful fields. apiVersion, kind, uid?
                               type: string
                             optional:
                               description: Specify whether the Secret must be defined
@@ -1161,8 +1291,9 @@ spec:
                         in a Container.
                       properties:
                         name:
-                          description: Name of the environment variable. Must be a
-                            C_IDENTIFIER.
+                          description: |-
+                            Name of the environment variable.
+                            May consist of any printable ASCII characters except '='.
                           type: string
                         value:
                           description: |-
@@ -1187,10 +1318,13 @@ spec:
                                   description: The key to select.
                                   type: string
                                 name:
+                                  default: ""
                                   description: |-
                                     Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
                                     More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind, uid?
                                   type: string
                                 optional:
                                   description: Specify whether the ConfigMap or its
@@ -1215,6 +1349,43 @@ spec:
                                   type: string
                               required:
                               - fieldPath
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            fileKeyRef:
+                              description: |-
+                                FileKeyRef selects a key of the env file.
+                                Requires the EnvFiles feature gate to be enabled.
+                              properties:
+                                key:
+                                  description: |-
+                                    The key within the env file. An invalid key will prevent the pod from starting.
+                                    The keys defined within a source may consist of any printable ASCII characters except '='.
+                                    During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                                  type: string
+                                optional:
+                                  default: false
+                                  description: |-
+                                    Specify whether the file or its key must be defined. If the file or key
+                                    does not exist, then the env var is not published.
+                                    If optional is set to true and the specified key does not exist,
+                                    the environment variable will not be set in the Pod's containers.
+
+                                    If optional is set to false and the specified key does not exist,
+                                    an error will be returned during Pod creation.
+                                  type: boolean
+                                path:
+                                  description: |-
+                                    The path within the volume from which to select the file.
+                                    Must be relative and may not contain the '..' path or start with '..'.
+                                  type: string
+                                volumeName:
+                                  description: The name of the volume mount containing
+                                    the env file.
+                                  type: string
+                              required:
+                              - key
+                              - path
+                              - volumeName
                               type: object
                               x-kubernetes-map-type: atomic
                             resourceFieldRef:
@@ -1250,10 +1421,13 @@ spec:
                                     be a valid secret key.
                                   type: string
                                 name:
+                                  default: ""
                                   description: |-
                                     Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
                                     More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                    TODO: Add other useful fields. apiVersion, kind, uid?
                                   type: string
                                 optional:
                                   description: Specify whether the Secret or its key
@@ -1286,6 +1460,30 @@ spec:
                           2) has CAP_SYS_ADMIN
                           Note that this field cannot be set when spec.os.name is windows.
                         type: boolean
+                      appArmorProfile:
+                        description: |-
+                          appArmorProfile is the AppArmor options to use by this container. If set, this profile
+                          overrides the pod's appArmorProfile.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile loaded on the node that should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must match the loaded name of the profile.
+                              Must be set if and only if type is "Localhost".
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of AppArmor profile will be applied.
+                              Valid options are:
+                                Localhost - a profile pre-loaded on the node.
+                                RuntimeDefault - the container runtime's default profile.
+                                Unconfined - no AppArmor enforcement.
+                            type: string
+                        required:
+                        - type
+                        type: object
                       capabilities:
                         description: |-
                           The capabilities to add/drop when running containers.
@@ -1299,6 +1497,7 @@ spec:
                                 type
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                           drop:
                             description: Removed capabilities
                             items:
@@ -1306,6 +1505,7 @@ spec:
                                 type
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       privileged:
                         description: |-
@@ -1317,7 +1517,7 @@ spec:
                       procMount:
                         description: |-
                           procMount denotes the type of proc mount to use for the containers.
-                          The default is DefaultProcMount which uses the container runtime defaults for
+                          The default value is Default which uses the container runtime defaults for
                           readonly paths and masked paths.
                           This requires the ProcMountType feature flag to be enabled.
                           Note that this field cannot be set when spec.os.name is windows.
@@ -1399,7 +1599,6 @@ spec:
                               type indicates which kind of seccomp profile will be applied.
                               Valid options are:
 
-
                               Localhost - a profile defined in a file on the node should be used.
                               RuntimeDefault - the container runtime default profile should be used.
                               Unconfined - no profile should be applied.
@@ -1459,16 +1658,8 @@ spec:
             properties:
               conditions:
                 items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -1509,12 +1700,7 @@ spec:
                       - Unknown
                       type: string
                     type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
