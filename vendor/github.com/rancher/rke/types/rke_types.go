@@ -5,7 +5,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
-	configv1 "k8s.io/apiserver/pkg/apis/config/v1"
 	eventratelimitapi "k8s.io/kubernetes/plugin/pkg/admission/eventratelimit/apis/eventratelimit"
 )
 
@@ -66,6 +65,10 @@ type RancherKubernetesEngineConfig struct {
 	DNS *DNSConfig `yaml:"dns" json:"dns,omitempty"`
 	// Upgrade Strategy for the cluster
 	UpgradeStrategy *NodeUpgradeStrategy `yaml:"upgrade_strategy,omitempty" json:"upgradeStrategy,omitempty"`
+	// Stream Server Address for cri-dockerd
+	CRIDockerdStreamServerAddress string `yaml:"cri_dockerd_stream_server_address" json:"criDockerdStreamServerAddress,omitempty"`
+	// Stream Server Port for cri-dockerd
+	CRIDockerdStreamServerPort string `yaml:"cri_dockerd_stream_server_port" json:"criDockerdStreamServerPort,omitempty"`
 }
 
 func (r *RancherKubernetesEngineConfig) ObjClusterName() string {
@@ -293,8 +296,6 @@ type KubeAPIService struct {
 	ServiceClusterIPRange string `yaml:"service_cluster_ip_range" json:"serviceClusterIpRange,omitempty"`
 	// Port range for services defined with NodePort type
 	ServiceNodePortRange string `yaml:"service_node_port_range" json:"serviceNodePortRange,omitempty" norman:"default=30000-32767"`
-	// Enabled/Disable PodSecurityPolicy
-	PodSecurityPolicy bool `yaml:"pod_security_policy" json:"podSecurityPolicy,omitempty"`
 	// setting the default configuration for PodSecurityAdmission
 	PodSecurityConfiguration string `yaml:"pod_security_configuration" json:"podSecurityConfiguration,omitempty"`
 	// Enable/Disable AlwaysPullImages admissions plugin
@@ -408,6 +409,8 @@ type NetworkConfig struct {
 	UpdateStrategy *DaemonSetUpdateStrategy `yaml:"update_strategy" json:"updateStrategy,omitempty"`
 	// Tolerations for Deployments
 	Tolerations []v1.Toleration `yaml:"tolerations" json:"tolerations,omitempty"`
+	// Enable/Disable br_netfilter on nodes
+	EnableBrNetfilter *bool `yaml:"enable_br_netfilter" json:"enableBrNetfilter" norman:"default=true"`
 }
 
 type AuthWebhookConfig struct {
@@ -698,6 +701,20 @@ type AciNetworkProvider struct {
 	OpflexOpensslCompat                  string              `yaml:"opflex_openssl_compat,omitempty" json:"opflexOpensslCompat,omitempty"`
 	NodeSnatRedirectExclude              []map[string]string `yaml:"node_snat_redirect_exclude,omitempty" json:"nodeSnatRedirectExclude,omitempty"`
 	TolerationSeconds                    string              `yaml:"toleration_seconds,omitempty" json:"tolerationSeconds,omitempty"`
+	DisableHppRendering                  string              `yaml:"disable_hpp_rendering,omitempty" json:"disableHppRendering,omitempty"`
+	ApicConnectionRetryLimit             string              `yaml:"apic_connection_retry_limit,omitempty" json:"apicConnectionRetryLimit,omitempty"`
+	TaintNotReadyNode                    string              `yaml:"taint_not_ready_node,omitempty" json:"taintNotReadyNode,omitempty"`
+	DropLogDisableEvents                 string              `yaml:"drop_log_disable_events,omitempty" json:"dropLogDisableEvents,omitempty"`
+	DropLogOpflexRedirectDropLogs        string              `yaml:"drop_log_opflex_redirect_drop_logs,omitempty" json:"dropLogOpflexRedirectDropLogs,omitempty"`
+	OpflexStartupEnabled                 string              `yaml:"opflex_startup_enabled,omitempty" json:"opflexStartupEnabled,omitempty"`
+	OpflexStartupPolicyDuration          string              `yaml:"opflex_startup_policy_duration,omitempty" json:"opflexStartupPolicyDuration,omitempty"`
+	OpflexStartupResolveAftConn          string              `yaml:"opflex_startup_resolve_aft_conn,omitempty" json:"opflexStartupResolveAftConn,omitempty"`
+	OpflexSwitchSyncDelay                string              `yaml:"opflex_switch_sync_delay,omitempty" json:"opflexSwitchSyncDelay,omitempty"`
+	OpflexSwitchSyncDynamic              string              `yaml:"opflex_switch_sync_dynamic,omitempty" json:"opflexSwitchSyncDynamic,omitempty"`
+	UnknownMacUnicastAction              string              `yaml:"unknown_mac_unicast_action,omitempty" json:"unknownMacUnicastAction,omitempty"`
+	EnableHppDirect                      string              `yaml:"enable_hpp_direct,omitempty" json:"enableHppDirect,omitempty"`
+	OpflexAgentResetWaitDelay            string              `yaml:"opflex_agent_reset_wait_delay,omitempty" json:"opflexAgentResetWaitDelay,omitempty"`
+	ProactiveConf                        string              `yaml:"proactive_conf,omitempty" json:"proactiveConf,omitempty"`
 }
 
 type KubernetesServicesOptions struct {
@@ -1051,7 +1068,7 @@ type SecretsEncryptionConfig struct {
 	// Enable/disable secrets encryption provider config
 	Enabled bool `yaml:"enabled" json:"enabled,omitempty"`
 	// Custom Encryption Provider configuration object
-	CustomConfig *configv1.EncryptionConfiguration `yaml:"custom_config" json:"customConfig,omitempty"`
+	CustomConfig *apiserverv1.EncryptionConfiguration `yaml:"custom_config" json:"customConfig,omitempty"`
 }
 
 type File struct {

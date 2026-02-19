@@ -1,18 +1,19 @@
 package v1alpha1
 
 import (
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
-	SchemeBuilder.Register(&GitRepo{}, &GitRepoList{})
+	InternalSchemeBuilder.Register(&GitRepo{}, &GitRepoList{})
 }
 
 var (
+	CommitLabel          = "fleet.cattle.io/commit"
 	RepoLabel            = "fleet.cattle.io/repo-name"
 	BundleLabel          = "fleet.cattle.io/bundle-name"
 	BundleNamespaceLabel = "fleet.cattle.io/bundle-namespace"
+	CreatedByUserIDLabel = "fleet.cattle.io/created-by-user-id"
 )
 
 const (
@@ -51,7 +52,8 @@ type GitRepoList struct {
 
 type GitRepoSpec struct {
 	// Repo is a URL to a git repo to clone and index.
-	// +nullable
+	// +required
+	// +kubebuilder:validation:MinLength=1
 	Repo string `json:"repo,omitempty"`
 
 	// Branch The git branch to follow.
@@ -121,14 +123,37 @@ type GitRepoSpec struct {
 	ImageSyncInterval *metav1.Duration `json:"imageScanInterval,omitempty"`
 
 	// Commit specifies how to commit to the git repo when a new image is scanned and written back to git repo.
-	// +required
-	ImageScanCommit CommitSpec `json:"imageScanCommit,omitempty"`
+	ImageScanCommit *CommitSpec `json:"imageScanCommit,omitempty"`
 
 	// KeepResources specifies if the resources created must be kept after deleting the GitRepo.
 	KeepResources bool `json:"keepResources,omitempty"`
 
+	// DeleteNamespace specifies if the namespace created must be deleted after deleting the GitRepo.
+	DeleteNamespace bool `json:"deleteNamespace,omitempty"`
+
 	// CorrectDrift specifies how drift correction should work.
 	CorrectDrift *CorrectDrift `json:"correctDrift,omitempty"`
+
+	// Disables git polling. When enabled only webhooks will be used.
+	DisablePolling bool `json:"disablePolling,omitempty"`
+
+	// OCIRegistrySecret contains the name of the secret to be used for retrieving the OCI registry connection details.
+	OCIRegistrySecret string `json:"ociRegistrySecret,omitempty"`
+
+	// WebhookSecret contains the name of the secret to use for webhook parsing
+	WebhookSecret string `json:"webhookSecret,omitempty"`
+
+	// Bundles defines the paths of bundles to be read.
+	// This drives the fleet resource scanner that simply loads the specified folders
+	Bundles []BundlePath `json:"bundles,omitempty"`
+}
+
+type BundlePath struct {
+	// Base is the base path for the bundle resources
+	Base string `json:"base,omitempty"`
+	// Options is the path (relative to path above) that defines a fleet.yaml file to configure the bundle
+	// +nullable
+	Options string `json:"options,omitempty"`
 }
 
 // GitTarget is a cluster or cluster group to deploy to.
@@ -151,6 +176,7 @@ type GitTarget struct {
 }
 
 type GitRepoStatus struct {
+	StatusBase `json:",inline"`
 	// ObservedGeneration is the current generation of the resource in the cluster. It is copied from k8s
 	// metadata.Generation. The value is incremented for all changes, except for changes to .metadata or .status.
 	// +optional
@@ -158,61 +184,20 @@ type GitRepoStatus struct {
 	// Update generation is the force update generation if spec.forceSyncGeneration is set
 	UpdateGeneration int64 `json:"updateGeneration,omitempty"`
 	// Commit is the Git commit hash from the last git job run.
-	// +nullable
+	// +optional
 	Commit string `json:"commit,omitempty"`
-	// ReadyClusters is the lowest number of clusters that are ready over
-	// all the bundles of this GitRepo.
+	// WebhookCommit is the latest Git commit hash received from a webhook
 	// +optional
-	ReadyClusters int `json:"readyClusters"`
-	// DesiredReadyClusters	is the number of clusters that should be ready for bundles of this GitRepo.
+	WebhookCommit string `json:"webhookCommit,omitempty"`
+	// PollingCommit is the latest Git commit hash received from polling
 	// +optional
-	DesiredReadyClusters int `json:"desiredReadyClusters"`
+	PollingCommit string `json:"pollingCommit,omitempty"`
 	// GitJobStatus is the status of the last Git job run, e.g. "Current" if there was no error.
 	GitJobStatus string `json:"gitJobStatus,omitempty"`
-	// Summary contains the number of bundle deployments in each state and a list of non-ready resources.
-	Summary BundleSummary `json:"summary,omitempty"`
-	// Display contains a human readable summary of the status.
-	Display GitRepoDisplay `json:"display,omitempty"`
-	// Conditions is a list of Wrangler conditions that describe the state
-	// of the GitRepo.
-	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
-	// Resources contains metadata about the resources of each bundle.
-	Resources []GitRepoResource `json:"resources,omitempty"`
-	// ResourceCounts contains the number of resources in each state over all bundles.
-	ResourceCounts GitRepoResourceCounts `json:"resourceCounts,omitempty"`
-	// ResourceErrors is a sorted list of errors from the resources.
-	ResourceErrors []string `json:"resourceErrors,omitempty"`
 	// LastSyncedImageScanTime is the time of the last image scan.
 	LastSyncedImageScanTime metav1.Time `json:"lastSyncedImageScanTime,omitempty"`
-}
-
-// GitRepoResourceCounts contains the number of resources in each state.
-type GitRepoResourceCounts struct {
-	// Ready is the number of ready resources.
-	// +optional
-	Ready int `json:"ready"`
-	// DesiredReady is the number of resources that should be ready.
-	// +optional
-	DesiredReady int `json:"desiredReady"`
-	// WaitApplied is the number of resources that are waiting to be applied.
-	// +optional
-	WaitApplied int `json:"waitApplied"`
-	// Modified is the number of resources that have been modified.
-	// +optional
-	Modified int `json:"modified"`
-	// Orphaned is the number of orphaned resources.
-	// +optional
-	Orphaned int `json:"orphaned"`
-	// Missing is the number of missing resources.
-	// +optional
-	Missing int `json:"missing"`
-	// Unknown is the number of resources in an unknown state.
-	// +optional
-	Unknown int `json:"unknown"`
-	// NotReady is the number of not ready resources. Resources are not
-	// ready if they do not match any other state.
-	// +optional
-	NotReady int `json:"notReady"`
+	// LastPollingTime is the last time the polling check was triggered
+	LastPollingTime metav1.Time `json:"lastPollingTriggered,omitempty"`
 }
 
 type GitRepoDisplay struct {
@@ -228,67 +213,17 @@ type GitRepoDisplay struct {
 	Error bool `json:"error,omitempty"`
 }
 
-// GitRepoResource contains metadata about the resources of a bundle.
-type GitRepoResource struct {
-	// APIVersion is the API version of the resource.
-	APIVersion string `json:"apiVersion,omitempty"`
-	// Kind is the k8s kind of the resource.
-	Kind string `json:"kind,omitempty"`
-	// Type is the type of the resource, e.g. "apiextensions.k8s.io.customresourcedefinition" or "configmap".
-	Type string `json:"type,omitempty"`
-	// ID is the name of the resource, e.g. "namespace1/my-config" or "backingimagemanagers.storage.io".
-	ID string `json:"id,omitempty"`
-	// Namespace of the resource.
-	Namespace string `json:"namespace,omitempty"`
-	// Name of the resource.
-	Name string `json:"name,omitempty"`
-	// IncompleteState is true if a bundle summary has 10 or more non-ready
-	// resources or a non-ready resource has more 10 or more non-ready or
-	// modified states.
-	IncompleteState bool `json:"incompleteState,omitempty"`
-	// State is the state of the resource, e.g. "Unknown", "WaitApplied", "ErrApplied" or "Ready".
-	State string `json:"state,omitempty"`
-	// Error is true if any Error in the PerClusterState is true.
-	Error bool `json:"error,omitempty"`
-	// Transitioning is true if any Transitioning in the PerClusterState is true.
-	Transitioning bool `json:"transitioning,omitempty"`
-	// Message is the first message from the PerClusterStates.
-	Message string `json:"message,omitempty"`
-	// PerClusterState is a list of states for each cluster. Derived from the summaries non-ready resources.
-	PerClusterState []ResourcePerClusterState `json:"perClusterState,omitempty"`
-}
-
-// ResourcePerClusterState is generated for each non-ready resource of the bundles.
-type ResourcePerClusterState struct {
-	// State is the state of the resource.
-	State string `json:"state,omitempty"`
-	// Error is true if the resource is in an error state, copied from the bundle's summary for non-ready resources.
-	Error bool `json:"error,omitempty"`
-	// Transitioning is true if the resource is in a transitioning state,
-	// copied from the bundle's summary for non-ready resources.
-	Transitioning bool `json:"transitioning,omitempty"`
-	// Message combines the messages from the bundle's summary. Messages are joined with the delimiter ';'.
-	Message string `json:"message,omitempty"`
-	// Patch for modified resources.
-	Patch *GenericMap `json:"patch,omitempty"`
-	// ClusterID is the id of the cluster.
-	ClusterID string `json:"clusterId,omitempty"`
-}
-
 // CommitSpec specifies how to commit changes to the git repository
 type CommitSpec struct {
 	// AuthorName gives the name to provide when making a commit
 	// +optional
-	// +nullable
 	AuthorName string `json:"authorName"`
 	// AuthorEmail gives the email to provide when making a commit
 	// +optional
-	// +nullable
 	AuthorEmail string `json:"authorEmail"`
 	// MessageTemplate provides a template for the commit message,
 	// into which will be interpolated the details of the change made.
 	// +optional
-	// +nullable
 	MessageTemplate string `json:"messageTemplate,omitempty"`
 }
 
