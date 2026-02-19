@@ -20,7 +20,7 @@ import (
 	"errors"
 	"strings"
 
-	values "github.com/rancher/wrangler/v2/pkg/data"
+	values "github.com/rancher/wrangler/v3/pkg/data"
 )
 
 var errValueNotFound = errors.New("value not found")
