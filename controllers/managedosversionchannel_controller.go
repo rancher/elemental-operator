@@ -79,7 +79,7 @@ func (r *ManagedOSVersionChannelReconciler) SetupWithManager(mgr ctrl.Manager) e
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
-			RateLimiter: workqueue.NewItemExponentialFailureRateLimiter(baseRateTime, maxDelayTime),
+			RateLimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](baseRateTime, maxDelayTime),
 		}).
 		For(&elementalv1.ManagedOSVersionChannel{}).
 		Owns(&corev1.Pod{}).
