@@ -318,6 +318,11 @@ type GKENodeConfig struct {
 	// Taints are the taints applied to the node.
 	// +optional
 	Taints []GKENodeTaintConfig `json:"taints,omitempty"`
+
+	// ServiceAccount is the email address of the service account that is assigned to each node in the node pool.
+	// If not specified, the default service account is used.
+	// +optional
+	ServiceAccount string `json:"serviceAccount,omitempty"`
 }
 
 type GKENodeTaintConfig struct {

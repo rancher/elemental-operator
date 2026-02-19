@@ -1,13 +1,13 @@
 package v1alpha1
 
 import (
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
-	SchemeBuilder.Register(&ImageScan{}, &ImageScanList{})
+	InternalSchemeBuilder.Register(&ImageScan{}, &ImageScanList{})
 }
 
 // +genclient
