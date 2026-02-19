@@ -1,13 +1,13 @@
 package v1alpha1
 
 import (
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
-	SchemeBuilder.Register(&Cluster{}, &ClusterList{})
+	InternalSchemeBuilder.Register(&Cluster{}, &ClusterList{})
 }
 
 const ClusterResourceNamePlural = "clusters"
@@ -16,6 +16,9 @@ var (
 	// ClusterConditionReady indicates that all bundles in this cluster
 	// have been deployed and all resources are ready.
 	ClusterConditionReady = "Ready"
+	// ClusterConditionProcessed indicates that the status fields have been
+	// processed.
+	ClusterConditionProcessed = "Processed"
 	// ClusterNamespaceAnnotation used on a cluster namespace to refer to
 	// the cluster registration namespace, which contains the cluster
 	// resource.
@@ -39,6 +42,9 @@ var (
 	// ClusterLabel is used on a bundledeployment to refer to the targeted
 	// cluster
 	ClusterLabel = "fleet.cattle.io/cluster"
+
+	// ClusterManagementLabel can be used to specify a custom cluster manager
+	ClusterManagementLabel = "fleet.cattle.io/cluster-management"
 )
 
 // +genclient
@@ -46,14 +52,12 @@ var (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Bundles-Ready",type=string,JSONPath=`.status.display.readyBundles`
-// +kubebuilder:printcolumn:name="Nodes-Ready",type=string,JSONPath=`.status.display.readyNodes`
-// +kubebuilder:printcolumn:name="Sample-Node",type=string,JSONPath=`.status.display.sampleNode`
 // +kubebuilder:printcolumn:name="Last-Seen",type=string,JSONPath=`.status.agent.lastSeen`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].message`
 
 // Cluster corresponds to a Kubernetes cluster. Fleet deploys bundles to targeted clusters.
 // Clusters to which Fleet deploys manifests are referred to as downstream
-// clusters. In the single cluster use case, the Fleet manager Kubernetes
+// clusters. In the single cluster use case, the Fleet Kubernetes
 // cluster is both the manager and downstream cluster at the same time.
 type Cluster struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -70,6 +74,21 @@ type ClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Cluster `json:"items"`
+}
+
+type AgentSchedulingCustomization struct {
+	PriorityClass       *PriorityClassSpec       `json:"priorityClass,omitempty"`
+	PodDisruptionBudget *PodDisruptionBudgetSpec `json:"podDisruptionBudget,omitempty"`
+}
+
+type PriorityClassSpec struct {
+	Value            int                      `json:"value,omitempty"`
+	PreemptionPolicy *corev1.PreemptionPolicy `json:"preemptionPolicy,omitempty"`
+}
+
+type PodDisruptionBudgetSpec struct {
+	MinAvailable   string `json:"minAvailable,omitempty"`
+	MaxUnavailable string `json:"maxUnavailable,omitempty"`
 }
 
 type ClusterSpec struct {
@@ -96,6 +115,7 @@ type ClusterSpec struct {
 	RedeployAgentGeneration int64 `json:"redeployAgentGeneration,omitempty"`
 
 	// AgentEnvVars are extra environment variables to be added to the agent deployment.
+	// +nullable
 	AgentEnvVars []corev1.EnvVar `json:"agentEnvVars,omitempty"`
 
 	// AgentNamespace defaults to the system namespace, e.g. cattle-fleet-system.
@@ -107,9 +127,12 @@ type ClusterSpec struct {
 	PrivateRepoURL string `json:"privateRepoURL,omitempty"`
 
 	// TemplateValues defines a cluster specific mapping of values to be sent to fleet.yaml values templating.
+	// +nullable
+	// +kubebuilder:validation:XPreserveUnknownFields
 	TemplateValues *GenericMap `json:"templateValues,omitempty"`
 
 	// AgentTolerations defines an extra set of Tolerations to be added to the Agent deployment.
+	// +nullable
 	AgentTolerations []corev1.Toleration `json:"agentTolerations,omitempty"`
 
 	// AgentAffinity overrides the default affinity for the cluster's agent
@@ -120,6 +143,14 @@ type ClusterSpec struct {
 	// +nullable
 	// AgentResources sets the resources for the cluster's agent deployment.
 	AgentResources *corev1.ResourceRequirements `json:"agentResources,omitempty"`
+
+	// +nullable
+	// +optional
+	// HostNetwork sets the agent Deployment to use hostNetwork: true setting.
+	// Allows for provisioning of network related bundles (CNI configuration).
+	HostNetwork *bool `json:"hostNetwork,omitempty"`
+
+	AgentSchedulingCustomization *AgentSchedulingCustomization `json:"agentSchedulingCustomization,omitempty"`
 }
 
 type ClusterStatus struct {
@@ -130,18 +161,28 @@ type ClusterStatus struct {
 	// "cluster-fleet-local-cluster-294db1acfa77-d9ccf852678f"
 	Namespace string `json:"namespace,omitempty"`
 
-	// Summary is a summary of the bundledeployments. The resource counts
-	// are copied from the gitrepo resource.
+	// Summary is a summary of the bundledeployments.
 	Summary BundleSummary `json:"summary,omitempty"`
-	// ResourceCounts is an aggregate over the GitRepoResourceCounts.
-	ResourceCounts GitRepoResourceCounts `json:"resourceCounts,omitempty"`
+	// ResourceCounts is an aggregate over the ResourceCounts.
+	ResourceCounts ResourceCounts `json:"resourceCounts,omitempty"`
+
 	// ReadyGitRepos is the number of gitrepos for this cluster that are ready.
 	// +optional
 	ReadyGitRepos int `json:"readyGitRepos"`
+
 	// DesiredReadyGitRepos is the number of gitrepos for this cluster that
 	// are desired to be ready.
 	// +optional
 	DesiredReadyGitRepos int `json:"desiredReadyGitRepos"`
+
+	// ReadyHelmOps is the number of helmop resources for this cluster that are ready.
+	// +optional
+	ReadyHelmOps int `json:"readyHelmOps"`
+
+	// DesiredReadyHelmOps is the number of helmop resources for this cluster that
+	// are desired to be ready.
+	// +optional
+	DesiredReadyHelmOps int `json:"desiredReadyHelmOps"`
 
 	// AgentEnvVarsHash is a hash of the agent's env vars, used to detect changes.
 	// +nullable
@@ -149,6 +190,9 @@ type ClusterStatus struct {
 	// AgentPrivateRepoURL is the private repo URL for the agent that is currently used.
 	// +nullable
 	AgentPrivateRepoURL string `json:"agentPrivateRepoURL,omitempty"`
+	// AgentHostNetwork defines observed state of spec.hostNetwork setting that is currently used.
+	// +nullable
+	AgentHostNetwork bool `json:"agentHostNetwork,omitempty"`
 	// AgentDeployedGeneration is the generation of the agent that is currently deployed.
 	// +nullable
 	AgentDeployedGeneration *int64 `json:"agentDeployedGeneration,omitempty"`
@@ -189,10 +233,32 @@ type ClusterStatus struct {
 	// +nullable
 	APIServerCAHash string `json:"apiServerCAHash,omitempty"`
 
+	// AgentTLSMode supports two values: `system-store` and `strict`. If set to
+	// `system-store`, instructs the agent to trust CA bundles from the operating
+	// system's store. If set to `strict`, then the agent shall only connect to a
+	// server which uses the exact CA configured when creating/updating the agent.
+	// +nullable
+	AgentTLSMode string `json:"agentTLSMode,omitempty"`
+
 	// Display contains the number of ready bundles, nodes and a summary state.
 	Display ClusterDisplay `json:"display,omitempty"`
 	// AgentStatus contains information about the agent.
 	Agent AgentStatus `json:"agent,omitempty"`
+
+	// GarbageCollectionInterval determines how often agents clean up obsolete Helm releases.
+	GarbageCollectionInterval *metav1.Duration `json:"garbageCollectionInterval,omitempty"`
+
+	AgentSchedulingCustomizationHash string `json:"agentSchedulingCustomizationHash,omitempty"`
+
+	// Scheduled specifies if the cluster has been added to any Schedule.
+	// When set to true ActiveSchedule is taken into account to check if the deployment
+	// can be deployed.
+	Scheduled bool `json:"scheduled,omitempty"`
+
+	// ActiveSchedule specifies if the cluster is in schedule, which means BundleDeployments can
+	// be updated and deployed. If ActiveSchedule is set to false and Scheduled is set to true
+	// BundleDeployments are not updated nor deployed.
+	ActiveSchedule bool `json:"activeSchedule,omitempty"`
 }
 
 type ClusterDisplay struct {
@@ -200,13 +266,8 @@ type ClusterDisplay struct {
 	// number of bundles that are ready vs. the number of bundles desired
 	// to be ready.
 	ReadyBundles string `json:"readyBundles,omitempty"`
-	// ReadyNodes is a string in the form "%d/%d", that describes the
-	// number of nodes that are ready vs. the number of expected nodes.
-	ReadyNodes string `json:"readyNodes,omitempty"`
-	// SampleNode is the name of one of the nodes that are ready. If no
-	// node is ready, it's the name of a node that is not ready.
-	SampleNode string `json:"sampleNode,omitempty"`
 	// State of the cluster, either one of the bundle states, or "WaitCheckIn".
+	// +nullable
 	State string `json:"state,omitempty"`
 }
 
@@ -220,18 +281,4 @@ type AgentStatus struct {
 	// +nullable
 	// +optional
 	Namespace string `json:"namespace"`
-	// NonReadyNodes is the number of nodes that are not ready.
-	// +optional
-	NonReadyNodes int `json:"nonReadyNodes"`
-	// ReadyNodes is the number of nodes that are ready.
-	// +optional
-	ReadyNodes int `json:"readyNodes"`
-	// NonReadyNode contains the names of non-ready nodes. The list is
-	// limited to at most 3 names.
-	// +optional
-	NonReadyNodeNames []string `json:"nonReadyNodeNames"`
-	// ReadyNodes contains the names of ready nodes. The list is limited to
-	// at most 3 names.
-	// +optional
-	ReadyNodeNames []string `json:"readyNodeNames"`
 }

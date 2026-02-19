@@ -196,6 +196,11 @@ func (in *EKSClusterConfigStatus) DeepCopyInto(out *EKSClusterConfigStatus) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.CompletedUpdateIDs != nil {
+		in, out := &in.CompletedUpdateIDs, &out.CompletedUpdateIDs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
@@ -265,12 +270,7 @@ func (in *NodeGroup) DeepCopyInto(out *NodeGroup) {
 	}
 	if in.DiskSize != nil {
 		in, out := &in.DiskSize, &out.DiskSize
-		*out = new(int64)
-		**out = **in
-	}
-	if in.InstanceType != nil {
-		in, out := &in.InstanceType, &out.InstanceType
-		*out = new(string)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.Labels != nil {
@@ -295,17 +295,17 @@ func (in *NodeGroup) DeepCopyInto(out *NodeGroup) {
 	}
 	if in.DesiredSize != nil {
 		in, out := &in.DesiredSize, &out.DesiredSize
-		*out = new(int64)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.MaxSize != nil {
 		in, out := &in.MaxSize, &out.MaxSize
-		*out = new(int64)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.MinSize != nil {
 		in, out := &in.MinSize, &out.MinSize
-		*out = new(int64)
+		*out = new(int32)
 		**out = **in
 	}
 	if in.Subnets != nil {
@@ -330,17 +330,9 @@ func (in *NodeGroup) DeepCopyInto(out *NodeGroup) {
 	}
 	if in.ResourceTags != nil {
 		in, out := &in.ResourceTags, &out.ResourceTags
-		*out = make(map[string]*string, len(*in))
+		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
-			var outVal *string
-			if val == nil {
-				(*out)[key] = nil
-			} else {
-				in, out := &val, &outVal
-				*out = new(string)
-				**out = **in
-			}
-			(*out)[key] = outVal
+			(*out)[key] = val
 		}
 	}
 	if in.UserData != nil {
@@ -365,14 +357,8 @@ func (in *NodeGroup) DeepCopyInto(out *NodeGroup) {
 	}
 	if in.SpotInstanceTypes != nil {
 		in, out := &in.SpotInstanceTypes, &out.SpotInstanceTypes
-		*out = make([]*string, len(*in))
-		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(string)
-				**out = **in
-			}
-		}
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	if in.NodeRole != nil {
 		in, out := &in.NodeRole, &out.NodeRole
