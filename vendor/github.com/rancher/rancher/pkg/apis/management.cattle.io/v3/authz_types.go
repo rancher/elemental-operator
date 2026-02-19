@@ -6,7 +6,6 @@ import (
 	"github.com/rancher/norman/condition"
 	"github.com/rancher/norman/types"
 	v1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -22,6 +21,8 @@ var (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:name="BACKINGNAMESPACE",type="string",JSONPath=".status.backingNamespace"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Project is a group of namespaces.
 // Projects are used to create a multi-tenant environment within a Kubernetes cluster by managing namespace operations,
@@ -47,15 +48,23 @@ func (p *Project) ObjClusterName() string {
 	return p.Spec.ObjClusterName()
 }
 
+// GetProjectBackingNamespace returns the namespace a project uses in the local cluster to store PRTBs and Project Scoped Secrets.
+func (p *Project) GetProjectBackingNamespace() string {
+	if p.Status.BackingNamespace != "" {
+		return p.Status.BackingNamespace
+	}
+	return p.Name
+}
+
 // ProjectStatus represents the most recently observed status of the project.
 type ProjectStatus struct {
 	// Conditions are a set of indicators about aspects of the project.
 	// +optional
 	Conditions []ProjectCondition `json:"conditions,omitempty"`
 
-	// PodSecurityPolicyTemplateName is the pod security policy template associated with the project.
+	// BackingNamespace is the name of the namespace that contains resources associated with the project.
 	// +optional
-	PodSecurityPolicyTemplateName string `json:"podSecurityPolicyTemplateId,omitempty"`
+	BackingNamespace string `json:"backingNamespace,omitempty"`
 }
 
 // ProjectCondition is the status of an aspect of the project.
@@ -126,6 +135,8 @@ func (p *ProjectSpec) ObjClusterName() string {
 // +genclient:nonNamespaced
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.summary"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // GlobalRole defines rules that can be applied to the local cluster and or every downstream cluster.
@@ -168,9 +179,23 @@ type GlobalRole struct {
 	// +optional
 	NamespacedRules map[string][]rbacv1.PolicyRule `json:"namespacedRules,omitempty"`
 
+	// InheritedFleetWorkspacePermissions are the permissions granted by this GlobalRole in every fleet workspace besides
+	// the local one.
+	// +optional
+	InheritedFleetWorkspacePermissions *FleetWorkspacePermission `json:"inheritedFleetWorkspacePermissions,omitempty"`
+
 	// Status is the most recently observed status of the GlobalRole.
 	// +optional
 	Status GlobalRoleStatus `json:"status,omitempty"`
+}
+
+// FleetWorkspacePermission defines permissions that will apply to all fleet workspaces except local.
+type FleetWorkspacePermission struct {
+	// ResourceRules rules granted in all backing namespaces for all fleet workspaces besides the local one.
+	ResourceRules []rbacv1.PolicyRule `json:"resourceRules,omitempty" yaml:"resourceRules,omitempty"`
+	// WorkspaceVerbs verbs used to grant permissions to the cluster-wide fleetworkspace resources. ResourceNames for
+	// this rule will contain all fleet workspace names except local.
+	WorkspaceVerbs []string `json:"workspaceVerbs,omitempty" yaml:"workspaceVerbs,omitempty"`
 }
 
 // GlobalRoleStatus represents the most recently observed status of the GlobalRole.
@@ -198,6 +223,9 @@ type GlobalRoleStatus struct {
 // +genclient:nonNamespaced
 // +kubebuilder:resource:scope=Cluster
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.summary"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 
 // GlobalRoleBinding binds a given subject user or group to a GlobalRole.
 type GlobalRoleBinding struct {
@@ -215,9 +243,54 @@ type GlobalRoleBinding struct {
 	// +optional
 	GroupPrincipalName string `json:"groupPrincipalName,omitempty" norman:"noupdate,type=reference[principal]"`
 
+	// UserPrincipalName is the name of the user principal subject to be bound. Immutable.
+	// +optional
+	UserPrincipalName string `json:"userPrincipalName,omitempty" norman:"noupdate,type=reference[principal]"`
+
 	// GlobalRoleName is the name of the Global Role that the subject will be bound to. Immutable.
 	// +kubebuilder:validation:Required
 	GlobalRoleName string `json:"globalRoleName" norman:"required,noupdate,type=reference[globalRole]"`
+
+	// Status is the most recently observed status of the GlobalRoleBinding. Note, that this is read from and written to by __two__ controllers.
+	// +optional
+	Status GlobalRoleBindingStatus `json:"status,omitempty"`
+}
+
+// GlobalRoleBindingStatus represents the most recently observed status of the GlobalRoleBinding
+type GlobalRoleBindingStatus struct {
+	// ObservedGenerationLocal is the most recent generation (metadata.generation in GRB)
+	// observed by the local controller operating on this status. Populated by the system.
+	// +optional
+	ObservedGenerationLocal int64 `json:"observedGenerationLocal,omitempty"`
+
+	// ObservedGenerationRemote is the most recent generation (metadata.generation in GRB)
+	// observed by the remote controller operating on this status. Populated by the system.
+	// +optional
+	ObservedGenerationRemote int64 `json:"observedGenerationRemote,omitempty"`
+
+	// LastUpdateTime is a k8s timestamp of the last time the status was updated by any of the two controllers operating on it.
+	// +optional
+	LastUpdateTime string `json:"lastUpdateTime,omitempty"`
+
+	// Summary represents the summary of all resources. One of "Complete" or "Error".
+	// +optional
+	Summary string `json:"summary,omitempty"`
+
+	// SummaryLocal represents the summary of the resources created in the local cluster. One of "Complete" or "Error".
+	// +optional
+	SummaryLocal string `json:"summaryLocal,omitempty"`
+
+	// SummaryRemote represents the summary of the resources created in the downstream cluster. One of "Complete" or "Error".
+	// +optional
+	SummaryRemote string `json:"summaryRemote,omitempty"`
+
+	// LocalConditions is a slice of Condition, indicating the status of backing RBAC objects created in the local cluster.
+	// +optional
+	LocalConditions []metav1.Condition `json:"localConditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+
+	// RemoteConditions is a slice of Condition, indicating the status of backing RBAC objects created in the downstream cluster.
+	// +optional
+	RemoteConditions []metav1.Condition `json:"remoteConditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 // +genclient
@@ -254,6 +327,12 @@ type RoleTemplate struct {
 	// +optional
 	External bool `json:"external"`
 
+	// ExternalRules hold the external PolicyRules that will be used for authorization.
+	// This field is required when External=true and no underlying ClusterRole exists in the local cluster.
+	// This field is just used when the feature flag 'external-rules' is on.
+	// +optional
+	ExternalRules []rbacv1.PolicyRule `json:"externalRules,omitempty"`
+
 	// Hidden if true informs the Rancher UI not to display this RoleTemplate.
 	// Default to false.
 	// +optional
@@ -287,36 +366,9 @@ type RoleTemplate struct {
 	// +optional
 	RoleTemplateNames []string `json:"roleTemplateNames,omitempty" norman:"type=array[reference[roleTemplate]]"`
 
-	// Administrative if false, and context is set to cluster this RoleTemplate will not grant access to "CatalogTemplates" and "CatalogTemplateVersions" for any project in the cluster.
-	// Default is false.
+	// Administrative field is deprecated and no longer used.
 	// +optional
 	Administrative bool `json:"administrative,omitempty"`
-}
-
-// +genclient
-// +kubebuilder:skipversion
-// +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type PodSecurityPolicyTemplate struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Description string                         `json:"description"`
-	Spec        policyv1.PodSecurityPolicySpec `json:"spec,omitempty"`
-}
-
-// +genclient
-// +kubebuilder:skipversion
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-type PodSecurityPolicyTemplateProjectBinding struct {
-	types.Namespaced
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	PodSecurityPolicyTemplateName string `json:"podSecurityPolicyTemplateId" norman:"required,type=reference[podSecurityPolicyTemplate]"`
-	TargetProjectName             string `json:"targetProjectId" norman:"required,type=reference[project]"`
 }
 
 // +genclient
@@ -368,6 +420,9 @@ func (p *ProjectRoleTemplateBinding) ObjClusterName() string {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="STATUS",type="string",JSONPath=".status.summary"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 
 // ClusterRoleTemplateBinding is the object representing membership of a subject in a cluster with permissions
 // specified by a given role template.
@@ -403,12 +458,49 @@ type ClusterRoleTemplateBinding struct {
 	// RoleTemplateName is the name of the role template that defines permissions to perform actions on resources in the cluster. Immutable.
 	// +kubebuilder:validation:Required
 	RoleTemplateName string `json:"roleTemplateName" norman:"required,noupdate,type=reference[roleTemplate]"`
+
+	// Status is the most recently observed status of the ClusterRoleTemplateBinding. BEWARE. This is read from and written to by __two__ controllers.
+	// +optional
+	Status ClusterRoleTemplateBindingStatus `json:"status,omitempty"`
+}
+
+// ClusterRoleTemplateBindingStatus represents the most recently observed status of the ClusterRoleTemplateBinding
+type ClusterRoleTemplateBindingStatus struct {
+	// ObservedGenerationLocal is the most recent generation (metadata.generation in CRTB)
+	// observed by the local controller operating on this status. Populated by the system.
+	// +optional
+	ObservedGenerationLocal int64 `json:"observedGenerationLocal,omitempty"`
+
+	// ObservedGenerationRemote is the most recent generation (metadata.generation in CRTB)
+	// observed by the remote controller operating on this status. Populated by the system.
+	// +optional
+	ObservedGenerationRemote int64 `json:"observedGenerationRemote,omitempty"`
+
+	// LastUpdateTime is a k8s timestamp of the last time the status was updated by any of the two controllers operating on it.
+	// +optional
+	LastUpdateTime string `json:"lastUpdateTime,omitempty"`
+
+	// Summary represents the summary of all resources. One of "Complete" or "Error".
+	// +optional
+	Summary string `json:"summary,omitempty"`
+
+	// SummaryLocal represents the summary of the resources created in the local cluster. One of "Complete" or "Error".
+	// +optional
+	SummaryLocal string `json:"summaryLocal,omitempty"`
+
+	// SummaryRemote represents the summary of the resources created in the downstream cluster. One of "Complete" or "Error".
+	// +optional
+	SummaryRemote string `json:"summaryRemote,omitempty"`
+
+	// LocalConditions is a slice of Condition, indicating the status of backing RBAC objects created in the local cluster.
+	// +optional
+	LocalConditions []metav1.Condition `json:"localConditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
+
+	// RemoteConditions is a slice of Condition, indicating the status of backing RBAC objects created in the downstream cluster.
+	// +optional
+	RemoteConditions []metav1.Condition `json:"remoteConditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
 func (c *ClusterRoleTemplateBinding) ObjClusterName() string {
 	return c.ClusterName
-}
-
-type SetPodSecurityPolicyTemplateInput struct {
-	PodSecurityPolicyTemplateName string `json:"podSecurityPolicyTemplateId" norman:"type=reference[podSecurityPolicyTemplate]"`
 }

@@ -78,6 +78,8 @@ type AKSClusterConfigSpec struct {
 	// NetworkService CIDR is the network service cidr.
 	NetworkServiceCIDR *string `json:"serviceCidr" norman:"pointer"`
 	// NetworkDockerBridgeCIDR is the network docker bridge cidr.
+	// Setting the dockerBridgeCidr field is no longer supported,
+	// see https://github.com/Azure/AKS/issues/3534
 	NetworkDockerBridgeCIDR *string `json:"dockerBridgeCidr" norman:"pointer"`
 	// NetworkPodCIDR is the network pod cidr.
 	NetworkPodCIDR *string `json:"podCidr" norman:"pointer"`
@@ -165,7 +167,7 @@ type AKSNodePool struct {
 	// +kubebuilder:validation:Minimum=0
 	OsDiskSizeGB *int32 `json:"osDiskSizeGB,omitempty"`
 	// OSDiskType is the type of the OS disk.
-	// +kubebuilder:validation:Enum=Standard_LRS;Premium_LRS;StandardSSD_LRS;UltraSSD_LRS
+	// +kubebuilder:validation:Enum=Standard_LRS;Premium_LRS;StandardSSD_LRS;UltraSSD_LRS;Ephemeral;Managed
 	OsDiskType string `json:"osDiskType,omitempty"`
 	// Mode is the mode of the node pool.
 	// +kubebuilder:validation:Enum=System;User
