@@ -24,7 +24,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20251125015639-f94ac947f75e
 	github.com/rancher/steve v0.8.0
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240308073002-4a643535e6ea
-	github.com/rancher/wrangler/v2 v2.1.4
+	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/rancher/yip v1.4.11
 	github.com/sanity-io/litter v1.5.5
 	github.com/spf13/cobra v1.9.1
@@ -107,7 +107,6 @@ require (
 	github.com/rancher/remotedialer v0.6.0-rc.1 // indirect
 	github.com/rancher/rke v1.8.0 // indirect
 	github.com/rancher/wrangler v1.1.1 // indirect
-	github.com/rancher/wrangler/v3 v3.3.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
