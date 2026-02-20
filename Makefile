@@ -48,12 +48,12 @@ GINKGO_VER := $(shell go list -m github.com/onsi/ginkgo/v2 | awk '{print $$2}')
 GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
 GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 
-SETUP_ENVTEST_VER := v0.0.0-20250520071515-71f7db556ca5
+SETUP_ENVTEST_VER := v0.0.0-20260305142021-f9589b9f2b9d
 SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
 # See: https://storage.googleapis.com/kubebuilder-tools
-ENVTEST_K8S_VERSION := 1.27.1
+ENVTEST_K8S_VERSION := 1.34.1
 
 KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
@@ -174,7 +174,7 @@ validate:
 
 .PHONY: unit-tests
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
-	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ABS_TOOLS_DIR) -p path)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
+	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ABS_TOOLS_DIR) -p path)" $(GINKGO) -vv -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
 
 .PHONY: airgap-script-test
 airgap-script-test:
