@@ -116,7 +116,9 @@ spec:
                   - address
                   - type
                   type: object
+                maxItems: 128
                 type: array
+                x-kubernetes-list-type: atomic
               bootstrapPlanChecksum:
                 description: BootstrapPlanChecksum represent bootstrap plan checksum.
                 type: string
