@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/utils/ptr"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -315,6 +315,17 @@ func (r *MachineInventoryReconciler) networkNeedsReconcile(mInventory elementalv
 	return false
 }
 
+func ConvertToIPPoolReference(ref *corev1.TypedLocalObjectReference) ipamv1.IPPoolReference {
+	if ref == nil {
+		return ipamv1.IPPoolReference{}
+	}
+	return ipamv1.IPPoolReference{
+		Name:     ref.Name,
+		Kind:     ref.Kind,
+		APIGroup: *ref.APIGroup,
+	}
+}
+
 func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context, mInventory *elementalv1.MachineInventory) (ctrl.Result, error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling Network Config")
@@ -338,7 +349,7 @@ func (r *MachineInventoryReconciler) reconcileNetworkConfig(ctx context.Context,
 				},
 			},
 			Spec: ipamv1.IPAddressClaimSpec{
-				PoolRef: *ipPoolRef,
+				PoolRef: ConvertToIPPoolReference(ipPoolRef),
 			},
 		}
 		if err := r.Create(ctx, ipClaim); apierrors.IsAlreadyExists(err) {
