@@ -134,11 +134,11 @@ var _ = Describe("newFleetBundleResources", func() {
 
 		Expect(bundleResources).To(HaveLen(5))
 
-		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-d5689b3c1cd3.yaml"))
-		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
-		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
-		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
-		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-24d63a562894.yaml"))
+		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-76e70a456f8d.yaml"))
+		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-1aac7f7a2652.yaml"))
+		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-8a5f5287871a.yaml"))
+		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-5a9dadd40061.yaml"))
+		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-33afae47ddbc.yaml"))
 	})
 
 	It("should create fleet bundle when managedOSVersion exists", func() {
@@ -166,11 +166,11 @@ var _ = Describe("newFleetBundleResources", func() {
 		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-d5689b3c1cd3.yaml"))
-		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-cc7ce4275b54.yaml"))
-		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-08929531f5c0.yaml"))
-		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-52e9d8e041f4.yaml"))
-		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-24d63a562894.yaml"))
+		Expect(bundleResources[0].Name).To(Equal("ClusterRole--os-upgrader-test-name-76e70a456f8d.yaml"))
+		Expect(bundleResources[1].Name).To(Equal("ClusterRoleBinding--os-upgrader-test-name-1aac7f7a2652.yaml"))
+		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-8a5f5287871a.yaml"))
+		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-5a9dadd40061.yaml"))
+		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-33afae47ddbc.yaml"))
 	})
 })
 
