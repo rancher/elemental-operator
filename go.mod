@@ -25,7 +25,7 @@ require (
 	github.com/rancher/steve v0.8.0
 	github.com/rancher/system-upgrade-controller/pkg/apis v0.0.0-20240308073002-4a643535e6ea
 	github.com/rancher/wrangler/v3 v3.3.1
-	github.com/rancher/yip v1.4.11
+	github.com/rancher/yip v1.9.6
 	github.com/sanity-io/litter v1.5.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.0
@@ -82,8 +82,8 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/itchyny/gojq v0.12.14 // indirect
-	github.com/itchyny/timefmt-go v0.1.5 // indirect
+	github.com/itchyny/gojq v0.12.16 // indirect
+	github.com/itchyny/timefmt-go v0.1.6 // indirect
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -108,7 +108,7 @@ require (
 	github.com/rancher/rke v1.8.0 // indirect
 	github.com/rancher/wrangler v1.1.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/sirupsen/logrus v1.9.4-0.20230606125235-dd1b4c2e81af // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
