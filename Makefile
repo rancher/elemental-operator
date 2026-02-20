@@ -19,7 +19,7 @@ endif
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
 CHART_CRDS?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-crds-$(CHART_VERSION).tgz" -print)
-KUBE_VERSION?="v1.27.10"
+KUBE_VERSION?="v1.34.1"
 CLUSTER_NAME?="operator-e2e"
 COMMITDATE?=$(shell git log -n1 --format="%as")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
@@ -51,7 +51,7 @@ SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
 # See: https://storage.googleapis.com/kubebuilder-tools
-ENVTEST_K8S_VERSION := 1.27.1
+ENVTEST_K8S_VERSION := 1.34.1
 
 KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
@@ -157,7 +157,7 @@ validate:
 
 .PHONY: unit-tests
 unit-tests: $(SETUP_ENVTEST) $(GINKGO)
-	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ABS_TOOLS_DIR) -p path)" $(GINKGO) -v -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
+	KUBEBUILDER_ASSETS="$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ABS_TOOLS_DIR) -p path)" $(GINKGO) -vv -r --trace --race --covermode=atomic --coverprofile=coverage.out --coverpkg=github.com/rancher/elemental-operator/... ./pkg/... ./controllers/... ./cmd/...
 
 .PHONY: airgap-script-test
 airgap-script-test:
