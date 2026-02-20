@@ -84,6 +84,13 @@ func Compile(q *Query, options ...CompilerOption) (*Code, error) {
 	setscope := c.lazy(func() *code {
 		return &code{op: opscope, v: [3]int{scope.id, scope.variablecnt, 0}}
 	})
+	for _, name := range c.variables {
+		if !newLexer(name).validVarName() {
+			return nil, &variableNameError{name}
+		}
+		c.appendCodeInfo(name)
+		c.append(&code{op: opstore, v: c.pushVariable(name)})
+	}
 	if c.moduleLoader != nil {
 		if moduleLoader, ok := c.moduleLoader.(interface {
 			LoadInitModules() ([]*Query, error)
@@ -113,13 +120,6 @@ func Compile(q *Query, options ...CompilerOption) (*Code, error) {
 }
 
 func (c *compiler) compile(q *Query) error {
-	for _, name := range c.variables {
-		if !newLexer(name).validVarName() {
-			return &variableNameError{name}
-		}
-		c.appendCodeInfo(name)
-		c.append(&code{op: opstore, v: c.pushVariable(name)})
-	}
 	for _, i := range q.Imports {
 		if err := c.compileImport(i); err != nil {
 			return err
@@ -398,6 +398,8 @@ func (c *compiler) compileQuery(e *Query) error {
 		return c.compileTerm(e.Term)
 	}
 	switch e.Op {
+	case Operator(0):
+		return errors.New(`missing query (try ".")`)
 	case OpPipe:
 		if err := c.compileQuery(e.Left); err != nil {
 			return err
@@ -538,6 +540,7 @@ func (c *compiler) compileQueryUpdate(l, r *Query, op Operator) error {
 }
 
 func (c *compiler) compileBind(e *Term, b *Bind) error {
+	defer c.newScopeDepth()()
 	c.append(&code{op: opdup})
 	c.append(&code{op: opexpbegin})
 	if err := c.compileTerm(e); err != nil {
@@ -734,7 +737,7 @@ func (c *compiler) compileReduce(e *Reduce) error {
 	}
 	f()
 	c.append(&code{op: opstore, v: v})
-	if err := c.compileTerm(e.Term); err != nil {
+	if err := c.compileQuery(e.Query); err != nil {
 		return err
 	}
 	if _, err := c.compilePattern(nil, e.Pattern); err != nil {
@@ -765,7 +768,7 @@ func (c *compiler) compileForeach(e *Foreach) error {
 	}
 	f()
 	c.append(&code{op: opstore, v: v})
-	if err := c.compileTerm(e.Term); err != nil {
+	if err := c.compileQuery(e.Query); err != nil {
 		return err
 	}
 	if _, err := c.compilePattern(nil, e.Pattern); err != nil {
@@ -990,6 +993,22 @@ func (c *compiler) compileFunc(e *Func) error {
 				true,
 				-1,
 			)
+		case "debug":
+			setfork := c.lazy(func() *code {
+				return &code{op: opfork, v: len(c.codes)}
+			})
+			if err := c.compileQuery(e.Args[0]); err != nil {
+				return err
+			}
+			if err := c.compileFunc(&Func{Name: "debug"}); err != nil {
+				if _, ok := err.(*funcNotFoundError); ok {
+					err = &funcNotFoundError{e}
+				}
+				return err
+			}
+			c.append(&code{op: opbacktrack})
+			setfork()
+			return nil
 		default:
 			return c.compileCall(e.Name, e.Args)
 		}
@@ -1328,10 +1347,8 @@ func (c *compiler) compileObjectKeyVal(v [2]int, kv *ObjectKeyVal) error {
 	}
 	if kv.Val != nil {
 		c.append(&code{op: opload, v: v})
-		for _, e := range kv.Val.Queries {
-			if err := c.compileQuery(e); err != nil {
-				return err
-			}
+		if err := c.compileQuery(kv.Val); err != nil {
+			return err
 		}
 	}
 	return nil
