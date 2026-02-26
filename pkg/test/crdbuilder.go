@@ -29,7 +29,7 @@ import (
 
 var (
 	managementGroupVersion = schema.GroupVersion{Group: "management.cattle.io", Version: "v3"}
-	clusterGroupVersion    = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta1"}
+	clusterGroupVersion    = schema.GroupVersion{Group: "cluster.x-k8s.io", Version: "v1beta2"}
 	fleetGroupVersion      = schema.GroupVersion{Group: "fleet.cattle.io", Version: "v1alpha1"}
 
 	// fakeSettingKind is the Kind for the Setting object.
