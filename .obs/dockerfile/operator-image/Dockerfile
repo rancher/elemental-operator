@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # Define the names/tags of the container
-#!BuildTag: rancher/elemental-operator:latest
 #!BuildTag: rancher/elemental-operator:%VERSION%
 #!BuildTag: rancher/elemental-operator:%VERSION%-%RELEASE%
 #!UseOBSRepositories
@@ -20,7 +19,7 @@ COPY --from=BASE /installroot /
 RUN /usr/sbin/update-ca-certificates
 
 ARG BUILD_REPO=%%IMG_REPO%%
-ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-operator:latest
+ARG IMAGE_REPO=$BUILD_REPO/rancher/elemental-operator:%VERSION%-%RELEASE%
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.suse.elemental
