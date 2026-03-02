@@ -264,10 +264,10 @@ generate-go: generate-mocks $(CONTROLLER_GEN) ## Runs Go related generate target
 		paths=./api/...
 
 build-crds: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm/templates/crds.yaml
+	$(KUSTOMIZE) build config/crd > .obs/chartfile/elemental-operator-crds-helm1.9/templates/crds.yaml
 
 build-rbac: $(KUSTOMIZE)
-	$(KUSTOMIZE) build config/rbac > .obs/chartfile/elemental-operator-helm/templates/cluster_role.yaml
+	$(KUSTOMIZE) build config/rbac > .obs/chartfile/elemental-operator-helm1.9/templates/cluster_role.yaml
 
 build-manifests: $(KUSTOMIZE) generate
 	$(MAKE) build-crds

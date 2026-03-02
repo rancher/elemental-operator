@@ -11,7 +11,7 @@ FROM bci/bci-base:${SL_VERSION} as BASE
 
 RUN mkdir /installroot
 RUN zypper --installroot /installroot in -y --no-recommends \
-      elemental-operator ca-certificates ca-certificates-mozilla
+      elemental-operator1.9 ca-certificates ca-certificates-mozilla
 
 FROM scratch as OPERATOR
 
