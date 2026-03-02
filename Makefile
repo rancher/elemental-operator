@@ -47,7 +47,7 @@ GINKGO_VER := $(shell go list -m github.com/onsi/ginkgo/v2 | awk '{print $$2}')
 GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
 GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 
-SETUP_ENVTEST_VER := v0.0.0-20240213082838-4282ca1767dc
+SETUP_ENVTEST_VER := release-0.22
 SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
