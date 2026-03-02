@@ -18,7 +18,9 @@
 %define commit _replaceme_
 %define c_date _replaceme_
 
-Name:           elemental-operator
+%define minorv 1.9
+
+Name:           elemental-operator%{minorv}
 Version:        0
 Release:        0
 Summary:        Kubernetes operator to support OS management
@@ -26,6 +28,10 @@ License:        Apache-2.0
 Group:          System/Management
 URL:            https://github.com/rancher/%{name}
 Source:         %{name}.tar.xz
+
+# ensure it is not coinstallable with any previous elemental-operator package
+Provides: elemental-operator
+Conflicts: elemental-operator < %{minorv}
 
 # go-tpm-tools aren't _that_ portable :-(
 ExclusiveArch:  x86_64 aarch64
@@ -62,16 +68,16 @@ The Elemental operator is responsible for managing the OS
 versions and maintaining a machine inventory to assist with edge or
 baremetal installations.
 
-%package -n elemental-httpfy
+%package -n elemental-httpfy%{minorv}
 Summary: Simple http server
 
-%description -n elemental-httpfy
+%description -n elemental-httpfy%{minorv}
 httpfy starts a simple http server, serving files from the current dir.
 
-%package -n elemental-seedimage-hooks
+%package -n elemental-seedimage-hooks%{minorv}
 Summary: Hooks used in SeedImage builder
 
-%description -n elemental-seedimage-hooks
+%description -n elemental-seedimage-hooks%{minorv}
 Hooks used in SeedImage builder to copy firmware when building disk-images.
 
 %prep
@@ -126,14 +132,14 @@ mkdir -p %{buildroot}%{oemdir}
 %files
 %defattr(-,root,root,-)
 %license LICENSE
-%{_sbindir}/%{name}
+%{_sbindir}/elemental-operator
 
-%files -n elemental-httpfy
+%files -n elemental-httpfy%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %{_sbindir}/elemental-httpfy
 
-%files -n elemental-seedimage-hooks
+%files -n elemental-seedimage-hooks%{minorv}
 %defattr(-,root,root,-)
 %license LICENSE
 %dir %{systemdir}
