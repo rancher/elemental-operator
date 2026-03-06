@@ -2,19 +2,20 @@ substitutions:
   '_BASE_IMAGE': ''
   '_OUTPUT_IMAGE_NAME': ''
   '_OUTPUT_IMAGE_FAMILY': ''
-  '_BASE_IMAGE_PROJECT': 'cos-cloud'
+  '_BASE_IMAGE_PROJECT': ''
   '_IMAGE_ENV': ''
-  '_BUCKET_NAME': '${PROJECT_ID}_cloudbuild'
+  '_BUCKET_NAME': ''
   '_CS_LICENSE': ''
+  '_SHORT_SHA': ''
 
 steps:
-  - name: golang:1.20
+  - name: golang:1.23
     entrypoint: /bin/bash
     args:
       - -c
       - |
         cd launcher/launcher
-        CGO_ENABLED=0 go build -o ../image/launcher
+        CGO_ENABLED=0 go build -o ../image/launcher -ldflags="-X 'main.BuildCommit=${_SHORT_SHA}'"
   - name: 'gcr.io/cloud-builders/gcloud'
     id: DownloadExpBinary
     entrypoint: 'gcloud'
@@ -53,7 +54,4 @@ steps:
 timeout: '3000s'
 
 options:
-  logging: CLOUD_LOGGING_ONLY
   dynamic_substitutions: true
-  pool:
-    name: 'projects/confidential-space-images-dev/locations/us-west1/workerPools/cs-image-build-vpc'
