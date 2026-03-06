@@ -28,13 +28,17 @@ jobs:
   build:
     strategy:
       matrix:
-        go-version: [1.20.x]
+        go-version: [1.21.x]
         # TODO: Get this working on windows-latest
-        os: [macos-latest, ubuntu-latest]
+        os: [ubuntu-latest]
         architecture: [x32, x64]
-        exclude:
+        include:
           - os: macos-latest
-            architecture: x32
+            architecture: arm64
+            go-version: 1.21.x
+          - os: macos-14-large
+            architecture: x64
+            go-version: 1.21.x
     name: Generate/Build/Test (${{ matrix.os }}, ${{ matrix.architecture }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
     steps:
@@ -52,7 +56,7 @@ jobs:
         run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.0
       - name: Check Protobuf Generation
         run: |
-          go generate ./... ./cmd/... ./launcher/...
+          go generate ./... ./cmd/... ./launcher/... ./verifier/...
           git diff -G'^[^/]' --exit-code
       - name: Install Linux 64-bit packages
         run: sudo apt-get -y install libssl-dev
@@ -61,24 +65,32 @@ jobs:
         run: sudo dpkg --add-architecture i386; sudo apt-get update; sudo apt-get -y install libssl-dev:i386 libgcc-s1:i386 gcc-multilib
         if: runner.os == 'Linux' && matrix.architecture == 'x32'
       - name: Install Mac packages
-        run: brew install openssl
+        run: |
+          brew install openssl
         if: runner.os == 'macOS'
       - name: Install Windows packages
         run: choco install openssl
         if: runner.os == 'Windows'
-      - name: Build all modules
-        run: go build -v ./... ./cmd/... ./launcher/...
+      - name: Build all modules except launcher
+        run: go build -v ./... ./cmd/... ./verifier/...
+      - name: Build launcher module
+        run: go build -v ./launcher/...
+        if: runner.os == 'Linux'
       - name: Run specific tests under root permission
         run: |
           GO_EXECUTABLE_PATH=$(which go)
           sudo $GO_EXECUTABLE_PATH test -v -run "TestFetchImageSignaturesDockerPublic" ./launcher
-      - name: Test all modules
-        run: go test -v ./... ./cmd/... ./launcher/...
+        if: runner.os == 'Linux'
+      - name: Run all tests in launcher to capture potential data race
+        run: go test -v -race ./launcher/...
+        if: (runner.os == 'Linux') && matrix.architecture == 'x64'
+      - name: Test all modules except launcher
+        run: go test -v ./... ./cmd/... ./verifier/... -skip='TestCacheConcurrentSetGet|TestHwAttestationPass|TestHardwareAttestationPass'
 
   lint:
     strategy:
       matrix:
-        go-version: [1.20.x]
+        go-version: [1.21.x]
         os: [ubuntu-latest]
         dir: ["./", "./cmd", "./launcher"]
     name: Lint ${{ matrix.dir }} (${{ matrix.os }}, Go ${{ matrix.go-version }})
@@ -109,7 +121,7 @@ jobs:
   lintc:
     strategy:
       matrix:
-        go-version: [1.20.x]
+        go-version: [1.21.x]
         os: [ubuntu-latest]
     name: Lint CGO (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}

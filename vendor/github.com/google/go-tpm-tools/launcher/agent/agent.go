@@ -8,25 +8,38 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto"
+	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"os"
 	"sync"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/google/go-configfs-tsm/configfs/configfsi"
+
+	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
+	tg "github.com/google/go-tdx-guest/client"
+	tlabi "github.com/google/go-tdx-guest/client/linuxabi"
 
 	"github.com/google/go-tpm-tools/cel"
 	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/launcher/internal/oci"
+	"github.com/google/go-tpm-tools/internal"
+	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
 	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/launcher/verifier"
 	pb "github.com/google/go-tpm-tools/proto/attest"
+	"github.com/google/go-tpm-tools/verifier"
+	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/google/go-tpm-tools/verifier/oci"
+	"github.com/google/go-tpm-tools/verifier/util"
 )
 
-var defaultCELHashAlgo = []crypto.Hash{crypto.SHA256, crypto.SHA1}
+const (
+	audienceSTS = "https://sts.googleapis.com"
+)
 
-type tpmKeyFetcher func(rw io.ReadWriter) (*client.Key, error)
 type principalIDTokenFetcher func(audience string) ([][]byte, error)
 
 // AttestationAgent is an agent that interacts with GCE's Attestation Service
@@ -34,18 +47,38 @@ type principalIDTokenFetcher func(audience string) ([][]byte, error)
 // struct to make testing easier.
 type AttestationAgent interface {
 	MeasureEvent(cel.Content) error
-	Attest(context.Context) ([]byte, error)
+	Attest(context.Context, AttestAgentOpts) ([]byte, error)
+	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
+	Refresh(context.Context) error
+	Close() error
+}
+
+type attestRoot interface {
+	// Extend measures the cel content into a measurement register and appends to the CEL.
+	Extend(cel.Content) error
+	// GetCEL fetches the CEL with events corresponding to the sequence of Extended measurements
+	// to this attestation root
+	GetCEL() *cel.CEL
+	// Attest fetches a technology-specific quote from the root of trust.
+	Attest(nonce []byte) (any, error)
+}
+
+// AttestAgentOpts contains user generated options when calling the
+// VerifyAttestation API
+type AttestAgentOpts struct {
+	TokenOptions *models.TokenOptions
 }
 
 type agent struct {
-	tpm              io.ReadWriteCloser
-	akFetcher        tpmKeyFetcher
+	measuredRots     []attestRoot
+	avRot            attestRoot
+	fetchedAK        *client.Key
 	client           verifier.Client
 	principalFetcher principalIDTokenFetcher
 	sigsFetcher      signaturediscovery.Fetcher
-	cosCel           cel.CEL
 	launchSpec       spec.LaunchSpec
-	logger           *log.Logger
+	logger           logging.Logger
+	sigsCache        *sigsCache
 }
 
 // CreateAttestationAgent returns an agent capable of performing remote
@@ -55,31 +88,110 @@ type agent struct {
 // - principalFetcher is a func to fetch GCE principal tokens for a given audience.
 // - signaturesFetcher is a func to fetch container image signatures associated with the running workload.
 // - logger will log any partial errors returned by VerifyAttestation.
-func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher tpmKeyFetcher, verifierClient verifier.Client, principalFetcher principalIDTokenFetcher, sigsFetcher signaturediscovery.Fetcher, launchSpec spec.LaunchSpec, logger *log.Logger) AttestationAgent {
-	return &agent{
-		tpm:              tpm,
+func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher, verifierClient verifier.Client, principalFetcher principalIDTokenFetcher, sigsFetcher signaturediscovery.Fetcher, launchSpec spec.LaunchSpec, logger logging.Logger) (AttestationAgent, error) {
+	// Fetched the AK and save it, so the agent doesn't need to create a new key everytime
+	ak, err := akFetcher(tpm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create an Attestation Agent: %w", err)
+	}
+
+	attestAgent := &agent{
 		client:           verifierClient,
-		akFetcher:        akFetcher,
+		fetchedAK:        ak,
 		principalFetcher: principalFetcher,
 		sigsFetcher:      sigsFetcher,
 		launchSpec:       launchSpec,
 		logger:           logger,
+		sigsCache:        &sigsCache{},
 	}
+
+	// Add TPM
+	logger.Info("Adding TPM PCRs for measurement.")
+	var tpmAR = &tpmAttestRoot{
+		fetchedAK: ak,
+		tpm:       tpm,
+	}
+	attestAgent.measuredRots = append(attestAgent.measuredRots, tpmAR)
+
+	// check if is a TDX machine
+	qp, err := tg.GetQuoteProvider()
+	if err != nil {
+		return nil, err
+	}
+	// Use qp.IsSupported to check the TDX RTMR interface is enabled
+	if qp.IsSupported() == nil {
+		logger.Info("Adding TDX RTMRs for measurement.")
+		// try to create tsm client for tdx rtmr
+		tsm, err := linuxtsm.MakeClient()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TSM for TDX: %v", err)
+		}
+		var tdxAR = &tdxAttestRoot{
+			qp:        qp,
+			tsmClient: tsm,
+		}
+		attestAgent.measuredRots = append(attestAgent.measuredRots, tdxAR)
+
+		logger.Info("Using TDX RTMR as attestation root.")
+		attestAgent.avRot = tdxAR
+	} else {
+		logger.Info("Using TPM PCR as attestation root.")
+		attestAgent.avRot = tpmAR
+	}
+
+	return attestAgent, nil
+}
+
+// Close cleans up the agent
+func (a *agent) Close() error {
+	a.fetchedAK.Close()
+	return nil
 }
 
 // MeasureEvent takes in a cel.Content and appends it to the CEL eventlog
 // under the attestation agent.
+// MeasureEvent measures to all Attest Roots.
 func (a *agent) MeasureEvent(event cel.Content) error {
-	return a.cosCel.AppendEvent(a.tpm, cel.CosEventPCR, defaultCELHashAlgo, event)
+	for _, attestRoot := range a.measuredRots {
+		if err := attestRoot.Extend(event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Attest fetches the nonce and connection ID from the Attestation Service,
 // creates an attestation message, and returns the resultant
 // principalIDTokens and Metadata Server-generated ID tokens for the instance.
-func (a *agent) Attest(ctx context.Context) ([]byte, error) {
-	challenge, err := a.client.CreateChallenge(ctx)
+// When possible, Attest uses the technology-specific attestation root-of-trust
+// (TDX RTMR), otherwise falls back to the vTPM.
+func (a *agent) Attest(ctx context.Context, opts AttestAgentOpts) ([]byte, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("attest agent does not have initialized verifier client")
+	}
+
+	return a.AttestWithClient(ctx, opts, a.client)
+}
+
+// AttestWithClient fetches the nonce and connection ID from the Attestation Service via the provided client,
+// creates an attestation message, and returns the resultant
+// principalIDTokens and Metadata Server-generated ID tokens for the instance.
+// When possible, Attest uses the technology-specific attestation root-of-trust
+// (TDX RTMR), otherwise falls back to the vTPM.
+func (a *agent) AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error) {
+	challenge, err := client.CreateChallenge(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	tokenOpts := opts.TokenOptions
+	if tokenOpts == nil {
+		tokenOpts = &models.TokenOptions{TokenType: "OIDC"}
+	}
+
+	// The customer is responsible for providing an audience if they provided nonces.
+	if tokenOpts.Audience == "" && len(tokenOpts.Nonces) == 0 {
+		tokenOpts.Audience = audienceSTS
 	}
 
 	principalTokens, err := a.principalFetcher(challenge.Name)
@@ -87,56 +199,165 @@ func (a *agent) Attest(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get principal tokens: %w", err)
 	}
 
-	attestation, err := a.getAttestation(challenge.Nonce)
+	// attResult can be tdx or tpm or other attest root
+	attResult, err := a.avRot.Attest(challenge.Nonce)
 	if err != nil {
+		return nil, fmt.Errorf("failed to attest: %v", err)
+	}
+
+	var cosCel bytes.Buffer
+	if err := a.avRot.GetCEL().EncodeCEL(&cosCel); err != nil {
 		return nil, err
 	}
 
 	req := verifier.VerifyAttestationRequest{
 		Challenge:      challenge,
 		GcpCredentials: principalTokens,
-		Attestation:    attestation,
+		TokenOptions:   tokenOpts,
 	}
 
-	if a.launchSpec.Experiments.EnableSignedContainerImage {
-		signatures := fetchContainerImageSignatures(ctx, a.sigsFetcher, a.launchSpec.SignedImageRepos, a.logger)
-		if len(signatures) > 0 {
-			req.ContainerImageSignatures = signatures
-			a.logger.Printf("Found container image signatures: %v\n", signatures)
+	switch v := attResult.(type) {
+	case *pb.Attestation:
+		a.logger.Info("attestation through TPM quote")
+
+		v.CanonicalEventLog = cosCel.Bytes()
+		req.Attestation = v
+	case *verifier.TDCCELAttestation:
+		a.logger.Info("attestation through TDX quote")
+
+		certChain, err := internal.GetCertificateChain(a.fetchedAK.Cert(), http.DefaultClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed when fetching certificate chain: %w", err)
 		}
+
+		v.CanonicalEventLog = cosCel.Bytes()
+		v.IntermediateCerts = certChain
+		v.AkCert = a.fetchedAK.CertDERBytes()
+		req.TDCCELAttestation = v
+	default:
+		return nil, fmt.Errorf("received an unsupported attestation type! %v", v)
 	}
 
-	resp, err := a.client.VerifyAttestation(ctx, req)
+	signatures := a.sigsCache.get()
+	if len(signatures) > 0 {
+		for _, sig := range signatures {
+			verifierSig, err := convertOCIToContainerSignature(sig)
+			if err != nil {
+				a.logger.Error(fmt.Sprintf("error converting container signatures: %v", err))
+				continue
+			}
+			req.ContainerImageSignatures = append(req.ContainerImageSignatures, verifierSig)
+		}
+		a.logger.Info("Found container image signatures: %v\n", signatures)
+	}
+
+	resp, err := client.VerifyAttestation(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	if len(resp.PartialErrs) > 0 {
-		a.logger.Printf("Partial errors from VerifyAttestation: %v", resp.PartialErrs)
+		a.logger.Error(fmt.Sprintf("Partial errors from VerifyAttestation: %v", resp.PartialErrs))
 	}
 	return resp.ClaimsToken, nil
 }
 
-func (a *agent) getAttestation(nonce []byte) (*pb.Attestation, error) {
-	ak, err := a.akFetcher(a.tpm)
+func convertOCIToContainerSignature(ociSig oci.Signature) (*verifier.ContainerSignature, error) {
+	payload, err := ociSig.Payload()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get AK: %v", err)
+		return nil, fmt.Errorf("failed to get payload from signature [%v]: %v", ociSig, err)
 	}
-	defer ak.Close()
+	b64Sig, err := ociSig.Base64Encoded()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base64 signature from signature [%v]: %v", ociSig, err)
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(b64Sig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode signature for signature [%v]: %v", ociSig, err)
+	}
+	return &verifier.ContainerSignature{
+		Payload:   payload,
+		Signature: sigBytes,
+	}, nil
+}
 
-	var buf bytes.Buffer
-	if err := a.cosCel.EncodeCEL(&buf); err != nil {
+type tpmAttestRoot struct {
+	tpmMu     sync.Mutex
+	fetchedAK *client.Key
+	tpm       io.ReadWriteCloser
+	cosCel    cel.CEL
+}
+
+func (t *tpmAttestRoot) GetCEL() *cel.CEL {
+	return &t.cosCel
+}
+
+func (t *tpmAttestRoot) Extend(c cel.Content) error {
+	return t.cosCel.AppendEventPCR(t.tpm, cel.CosEventPCR, c)
+}
+
+func (t *tpmAttestRoot) Attest(nonce []byte) (any, error) {
+	t.tpmMu.Lock()
+	defer t.tpmMu.Unlock()
+
+	return t.fetchedAK.Attest(client.AttestOpts{
+		Nonce:            nonce,
+		CertChainFetcher: http.DefaultClient,
+	})
+}
+
+type tdxAttestRoot struct {
+	tdxMu     sync.Mutex
+	qp        *tg.LinuxConfigFsQuoteProvider
+	tsmClient configfsi.Client
+	cosCel    cel.CEL
+}
+
+func (t *tdxAttestRoot) GetCEL() *cel.CEL {
+	return &t.cosCel
+}
+
+func (t *tdxAttestRoot) Extend(c cel.Content) error {
+	return t.cosCel.AppendEventRTMR(t.tsmClient, cel.CosRTMR, c)
+}
+
+func (t *tdxAttestRoot) Attest(nonce []byte) (any, error) {
+	t.tdxMu.Lock()
+	defer t.tdxMu.Unlock()
+
+	var tdxNonce [tlabi.TdReportDataSize]byte
+	copy(tdxNonce[:], nonce)
+
+	rawQuote, err := tg.GetRawQuote(t.qp, tdxNonce)
+	if err != nil {
 		return nil, err
 	}
 
-	attestation, err := ak.Attest(client.AttestOpts{Nonce: nonce, CanonicalEventLog: buf.Bytes(), CertChainFetcher: http.DefaultClient})
+	ccelData, err := os.ReadFile("/sys/firmware/acpi/tables/data/CCEL")
 	if err != nil {
-		return nil, fmt.Errorf("failed to attest: %v", err)
+		return nil, err
 	}
-	return attestation, nil
+	ccelTable, err := os.ReadFile("/sys/firmware/acpi/tables/CCEL")
+	if err != nil {
+		return nil, err
+	}
+
+	return &verifier.TDCCELAttestation{
+		CcelAcpiTable: ccelTable,
+		CcelData:      ccelData,
+		TdQuote:       rawQuote,
+	}, nil
 }
 
-// TODO: cache signatures so we don't need to fetch every time.
-func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, logger *log.Logger) []oci.Signature {
+// Refresh refreshes the internal state of the attestation agent.
+// It will reset the container image signatures for now.
+func (a *agent) Refresh(ctx context.Context) error {
+	signatures := fetchContainerImageSignatures(ctx, a.sigsFetcher, a.launchSpec.SignedImageRepos, defaultRetryPolicy, a.logger)
+	a.sigsCache.set(signatures)
+	a.logger.Info("Refreshed container image signature cache", "signatures", signatures)
+	return nil
+}
+
+func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscovery.Fetcher, targetRepos []string, retry func() backoff.BackOff, logger logging.Logger) []oci.Signature {
 	signatures := make([][]oci.Signature, len(targetRepos))
 
 	var wg sync.WaitGroup
@@ -144,12 +365,25 @@ func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscove
 		wg.Add(1)
 		go func(targetRepo string, index int) {
 			defer wg.Done()
-			sigs, err := fetcher.FetchImageSignatures(ctx, targetRepo)
+
+			// backoff independently per repo
+			var sigs []oci.Signature
+			err := backoff.RetryNotify(
+				func() error {
+					s, err := fetcher.FetchImageSignatures(ctx, targetRepo)
+					sigs = s
+					return err
+				},
+				retry(),
+				func(err error, _ time.Duration) {
+					logger.Error(fmt.Sprintf("Failed to fetch container image signatures from repo: %v", err.Error()), "repo", targetRepo)
+				})
 			if err != nil {
-				logger.Printf("Failed to fetch signatures from the target repo [%s]: %v", targetRepo, err)
+				logger.Error(fmt.Sprintf("Failed all attempts to refresh container signatures from repo: %v", err.Error()), "repo", targetRepo)
 			} else {
 				signatures[index] = sigs
 			}
+
 		}(repo, i)
 	}
 	wg.Wait()
@@ -159,4 +393,27 @@ func fetchContainerImageSignatures(ctx context.Context, fetcher signaturediscove
 		foundSigs = append(foundSigs, sigs...)
 	}
 	return foundSigs
+}
+
+func defaultRetryPolicy() backoff.BackOff {
+	b := backoff.NewConstantBackOff(time.Millisecond * 300)
+	return backoff.WithMaxRetries(b, 3)
+}
+
+type sigsCache struct {
+	mu    sync.RWMutex
+	items []oci.Signature
+}
+
+func (c *sigsCache) set(sigs []oci.Signature) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make([]oci.Signature, len(sigs))
+	copy(c.items, sigs)
+}
+
+func (c *sigsCache) get() []oci.Signature {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.items
 }

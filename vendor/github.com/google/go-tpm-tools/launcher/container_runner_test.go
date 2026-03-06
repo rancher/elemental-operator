@@ -5,15 +5,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,12 +18,19 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-tpm-tools/cel"
+	"github.com/google/go-tpm-tools/launcher/agent"
+	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/launcherfile"
 	"github.com/google/go-tpm-tools/launcher/spec"
+	"github.com/google/go-tpm-tools/verifier"
+	"github.com/opencontainers/go-digest"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/oauth2"
-	"google.golang.org/api/option"
 )
 
 const (
@@ -36,7 +40,13 @@ const (
 // Fake attestation agent.
 type fakeAttestationAgent struct {
 	measureEventFunc func(cel.Content) error
-	attestFunc       func(context.Context) ([]byte, error)
+	attestFunc       func(context.Context, agent.AttestAgentOpts) ([]byte, error)
+	sigsCache        []string
+	sigsFetcherFunc  func(context.Context) []string
+
+	// attMu sits on top of attempts field and protects attempts.
+	attMu    sync.Mutex
+	attempts int
 }
 
 func (f *fakeAttestationAgent) MeasureEvent(event cel.Content) error {
@@ -47,12 +57,33 @@ func (f *fakeAttestationAgent) MeasureEvent(event cel.Content) error {
 	return fmt.Errorf("unimplemented")
 }
 
-func (f *fakeAttestationAgent) Attest(ctx context.Context) ([]byte, error) {
+func (f *fakeAttestationAgent) Attest(ctx context.Context, _ agent.AttestAgentOpts) ([]byte, error) {
 	if f.attestFunc != nil {
-		return f.attestFunc(ctx)
+		return f.attestFunc(ctx, agent.AttestAgentOpts{})
 	}
 
 	return nil, fmt.Errorf("unimplemented")
+}
+
+func (f *fakeAttestationAgent) AttestWithClient(_ context.Context, _ agent.AttestAgentOpts, _ verifier.Client) ([]byte, error) {
+	return nil, fmt.Errorf("unimplemented")
+}
+
+// Refresh simulates the behavior of an actual agent.
+func (f *fakeAttestationAgent) Refresh(ctx context.Context) error {
+	if f.sigsFetcherFunc != nil {
+		f.sigsCache = f.sigsFetcherFunc(ctx)
+	}
+	return nil
+}
+
+func (f *fakeAttestationAgent) Close() error {
+	return nil
+}
+
+type fakeClaims struct {
+	jwt.RegisteredClaims
+	Signatures []string
 }
 
 func createJWT(t *testing.T, ttl time.Duration) []byte {
@@ -60,19 +91,39 @@ func createJWT(t *testing.T, ttl time.Duration) []byte {
 }
 
 func createJWTWithID(t *testing.T, id string, ttl time.Duration) []byte {
-	t.Helper()
-
-	privkey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Error creating token key: %v", err)
-	}
-
 	now := jwt.TimeFunc()
 	claims := &jwt.RegisteredClaims{
 		ID:        id,
 		IssuedAt:  jwt.NewNumericDate(now),
 		NotBefore: jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+	}
+
+	return createSignedToken(t, claims)
+}
+
+func createJWTWithSignatures(t *testing.T, signatures []string) []byte {
+	now := jwt.TimeFunc()
+	ttl := 5 * time.Second
+	id := "signature token"
+	claims := &fakeClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        id,
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
+		},
+		Signatures: signatures,
+	}
+	return createSignedToken(t, claims)
+}
+
+func createSignedToken(t *testing.T, claims jwt.Claims) []byte {
+	t.Helper()
+
+	privkey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Error creating token key: %v", err)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
@@ -102,14 +153,14 @@ func TestRefreshToken(t *testing.T) {
 
 	runner := ContainerRunner{
 		attestAgent: &fakeAttestationAgent{
-			attestFunc: func(context.Context) ([]byte, error) {
+			attestFunc: func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
 				return expectedToken, nil
 			},
 		},
-		logger: log.Default(),
+		logger: logging.SimpleLogger(),
 	}
 
-	if err := os.MkdirAll(launcherfile.HostTmpPath, 0744); err != nil {
+	if err := os.MkdirAll(launcherfile.HostTmpPath, 0755); err != nil {
 		t.Fatalf("Error creating host token path directory: %v", err)
 	}
 
@@ -134,8 +185,67 @@ func TestRefreshToken(t *testing.T) {
 	}
 }
 
+// TestRefreshTokenWithSignedContainerCacheEnabled checks `refreshToken` updates the default token when signatures get updated.
+func TestRefreshTokenWithSignedContainerCacheEnabled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	oldCache := []string{"old sigs cache"}
+	fakeAgent := &fakeAttestationAgent{
+		sigsFetcherFunc: func(context.Context) []string {
+			return oldCache
+		},
+	}
+	fakeAgent.attestFunc = func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
+		return createJWTWithSignatures(t, fakeAgent.sigsCache), nil
+	}
+
+	runner := ContainerRunner{
+		attestAgent: fakeAgent,
+		logger:      logging.SimpleLogger(),
+	}
+
+	if err := os.MkdirAll(launcherfile.HostTmpPath, 0755); err != nil {
+		t.Fatalf("Error creating host token path directory: %v", err)
+	}
+
+	_, err := runner.refreshToken(ctx)
+	if err != nil {
+		t.Fatalf("refreshToken returned with error: %v", err)
+	}
+
+	// Simulate adding signatures.
+	newCache := []string{"old sigs cache", "new sigs cache"}
+	fakeAgent.sigsFetcherFunc = func(context.Context) []string {
+		return newCache
+	}
+
+	// Refresh token again to get the updated token.
+	_, err = runner.refreshToken(ctx)
+	if err != nil {
+		t.Fatalf("refreshToken returned with error: %v", err)
+	}
+
+	// Read the token to check if claims contain the updated signatures.
+	filepath := path.Join(launcherfile.HostTmpPath, launcherfile.AttestationVerifierTokenFilename)
+	token, err := os.ReadFile(filepath)
+	if err != nil {
+		t.Fatalf("Failed to read from %s: %v", filepath, err)
+	}
+
+	gotClaims := &fakeClaims{}
+	_, _, err = jwt.NewParser().ParseUnverified(string(token), gotClaims)
+	if err != nil {
+		t.Fatalf("failed to parse token: %v", err)
+	}
+
+	if gotSignatures, wantSignatures := gotClaims.Signatures, newCache; !cmp.Equal(gotSignatures, wantSignatures) {
+		t.Errorf("Updated token written to file does not contain expected signatures: got %v, want %v", gotSignatures, wantSignatures)
+	}
+}
+
 func TestRefreshTokenError(t *testing.T) {
-	if err := os.MkdirAll(launcherfile.HostTmpPath, 0744); err != nil {
+	if err := os.MkdirAll(launcherfile.HostTmpPath, 0755); err != nil {
 		t.Fatalf("Error creating host token path directory: %v", err)
 	}
 
@@ -146,7 +256,7 @@ func TestRefreshTokenError(t *testing.T) {
 		{
 			name: "Attest fails",
 			agent: &fakeAttestationAgent{
-				attestFunc: func(context.Context) ([]byte, error) {
+				attestFunc: func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
 					return nil, errors.New("attest error")
 				},
 			},
@@ -154,7 +264,7 @@ func TestRefreshTokenError(t *testing.T) {
 		{
 			name: "Attest returns expired token",
 			agent: &fakeAttestationAgent{
-				attestFunc: func(context.Context) ([]byte, error) {
+				attestFunc: func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
 					return createJWT(t, -5*time.Second), nil
 				},
 			},
@@ -165,7 +275,7 @@ func TestRefreshTokenError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			runner := ContainerRunner{
 				attestAgent: tc.agent,
-				logger:      log.Default(),
+				logger:      logging.SimpleLogger(),
 			}
 
 			if _, err := runner.refreshToken(context.Background()); err == nil {
@@ -184,11 +294,11 @@ func TestFetchAndWriteTokenSucceeds(t *testing.T) {
 
 	runner := ContainerRunner{
 		attestAgent: &fakeAttestationAgent{
-			attestFunc: func(context.Context) ([]byte, error) {
+			attestFunc: func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
 				return expectedToken, nil
 			},
 		},
-		logger: log.Default(),
+		logger: logging.SimpleLogger(),
 	}
 
 	if err := runner.fetchAndWriteToken(ctx); err != nil {
@@ -212,17 +322,23 @@ func TestTokenIsNotChangedIfRefreshFails(t *testing.T) {
 
 	expectedToken := createJWT(t, 5*time.Second)
 	ttl := 5 * time.Second
-	successfulAttestFunc := func(context.Context) ([]byte, error) {
-		return expectedToken, nil
-	}
 
-	errorAttestFunc := func(context.Context) ([]byte, error) {
+	attestAgent := &fakeAttestationAgent{}
+	attestAgent.attestFunc = func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
+		attestAgent.attMu.Lock()
+		defer func() {
+			attestAgent.attempts = attestAgent.attempts + 1
+			attestAgent.attMu.Unlock()
+		}()
+		if attestAgent.attempts%2 == 0 {
+			return expectedToken, nil
+		}
 		return nil, errors.New("attest unsuccessful")
 	}
 
 	runner := ContainerRunner{
-		attestAgent: &fakeAttestationAgent{attestFunc: successfulAttestFunc},
-		logger:      log.Default(),
+		attestAgent: attestAgent,
+		logger:      logging.SimpleLogger(),
 	}
 
 	if err := runner.fetchAndWriteToken(ctx); err != nil {
@@ -238,9 +354,6 @@ func TestTokenIsNotChangedIfRefreshFails(t *testing.T) {
 	if !bytes.Equal(data, expectedToken) {
 		t.Errorf("Initial token written to file does not match expected token: got %v, want %v", data, expectedToken)
 	}
-
-	// Change attest agent to return error.
-	runner.attestAgent = &fakeAttestationAgent{attestFunc: errorAttestFunc}
 
 	time.Sleep(ttl)
 
@@ -289,7 +402,7 @@ func testRetryPolicyWithNTries(t *testing.T, numTries int, expectRefresh bool) {
 	// Wait the initial token's 5s plus a second per retry (MaxInterval).
 	ttl := time.Duration(numTries)*time.Second + 5*time.Second
 	retry := -1
-	attestFunc := func(context.Context) ([]byte, error) {
+	attestFunc := func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
 		retry++
 		// Success on the initial fetch (subsequent calls use refresher goroutine).
 		if retry == 0 {
@@ -302,9 +415,9 @@ func testRetryPolicyWithNTries(t *testing.T, numTries int, expectRefresh bool) {
 	}
 	runner := ContainerRunner{
 		attestAgent: &fakeAttestationAgent{attestFunc: attestFunc},
-		logger:      log.Default(),
+		logger:      logging.SimpleLogger(),
 	}
-	if err := runner.fetchAndWriteTokenWithRetry(ctx, testRetryPolicyThreeTimes()); err != nil {
+	if err := runner.fetchAndWriteTokenWithRetry(ctx, testRetryPolicyThreeTimes); err != nil {
 		t.Fatalf("fetchAndWriteTokenWithRetry failed: %v", err)
 	}
 	filepath := path.Join(launcherfile.HostTmpPath, launcherfile.AttestationVerifierTokenFilename)
@@ -345,16 +458,25 @@ func TestFetchAndWriteTokenWithTokenRefresh(t *testing.T) {
 	defer cancel()
 
 	expectedToken := createJWT(t, 5*time.Second)
+	expectedRefreshedToken := createJWT(t, 10*time.Second)
 
 	ttl := 5 * time.Second
 
+	attestAgent := &fakeAttestationAgent{}
+	attestAgent.attestFunc = func(context.Context, agent.AttestAgentOpts) ([]byte, error) {
+		attestAgent.attMu.Lock()
+		defer func() {
+			attestAgent.attempts = attestAgent.attempts + 1
+			attestAgent.attMu.Unlock()
+		}()
+		if attestAgent.attempts%2 == 0 {
+			return expectedToken, nil
+		}
+		return expectedRefreshedToken, nil
+	}
 	runner := ContainerRunner{
-		attestAgent: &fakeAttestationAgent{
-			attestFunc: func(context.Context) ([]byte, error) {
-				return expectedToken, nil
-			},
-		},
-		logger: log.Default(),
+		attestAgent: attestAgent,
+		logger:      logging.SimpleLogger(),
 	}
 
 	if err := runner.fetchAndWriteToken(ctx); err != nil {
@@ -369,14 +491,6 @@ func TestFetchAndWriteTokenWithTokenRefresh(t *testing.T) {
 
 	if !bytes.Equal(data, expectedToken) {
 		t.Errorf("Initial token written to file does not match expected token: got %v, want %v", data, expectedToken)
-	}
-
-	// Change attest agent to return new token.
-	expectedRefreshedToken := createJWT(t, 10*time.Second)
-	runner.attestAgent = &fakeAttestationAgent{
-		attestFunc: func(context.Context) ([]byte, error) {
-			return expectedRefreshedToken, nil
-		},
 	}
 
 	// Check that token has not been refreshed yet.
@@ -399,59 +513,6 @@ func TestFetchAndWriteTokenWithTokenRefresh(t *testing.T) {
 
 	if !bytes.Equal(data, expectedRefreshedToken) {
 		t.Errorf("Refreshed token written to file does not match expected token: got %v, want %v", data, expectedRefreshedToken)
-	}
-}
-
-type testRoundTripper struct {
-	roundTripFunc func(*http.Request) *http.Response
-}
-
-func (t *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return t.roundTripFunc(req), nil
-}
-
-type idTokenResp struct {
-	Token string `json:"token"`
-}
-
-func TestFetchImpersonatedToken(t *testing.T) {
-	expectedEmail := "test2@google.com"
-
-	expectedToken := []byte("test_token")
-
-	expectedURL := fmt.Sprintf(idTokenEndpoint, expectedEmail)
-	client := &http.Client{
-		Transport: &testRoundTripper{
-			roundTripFunc: func(req *http.Request) *http.Response {
-				if req.URL.String() != expectedURL {
-					t.Errorf("HTTP call was not made to a endpoint: got %v, want %v", req.URL.String(), expectedURL)
-				}
-
-				resp := idTokenResp{
-					Token: string(expectedToken),
-				}
-
-				respBody, err := json.Marshal(resp)
-				if err != nil {
-					t.Fatalf("Unable to marshal HTTP response: %v", err)
-				}
-
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Header:     make(http.Header),
-					Body:       io.NopCloser(bytes.NewBuffer(respBody)),
-				}
-			},
-		},
-	}
-
-	token, err := fetchImpersonatedToken(context.Background(), expectedEmail, "test_aud", option.WithHTTPClient(client))
-	if err != nil {
-		t.Fatalf("fetchImpersonatedToken returned error: %v", err)
-	}
-
-	if !bytes.Equal(token, expectedToken) {
-		t.Errorf("fetchImpersonatedToken did not return expected token: got %v, want %v", token, expectedToken)
 	}
 }
 
@@ -497,4 +558,178 @@ func TestInitImageDockerPublic(t *testing.T) {
 			t.Error(err)
 		}
 	}
+}
+
+func TestMeasureCELEvents(t *testing.T) {
+	ctx := context.Background()
+	fakeContainer := &fakeContainer{
+		image: &fakeImage{
+			name:   "fake image name",
+			digest: "fake digest",
+			id:     "fake id",
+		},
+		args: []string{"fake args"},
+		env:  []string{"fake env"},
+	}
+
+	testCases := []struct {
+		name          string
+		wantCELEvents []cel.CosType
+		launchSpec    spec.LaunchSpec
+	}{
+		{
+			name: "measure full container events and launch separator event",
+			wantCELEvents: []cel.CosType{
+				cel.ImageRefType,
+				cel.ImageDigestType,
+				cel.RestartPolicyType,
+				cel.ImageIDType,
+				cel.ArgType,
+				cel.EnvVarType,
+				cel.OverrideEnvType,
+				cel.OverrideArgType,
+				cel.MemoryMonitorType,
+				cel.LaunchSeparatorType,
+			},
+			launchSpec: spec.LaunchSpec{
+				Envs: []spec.EnvVar{{Name: "hello", Value: "world"}},
+				Cmd:  []string{"hello world"},
+			},
+		},
+		{
+			name: "measure partial container events, memory monitoring event, and launch separator event",
+			wantCELEvents: []cel.CosType{
+				cel.ImageRefType,
+				cel.ImageDigestType,
+				cel.RestartPolicyType,
+				cel.ImageIDType,
+				cel.ArgType,
+				cel.EnvVarType,
+				cel.MemoryMonitorType,
+				cel.LaunchSeparatorType,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotEvents := []cel.CosType{}
+
+			fakeAgent := &fakeAttestationAgent{
+				measureEventFunc: func(content cel.Content) error {
+					got, _ := content.GetTLV()
+					tlv := &cel.TLV{}
+					tlv.UnmarshalBinary(got.Value)
+					gotEvents = append(gotEvents, cel.CosType(tlv.Type))
+					return nil
+				},
+			}
+
+			r := ContainerRunner{
+				attestAgent: fakeAgent,
+				container:   fakeContainer,
+				launchSpec:  tc.launchSpec,
+				logger:      logging.SimpleLogger(),
+			}
+
+			if err := r.measureCELEvents(ctx); err != nil {
+				t.Errorf("failed to measureCELEvents: %v", err)
+			}
+
+			if !cmp.Equal(gotEvents, tc.wantCELEvents) {
+				t.Errorf("failed to measure CEL events, got %v, but want %v", gotEvents, tc.wantCELEvents)
+			}
+		})
+	}
+}
+
+func TestPullImageWithRetries(t *testing.T) {
+	testCases := []struct {
+		name        string
+		imagePuller func(int) (containerd.Image, error)
+		wantPass    bool
+	}{
+		{
+			name:        "success with single attempt",
+			imagePuller: func(int) (containerd.Image, error) { return &fakeImage{}, nil },
+			wantPass:    true,
+		},
+		{
+			name: "failure then success",
+			imagePuller: func(attempts int) (containerd.Image, error) {
+				if attempts%2 == 1 {
+					return nil, errors.New("fake error")
+				}
+				return &fakeImage{}, nil
+			},
+			wantPass: true,
+		},
+		{
+			name: "failure with attempts exceeded",
+			imagePuller: func(int) (containerd.Image, error) {
+				return nil, errors.New("fake error")
+			},
+			wantPass: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			retryPolicy := func() backoff.BackOff {
+				b := backoff.NewExponentialBackOff()
+				return backoff.WithMaxRetries(b, 2)
+			}
+
+			attempts := 0
+			_, err := pullImageWithRetries(
+				func() (containerd.Image, error) {
+					attempts++
+					return tc.imagePuller(attempts)
+				},
+				retryPolicy)
+			if gotPass := (err == nil); gotPass != tc.wantPass {
+				t.Errorf("pullImageWithRetries failed, got %v, but want %v", gotPass, tc.wantPass)
+			}
+		})
+	}
+}
+
+// This ensures fakeContainer implements containerd.Container interface.
+var _ containerd.Container = &fakeContainer{}
+
+// This ensures fakeImage implements containerd.Image interface.
+var _ containerd.Image = &fakeImage{}
+
+type fakeContainer struct {
+	containerd.Container
+	image containerd.Image
+	args  []string
+	env   []string
+}
+
+func (c *fakeContainer) Image(context.Context) (containerd.Image, error) {
+	return c.image, nil
+}
+
+func (c *fakeContainer) Spec(context.Context) (*oci.Spec, error) {
+	return &oci.Spec{Process: &specs.Process{Args: c.args, Env: c.env}}, nil
+}
+
+type fakeImage struct {
+	containerd.Image
+	name   string
+	digest digest.Digest
+	id     digest.Digest
+}
+
+func (i *fakeImage) Name() string {
+	return i.name
+}
+
+func (i *fakeImage) Target() v1.Descriptor {
+	return v1.Descriptor{Digest: i.digest}
+}
+
+func (i *fakeImage) Config(_ context.Context) (v1.Descriptor, error) {
+	return v1.Descriptor{Digest: i.id}, nil
 }

@@ -11,17 +11,23 @@ import (
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
-	output   string
-	input    string
-	nvIndex  uint32
-	nonce    []byte
-	teeNonce []byte
-	keyAlgo  = tpm2.AlgRSA
-	pcrs     []int
-	format   string
+	output      string
+	input       string
+	nvIndex     uint32
+	nonce       []byte
+	teeNonce    []byte
+	keyAlgo     = tpm2.AlgRSA
+	pcrs        []int
+	format      string
+	asAddress   string
+	audience    string
+	eventLog    string
+	cloudLog    bool
+	customNonce []string
 )
 
 type pcrsFlag struct {
@@ -123,6 +129,34 @@ func addInputFlag(cmd *cobra.Command) {
 		"input file (defaults to stdin)")
 }
 
+// Lets this command specify an Attestation Server Address.
+func addAsAddressFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(&asAddress, "verifier-endpoint", "https://confidentialcomputing.googleapis.com",
+		"the attestation verifier endpoint used to retrieve an attestation claims token")
+}
+
+// Lets this command enable Cloud logging.
+func addCloudLoggingFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&cloudLog, "cloud-log", false, "logs the attestation and token to Cloud Logging for auditing purposes. Requires the audience flag.")
+}
+
+// Lets this command specify custom audience field of the attestation token.
+func addAudienceFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(&audience, "audience", "",
+		"the audience field in the claims token. Cannot be sts.googleapis.com.")
+}
+
+// Lets this command specify custom nonce field of the attestation token.
+func addCustomNonceFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringArrayVar(&customNonce, "custom-nonce", nil,
+		"the custom nonce field in the claims token. use this flag multiple times to add multiple custom nonces.")
+}
+
+// Lets this command specify event log path.
+func addEventLogFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(&eventLog, "event-log", "/sys/kernel/security/tpm0/binary_bios_measurements", "specifies the event log file path.")
+}
+
 // Lets this command specify an NVDATA index, for use with nvIndex.
 func addIndexFlag(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&nvIndex, "index", 0,
@@ -185,6 +219,38 @@ func dataOutput() io.Writer {
 	return file
 }
 
+func openForWrite(path string) io.Writer {
+	if path == "" {
+		return os.Stdout
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return alwaysError{err}
+	}
+	return file
+}
+
+func writeProtoToOutput(message proto.Message) error {
+	var out []byte
+	var err error
+	switch format {
+	case "binarypb":
+		out, err = proto.Marshal(message)
+		if err != nil {
+			return fmt.Errorf("failed to marshal proto: %v", message)
+		}
+	case "textproto":
+		out = []byte(marshalOptions.Format(message))
+	default:
+		return fmt.Errorf("format should be either binarypb or textproto")
+	}
+	if _, err := dataOutput().Write(out); err != nil {
+		return fmt.Errorf("failed to write attestation report: %v", err)
+	}
+	return nil
+}
+
 // Handle to input data file. If there is an issue opening the file, the Reader
 // returned will return the error upon any call to Read()
 func dataInput() io.Reader {
@@ -197,6 +263,37 @@ func dataInput() io.Reader {
 		return alwaysError{err}
 	}
 	return file
+}
+
+var errMustSpecifyPath = errors.New("must specify path to read file")
+
+func readBytes(path string) ([]byte, error) {
+	if path == "" {
+		return nil, errMustSpecifyPath
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read proto: %v", err)
+	}
+	return bytes, nil
+}
+
+// Reads binarypb file from path
+func readProtoFromPath(path string, message proto.Message) error {
+	requestBytes, err := readBytes(path)
+	if err != nil {
+		return fmt.Errorf("failed to read proto: %v", err)
+	}
+
+	err = proto.Unmarshal(requestBytes, message)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal proto: %v", err)
+	}
+	return nil
 }
 
 // Load SRK based on tpm2.Algorithm set in the global flag vars.
