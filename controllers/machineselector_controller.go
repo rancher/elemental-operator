@@ -170,8 +170,8 @@ func (r *MachineInventorySelectorReconciler) reconcile(ctx context.Context, miSe
 		return ctrl.Result{}, fmt.Errorf("failed to set inventory selector address: %w", err)
 	}
 
-	if requeue {
-		return ctrl.Result{RequeueAfter: time.Second}, nil
+	if requeue > 0 {
+		return ctrl.Result{RequeueAfter: requeue}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -251,21 +251,21 @@ func (r *MachineInventorySelectorReconciler) findAndAdoptInventory(ctx context.C
 	return nil
 }
 
-func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) (bool, error) {
+func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Context, miSelector *elementalv1.MachineInventorySelector, mInventory *elementalv1.MachineInventory) (time.Duration, error) {
 	logger := ctrl.LoggerFrom(ctx)
 
 	if miSelector.Status.MachineInventoryRef == nil {
 		logger.V(log.DebugDepth).Info("Waiting for a machine inventory match")
-		return false, nil
+		return time.Minute, nil
 	}
 
 	inventoryReady := meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
 	if inventoryReady == nil {
-		return false, fmt.Errorf("missing required InventoryReadyCondition it must be already set at this phase")
+		return 0, fmt.Errorf("missing required InventoryReadyCondition it must be already set at this phase")
 	}
 	if inventoryReady.Status == metav1.ConditionTrue {
 		logger.V(log.DebugDepth).Info("Machine inventory is successfully adopted already")
-		return false, nil
+		return 0, nil
 	}
 
 	if mInventory == nil {
@@ -276,7 +276,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 		},
 			mInventory,
 		); err != nil {
-			return false, fmt.Errorf("failed to get machine inventory: %w", err)
+			return 0, fmt.Errorf("failed to get machine inventory: %w", err)
 		}
 	}
 
@@ -290,10 +290,10 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 	switch {
 	case owner != nil && owner.Name != miSelector.Name:
 		miSelector.Status.MachineInventoryRef = nil
-		return false, fmt.Errorf("machine inventory ownership mismatch detected, restart adoption")
+		return 0, fmt.Errorf("machine inventory ownership mismatch detected, restart adoption")
 	case orphanInventory && now.After(deadLine):
 		miSelector.Status.MachineInventoryRef = nil
-		return false, fmt.Errorf("machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
+		return 0, fmt.Errorf("machine inventory adoption validation timeout, restart adoption. Deadline was: %v", deadLine)
 	case orphanInventory:
 		logger.V(log.DebugDepth).Info("Machine inventory adoption not completed")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
@@ -301,7 +301,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 			Reason: elementalv1.WaitForInventoryCheckReason,
 			Status: metav1.ConditionUnknown,
 		})
-		return true, nil
+		return time.Second, nil
 	default:
 		logger.Info("Machine inventory adoption successfully completed")
 		meta.SetStatusCondition(&miSelector.Status.Conditions, metav1.Condition{
@@ -309,7 +309,7 @@ func (r *MachineInventorySelectorReconciler) updateAdoptionStatus(ctx context.Co
 			Reason: elementalv1.SuccessfullyAdoptedInventoryReason,
 			Status: metav1.ConditionTrue,
 		})
-		return false, nil
+		return 0, nil
 	}
 }
 
@@ -666,8 +666,8 @@ func hasMatchingLabels(ctx context.Context, miSelector *elementalv1.MachineInven
 	}
 
 	if selector.Empty() {
-		logger.V(log.DebugDepth).Info("machine selector has empty selector", "mSelector.Name", miSelector.Name)
-		return false
+		logger.V(log.DebugDepth).Info("machine selector has empty selector, it can match any machine", "mSelector.Name", miSelector.Name)
+		return true
 	}
 
 	if !selector.Matches(labels.Set(mInventory.Labels)) {

@@ -341,7 +341,7 @@ var _ = Describe("updateAdoptionStatus", func() {
 		// Successfully check adoption
 		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
 		Expect(err).To(BeNil())
-		Expect(requeue).To(BeFalse())
+		Expect(requeue).To(Equal(0 * time.Second))
 
 		aCond = meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)
 		Expect(aCond).NotTo(BeNil())
@@ -375,7 +375,7 @@ var _ = Describe("updateAdoptionStatus", func() {
 		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
 		for err == nil {
 			Expect(time.Now().Before(testTimeout)).To(BeTrue())
-			Expect(requeue).To(BeTrue())
+			Expect(requeue).To(Equal(time.Second))
 			time.Sleep(time.Second)
 			requeue, err = r.updateAdoptionStatus(ctx, miSelector, mInventory)
 		}
@@ -420,7 +420,7 @@ var _ = Describe("updateAdoptionStatus", func() {
 
 	It("does nothing if adoption has not started", func() {
 		requeue, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
-		Expect(requeue).To(BeFalse())
+		Expect(requeue).To(Equal(time.Minute))
 		Expect(err).To(BeNil())
 		Expect(meta.FindStatusCondition(miSelector.Status.Conditions, elementalv1.InventoryReadyCondition)).To(BeNil())
 	})
@@ -545,7 +545,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			}},
 		}
 		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
-		Expect(update).To(BeFalse())
+		Expect(update).To(Equal(0 * time.Second))
 		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
@@ -575,7 +575,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			}},
 		}
 		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
-		Expect(update).To(BeFalse())
+		Expect(update).To(Equal(0 * time.Second))
 		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
@@ -607,7 +607,7 @@ var _ = Describe("updatePlanSecretWithBootstrap", func() {
 			}},
 		}
 		update, err := r.updateAdoptionStatus(ctx, miSelector, mInventory)
-		Expect(update).To(BeFalse())
+		Expect(update).To(Equal(0 * time.Second))
 		Expect(err).To(BeNil())
 		Expect(r.Status().Update(ctx, mInventory)).To(Succeed())
 
