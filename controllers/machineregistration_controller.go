@@ -44,6 +44,8 @@ import (
 	"github.com/rancher/elemental-operator/pkg/util"
 )
 
+var errDuplicateToken = errors.New("duplicate token")
+
 // MachineRegistrationReconciler reconciles a MachineRegistration object.
 type MachineRegistrationReconciler struct {
 	client.Client
@@ -126,10 +128,14 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 	}
 
 	if err := r.setRegistrationTokenAndURL(ctx, mRegistration); err != nil {
+		reason := elementalv1.MissingTokenOrServerURLReason
+		if errors.Is(err, errDuplicateToken) {
+			reason = elementalv1.DuplicateTokenReason
+		}
 		meta.SetStatusCondition(&mRegistration.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.ReadyCondition,
 			Status:  metav1.ConditionFalse,
-			Reason:  elementalv1.MissingTokenOrServerURLReason,
+			Reason:  reason,
 			Message: err.Error(),
 		})
 		return ctrl.Result{}, fmt.Errorf("failed to set registration token and url: %w", err)
@@ -156,6 +162,12 @@ func (r *MachineRegistrationReconciler) reconcile(ctx context.Context, mRegistra
 
 func (r *MachineRegistrationReconciler) isReady(ctx context.Context, mRegistration *elementalv1.MachineRegistration) bool {
 	if meta.IsStatusConditionTrue(mRegistration.Status.Conditions, elementalv1.ReadyCondition) {
+		// If the spec defines a static endpoint but the status token doesn't match, re-reconcile.
+		if mRegistration.Spec.Token != "" && mRegistration.Status.RegistrationToken != mRegistration.Spec.Token {
+			mRegistration.Status.RegistrationToken = ""
+			mRegistration.Status.RegistrationURL = ""
+			return false
+		}
 		// Despite being on ready state we check if the serviceaccount token is still available as it can be deleted
 		// by the control plane during backup & restore operations see: rancher/elemental#776
 		if err := r.Get(ctx, types.NamespacedName{
@@ -178,9 +190,16 @@ func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.C
 	logger.Info("Setting registration token and url")
 
 	if mRegistration.Status.RegistrationToken == "" {
-		mRegistration.Status.RegistrationToken, err = randomtoken.Generate()
-		if err != nil {
-			return fmt.Errorf("failed to generate registration token: %w", err)
+		if mRegistration.Spec.Token != "" {
+			if err := r.checkTokenUniqueness(ctx, mRegistration); err != nil {
+				return err
+			}
+			mRegistration.Status.RegistrationToken = mRegistration.Spec.Token
+		} else {
+			mRegistration.Status.RegistrationToken, err = randomtoken.Generate()
+			if err != nil {
+				return fmt.Errorf("failed to generate registration token: %w", err)
+			}
 		}
 	}
 
@@ -190,6 +209,25 @@ func (r *MachineRegistrationReconciler) setRegistrationTokenAndURL(ctx context.C
 			return fmt.Errorf("failed to get the server url: %w", err)
 		}
 		mRegistration.Status.RegistrationURL = fmt.Sprintf("%s/elemental/registration/%s", serverURL, mRegistration.Status.RegistrationToken)
+	}
+
+	return nil
+}
+
+func (r *MachineRegistrationReconciler) checkTokenUniqueness(ctx context.Context, mRegistration *elementalv1.MachineRegistration) error {
+	mRegistrationList := &elementalv1.MachineRegistrationList{}
+	if err := r.List(ctx, mRegistrationList); err != nil {
+		return fmt.Errorf("failed to list machine registrations: %w", err)
+	}
+
+	for _, m := range mRegistrationList.Items {
+		if m.UID == mRegistration.UID {
+			continue
+		}
+		if m.Status.RegistrationToken == mRegistration.Spec.Token {
+			return fmt.Errorf("token %q is already in use by %s/%s: %w",
+				mRegistration.Spec.Token, m.Namespace, m.Name, errDuplicateToken)
+		}
 	}
 
 	return nil
