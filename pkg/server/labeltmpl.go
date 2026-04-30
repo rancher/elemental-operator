@@ -132,17 +132,19 @@ func updateInventoryAnnotations(tmpl templater.Templater, inv *elementalv1.Machi
 	return nil
 }
 
-// mergeInventoryLabels: DEPRECATED
-// Used to merge client side labels, now deprecated would just skip and log an error.
+// mergeInventoryLabels: merge labels from the client.
+// All label keys are prepended with "elemental.cattle.io/".
 func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
 	labels := map[string]string{}
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
 	}
-	log.Debugf("received labels: %v", labels)
-	log.Errorf("received labels from registering client: no more supported, skipping")
+	log.Debug("Adding labels from client data")
 	if inventory.Labels == nil {
 		inventory.Labels = map[string]string{}
+	}
+	for key, val := range labels {
+		inventory.Labels[fmt.Sprintf("elemental.cattle.io/%s", sanitizeUserInput(key))] = sanitizeLabel(sanitizeUserInput(val))
 	}
 	return nil
 }

@@ -238,7 +238,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2"}`),
 			map[string]string{"key1": "val1"},
 			false,
-			map[string]string{"key1": "val1"},
+			map[string]string{"key1": "val1", "elemental.cattle.io/key2": "val2"},
 		},
 		{
 			[]byte(`{"key2":2}`),
@@ -250,7 +250,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2", "key3":"val3"}`),
 			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4"},
 			false,
-			map[string]string{"key1": "val1", "key3": "previous_val"},
+			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4", "elemental.cattle.io/key2": "val2", "elemental.cattle.io/key3": "val3"},
 		},
 		{
 			[]byte{},
@@ -262,7 +262,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 			[]byte(`{"key2":"val2"}`),
 			nil,
 			false,
-			map[string]string{},
+			map[string]string{"elemental.cattle.io/key2": "val2"},
 		},
 	}
 
@@ -276,6 +276,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 		} else {
 			assert.Equal(t, err, nil)
 		}
+		assert.Equal(t, len(inventory.Labels), len(test.expected))
 		for k, v := range test.expected {
 			val, ok := inventory.Labels[k]
 			assert.Equal(t, ok, true)

@@ -897,6 +897,10 @@ spec:
                           emulated-tpm-seed:
                             format: int64
                             type: integer
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
                           no-smbios:
                             type: boolean
                           no-toolkit:
