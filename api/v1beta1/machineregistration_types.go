@@ -29,6 +29,14 @@ const (
 )
 
 type MachineRegistrationSpec struct {
+	// Token is an optional static token for the registration URL.
+	// When set, the registration URL will be deterministic: {server-url}/elemental/registration/{token}.
+	// Must be URL-safe: lowercase alphanumeric characters and hyphens only.
+	// When empty, a random token is generated (default behavior).
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`
+	// +kubebuilder:validation:MaxLength=253
+	Token string `json:"token,omitempty"`
 	// +optional
 	MachineName string `json:"machineName,omitempty"`
 	// MachineInventoryLabels label to be added to the created MachineInventory object.

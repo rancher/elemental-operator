@@ -1006,6 +1006,15 @@ spec:
                 type: object
               machineName:
                 type: string
+              token:
+                description: |-
+                  Token is an optional static token for the registration URL.
+                  When set, the registration URL will be deterministic: {server-url}/elemental/registration/{token}.
+                  Must be URL-safe: lowercase alphanumeric characters and hyphens only.
+                  When empty, a random token is generated (default behavior).
+                maxLength: 253
+                pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+                type: string
             type: object
           status:
             properties:
