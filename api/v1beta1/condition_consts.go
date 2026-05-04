@@ -31,6 +31,9 @@ const (
 
 	// RbacCreationFailureReason documents a machine registration object that has RBAC creation failures.
 	RbacCreationFailureReason = "RbacCreationFailure"
+
+	// DuplicateTokenReason documents that another machine registration already uses the same token.
+	DuplicateTokenReason = "DuplicateToken"
 )
 
 // Machine Inventory conditions
