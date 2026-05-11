@@ -183,7 +183,7 @@ var _ = Describe("createPlanSecret", func() {
 		Expect(test.CleanupAndWait(ctx, cl, mInventory, planSecret)).To(Succeed())
 	})
 
-	It("should succesfully create plan secret", func() {
+	It("should successfully create plan secret", func() {
 		Expect(r.createPlanSecret(ctx, mInventory)).To(Succeed())
 
 		Expect(r.Get(ctx, types.NamespacedName{Namespace: mInventory.Namespace, Name: mInventory.Name}, planSecret)).To(Succeed())
@@ -438,7 +438,7 @@ var _ = Describe("updateInventoryWithPlanStatus", func() {
 		Expect(test.CleanupAndWait(ctx, cl, mInventory, planSecret)).To(Succeed())
 	})
 
-	It("should succesfully update when plan is applied", func() {
+	It("should successfully update when plan is applied", func() {
 		planSecret.Data = map[string][]byte{
 			"applied-checksum": []byte("applied-checksum"),
 		}
