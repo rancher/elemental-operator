@@ -706,7 +706,7 @@ var _ = Describe("newBootstrapPlan", func() {
 		Expect(err.Error()).To(ContainSubstring("failed to get a boostrap plan for the machine"))
 	})
 
-	It("should succesfully return new boostrap plan", func() {
+	It("should successfully return new boostrap plan", func() {
 		machine.Spec = clusterv1.MachineSpec{
 			Bootstrap: clusterv1.Bootstrap{
 				DataSecretName: ptr.To(boostrapSecret.Name),
@@ -776,7 +776,7 @@ var _ = Describe("setInvetorySelectorAddresses", func() {
 		Expect(err.Error()).To(ContainSubstring("failed to get machine inventory"))
 	})
 
-	It("should succesfully set adresses", func() {
+	It("should successfully set adresses", func() {
 		miSelector.Status.MachineInventoryRef = &corev1.LocalObjectReference{
 			Name: mInventory.Name,
 		}
