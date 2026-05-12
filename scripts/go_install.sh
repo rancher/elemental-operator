@@ -16,6 +16,11 @@ if [ -z "${3}" ]; then
   exit 1
 fi
 
+if [ "${3}" = "latest" ]; then
+  echo "must provide a pinned version as third parameter, 'latest' is not valid"
+  exit 1
+fi
+
 if [ -z "${GOBIN}" ]; then
   echo "GOBIN is not set. Must set GOBIN to install the bin in a specified directory."
   exit 1
