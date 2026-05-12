@@ -1010,6 +1010,11 @@ spec:
                 type: object
               machineName:
                 type: string
+              prefix:
+                description: |-
+                  Prefix is prepended to client-sent label and annotation keys (with a "/" separator).
+                  Defaults to "elemental.cattle.io". Set to "-" to disable prefixing.
+                type: string
               token:
                 description: |-
                   Token is an optional static token for the registration URL.

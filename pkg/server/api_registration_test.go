@@ -231,38 +231,58 @@ func TestMergeInventoryLabels(t *testing.T) {
 	testCase := []struct {
 		data     []byte            // labels to add to the inventory
 		labels   map[string]string // labels already in the inventory
+		prefix   string
 		fail     bool
 		expected map[string]string
 	}{
 		{
 			[]byte(`{"key2":"val2"}`),
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"key1": "val1", "elemental.cattle.io/key2": "val2"},
 		},
 		{
 			[]byte(`{"key2":2}`),
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			true,
 			map[string]string{"key1": "val1"},
 		},
 		{
 			[]byte(`{"key2":"val2", "key3":"val3"}`),
 			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4"},
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"key1": "val1", "key3": "previous_val", "key4": "val4", "elemental.cattle.io/key2": "val2", "elemental.cattle.io/key3": "val3"},
 		},
 		{
 			[]byte{},
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			true,
 			map[string]string{"key1": "val1"},
 		},
 		{
 			[]byte(`{"key2":"val2"}`),
 			nil,
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"elemental.cattle.io/key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			"",
+			false,
+			map[string]string{"key1": "val1", "key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			"custom.prefix/",
+			false,
+			map[string]string{"key1": "val1", "custom.prefix/key2": "val2"},
 		},
 	}
 
@@ -270,7 +290,7 @@ func TestMergeInventoryLabels(t *testing.T) {
 		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
-		err := mergeInventoryLabels(inventory, test.data)
+		err := mergeInventoryLabels(inventory, test.data, test.prefix)
 		if test.fail {
 			assert.Assert(t, err != nil)
 		} else {
@@ -290,38 +310,58 @@ func TestMergeInventoryAnnotations(t *testing.T) {
 	testCase := []struct {
 		data        []byte            // annotations to add to the inventory
 		annotations map[string]string // annotations already in the inventory
+		prefix      string
 		fail        bool
 		expected    map[string]string
 	}{
 		{
 			[]byte(`{"key2":"val2"}`),
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"key1": "val1", "elemental.cattle.io/key2": "val2"},
 		},
 		{
 			[]byte(`{"key2":2}`),
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			true,
 			map[string]string{"key1": "val1"},
 		},
 		{
 			[]byte(`{"key2":"val2", "key3":"val3"}`),
 			map[string]string{"key1": "val1", "elemental.cattle.io/key3": "previous_val"},
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"key1": "val1", "elemental.cattle.io/key3": "val3", "elemental.cattle.io/key2": "val2"},
 		},
 		{
 			[]byte{},
 			map[string]string{"key1": "val1"},
+			"elemental.cattle.io/",
 			true,
 			map[string]string{"key1": "val1"},
 		},
 		{
 			[]byte(`{"key2":"val2"}`),
 			nil,
+			"elemental.cattle.io/",
 			false,
 			map[string]string{"elemental.cattle.io/key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			"",
+			false,
+			map[string]string{"key1": "val1", "key2": "val2"},
+		},
+		{
+			[]byte(`{"key2":"val2"}`),
+			map[string]string{"key1": "val1"},
+			"custom.prefix/",
+			false,
+			map[string]string{"key1": "val1", "custom.prefix/key2": "val2"},
 		},
 	}
 
@@ -329,7 +369,7 @@ func TestMergeInventoryAnnotations(t *testing.T) {
 		inventory := &elementalv1.MachineInventory{}
 		inventory.Annotations = test.annotations
 
-		err := mergeInventoryAnnotations(test.data, inventory)
+		err := mergeInventoryAnnotations(test.data, inventory, test.prefix)
 		if test.fail {
 			assert.Assert(t, err != nil)
 		} else {

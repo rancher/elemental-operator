@@ -45,9 +45,24 @@ type MachineRegistrationSpec struct {
 	// MachineInventoryAnnotations annotations to be added to the created MachineInventory object.
 	// +optional
 	MachineInventoryAnnotations map[string]string `json:"machineInventoryAnnotations,omitempty"`
+	// Prefix is prepended to client-sent label and annotation keys (with a "/" separator).
+	// Defaults to "elemental.cattle.io". Set to "-" to disable prefixing.
+	// +optional
+	Prefix string `json:"prefix,omitempty"`
 	// Config the cloud config that will be used to provision the node.
 	// +optional
 	Config Config `json:"config,omitempty"`
+}
+
+func (s *MachineRegistrationSpec) GetLabelPrefix() string {
+	switch s.Prefix {
+	case "":
+		return "elemental.cattle.io/"
+	case "-":
+		return ""
+	default:
+		return s.Prefix + "/"
+	}
 }
 
 type MachineRegistrationStatus struct {
