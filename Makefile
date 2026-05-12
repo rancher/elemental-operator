@@ -24,6 +24,7 @@ KUBE_VERSION?="v1.27.10"
 CLUSTER_NAME?="operator-e2e"
 COMMITDATE?=$(shell git log -n1 --format="%as")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
+GO_TPM_SUM?=c2e95054ed9aee5a304dc31e9b25f2a945d52764352eec399b007e8214e10a0c
 E2E_CONF_FILE ?= $(ROOT_DIR)/tests/e2e/config/config.yaml
 
 LDFLAGS := -w -s
@@ -226,6 +227,7 @@ vendor:
 	go mod tidy
 	go mod vendor
 	curl -L 'https://github.com/google/go-tpm-tools/archive/refs/tags/$(GO_TPM_TAG).tar.gz' --output go-tpm-tools.tar.gz
+	echo "$(GO_TPM_SUM)  go-tpm-tools.tar.gz" | sha256sum -c -
 	tar xaf go-tpm-tools.tar.gz --strip-components=1 -C vendor/github.com/google/go-tpm-tools
 	rm go-tpm-tools.tar.gz
 
