@@ -43,7 +43,7 @@ BuildRequires:  make
 BuildRequires:  grep
 
 %if 0%{?suse_version}
-BuildRequires:  golang(API) >= 1.23
+BuildRequires:  golang(API) >= 1.25
 BuildRequires:  golang-packaging
 %{go_provides}
 %else
@@ -52,9 +52,9 @@ BuildRequires:  golang-packaging
 %global commit     25abcdc57b9409d4c5b2009cf0a2f9aa6ff647ad
 %gometa
 %if (0%{?centos_version} == 800) || (0%{?rhel_version} == 800)
-BuildRequires:  go1.23
+BuildRequires:  go1.25
 %else
-BuildRequires:  compiler(go-compiler) >= 1.23
+BuildRequires:  compiler(go-compiler) >= 1.25
 %endif
 %endif
 
