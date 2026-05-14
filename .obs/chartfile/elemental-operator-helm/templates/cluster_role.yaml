@@ -7,6 +7,9 @@ rules:
   - ""
   resources:
   - configmaps
+  - pods
+  - secrets
+  - services
   verbs:
   - create
   - delete
@@ -25,39 +28,11 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods/log
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resources:
   - pods/status
+  - services/status
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -68,24 +43,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - get
 - apiGroups:
   - cluster.x-k8s.io
   resources:
@@ -98,129 +55,11 @@ rules:
   - elemental.cattle.io
   resources:
   - machineinventories
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - machineinventories/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - machineinventoryselectors
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - machineinventoryselectors/status
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - machineregistrations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - machineregistrations/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - managedosimages
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - managedosimages/status
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - managedosversionchannels
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - managedosversionchannels/status
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - managedosversions
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - elemental.cattle.io
-  resources:
-  - managedosversions/status
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - elemental.cattle.io
-  resources:
   - seedimages
   verbs:
   - create
@@ -233,9 +72,23 @@ rules:
 - apiGroups:
   - elemental.cattle.io
   resources:
+  - machineinventories/status
+  - machineregistrations/status
   - seedimages/status
   verbs:
   - get
+  - patch
+  - update
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - machineinventoryselectors/status
+  - managedosimages/status
+  - managedosversionchannels/status
+  - managedosversions/status
+  verbs:
+  - get
+  - list
   - patch
   - update
 - apiGroups:
