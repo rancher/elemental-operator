@@ -206,7 +206,7 @@ var _ = Describe("createRBACObjects", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-name",
 				Namespace: "default",
-				UID:       "testuid",
+				UID:       "83970556-78b1-4332-a834-073ad99fbf75",
 			},
 		}
 
