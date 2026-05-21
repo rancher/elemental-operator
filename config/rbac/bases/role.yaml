@@ -131,6 +131,32 @@ rules:
 - apiGroups:
   - elemental.cattle.io
   resources:
+  - managedoschangelogs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - managedoschangelogs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - elemental.cattle.io
+  resources:
+  - managedoschangelogs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - elemental.cattle.io
+  resources:
   - managedosimages
   verbs:
   - create
