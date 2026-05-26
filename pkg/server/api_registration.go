@@ -266,7 +266,7 @@ func (i *InventoryServer) serveLoop(conn *websocket.Conn, inventory *elementalv1
 			}
 			tmpl.Fill(smbiosData)
 		case register.MsgLabels:
-			if err := mergeInventoryLabels(inventory, data, registration.Spec.GetLabelPrefix()); err != nil {
+			if err := mergeInventoryLabels(tmpl, inventory, data, registration.Spec.GetLabelPrefix()); err != nil {
 				return err
 			}
 		case register.MsgAnnotations:

@@ -133,7 +133,7 @@ func updateInventoryAnnotations(tmpl templater.Templater, inv *elementalv1.Machi
 }
 
 // mergeInventoryLabels: merge labels from the client.
-func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte, prefix string) error {
+func mergeInventoryLabels(tmpl templater.Templater, inventory *elementalv1.MachineInventory, data []byte, prefix string) error {
 	labels := map[string]string{}
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
@@ -143,7 +143,20 @@ func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte, 
 		inventory.Labels = map[string]string{}
 	}
 	for key, val := range labels {
-		inventory.Labels[prefix+sanitizeUserInput(key)] = sanitizeLabel(sanitizeUserInput(val))
+		decodedLabel, err := tmpl.Decode(val)
+		if err != nil {
+			if templater.IsValueNotFoundError(err) {
+				log.Warningf("Templater cannot decode label %q: %s", val, err.Error())
+				continue
+			}
+			log.Errorf("Templater failed decoding label %q: %s", val, err.Error())
+			continue
+		}
+		decodedLabel = sanitizeLabel(decodedLabel)
+
+		log.Debugf("Decoded %s into %s, setting it to label %s", val, decodedLabel, key)
+
+		inventory.Labels[prefix+sanitizeUserInput(key)] = decodedLabel
 	}
 	return nil
 }
