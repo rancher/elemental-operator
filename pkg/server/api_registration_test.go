@@ -271,6 +271,13 @@ func TestMergeInventoryLabels(t *testing.T) {
 			map[string]string{"elemental.cattle.io/key2": "val2"},
 		},
 		{
+			[]byte(`{"hostname":"${Runtime/Hostname}"}`),
+			nil,
+			"elemental.cattle.io/",
+			false,
+			map[string]string{"elemental.cattle.io/hostname": "fire"},
+		},
+		{
 			[]byte(`{"key2":"val2"}`),
 			map[string]string{"key1": "val1"},
 			"",
@@ -286,11 +293,20 @@ func TestMergeInventoryLabels(t *testing.T) {
 		},
 	}
 
+	data := map[string]interface{}{
+		"Runtime": map[string]interface{}{
+			"Hostname": "fire",
+		},
+	}
+
+	tmpl := templater.NewTemplater()
+	tmpl.Fill(data)
+
 	for _, test := range testCase {
 		inventory := &elementalv1.MachineInventory{}
 		inventory.Labels = test.labels
 
-		err := mergeInventoryLabels(inventory, test.data, test.prefix)
+		err := mergeInventoryLabels(tmpl, inventory, test.data, test.prefix)
 		if test.fail {
 			assert.Assert(t, err != nil)
 		} else {
