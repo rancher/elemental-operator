@@ -20,7 +20,7 @@ endif
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
 CHART_CRDS?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-crds-$(CHART_VERSION).tgz" -print)
-KUBE_VERSION?="v1.27.10"
+KUBE_VERSION?="v1.34.3"
 CLUSTER_NAME?="operator-e2e"
 COMMITDATE?=$(shell git log -n1 --format="%as")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')

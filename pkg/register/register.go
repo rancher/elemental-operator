@@ -118,6 +118,10 @@ func (r *client) Register(reg elementalv1.Registration, caCert []byte, state *St
 		}
 	}
 
+	if err := sendLabels(conn, reg); err != nil {
+		return nil, fmt.Errorf("failed to send client labels: %w", err)
+	}
+
 	log.Info("Get elemental configuration")
 	if err := WriteMessage(conn, MsgGet, []byte{}); err != nil {
 		return nil, fmt.Errorf("request elemental configuration: %w", err)
@@ -328,6 +332,19 @@ func sendAnnotations(conn *websocket.Conn, reg elementalv1.Registration) error {
 	err := SendJSONData(conn, MsgAnnotations, data)
 	if err != nil {
 		log.Debugf("annotation data:\n%s", litter.Sdump(data))
+		return err
+	}
+	return nil
+}
+
+func sendLabels(conn *websocket.Conn, reg elementalv1.Registration) error {
+	if len(reg.Labels) == 0 {
+		return nil
+	}
+	log.Info("Send client labels")
+	err := SendJSONData(conn, MsgLabels, reg.Labels)
+	if err != nil {
+		log.Debugf("label data:\n%s", litter.Sdump(reg.Labels))
 		return err
 	}
 	return nil

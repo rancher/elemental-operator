@@ -363,6 +363,76 @@ var _ = Describe("elemental-register --reset", Label("registration", "cli", "res
 	})
 })
 
+var _ = Describe("elemental-register --local-labels-file", Label("registration", "cli", "labels"), func() {
+	var fs vfs.FS
+	var err error
+	var fsCleanup func()
+	var cmd *cobra.Command
+	var mockCtrl *gomock.Controller
+	var client *rmocks.MockClient
+	var installer *imocks.MockInstaller
+	var stateHandler *rmocks.MockStateHandler
+	BeforeEach(func() {
+		fs, fsCleanup, err = vfst.NewTestFS(map[string]interface{}{})
+		Expect(err).ToNot(HaveOccurred())
+		mockCtrl = gomock.NewController(GinkgoT())
+		client = rmocks.NewMockClient(mockCtrl)
+		installer = imocks.NewMockInstaller(mockCtrl)
+		stateHandler = rmocks.NewMockStateHandler(mockCtrl)
+		cmd = newCommand(fs, client, stateHandler, installer)
+		DeferCleanup(fsCleanup)
+	})
+	When("using existing default config", func() {
+		BeforeEach(func() {
+			marshalIntoFile(fs, baseConfigFixture, defaultConfigPath)
+			stateHandler.EXPECT().Init(defaultStatePath).Return(nil)
+			stateHandler.EXPECT().Load().Return(stateFixture, nil)
+			stateHandler.EXPECT().Save(stateFixture).Return(nil)
+		})
+		It("should load labels from the default file path", func() {
+			fileLabels := map[string]string{"env": "production", "region": "us-east"}
+			marshalIntoFile(fs, fileLabels, defaultLocalLabelsFile)
+			cmd.SetArgs([]string{})
+			wantReg := baseConfigFixture.Elemental.Registration.DeepCopy()
+			wantReg.Labels = map[string]string{"env": "production", "region": "us-east"}
+			client.EXPECT().
+				Register(*wantReg, []byte(wantReg.CACert), &stateFixture).
+				Return(marshalToBytes(baseConfigFixture), nil)
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+		It("should skip missing labels file without error", func() {
+			cmd.SetArgs([]string{})
+			client.EXPECT().
+				Register(baseConfigFixture.Elemental.Registration, []byte(baseConfigFixture.Elemental.Registration.CACert), &stateFixture).
+				Return(marshalToBytes(baseConfigFixture), nil)
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+		It("should let CLI labels override file labels", func() {
+			fileLabels := map[string]string{"env": "from-file", "region": "us-east"}
+			marshalIntoFile(fs, fileLabels, defaultLocalLabelsFile)
+			cmd.SetArgs([]string{"--label", "env=from-cli"})
+			wantReg := baseConfigFixture.Elemental.Registration.DeepCopy()
+			wantReg.Labels = map[string]string{"env": "from-cli", "region": "us-east"}
+			client.EXPECT().
+				Register(*wantReg, []byte(wantReg.CACert), &stateFixture).
+				Return(marshalToBytes(baseConfigFixture), nil)
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+		It("should load labels from a custom file path", func() {
+			customPath := "/custom/path/labels.yaml"
+			fileLabels := map[string]string{"custom": "label"}
+			marshalIntoFile(fs, fileLabels, customPath)
+			cmd.SetArgs([]string{"--local-labels-file", customPath})
+			wantReg := baseConfigFixture.Elemental.Registration.DeepCopy()
+			wantReg.Labels = map[string]string{"custom": "label"}
+			client.EXPECT().
+				Register(*wantReg, []byte(wantReg.CACert), &stateFixture).
+				Return(marshalToBytes(baseConfigFixture), nil)
+			Expect(cmd.Execute()).ToNot(HaveOccurred())
+		})
+	})
+})
+
 func marshalIntoFile(fs vfs.FS, input any, filePath string) {
 	bytes := marshalToBytes(input)
 	Expect(vfs.MkdirAll(fs, path.Dir(filePath), os.ModePerm)).ToNot(HaveOccurred())
