@@ -187,6 +187,60 @@ var _ = Describe("setRegistrationTokenAndURL", func() {
 		Expect(err.Error()).To(ContainSubstring("server-url is not set"))
 		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
 	})
+
+	It("should use static registration endpoint when set", func() {
+		setting := &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "server-url",
+			},
+			Value: "https://example.com",
+		}
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+		mRegistration.Spec.Token = "my-static-endpoint"
+		Expect(r.setRegistrationTokenAndURL(ctx, mRegistration)).To(Succeed())
+		Expect(mRegistration.Status.RegistrationToken).To(Equal("my-static-endpoint"))
+		Expect(mRegistration.Status.RegistrationURL).To(Equal("https://example.com/elemental/registration/my-static-endpoint"))
+		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
+	})
+
+	It("should return error when static registration endpoint is already in use", func() {
+		setting := &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "server-url",
+			},
+			Value: "https://example.com",
+		}
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+
+		// Create and reconcile the first registration with a static endpoint
+		mRegistration.Spec.Token = "shared-endpoint"
+		Expect(cl.Create(ctx, mRegistration)).To(Succeed())
+		_, err := r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mRegistration.Namespace,
+				Name:      mRegistration.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create a second registration with the same static endpoint
+		mRegistration2 := &elementalv1.MachineRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-name-2",
+				Namespace: "default",
+			},
+			Spec: elementalv1.MachineRegistrationSpec{
+				Token: "shared-endpoint",
+			},
+		}
+		Expect(cl.Create(ctx, mRegistration2)).To(Succeed())
+
+		err = r.setRegistrationTokenAndURL(ctx, mRegistration2)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("already in use"))
+
+		Expect(test.CleanupAndWait(ctx, cl, setting, mRegistration2)).To(Succeed())
+	})
 })
 
 var _ = Describe("createRBACObjects", func() {
