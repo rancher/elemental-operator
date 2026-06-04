@@ -109,6 +109,8 @@ type Registration struct {
 	Auth string `json:"auth,omitempty" yaml:"auth,omitempty" mapstructure:"auth"`
 	// +optional
 	NoToolkit bool `json:"no-toolkit,omitempty" yaml:"no-toolkit,omitempty" mapstructure:"no-toolkit"`
+	// +optional
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" mapstructure:"labels"`
 }
 
 type SystemAgent struct {

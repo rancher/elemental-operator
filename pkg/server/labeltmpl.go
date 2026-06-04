@@ -132,24 +132,38 @@ func updateInventoryAnnotations(tmpl templater.Templater, inv *elementalv1.Machi
 	return nil
 }
 
-// mergeInventoryLabels: DEPRECATED
-// Used to merge client side labels, now deprecated would just skip and log an error.
-func mergeInventoryLabels(inventory *elementalv1.MachineInventory, data []byte) error {
+// mergeInventoryLabels: merge labels from the client.
+func mergeInventoryLabels(tmpl templater.Templater, inventory *elementalv1.MachineInventory, data []byte, prefix string) error {
 	labels := map[string]string{}
 	if err := json.Unmarshal(data, &labels); err != nil {
 		return fmt.Errorf("cannot extract inventory labels: %w", err)
 	}
-	log.Debugf("received labels: %v", labels)
-	log.Errorf("received labels from registering client: no more supported, skipping")
+	log.Debug("Adding labels from client data")
 	if inventory.Labels == nil {
 		inventory.Labels = map[string]string{}
+	}
+	for key, val := range labels {
+		decodedLabel, err := tmpl.Decode(val)
+		if err != nil {
+			if templater.IsValueNotFoundError(err) {
+				log.Warningf("Templater cannot decode label %q: %s", val, err.Error())
+				continue
+			}
+			log.Errorf("Templater failed decoding label %q: %s", val, err.Error())
+			continue
+		}
+		decodedLabel = sanitizeLabel(decodedLabel)
+
+		log.Debugf("Decoded %s into %s, setting it to label %s", val, decodedLabel, key)
+
+		inventory.Labels[prefix+sanitizeUserInput(key)] = decodedLabel
 	}
 	return nil
 }
 
 // mergeInventoryAnnotations: merge annotations from the client, which include dynamic data,
-// e.g., the IP address. All annotation keys are prepended with "elemental.cattle.io/".
-func mergeInventoryAnnotations(data []byte, mInventory *elementalv1.MachineInventory) error {
+// e.g., the IP address.
+func mergeInventoryAnnotations(data []byte, mInventory *elementalv1.MachineInventory, prefix string) error {
 	annotations := map[string]string{}
 	if err := json.Unmarshal(data, &annotations); err != nil {
 		return fmt.Errorf("cannot extract inventory annotations: %w", err)
@@ -159,7 +173,7 @@ func mergeInventoryAnnotations(data []byte, mInventory *elementalv1.MachineInven
 		mInventory.Annotations = map[string]string{}
 	}
 	for key, val := range annotations {
-		mInventory.Annotations[fmt.Sprintf("elemental.cattle.io/%s", sanitizeUserInput(key))] = sanitizeUserInput(val)
+		mInventory.Annotations[prefix+sanitizeUserInput(key)] = sanitizeUserInput(val)
 	}
 	return nil
 }

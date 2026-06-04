@@ -29,12 +29,9 @@ import (
 	"testing"
 	"time"
 
-	checkver "github.com/hashicorp/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	kubectl "github.com/rancher-sandbox/ele-testhelpers/kubectl"
-	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
-	e2eConfig "github.com/rancher/elemental-operator/tests/e2e/config"
 	fleetv1 "github.com/rancher/fleet/pkg/apis/fleet.cattle.io/v1alpha1"
 	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	appsv1 "k8s.io/api/apps/v1"
@@ -44,6 +41,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
+	e2eConfig "github.com/rancher/elemental-operator/tests/e2e/config"
 )
 
 func init() {
@@ -259,8 +259,6 @@ var _ = BeforeSuite(func() {
 				"--set", "bootstrapPassword="+password,
 				"--set", "extraEnv[0].name=CATTLE_SERVER_URL",
 				"--set", "extraEnv[0].value=https://"+hostname,
-				"--set", "extraEnv[1].name=CATTLE_BOOTSTRAP_PASSWORD",
-				"--set", "extraEnv[1].value="+password,
 				"--set", "privateCA=true",
 				"--set", "agentTLSMode=system-store",
 				"--namespace", cattleSystemNamespace,
@@ -268,33 +266,11 @@ var _ = BeforeSuite(func() {
 
 			Eventually(func() bool {
 				return isDeploymentReady(cattleSystemNamespace, rancherName)
+			}, 10*time.Minute, 2*time.Second).Should(BeTrue())
+
+			Eventually(func() bool {
+				return isDeploymentReady(cattleFleetNamespace, fleetAgent)
 			}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-
-			rancherVer, err := checkver.NewVersion(e2eCfg.RancherVersion)
-			Expect(err).ToNot(HaveOccurred())
-
-			// fleet is deployed as statefulSet since 2.9
-			fleetStatefulSetVer, err := checkver.NewVersion("2.9.0")
-			Expect(err).ToNot(HaveOccurred())
-			if rancherVer.GreaterThanOrEqual(fleetStatefulSetVer) {
-				Eventually(func() bool {
-					return isStatefulSetReady(cattleFleetNamespace, fleetAgent)
-				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-			} else {
-				Eventually(func() bool {
-					return isDeploymentReady(cattleFleetNamespace, fleetAgent)
-				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-			}
-
-			// capi-controller exists only since Rancher Manager v2.7.8
-			nonCapiVer, err := checkver.NewVersion("2.7.8")
-			Expect(err).ToNot(HaveOccurred())
-
-			if rancherVer.GreaterThanOrEqual(nonCapiVer) {
-				Eventually(func() bool {
-					return isDeploymentReady(cattleCapiNamespace, capiController)
-				}, 5*time.Minute, 2*time.Second).Should(BeTrue())
-			}
 
 			Eventually(func() bool {
 				return isDeploymentReady(cattleSystemNamespace, rancherWebhook)

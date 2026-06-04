@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KUBE_VERSION=${KUBE_VERSION:-v1.27.10}
+KUBE_VERSION=${KUBE_VERSION:-v1.34.3}
 CLUSTER_NAME="${CLUSTER_NAME:-operator-e2e}"
 
 if ! kind get clusters | grep "$CLUSTER_NAME"; then
@@ -35,5 +35,5 @@ kubectl wait --for=condition=Ready node/operator-e2e-control-plane
 # https://github.com/kubernetes/enhancements/tree/master/keps/sig-cluster-lifecycle/kubeadm/2067-rename-master-label-taint
 # https://kubernetes.io/blog/2022/04/07/upcoming-changes-in-kubernetes-1-24/#api-removals-deprecations-and-other-changes-for-kubernetes-1-24
 # system-upgrade-controller 0.9.1 still uses it to schedule pods
-kubectl label nodes --all node-role.kubernetes.io/master=
+kubectl label nodes --overwrite=true --all node-role.kubernetes.io/master=
 kubectl get nodes -o wide
