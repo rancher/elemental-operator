@@ -6,15 +6,15 @@ operatorReplicas: 1
 noSetup: false
 artifactsDir: ../../_artifacts
 
-nginxVersion: controller-v1.9.6
+nginxVersion: controller-v1.15.1
 nginxURL: https://raw.githubusercontent.com/kubernetes/ingress-nginx/${NGINX_VERSION}/deploy/static/provider/kind/deploy.yaml
 
-certManagerVersion: v1.14.2
+certManagerVersion: v1.20.2
 certManagerChartURL: https://charts.jetstack.io/charts/cert-manager-${CERT_MANAGER_VERSION}.tgz
 
-rancherVersion: 2.9.2
+rancherVersion: 2.13.3
 rancherChartURL: https://releases.rancher.com/server-charts/latest/rancher-${RANCHER_VERSION}.tgz
 
-systemUpgradeControllerVersion: v0.13.4
+systemUpgradeControllerVersion: v0.19.2
 systemUpgradeControllerURL: https://github.com/rancher/system-upgrade-controller/releases/download/${SYSTEM_UPGRADE_CONTROLLER_VERSION}/system-upgrade-controller.yaml
 systemUpgradeControllerCRDsURL: https://github.com/rancher/system-upgrade-controller/releases/download/${SYSTEM_UPGRADE_CONTROLLER_VERSION}/crd.yaml
