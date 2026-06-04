@@ -130,6 +130,10 @@ spec:
                           emulated-tpm-seed:
                             format: int64
                             type: integer
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
                           no-smbios:
                             type: boolean
                           no-toolkit:
@@ -225,6 +229,11 @@ spec:
                         type: object
                     type: object
                 type: object
+              labelPrefix:
+                description: |-
+                  LabelPrefix is prepended to client-sent label and annotation keys (with a "/" separator).
+                  Defaults to "elemental.cattle.io". Set to "-" to disable prefixing.
+                type: string
               machineInventoryAnnotations:
                 additionalProperties:
                   type: string

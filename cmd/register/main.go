@@ -43,6 +43,7 @@ const (
 	defaultLiveStatePath            = "/tmp/registration/state.yaml"
 	defaultConfigPath               = "/oem/registration/config.yaml"
 	defaultLiveConfigPath           = "/run/initramfs/live/livecd-cloud-config.yaml"
+	defaultLocalLabelsFile          = "/etc/elemental/labels.yaml"
 	registrationUpdateSuppressTimer = 24 * time.Hour
 )
 
@@ -55,6 +56,8 @@ var (
 	disableBootEntry bool
 	configPath       string
 	statePath        string
+	localLabelsFile  string
+	labels           map[string]string
 )
 
 var (
@@ -101,6 +104,17 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 			// Initialize Config
 			if err := initConfig(fs); err != nil {
 				return fmt.Errorf("initializing configuration: %w", err)
+			}
+			// Merge labels from local file into config
+			if err := mergeLocalLabelsFile(fs); err != nil {
+				return fmt.Errorf("loading local labels file: %w", err)
+			}
+			// Merge CLI labels into config (overrides file labels)
+			for k, v := range labels {
+				if cfg.Elemental.Registration.Labels == nil {
+					cfg.Elemental.Registration.Labels = map[string]string{}
+				}
+				cfg.Elemental.Registration.Labels[k] = v
 			}
 			// Load Registration State
 			if err := stateHandler.Init(statePath); err != nil {
@@ -191,6 +205,8 @@ func newCommand(fs vfs.FS, client register.Client, stateHandler register.StateHa
 	cmd.Flags().BoolVar(&installation, "install", false, "Install a new machine")
 	cmd.Flags().BoolVar(&cfg.Elemental.Registration.NoToolkit, "no-toolkit", false, "No OS management via elemental-toolkit, only Install agent config files to local filesystem (for pre-installed hosts)")
 	cmd.Flags().BoolVar(&disableBootEntry, "disable-boot-entry", false, "Don't create an EFI entry for the system during install/reset")
+	cmd.Flags().StringToStringVar(&labels, "label", nil, "Client-side labels to add to the MachineInventory (key=value pairs)")
+	cmd.Flags().StringVar(&localLabelsFile, "local-labels-file", defaultLocalLabelsFile, "Path to a YAML file containing labels to add to the MachineInventory")
 	return cmd
 }
 
@@ -238,6 +254,29 @@ func initConfig(fs vfs.FS) error {
 	}
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return fmt.Errorf("decoding configuration: %w", err)
+	}
+	return nil
+}
+
+func mergeLocalLabelsFile(fs vfs.FS) error {
+	if _, err := fs.Stat(localLabelsFile); err != nil {
+		log.Debugf("Local labels file '%s' not found, skipping", localLabelsFile)
+		return nil
+	}
+	data, err := fs.ReadFile(localLabelsFile)
+	if err != nil {
+		return fmt.Errorf("reading local labels file '%s': %w", localLabelsFile, err)
+	}
+	fileLabels := map[string]string{}
+	if err := yaml.Unmarshal(data, &fileLabels); err != nil {
+		return fmt.Errorf("parsing local labels file '%s': %w", localLabelsFile, err)
+	}
+	log.Infof("Loaded %d labels from '%s'", len(fileLabels), localLabelsFile)
+	for k, v := range fileLabels {
+		if cfg.Elemental.Registration.Labels == nil {
+			cfg.Elemental.Registration.Labels = map[string]string{}
+		}
+		cfg.Elemental.Registration.Labels[k] = v
 	}
 	return nil
 }
