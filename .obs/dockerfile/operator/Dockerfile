@@ -18,7 +18,7 @@ COPY --from=BASE /installroot /
 
 RUN /usr/sbin/update-ca-certificates
 
-ARG IMAGE_REPO=registry.suse.com/rancher/elemental-operator:%VERSION%-%RELEASE%
+ARG IMAGE_REPO=registry.suse.com/rancher/elemental-operator:%OPERATOR_VERSION%-%RELEASE%
 
 # Define labels according to https://en.opensuse.org/Building_derived_containers
 # labelprefix=com.suse.elemental
