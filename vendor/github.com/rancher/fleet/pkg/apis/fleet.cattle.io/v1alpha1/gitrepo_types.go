@@ -8,15 +8,13 @@ func init() {
 	InternalSchemeBuilder.Register(&GitRepo{}, &GitRepoList{})
 }
 
-var (
+const (
 	CommitLabel          = "fleet.cattle.io/commit"
 	RepoLabel            = "fleet.cattle.io/repo-name"
 	BundleLabel          = "fleet.cattle.io/bundle-name"
 	BundleNamespaceLabel = "fleet.cattle.io/bundle-namespace"
 	CreatedByUserIDLabel = "fleet.cattle.io/created-by-user-id"
-)
 
-const (
 	GitRepoAcceptedCondition = "Accepted"
 )
 
@@ -83,8 +81,8 @@ type GitRepoSpec struct {
 	// +nullable
 	HelmSecretNameForPaths string `json:"helmSecretNameForPaths,omitempty"`
 
-	// HelmRepoURLRegex Helm credentials will be used if the helm repo matches this regex
-	// Credentials will always be used if this is empty or not provided.
+	// HelmRepoURLRegex Helm credentials will be used if the helm repo matches this regex.
+	// Credentials will not be used if this is empty or not provided.
 	// +nullable
 	HelmRepoURLRegex string `json:"helmRepoURLRegex,omitempty"`
 
@@ -198,19 +196,6 @@ type GitRepoStatus struct {
 	LastSyncedImageScanTime metav1.Time `json:"lastSyncedImageScanTime,omitempty"`
 	// LastPollingTime is the last time the polling check was triggered
 	LastPollingTime metav1.Time `json:"lastPollingTriggered,omitempty"`
-}
-
-type GitRepoDisplay struct {
-	// ReadyBundleDeployments is a string in the form "%d/%d", that describes the
-	// number of ready bundledeployments over the total number of bundledeployments.
-	ReadyBundleDeployments string `json:"readyBundleDeployments,omitempty"`
-	// State is the state of the GitRepo, e.g. "GitUpdating" or the maximal
-	// BundleState according to StateRank.
-	State string `json:"state,omitempty"`
-	// Message contains the relevant message from the deployment conditions.
-	Message string `json:"message,omitempty"`
-	// Error is true if a message is present.
-	Error bool `json:"error,omitempty"`
 }
 
 // CommitSpec specifies how to commit changes to the git repository
