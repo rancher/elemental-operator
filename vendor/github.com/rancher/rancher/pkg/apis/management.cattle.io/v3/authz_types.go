@@ -179,6 +179,13 @@ type GlobalRole struct {
 	// +optional
 	NamespacedRules map[string][]rbacv1.PolicyRule `json:"namespacedRules,omitempty"`
 
+	// InheritedNamespacedRules are the rules that are active in each namespace of every cluster besides
+	// the local cluster. If the namespace does not exist in a downstream cluster, the rules will not be applied.
+	// * has no special meaning in the keys - these keys are read as raw strings
+	// and must exactly match with one existing namespace.
+	// +optional
+	InheritedNamespacedRules map[string][]rbacv1.PolicyRule `json:"inheritedNamespacedRules,omitempty"`
+
 	// InheritedFleetWorkspacePermissions are the permissions granted by this GlobalRole in every fleet workspace besides
 	// the local one.
 	// +optional
@@ -209,12 +216,11 @@ type GlobalRoleStatus struct {
 	// +optional
 	LastUpdate string `json:"lastUpdateTime,omitempty"`
 
-	// Summary is a string. One of "Complete", "InProgress" or "Error".
+	// Summary represents the summary of all conditions of the GlobalRole. Either "Completed" or "Error".
 	// +optional
 	Summary string `json:"summary,omitempty"`
 
-	// Conditions is a slice of Condition, indicating the status of specific backing RBAC objects.
-	// There is one condition per ClusterRole and Role managed by the GlobalRole.
+	// Conditions is a slice of Condition, indicating the status of specific backing RBAC objects in the local cluster.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }

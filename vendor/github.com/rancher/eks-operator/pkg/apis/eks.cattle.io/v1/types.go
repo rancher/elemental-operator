@@ -36,6 +36,7 @@ type EKSClusterConfigSpec struct {
 	AmazonCredentialSecret string            `json:"amazonCredentialSecret"`
 	DisplayName            string            `json:"displayName" norman:"noupdate"`
 	Region                 string            `json:"region" norman:"noupdate"`
+	IPFamily               *string           `json:"ipFamily,omitempty" norman:"noupdate,pointer"`
 	Imported               bool              `json:"imported" norman:"noupdate"`
 	KubernetesVersion      *string           `json:"kubernetesVersion" norman:"pointer"`
 	Tags                   map[string]string `json:"tags"`
