@@ -17,10 +17,10 @@ limitations under the License.
 package tpm
 
 import (
-	"math/big"
+	"hash/fnv"
 	"math/rand"
-	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/jaypipes/ghw"
 	gotpm "github.com/rancher-sandbox/go-tpm"
@@ -94,15 +94,15 @@ func randomTPMSeed() int64 {
 		emulatedSeed = rand.Int63()
 		log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
 	} else {
-		uuid := strings.Replace(data.UUID, "-", "", -1)
-		var i big.Int
-		_, converted := i.SetString(uuid, 16)
-		if !converted {
+		u, err := uuid.Parse(data.UUID)
+		if err != nil {
 			emulatedSeed = rand.Int63()
-			log.Debugf("TPM emulation using random seed: %d", emulatedSeed)
+			log.Debugf("TPM emulation: invalid UUID %q, using random seed: %d", data.UUID, emulatedSeed)
 		} else {
-			emulatedSeed = i.Int64()
-			log.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", uuid, emulatedSeed)
+			h := fnv.New64a()
+			h.Write(u[:])
+			emulatedSeed = int64(h.Sum64())
+			log.Debugf("TPM emulation using system UUID %s, resulting in seed: %d", data.UUID, emulatedSeed)
 		}
 	}
 	return emulatedSeed
