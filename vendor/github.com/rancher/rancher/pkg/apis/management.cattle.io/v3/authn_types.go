@@ -229,11 +229,14 @@ type Principals struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// Group identifies an identity provider's group that is provisioned via SCIM.
 type Group struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	DisplayName string `json:"displayName,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	ExternalID  string `json:"externalId,omitempty"`
 }
 
 // +genclient
@@ -456,6 +459,18 @@ type AzureADConfig struct {
 	ApplicationSecret     string `json:"applicationSecret,omitempty" norman:"required,type=password"`
 	RancherURL            string `json:"rancherUrl,omitempty" norman:"required,notnullable"`
 	GroupMembershipFilter string `json:"groupMembershipFilter,omitempty"`
+
+	// EndSessionEndpoint overrides the Azure AD end_session_endpoint used for SSO logout.
+	// If empty, defaults to {Endpoint}/{TenantID}/oauth2/v2.0/logout.
+	EndSessionEndpoint string `json:"endSessionEndpoint,omitempty"`
+
+	// LogoutAllEnabled enables SSO logout (RP-Initiated Logout) for this provider.
+	// Can be set only if AuthConfig.LogoutAllSupported is true.
+	LogoutAllEnabled bool `json:"logoutAllEnabled,omitempty"`
+
+	// LogoutAllForced, when set, makes SSO logout the only accepted logout path.
+	// Requires LogoutAllEnabled to be true.
+	LogoutAllForced bool `json:"logoutAllForced,omitempty"`
 }
 
 type AzureADConfigTestOutput struct {
@@ -721,6 +736,19 @@ type OIDCConfig struct {
 
 	// EmailClaim is used instead of email
 	EmailClaim string `json:"emailClaim,omitempty"`
+
+	// PKCE Method - leave empty for no PKCE or S256 for S256
+	// verification.
+	PKCEMethod string `json:"pkceMethod"`
+
+	// RancherAPIHost should be the base URL for accessing Rancher through the
+	// web. e.g. https://rancher.example.com.
+	RancherAPIHost string `json:"rancherApiHost"`
+
+	// clientAuthenticatedSearch indicates that we should search with the
+	// client/secret rather than the user credentials if the underlying provider
+	// supports this.
+	ClientAuthenticatedSearch bool `json:"clientAuthenticatedSearch"`
 }
 
 type OIDCTestOutput struct {
@@ -731,10 +759,6 @@ type OIDCApplyInput struct {
 	OIDCConfig OIDCConfig `json:"oidcConfig,omitempty"`
 	Code       string     `json:"code,omitempty"`
 	Enabled    bool       `json:"enabled,omitempty"`
-}
-
-type KeyCloakOIDCConfig struct {
-	OIDCConfig `json:",inline" mapstructure:",squash"`
 }
 
 // +genclient
@@ -766,6 +790,11 @@ type GenericOIDCTestOutput struct {
 // the configuration for the OIDC provider as well as an auth code.
 type GenericOIDCApplyInput struct {
 	OIDCApplyInput `json:",inline" mapstructure:",squash"`
+}
+
+// KeyCloakOIDCConfig is the wrapper for the Generic OIDC provider to hold the OIDC Configuration
+type KeyCloakOIDCConfig struct {
+	OIDCConfig `json:",inline" mapstructure:",squash"`
 }
 
 // GenericOIDCConfig is a wrapper for the AWS Cognito provider holding the OIDC Configuration
