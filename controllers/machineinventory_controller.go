@@ -271,7 +271,12 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	networkNeedsReset := mInventory.Spec.Network.Configurator != network.ConfiguratorNone
 
 	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
-	if unmanagedFound && unmanaged == "true" {
+	// Backward-compat / labelPrefix edge-case:
+	// When MachineRegistration.spec.labelPrefix is "-", prefixing of client-sent
+	// dynamic annotations is disabled, which may result in the operator storing
+	// the unmanaged flag under the unprefixed key "os.unmanaged".
+	unmanagedUnprefixed, unmanagedUnprefixedFound := mInventory.Annotations["os.unmanaged"]
+	if (unmanagedFound && unmanaged == "true") || (unmanagedUnprefixedFound && unmanagedUnprefixed == "true") {
 		checksum, resetPlan, err = r.newUnmanagedResetPlan(ctx)
 	} else {
 		checksum, resetPlan, err = r.newResetPlan(ctx, networkNeedsReset)
