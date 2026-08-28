@@ -103,8 +103,8 @@ github.com/google/gnostic-models/extensions
 github.com/google/gnostic-models/jsonschema
 github.com/google/gnostic-models/openapiv2
 github.com/google/gnostic-models/openapiv3
-# github.com/google/go-attestation v0.5.1
-## explicit; go 1.20
+# github.com/google/go-attestation v0.6.1
+## explicit; go 1.24.0
 github.com/google/go-attestation/attest
 github.com/google/go-attestation/attest/internal
 # github.com/google/go-cmp v0.7.0
@@ -114,23 +114,16 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
-# github.com/google/go-tpm v0.9.7
+# github.com/google/go-tpm v0.9.8
 ## explicit; go 1.22
 github.com/google/go-tpm/legacy/tpm2
 github.com/google/go-tpm/legacy/tpm2/credactivation
-github.com/google/go-tpm/tpm
 github.com/google/go-tpm/tpmutil
 github.com/google/go-tpm/tpmutil/tbs
 # github.com/google/go-tpm-tools v0.4.7
 ## explicit; go 1.22
 github.com/google/go-tpm-tools/simulator
 github.com/google/go-tpm-tools/simulator/internal
-# github.com/google/go-tspi v0.3.0
-## explicit; go 1.12
-github.com/google/go-tspi/attestation
-github.com/google/go-tspi/tspi
-github.com/google/go-tspi/tspiconst
-github.com/google/go-tspi/verification
 # github.com/google/pprof v0.0.0-20250820193118-f64d9cf942d6
 ## explicit; go 1.24.0
 github.com/google/pprof/profile

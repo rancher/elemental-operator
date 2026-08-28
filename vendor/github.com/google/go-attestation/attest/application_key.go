@@ -63,6 +63,13 @@ type Algorithm string
 const (
 	ECDSA Algorithm = "ECDSA"
 	RSA   Algorithm = "RSA"
+
+	// Windows specific ECDSA CNG algorithm identifiers.
+	// NOTE: Using ECDSA will default to P256.
+	// Ref: https://learn.microsoft.com/en-us/windows/win32/SecCNG/cng-algorithm-identifiers
+	P256 Algorithm = "ECDSA_P256"
+	P384 Algorithm = "ECDSA_P384"
+	P521 Algorithm = "ECDSA_P521"
 )
 
 // KeyConfig encapsulates parameters for minting keys.
@@ -76,12 +83,34 @@ type KeyConfig struct {
 	// If nil, the default SRK (i.e. RSA with handle 0x81000001) is assumed.
 	// Supported only by TPM 2.0 on Linux.
 	Parent *ParentKeyConfig
+	// QualifyingData is an optional data that will be included into
+	// a TPM-generated signature of the minted key.
+	// It may contain any data chosen by the caller.
+	QualifyingData []byte
 }
 
 // defaultConfig is used when no other configuration is specified.
 var defaultConfig = &KeyConfig{
 	Algorithm: ECDSA,
 	Size:      256,
+}
+
+// Size returns the bit size associated with an algorithm.
+func (a Algorithm) Size() int {
+	switch a {
+	case RSA:
+		return 2048
+	case ECDSA:
+		return 256
+	case P256:
+		return 256
+	case P384:
+		return 384
+	case P521:
+		return 521
+	default:
+		return 0
+	}
 }
 
 // Public returns the public key corresponding to the private key.
