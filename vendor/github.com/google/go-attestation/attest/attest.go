@@ -24,19 +24,7 @@ import (
 	"strings"
 
 	"github.com/google/go-tpm/legacy/tpm2"
-	"github.com/google/go-tpm/tpm"
 	"github.com/google/go-tpm/tpmutil"
-)
-
-// TPMVersion is used to configure a preference in
-// which TPM to use, if multiple are available.
-type TPMVersion uint8
-
-// TPM versions
-const (
-	TPMVersionAgnostic TPMVersion = iota
-	TPMVersion12
-	TPMVersion20
 )
 
 // TPMInterface indicates how the client communicates
@@ -60,11 +48,6 @@ type CommandChannelTPM20 interface {
 
 // OpenConfig encapsulates settings passed to OpenTPM().
 type OpenConfig struct {
-	// TPMVersion indicates which TPM version the library should
-	// attempt to use. If the specified version is not available,
-	// ErrTPMNotAvailable is returned. Defaults to TPMVersionAgnostic.
-	TPMVersion TPMVersion
-
 	// CommandChannel provides a TPM 2.0 command channel, which can be
 	// used in-lieu of any TPM present on the platform.
 	CommandChannel CommandChannelTPM20
@@ -117,12 +100,20 @@ type ak interface {
 	activateCredential(tpm tpmBase, in EncryptedCredential, ek *EK) ([]byte, error)
 	quote(t tpmBase, nonce []byte, alg HashAlg, selectedPCRs []int) (*Quote, error)
 	attestationParameters() AttestationParameters
-	certify(tb tpmBase, handle interface{}) (*CertificationParameters, error)
+	certify(tb tpmBase, handle any, opts CertifyOpts) (*CertificationParameters, error)
+	signMsg(tb tpmBase, msg []byte, pub crypto.PublicKey, opts crypto.SignerOpts) ([]byte, error)
 }
 
 // AK represents a key which can be used for attestation.
 type AK struct {
-	ak ak
+	ak  ak
+	pub crypto.PublicKey
+}
+
+// Public returns the public key for the AK. This is only supported for TPM 2.0
+// on Linux currently.
+func (k *AK) Public() crypto.PublicKey {
+	return k.pub
 }
 
 // Close unloads the AK from the system.
@@ -147,7 +138,7 @@ func (k *AK) ActivateCredential(tpm *TPM, in EncryptedCredential) (secret []byte
 	return k.ak.activateCredential(tpm.tpm, in, nil)
 }
 
-// ActivateCredential decrypts the secret using the key to prove that the AK
+// ActivateCredentialWithEK decrypts the secret using the key to prove that the AK
 // was generated on the same TPM as the EK. This method can be used with TPMs
 // that have an ECC EK. The 'ek' argument must be one of EKs returned from
 // TPM.EKs() or TPM.EKCertificates().
@@ -184,16 +175,27 @@ func (k *AK) AttestationParameters() AttestationParameters {
 // certification parameters which allow to verify the properties of the attested
 // key. Depending on the actual instantiation it can accept different handle
 // types (e.g., tpmutil.Handle on Linux or uintptr on Windows).
-func (k *AK) Certify(tpm *TPM, handle interface{}) (*CertificationParameters, error) {
-	return k.ak.certify(tpm.tpm, handle)
+func (k *AK) Certify(tpm *TPM, handle any) (*CertificationParameters, error) {
+	return k.ak.certify(tpm.tpm, handle, CertifyOpts{})
+}
+
+// SignMsg signs the message (not the digest) with the AK. Note that AK is a
+// restricted signing key, it cannot sign a digest directly.
+func (k *AK) SignMsg(tpm *TPM, msg []byte, opts crypto.SignerOpts) ([]byte, error) {
+	return k.ak.signMsg(tpm.tpm, msg, k.pub, opts)
 }
 
 // AKConfig encapsulates parameters for minting keys.
 type AKConfig struct {
+	// Optionally set unique name for AK on Windows.
+	Name string
 	// Parent describes the Storage Root Key that will be used as a parent.
 	// If nil, the default SRK (i.e. RSA with handle 0x81000001) is assumed.
 	// Supported only by TPM 2.0 on Linux.
 	Parent *ParentKeyConfig
+
+	// If not specified, the default algorithm (RSA) is assumed.
+	Algorithm Algorithm
 }
 
 // EncryptedCredential represents encrypted parameters which must be activated
@@ -206,7 +208,6 @@ type EncryptedCredential struct {
 // Quote encapsulates the results of a Quote operation against the TPM,
 // using an attestation key.
 type Quote struct {
-	Version   TPMVersion
 	Quote     []byte
 	Signature []byte
 }
@@ -228,7 +229,7 @@ func (p *PCR) QuoteVerified() bool {
 	return p.quoteVerified
 }
 
-// EK is a burned-in endorcement key bound to a TPM. This optionally contains
+// EK is a burned-in endorsement key bound to a TPM. This optionally contains
 // a certificate that can chain to the TPM manufacturer.
 type EK struct {
 	// Public key of the EK.
@@ -293,49 +294,38 @@ type AKPublic struct {
 
 // ParseAKPublic parses the Public blob from the AttestationParameters,
 // returning the public key and signing parameters for the key.
-func ParseAKPublic(version TPMVersion, public []byte) (*AKPublic, error) {
-	switch version {
-	case TPMVersion12:
-		rsaPub, err := tpm.UnmarshalPubRSAPublicKey(public)
-		if err != nil {
-			return nil, fmt.Errorf("parsing public key: %v", err)
-		}
-		return &AKPublic{Public: rsaPub, Hash: crypto.SHA1}, nil
-	case TPMVersion20:
-		pub, err := tpm2.DecodePublic(public)
-		if err != nil {
-			return nil, fmt.Errorf("parsing TPM public key structure: %v", err)
-		}
-		switch {
-		case pub.RSAParameters == nil && pub.ECCParameters == nil:
-			return nil, errors.New("parsing public key: missing asymmetric parameters")
-		case pub.RSAParameters != nil && pub.RSAParameters.Sign == nil:
-			return nil, errors.New("parsing public key: missing rsa signature scheme")
-		case pub.ECCParameters != nil && pub.ECCParameters.Sign == nil:
-			return nil, errors.New("parsing public key: missing ecc signature scheme")
-		}
-
-		pubKey, err := pub.Key()
-		if err != nil {
-			return nil, fmt.Errorf("parsing public key: %v", err)
-		}
-
-		var h crypto.Hash
-		switch pub.Type {
-		case tpm2.AlgRSA:
-			h, err = pub.RSAParameters.Sign.Hash.Hash()
-		case tpm2.AlgECC:
-			h, err = pub.ECCParameters.Sign.Hash.Hash()
-		default:
-			return nil, fmt.Errorf("unsupported public key type 0x%x", pub.Type)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("invalid public key hash: %v", err)
-		}
-		return &AKPublic{Public: pubKey, Hash: h}, nil
-	default:
-		return nil, fmt.Errorf("unknown tpm version 0x%x", version)
+func ParseAKPublic(public []byte) (*AKPublic, error) {
+	pub, err := tpm2.DecodePublic(public)
+	if err != nil {
+		return nil, fmt.Errorf("parsing TPM public key structure: %v", err)
 	}
+	switch {
+	case pub.RSAParameters == nil && pub.ECCParameters == nil:
+		return nil, errors.New("parsing public key: missing asymmetric parameters")
+	case pub.RSAParameters != nil && pub.RSAParameters.Sign == nil:
+		return nil, errors.New("parsing public key: missing rsa signature scheme")
+	case pub.ECCParameters != nil && pub.ECCParameters.Sign == nil:
+		return nil, errors.New("parsing public key: missing ecc signature scheme")
+	}
+
+	pubKey, err := pub.Key()
+	if err != nil {
+		return nil, fmt.Errorf("parsing public key: %v", err)
+	}
+
+	var h crypto.Hash
+	switch pub.Type {
+	case tpm2.AlgRSA:
+		h, err = pub.RSAParameters.Sign.Hash.Hash()
+	case tpm2.AlgECC:
+		h, err = pub.ECCParameters.Sign.Hash.Hash()
+	default:
+		return nil, fmt.Errorf("unsupported public key type 0x%x", pub.Type)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid public key hash: %v", err)
+	}
+	return &AKPublic{Public: pubKey, Hash: h}, nil
 }
 
 // Verify is used to prove authenticity of the PCR measurements. It ensures that
@@ -352,14 +342,7 @@ func ParseAKPublic(version TPMVersion, public []byte) (*AKPublic, error) {
 // nonce is used to tie additional data to the quote, the additional data should be
 // hashed to construct the nonce.
 func (a *AKPublic) Verify(quote Quote, pcrs []PCR, nonce []byte) error {
-	switch quote.Version {
-	case TPMVersion12:
-		return a.validate12Quote(quote, pcrs, nonce)
-	case TPMVersion20:
-		return a.validate20Quote(quote, pcrs, nonce)
-	default:
-		return fmt.Errorf("quote used unknown tpm version 0x%x", quote.Version)
-	}
+	return a.validateQuote(quote, pcrs, nonce)
 }
 
 // VerifyAll uses multiple quotes to verify the authenticity of all PCR
@@ -396,41 +379,62 @@ func (a *AKPublic) VerifyAll(quotes []Quote, pcrs []PCR, nonce []byte) error {
 // HashAlg identifies a hashing Algorithm.
 type HashAlg uint8
 
-// Valid hash algorithms.
+// Known valid hash algorithms.
 var (
 	HashSHA1   = HashAlg(tpm2.AlgSHA1)
 	HashSHA256 = HashAlg(tpm2.AlgSHA256)
+	HashSHA384 = HashAlg(tpm2.AlgSHA384)
+	HashSHA512 = HashAlg(tpm2.AlgSHA512)
 )
 
-func (a HashAlg) cryptoHash() crypto.Hash {
-	switch a {
-	case HashSHA1:
-		return crypto.SHA1
-	case HashSHA256:
-		return crypto.SHA256
+func (a HashAlg) cryptoHash() (crypto.Hash, error) {
+	g := a.goTPMAlg()
+	h, err := g.Hash()
+	if err != nil {
+		return 0, fmt.Errorf("HashAlg %v (corresponding to TPM2.Algorithm %v) has no corresponding crypto.Hash", a, g)
 	}
-	return 0
+	return h, nil
 }
 
 func (a HashAlg) goTPMAlg() tpm2.Algorithm {
-	switch a {
-	case HashSHA1:
-		return tpm2.AlgSHA1
-	case HashSHA256:
-		return tpm2.AlgSHA256
-	}
-	return 0
+	return tpm2.Algorithm(a)
 }
 
 // String returns a human-friendly representation of the hash algorithm.
 func (a HashAlg) String() string {
-	switch a {
-	case HashSHA1:
-		return "SHA1"
-	case HashSHA256:
-		return "SHA256"
+	return a.goTPMAlg().String()
+}
+
+// FromTPMAlg returns the HashAlg corresponding to the given tpm2.Algorithm.
+func FromTPMAlg(h tpm2.Algorithm) (HashAlg, error) {
+	switch h {
+	case tpm2.AlgSHA1:
+		return HashSHA1, nil
+	case tpm2.AlgSHA256:
+		return HashSHA256, nil
+	case tpm2.AlgSHA384:
+		return HashSHA384, nil
+	case tpm2.AlgSHA512:
+		return HashSHA512, nil
+	default:
+		return 0, fmt.Errorf("tpm2.Algorithm %v has no corresponding HashAlg", h)
 	}
-	return fmt.Sprintf("HashAlg<%d>", int(a))
+}
+
+// FromCryptoHash returns the HashAlg corresponding to the given crypto.Hash.
+func FromCryptoHash(h crypto.Hash) (HashAlg, error) {
+	switch h {
+	case crypto.SHA1:
+		return HashSHA1, nil
+	case crypto.SHA256:
+		return HashSHA256, nil
+	case crypto.SHA384:
+		return HashSHA384, nil
+	case crypto.SHA512:
+		return HashSHA512, nil
+	default:
+		return 0, fmt.Errorf("crypto.Hash %v has no corresponding HashAlg", h)
+	}
 }
 
 // PlatformParameters encapsulates the set of information necessary to attest
@@ -442,8 +446,6 @@ func (a HashAlg) String() string {
 //   - The event log parsed successfully using ParseEventLog(), and a call
 //     to EventLog.Verify() with the full set of PCRs returned no error.
 type PlatformParameters struct {
-	// The version of the TPM which generated this attestation.
-	TPMVersion TPMVersion
 	// The public blob of the AK which endorsed the platform state. This can
 	// be decoded to verify the adjacent quotes using ParseAKPublic().
 	Public []byte
@@ -464,16 +466,11 @@ var (
 	// either no TPM is available, or a TPM of the requested version
 	// is not available (if TPMVersion was set in the provided config).
 	ErrTPMNotAvailable = errors.New("TPM device not available")
-	// ErrTPM12NotImplemented is returned in response to methods which
-	// need to interact with the TPM1.2 device in ways that have not
-	// yet been implemented.
-	ErrTPM12NotImplemented = errors.New("TPM 1.2 support not yet implemented")
 )
 
 // TPMInfo contains information about the version & interface
 // of an open TPM.
 type TPMInfo struct {
-	Version      TPMVersion
 	Interface    TPMInterface
 	VendorInfo   string
 	Manufacturer TCGVendorID
@@ -485,19 +482,6 @@ type TPMInfo struct {
 	FirmwareVersionMinor int
 }
 
-// probedTPM identifies a TPM device on the system, which
-// is a candidate for being used.
-type probedTPM struct {
-	Version TPMVersion
-	Path    string
-}
-
-// MatchesConfig returns true if the TPM satisfies the constraints
-// specified by the given config.
-func (t *probedTPM) MatchesConfig(config OpenConfig) bool {
-	return config.TPMVersion == TPMVersionAgnostic || t.Version == config.TPMVersion
-}
-
 // OpenTPM initializes access to the TPM based on the
 // config provided.
 func OpenTPM(config *OpenConfig) (*TPM, error) {
@@ -507,9 +491,6 @@ func OpenTPM(config *OpenConfig) (*TPM, error) {
 	// As a special case, if the user provided us with a command channel,
 	// we should use that.
 	if config.CommandChannel != nil {
-		if config.TPMVersion > TPMVersionAgnostic && config.TPMVersion != TPMVersion20 {
-			return nil, errors.New("command channel can only be used as a TPM 2.0 device")
-		}
 		return &TPM{&wrappedTPM20{
 			interf: TPMInterfaceCommandChannel,
 			rwc:    config.CommandChannel,
@@ -522,9 +503,7 @@ func OpenTPM(config *OpenConfig) (*TPM, error) {
 	}
 
 	for _, tpm := range candidateTPMs {
-		if tpm.MatchesConfig(*config) {
-			return openTPM(tpm)
-		}
+		return openTPM(tpm)
 	}
 
 	return nil, ErrTPMNotAvailable
@@ -533,10 +512,6 @@ func OpenTPM(config *OpenConfig) (*TPM, error) {
 // AvailableTPMs returns information about available TPMs matching
 // the given config, without opening the devices.
 func AvailableTPMs(config *OpenConfig) ([]TPMInfo, error) {
-	if config == nil {
-		config = defaultOpenConfig
-	}
-
 	candidateTPMs, err := probeSystemTPMs()
 	if err != nil {
 		return nil, err
@@ -545,18 +520,17 @@ func AvailableTPMs(config *OpenConfig) ([]TPMInfo, error) {
 	var out []TPMInfo
 
 	for _, tpm := range candidateTPMs {
-		if tpm.MatchesConfig(*config) {
-			t, err := openTPM(tpm)
-			if err != nil {
-				return nil, err
-			}
-			defer t.Close()
-			i, err := t.Info()
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, *i)
+		t, err := openTPM(tpm)
+		if err != nil {
+			return nil, err
 		}
+		defer t.Close()
+		i, err := t.Info()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *i)
+
 	}
 
 	return out, nil
