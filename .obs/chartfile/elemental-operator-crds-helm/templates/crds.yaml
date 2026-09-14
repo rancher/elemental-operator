@@ -5,7 +5,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -287,7 +287,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -497,7 +497,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -733,7 +733,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -1116,7 +1116,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -2843,7 +2843,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -3413,7 +3413,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -3898,7 +3898,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
@@ -3958,7 +3958,7 @@ metadata:
     app.kubernetes.io/instance: '{{ .Release.Name }}'
     app.kubernetes.io/part-of: Elemental Operator
     app.kubernetes.io/version: '{{ .Chart.Version }}'
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   labels:
     cluster.x-k8s.io/provider: infrastructure-elemental
     cluster.x-k8s.io/v1beta1: v1beta1
