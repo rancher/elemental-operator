@@ -20,7 +20,7 @@ endif
 export ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 CHART?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-$(CHART_VERSION).tgz" -print)
 CHART_CRDS?=$(shell find $(ROOT_DIR) -type f  -name "elemental-operator-crds-$(CHART_VERSION).tgz" -print)
-KUBE_VERSION?="v1.34.3"
+KUBE_VERSION?="v1.35.0"
 CLUSTER_NAME?="operator-e2e"
 COMMITDATE?=$(shell git log -n1 --format="%as")
 GO_TPM_TAG?=$(shell grep google/go-tpm-tools go.mod | awk '{print $$2}')
@@ -47,14 +47,14 @@ GINKGO_VER := $(shell go list -m github.com/onsi/ginkgo/v2 | awk '{print $$2}')
 GINKGO := $(ABS_TOOLS_DIR)/ginkgo-$(GINKGO_VER)
 GINKGO_PKG := github.com/onsi/ginkgo/v2/ginkgo
 
-SETUP_ENVTEST_VER := release-0.22
+SETUP_ENVTEST_VER := release-0.25
 SETUP_ENVTEST := $(ABS_TOOLS_DIR)/setup-envtest-$(SETUP_ENVTEST_VER)
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 
 # See: https://storage.googleapis.com/kubebuilder-tools
-ENVTEST_K8S_VERSION := 1.34.1
+ENVTEST_K8S_VERSION := 1.35.0
 
-KUSTOMIZE_VER := v5.3.0
+KUSTOMIZE_VER := v5.8.1
 KUSTOMIZE := $(ABS_TOOLS_DIR)/kustomize-$(KUSTOMIZE_VER)
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
 
@@ -62,20 +62,20 @@ MOCKGEN_PKG := go.uber.org/mock/mockgen
 MOCKGEN_VER := v0.6.0
 MOCKGEN := $(ABS_TOOLS_DIR)/mockgen-$(MOCKGEN_VER)
 
-$(CONTROLLER_GEN): 
+$(CONTROLLER_GEN):
 	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(CONTROLLER_GEN_PKG) controller-gen $(CONTROLLER_GEN_VER)
 
 $(GINKGO):
 	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(GINKGO_PKG) ginkgo $(GINKGO_VER)
 
-$(SETUP_ENVTEST): 
+$(SETUP_ENVTEST):
 	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(SETUP_ENVTEST_PKG) setup-envtest $(SETUP_ENVTEST_VER)
 
 $(KUSTOMIZE):
 	CGO_ENABLED=0 GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(KUSTOMIZE_PKG) kustomize $(KUSTOMIZE_VER)
 
 $(MOCKGEN):
-	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(MOCKGEN_PKG) mockgen $(MOCKGEN_VER)	
+	GOBIN=$(ABS_TOOLS_DIR) $(GO_INSTALL) $(MOCKGEN_PKG) mockgen $(MOCKGEN_VER)
 
 .PHONY: build
 build: operator register support
