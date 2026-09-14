@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -62,167 +63,19 @@ var (
 	tbsGetDeviceInfo *windows.Proc
 )
 
-// Error codes.
-var (
-	isReadyErrors = map[uint32]string{
-		0x00000002: "Platform restart is required (shutdown).",
-		0x00000004: "Platform restart is required (reboot).",
-		0x00000008: "The TPM is already owned.",
-		0x00000010: "Physical presence is required to provision the TPM.",
-		0x00000020: "The TPM is disabled or deactivated.",
-		0x00000040: "TPM ownership was taken.",
-		0x00000080: "An endorsement key exists in the TPM.",
-		0x00000100: "The TPM owner authorization is not properly stored in the registry.",
-		0x00000200: "The Storage Root Key (SRK) authorization value is not all zeros.",
-		0x00000800: "The operating system's registry information about the TPM’s Storage Root Key does not match the TPM Storage Root Key.",
-		0x00001000: "The TPM permanent flag to allow reading of the Storage Root Key public value is not set.",
-		0x00002000: "The monotonic counter incremented during boot has not been created.",
-		0x00020000: "Windows Group Policy is configured to not store any TPM owner authorization so the TPM cannot be fully ready.",
-		0x00040000: "The EK Certificate was not read from the TPM NV Ram and stored in the registry.",
-		0x00080000: "The TCG event log is empty or cannot be read.",
-		0x00100000: "The TPM is not owned.",
-		0x00200000: "An error occurred, but not specific to a particular task.",
-		0x00400000: "The device lock counter has not been created.",
-		0x00800000: "The device identifier has not been created.",
-	}
-	tpmErrNums = map[uint32]string{
-		0x80280001: "TPM_E_AUTHFAIL",
-		0x80280002: "TPM_E_BADINDEX",
-		0x80280003: "TPM_E_BAD_PARAMETER",
-		0x80280004: "TPM_E_AUDITFAILURE",
-		0x80280005: "TPM_E_CLEAR_DISABLED",
-		0x80280006: "TPM_E_DEACTIVATED",
-		0x80280007: "TPM_E_DISABLED",
-		0x80280008: "TPM_E_DISABLED_CMD",
-		0x80280009: "TPM_E_FAIL",
-		0x8028000A: "TPM_E_BAD_ORDINAL",
-		0x8028000B: "TPM_E_INSTALL_DISABLED",
-		0x8028000C: "TPM_E_INVALID_KEYHANDLE",
-		0x8028000D: "TPM_E_KEYNOTFOUND",
-		0x8028000E: "TPM_E_INAPPROPRIATE_ENC",
-		0x8028000F: "TPM_E_MIGRATEFAIL",
-		0x80280010: "TPM_E_INVALID_PCR_INFO",
-		0x80280011: "TPM_E_NOSPACE",
-		0x80280012: "TPM_E_NOSRK",
-		0x80280013: "TPM_E_NOTSEALED_BLOB",
-		0x80280014: "TPM_E_OWNER_SET",
-		0x80280015: "TPM_E_RESOURCES",
-		0x80280016: "TPM_E_SHORTRANDOM",
-		0x80280017: "TPM_E_SIZE",
-		0x80280018: "TPM_E_WRONGPCRVAL",
-		0x80280019: "TPM_E_BAD_PARAM_SIZE",
-		0x8028001A: "TPM_E_SHA_THREAD",
-		0x8028001B: "TPM_E_SHA_ERROR",
-		0x8028001C: "TPM_E_FAILEDSELFTEST",
-		0x8028001D: "TPM_E_AUTH2FAIL",
-		0x8028001E: "TPM_E_BADTAG",
-		0x8028001F: "TPM_E_IOERROR",
-		0x80280020: "TPM_E_ENCRYPT_ERROR",
-		0x80280021: "TPM_E_DECRYPT_ERROR",
-		0x80280022: "TPM_E_INVALID_AUTHHANDLE",
-		0x80280023: "TPM_E_NO_ENDORSEMENT",
-		0x80280024: "TPM_E_INVALID_KEYUSAGE",
-		0x80280025: "TPM_E_WRONG_ENTITYTYPE",
-		0x80280026: "TPM_E_INVALID_POSTINIT",
-		0x80280027: "TPM_E_INAPPROPRIATE_SIG",
-		0x80280028: "TPM_E_BAD_KEY_PROPERTY",
-		0x80280029: "TPM_E_BAD_MIGRATION",
-		0x8028002A: "TPM_E_BAD_SCHEME",
-		0x8028002B: "TPM_E_BAD_DATASIZE",
-		0x8028002C: "TPM_E_BAD_MODE",
-		0x8028002D: "TPM_E_BAD_PRESENCE",
-		0x8028002E: "TPM_E_BAD_VERSION",
-		0x8028002F: "TPM_E_NO_WRAP_TRANSPORT",
-		0x80280030: "TPM_E_AUDITFAIL_UNSUCCESSFUL",
-		0x80280031: "TPM_E_AUDITFAIL_SUCCESSFUL",
-		0x80280032: "TPM_E_NOTRESETABLE",
-		0x80280033: "TPM_E_NOTLOCAL",
-		0x80280034: "TPM_E_BAD_TYPE",
-		0x80280035: "TPM_E_INVALID_RESOURCE",
-		0x80280036: "TPM_E_NOTFIPS",
-		0x80280037: "TPM_E_INVALID_FAMILY",
-		0x80280038: "TPM_E_NO_NV_PERMISSION",
-		0x80280039: "TPM_E_REQUIRES_SIGN",
-		0x8028003A: "TPM_E_KEY_NOTSUPPORTED",
-		0x8028003B: "TPM_E_AUTH_CONFLICT",
-		0x8028003C: "TPM_E_AREA_LOCKED",
-		// TODO: Finish NVRAM error codes.
-		0x80280049: "TPM_E_NOOPERATOR",
-		0x8028004A: "TPM_E_RESOURCEMISSING",
-		0x8028004B: "TPM_E_DELEGATE_LOCK",
-		0x8028004C: "TPM_E_DELEGATE_FAMILY",
-		0x8028004D: "TPM_E_DELEGATE_ADMIN",
-		0x8028004E: "TPM_E_TRANSPORT_NOTEXCLUSIVE",
-		0x8028004F: "TPM_E_OWNER_CONTROL",
-		0x80280050: "TPM_E_DAA_RESOURCES",
-		// TODO: Finish DAA error codes.
-		0x80280058: "TPM_E_BAD_HANDLE",
-		0x80280059: "TPM_E_BAD_DELEGATE",
-		0x8028005A: "TPM_E_BADCONTEXT",
-		0x8028005B: "TPM_E_TOOMANYCONTEXTS",
-		0x8028005C: "TPM_E_MA_TICKET_SIGNATURE",
-		0x8028005D: "TPM_E_MA_DESTINATION",
-		0x8028005E: "TPM_E_MA_SOURCE",
-		0x8028005F: "TPM_E_MA_AUTHORITY",
-		0x80280061: "TPM_E_PERMANENTEK",
-		0x80280062: "TPM_E_BAD_SIGNATURE",
-		0x80280063: "TPM_E_NOCONTEXTSPACE",
-		0x80280400: "TPM_E_COMMAND_BLOCKED",
-		0x80280401: "TPM_E_INVALID_HANDLE",
-		0x80280402: "TPM_E_DUPLICATE_VHANDLE",
-		0x80280403: "TPM_E_EMBEDDED_COMMAND_BLOCKED",
-		0x80280404: "TPM_E_EMBEDDED_COMMAND_UNSUPPORTED",
-		0x80280800: "TPM_E_RETRY",
-		0x80280801: "TPM_E_NEEDS_SELFTEST",
-		0x80280802: "TPM_E_DOING_SELFTEST",
-		0x80280803: "TPM_E_DEFEND_LOCK_RUNNING",
-		0x80284001: "TBS_E_INTERNAL_ERROR",
-		0x80284002: "TBS_E_BAD_PARAMETER",
-		0x80284003: "TBS_E_INVALID_OUTPUT_POINTER",
-		0x80284004: "TBS_E_INVALID_CONTEXT",
-		0x80284005: "TBS_E_INSUFFICIENT_BUFFER",
-		0x80284006: "TBS_E_IOERROR",
-		0x80284007: "TBS_E_INVALID_CONTEXT_PARAM",
-		0x80284008: "TBS_E_SERVICE_NOT_RUNNING",
-		0x80284009: "TBS_E_TOO_MANY_TBS_CONTEXTS",
-		0x8028400A: "TBS_E_TOO_MANY_RESOURCES",
-		0x8028400B: "TBS_E_SERVICE_START_PENDING",
-		0x8028400C: "TBS_E_PPI_NOT_SUPPORTED",
-		0x8028400D: "TBS_E_COMMAND_CANCELED",
-		0x8028400E: "TBS_E_BUFFER_TOO_LARGE",
-		0x8028400F: "TBS_E_TPM_NOT_FOUND",
-		0x80284010: "TBS_E_SERVICE_DISABLED",
-		0x80284011: "TBS_E_NO_EVENT_LOG",
-		0x80284012: "TBS_E_ACCESS_DENIED",
-		0x80284013: "TBS_E_PROVISIONING_NOT_ALLOWED",
-		0x80284014: "TBS_E_PPI_FUNCTION_UNSUPPORTED",
-		0x80284015: "TBS_E_OWNERAUTH_NOT_FOUND",
-		0x80284016: "TBS_E_PROVISIONING_INCOMPLETE",
-		// TODO: TPMAPI & TPMSIMP error codes.
-		0x80290401: "TPM_E_PCP_DEVICE_NOT_READY",
-		0x80290402: "TPM_E_PCP_INVALID_HANDLE",
-		0x80290403: "TPM_E_PCP_INVALID_PARAMETER",
-		0x80290404: "TPM_E_PCP_FLAG_NOT_SUPPORTED",
-		0x80290405: "TPM_E_PCP_NOT_SUPPORTED",
-		0x80290406: "TPM_E_PCP_BUFFER_TOO_SMALL",
-		0x80290407: "TPM_E_PCP_INTERNAL_ERROR",
-		0x80290408: "TPM_E_PCP_AUTHENTICATION_FAILED",
-		0x80290409: "TPM_E_PCP_AUTHENTICATION_IGNORED",
-		0x8029040A: "TPM_E_PCP_POLICY_NOT_FOUND",
-		0x8029040B: "TPM_E_PCP_PROFILE_NOT_FOUND",
-		0x8029040C: "TPM_E_PCP_VALIDATION_FAILED",
-		0x80090009: "NTE_BAD_FLAGS",
-		0x80090026: "NTE_INVALID_HANDLE",
-		0x80090027: "NTE_INVALID_PARAMETER",
-		0x80090029: "NTE_NOT_SUPPORTED",
-	}
-)
+// winErrCodeToString converts a Windows error code to its string description.
+// This is used to convert the return value of Windows API calls to a human
+// readable string. The error returned by the syscall.Proc.Call method is not to be used
+// the return code is what should be used.
+// For more info, see https://pkg.go.dev/golang.org/x/sys/windows#Proc.Call.
+func winErrCodeToString(errCode uintptr) string {
+	errno := windows.Errno(uint32(errCode))
 
-func maybeWinErr(errNo uintptr) error {
-	if code, known := tpmErrNums[uint32(errNo)]; known {
-		return fmt.Errorf("tpm or subsystem failure: %s", code)
-	}
-	return nil
+	// Go's runtime already uses FormatMessage under the hood when you call .Error()
+	msg := errno.Error()
+
+	// Windows is "helpful" as it appends \r\n to the message. Remove this.
+	return strings.TrimSpace(msg)
 }
 
 func utf16ToString(buf []byte) (string, error) {
@@ -236,12 +89,9 @@ func utf16ToString(buf []byte) (string, error) {
 
 // closeNCryptoObject is a helper to call NCryptFreeObject on a given handle.
 func closeNCryptObject(hnd uintptr) error {
-	r, _, msg := nCryptFreeObject.Call(hnd)
+	r, _, _ := nCryptFreeObject.Call(hnd)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			return tpmErr
-		}
-		return fmt.Errorf("NCryptFreeObject returned %X: %v", r, msg)
+		return fmt.Errorf("NCryptFreeObject returned %X (%v)", r, winErrCodeToString(r))
 	}
 	return nil
 }
@@ -255,20 +105,14 @@ func getNCryptBufferProperty(hnd uintptr, field string) ([]byte, error) {
 		return nil, err
 	}
 
-	r, _, msg := nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&wideField[0])), 0, 0, uintptr(unsafe.Pointer(&size)), 0)
+	r, _, _ := nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&wideField[0])), 0, 0, uintptr(unsafe.Pointer(&size)), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return nil, fmt.Errorf("NCryptGetProperty returned %d,%X (%v) for key %q on size read", size, r, msg, field)
+		return nil, fmt.Errorf("NCryptGetProperty returned size %d, code %X (%v) for field %q on size read", size, r, winErrCodeToString(r), field)
 	}
 	buff := make([]byte, size)
-	r, _, msg = nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&wideField[0])), uintptr(unsafe.Pointer(&buff[0])), uintptr(size), uintptr(unsafe.Pointer(&size)), 0)
+	r, _, _ = nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&wideField[0])), uintptr(unsafe.Pointer(&buff[0])), uintptr(size), uintptr(unsafe.Pointer(&size)), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return nil, fmt.Errorf("NCryptGetProperty returned %X (%v) for key %q on data read", r, msg, field)
+		return nil, fmt.Errorf("NCryptGetProperty returned %X (%v) for field %q on data read", r, winErrCodeToString(r), field)
 	}
 	return buff, nil
 }
@@ -317,11 +161,10 @@ func (h *winPCP) TPMInfo() (*windowsTPMInfo, error) {
 		return nil, err
 	}
 
-	r, _, msg := tbsGetDeviceInfo.Call(unsafe.Sizeof(out.TBSInfo), uintptr(unsafe.Pointer(&out.TBSInfo)))
+	r, _, _ := tbsGetDeviceInfo.Call(unsafe.Sizeof(out.TBSInfo), uintptr(unsafe.Pointer(&out.TBSInfo)))
 	if r != 0 {
-		return nil, fmt.Errorf("Failed to call Tbsi_GetDeviceInfo: %v", msg)
+		return nil, fmt.Errorf("Failed to call Tbsi_GetDeviceInfo: %X (%v)", r, winErrCodeToString(r))
 	}
-
 	return out, nil
 }
 
@@ -334,12 +177,9 @@ func (h *winPCP) TPMCommandInterface() (io.ReadWriteCloser, error) {
 		return nil, err
 	}
 
-	r, _, err := nCryptGetProperty.Call(h.hProv, uintptr(unsafe.Pointer(&platformHndField[0])), uintptr(unsafe.Pointer(&provTBS)), unsafe.Sizeof(provTBS), uintptr(unsafe.Pointer(&sz)), 0)
+	r, _, _ := nCryptGetProperty.Call(h.hProv, uintptr(unsafe.Pointer(&platformHndField[0])), uintptr(unsafe.Pointer(&provTBS)), unsafe.Sizeof(provTBS), uintptr(unsafe.Pointer(&sz)), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			err = tpmErr
-		}
-		return nil, fmt.Errorf("NCryptGetProperty for platform handle returned %X (%v)", r, err)
+		return nil, fmt.Errorf("NCryptGetProperty for platform handle returned %X (%v)", r, winErrCodeToString(r))
 	}
 
 	return tpmutil.FromContext(provTBS), nil
@@ -354,11 +194,8 @@ func (h *winPCP) TPMKeyHandle(hnd uintptr) (tpmutil.Handle, error) {
 		return 0, err
 	}
 
-	if r, _, err := nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&platformHndField[0])), uintptr(unsafe.Pointer(&keyHndTBS)), unsafe.Sizeof(keyHndTBS), uintptr(unsafe.Pointer(&sz)), 0); r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			err = tpmErr
-		}
-		return 0, fmt.Errorf("NCryptGetProperty for hKey platform handle returned %X (%v)", r, err)
+	if r, _, _ := nCryptGetProperty.Call(hnd, uintptr(unsafe.Pointer(&platformHndField[0])), uintptr(unsafe.Pointer(&keyHndTBS)), unsafe.Sizeof(keyHndTBS), uintptr(unsafe.Pointer(&sz)), 0); r != 0 {
+		return 0, fmt.Errorf("NCryptGetProperty for hKey platform handle returned %X (%v)", r, winErrCodeToString(r))
 	}
 
 	return keyHndTBS, nil
@@ -372,9 +209,9 @@ func (h *winPCP) Close() error {
 // DeleteKey permanently removes the key with the given handle from the system,
 // and frees its handle.
 func (h *winPCP) DeleteKey(kh uintptr) error {
-	r, _, msg := nCryptDeleteKey.Call(kh, 0)
+	r, _, _ := nCryptDeleteKey.Call(kh, 0)
 	if r != 0 {
-		return fmt.Errorf("nCryptDeleteKey returned %X: %v", r, msg)
+		return fmt.Errorf("nCryptDeleteKey returned %X (%v)", r, winErrCodeToString(r))
 	}
 	return nil
 }
@@ -423,14 +260,15 @@ func getPCPCerts(hProv uintptr, propertyName string) ([][]byte, error) {
 		return nil, err
 	}
 
-	r, _, msg := nCryptGetProperty.Call(hProv, uintptr(unsafe.Pointer(&utf16PropName[0])), uintptr(unsafe.Pointer(&cryptCertHnd)), 8, uintptr(unsafe.Pointer(&size)), 0)
+	r, _, _ := nCryptGetProperty.Call(hProv, uintptr(unsafe.Pointer(&utf16PropName[0])), uintptr(unsafe.Pointer(&cryptCertHnd)), 8, uintptr(unsafe.Pointer(&size)), 0)
 	if r != 0 {
-		return nil, fmt.Errorf("NCryptGetProperty returned %X, %v", r, msg)
+		return nil, fmt.Errorf("NCryptGetProperty returned %X (%v)", r, winErrCodeToString(r))
 	}
 	defer crypt32CertCloseStore.Call(uintptr(unsafe.Pointer(cryptCertHnd)), 0)
 
 	var out [][]byte
 	var certContext uintptr
+	var msg error
 	for {
 		certContext, _, msg = crypt32CertEnumCertificatesInStore.Call(uintptr(unsafe.Pointer(cryptCertHnd)), certContext)
 		if certContext == 0 && msg != nil {
@@ -453,37 +291,31 @@ func getPCPCerts(hProv uintptr, propertyName string) ([][]byte, error) {
 }
 
 // NewAK creates a persistent attestation key of the specified name.
-func (h *winPCP) NewAK(name string) (uintptr, error) {
+func (h *winPCP) NewAK(name string, alg Algorithm) (uintptr, error) {
 	var kh uintptr
 	utf16Name, err := windows.UTF16FromString(name)
 	if err != nil {
 		return 0, err
 	}
-	utf16RSA, err := windows.UTF16FromString("RSA")
+	utf16Alg, err := windows.UTF16FromString(string(alg))
 	if err != nil {
 		return 0, err
 	}
 
 	// Create a persistent RSA key of the specified name.
-	r, _, msg := nCryptCreatePersistedKey.Call(h.hProv, uintptr(unsafe.Pointer(&kh)), uintptr(unsafe.Pointer(&utf16RSA[0])), uintptr(unsafe.Pointer(&utf16Name[0])), 0, 0)
+	r, _, _ := nCryptCreatePersistedKey.Call(h.hProv, uintptr(unsafe.Pointer(&kh)), uintptr(unsafe.Pointer(&utf16Alg[0])), uintptr(unsafe.Pointer(&utf16Name[0])), 0, 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return 0, fmt.Errorf("NCryptCreatePersistedKey returned %X: %v", r, msg)
+		return 0, fmt.Errorf("NCryptCreatePersistedKey returned %X (%v)", r, winErrCodeToString(r))
 	}
 	// Specify generated key length to be 2048 bits.
 	utf16Length, err := windows.UTF16FromString("Length")
 	if err != nil {
 		return 0, err
 	}
-	var length uint32 = 2048
-	r, _, msg = nCryptSetProperty.Call(kh, uintptr(unsafe.Pointer(&utf16Length[0])), uintptr(unsafe.Pointer(&length)), unsafe.Sizeof(length), 0)
+	var length uint32 = uint32(alg.Size())
+	r, _, _ = nCryptSetProperty.Call(kh, uintptr(unsafe.Pointer(&utf16Length[0])), uintptr(unsafe.Pointer(&length)), unsafe.Sizeof(length), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return 0, fmt.Errorf("NCryptSetProperty (Length) returned %X: %v", r, msg)
+		return 0, fmt.Errorf("NCryptSetProperty (Length) returned %X (%v)", r, winErrCodeToString(r))
 	}
 	// Specify the generated key can only be used for identity attestation.
 	utf16KeyPolicy, err := windows.UTF16FromString("PCP_KEY_USAGE_POLICY")
@@ -491,21 +323,15 @@ func (h *winPCP) NewAK(name string) (uintptr, error) {
 		return 0, err
 	}
 	var policy uint32 = nCryptPropertyPCPKeyUsagePolicyIdentity
-	r, _, msg = nCryptSetProperty.Call(kh, uintptr(unsafe.Pointer(&utf16KeyPolicy[0])), uintptr(unsafe.Pointer(&policy)), unsafe.Sizeof(policy), 0)
+	r, _, _ = nCryptSetProperty.Call(kh, uintptr(unsafe.Pointer(&utf16KeyPolicy[0])), uintptr(unsafe.Pointer(&policy)), unsafe.Sizeof(policy), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return 0, fmt.Errorf("NCryptSetProperty (PCP KeyUsage Policy) returned %X: %v", r, msg)
+		return 0, fmt.Errorf("NCryptSetProperty (PCP KeyUsage Policy) returned %X (%v)", r, winErrCodeToString(r))
 	}
 
 	// Finalize (create) the key.
-	r, _, msg = nCryptFinalizeKey.Call(kh, 0)
+	r, _, _ = nCryptFinalizeKey.Call(kh, 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return 0, fmt.Errorf("NCryptFinalizeKey returned %X: %v", r, msg)
+		return 0, fmt.Errorf("NCryptFinalizeKey returned %X (%v)", r, winErrCodeToString(r))
 	}
 
 	return kh, nil
@@ -537,7 +363,7 @@ func (h *winPCP) AKProperties(kh uintptr) (*akProps, error) {
 	if bytes.Equal(idBlob[0:4], []byte{1, 1, 0, 0}) {
 		return decodeAKProps12(r)
 	}
-	return decodeAKProps20(r)
+	return decodeAKProps20(&io.LimitedReader{R: r, N: int64(r.Len())})
 }
 
 // decodeAKProps12 separates the single TPM 1.2 blob from the PCP property
@@ -563,6 +389,9 @@ func decodeAKProps12(r *bytes.Reader) (*akProps, error) {
 	if err := binary.Read(r, binary.BigEndian, &exponentSize); err != nil {
 		return nil, fmt.Errorf("failed to decode exponentSize: %v", err)
 	}
+	if int64(exponentSize) > int64(r.Len()) {
+		return nil, fmt.Errorf("exponentSize (%d bytes) exceeds remaining capacity (%d bytes)", exponentSize, r.Len())
+	}
 	// Consume the bytes representing the exponent.
 	exp := make([]byte, int(exponentSize))
 	if err := binary.Read(r, binary.BigEndian, &exp); err != nil {
@@ -572,6 +401,9 @@ func decodeAKProps12(r *bytes.Reader) (*akProps, error) {
 	var keyDataSize uint32
 	if err := binary.Read(r, binary.BigEndian, &keyDataSize); err != nil {
 		return nil, fmt.Errorf("failed to decode keyDataSize: %v", err)
+	}
+	if int64(keyDataSize) > int64(r.Len()) {
+		return nil, fmt.Errorf("keyDataSize (%d bytes) exceeds remaining capacity (%d bytes)", keyDataSize, r.Len())
 	}
 	// Seek to the end of the key data.
 	r.Seek(int64(keyDataSize), io.SeekCurrent)
@@ -584,7 +416,11 @@ func decodeAKProps12(r *bytes.Reader) (*akProps, error) {
 
 	// Seek back to the location of the public key, and consume it.
 	r.Seek(int64(pubKeyStartIdx), io.SeekStart)
-	out.RawPublic = make([]byte, 24+int(exponentSize)+4+int(keyDataSize))
+	pubSize := int64(24) + int64(exponentSize) + int64(4) + int64(keyDataSize)
+	if pubSize > int64(r.Len()) {
+		return nil, fmt.Errorf("public structure size (%d bytes) exceeds remaining capacity (%d bytes)", pubSize, r.Len())
+	}
+	out.RawPublic = make([]byte, pubSize)
 	if err := binary.Read(r, binary.BigEndian, &out.RawPublic); err != nil {
 		return nil, fmt.Errorf("failed to decode public: %v", err)
 	}
@@ -596,12 +432,15 @@ func decodeAKProps12(r *bytes.Reader) (*akProps, error) {
 // into its constituents. For TPM 2.0 devices, these are bytes representing
 // the following structures: TPM2B_PUBLIC, TPM2B_CREATION_DATA, TPM2B_ATTEST,
 // and TPMT_SIGNATURE.
-func decodeAKProps20(r *bytes.Reader) (*akProps, error) {
+func decodeAKProps20(r *io.LimitedReader) (*akProps, error) {
 	var out akProps
 
 	var publicSize uint16
 	if err := binary.Read(r, binary.BigEndian, &publicSize); err != nil {
 		return nil, fmt.Errorf("failed to decode TPM2B_PUBLIC.size: %v", err)
+	}
+	if int64(publicSize) > r.N {
+		return nil, fmt.Errorf("TPM2B_PUBLIC.size (%d bytes) larger than remaining capacity (%d bytes)", publicSize, r.N)
 	}
 	out.RawPublic = make([]byte, publicSize)
 	if err := binary.Read(r, binary.BigEndian, &out.RawPublic); err != nil {
@@ -612,6 +451,9 @@ func decodeAKProps20(r *bytes.Reader) (*akProps, error) {
 	if err := binary.Read(r, binary.BigEndian, &creationDataSize); err != nil {
 		return nil, fmt.Errorf("failed to decode TPM2B_CREATION_DATA.size: %v", err)
 	}
+	if int64(creationDataSize) > r.N {
+		return nil, fmt.Errorf("TPM2B_CREATION_DATA.size (%d bytes) larger than remaining capacity (%d bytes)", creationDataSize, r.N)
+	}
 	out.RawCreationData = make([]byte, creationDataSize)
 	if err := binary.Read(r, binary.BigEndian, &out.RawCreationData); err != nil {
 		return nil, fmt.Errorf("failed to decode TPM2B_CREATION_DATA.data: %v", err)
@@ -621,6 +463,9 @@ func decodeAKProps20(r *bytes.Reader) (*akProps, error) {
 	if err := binary.Read(r, binary.BigEndian, &attestSize); err != nil {
 		return nil, fmt.Errorf("failed to decode TPM2B_ATTEST.size: %v", err)
 	}
+	if int64(attestSize) > r.N {
+		return nil, fmt.Errorf("TPM2B_ATTEST.size (%d bytes) larger than remaining capacity (%d bytes)", attestSize, r.N)
+	}
 	out.RawAttest = make([]byte, attestSize)
 	if err := binary.Read(r, binary.BigEndian, &out.RawAttest); err != nil {
 		return nil, fmt.Errorf("failed to decode TPM2B_ATTEST.data: %v", err)
@@ -628,7 +473,7 @@ func decodeAKProps20(r *bytes.Reader) (*akProps, error) {
 
 	// The encoded TPMT_SIGNATURE structure represents the remaining bytes in
 	// the ID binding blob.
-	out.RawSignature = make([]byte, r.Len())
+	out.RawSignature = make([]byte, r.N)
 	if err := binary.Read(r, binary.BigEndian, &out.RawSignature); err != nil {
 		return nil, fmt.Errorf("failed to decode TPMT_SIGNATURE.data: %v", err)
 	}
@@ -644,9 +489,9 @@ func (h *winPCP) LoadKeyByName(name string) (uintptr, error) {
 	}
 
 	var hKey uintptr
-	r, _, msg := nCryptOpenKey.Call(h.hProv, uintptr(unsafe.Pointer(&hKey)), uintptr(unsafe.Pointer(&utf16Name[0])), 0, 0)
+	r, _, _ := nCryptOpenKey.Call(h.hProv, uintptr(unsafe.Pointer(&hKey)), uintptr(unsafe.Pointer(&utf16Name[0])), 0, 0)
 	if r != 0 {
-		return 0, msg
+		return 0, fmt.Errorf("NCryptOpenKey returned %X (%v) for key %q", r, winErrCodeToString(r), name)
 	}
 	return hKey, nil
 }
@@ -658,24 +503,12 @@ func (h *winPCP) ActivateCredential(hKey uintptr, activationBlob []byte) ([]byte
 		return nil, err
 	}
 
-	r, _, msg := nCryptSetProperty.Call(hKey, uintptr(unsafe.Pointer(&utf16ActivationStr[0])), uintptr(unsafe.Pointer(&activationBlob[0])), uintptr(len(activationBlob)), 0)
+	r, _, _ := nCryptSetProperty.Call(hKey, uintptr(unsafe.Pointer(&utf16ActivationStr[0])), uintptr(unsafe.Pointer(&activationBlob[0])), uintptr(len(activationBlob)), 0)
 	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return nil, fmt.Errorf("NCryptSetProperty returned %X (%v) for key activation", r, msg)
+		return nil, fmt.Errorf("NCryptSetProperty returned %X (%v) for key activation", r, winErrCodeToString(r))
 	}
 
-	secretBuff := make([]byte, 256)
-	var size uint32
-	r, _, msg = nCryptGetProperty.Call(hKey, uintptr(unsafe.Pointer(&utf16ActivationStr[0])), uintptr(unsafe.Pointer(&secretBuff[0])), uintptr(len(secretBuff)), uintptr(unsafe.Pointer(&size)), 0)
-	if r != 0 {
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			msg = tpmErr
-		}
-		return nil, fmt.Errorf("NCryptGetProperty returned %X (%v) for key activation", r, msg)
-	}
-	return secretBuff[:size], nil
+	return getNCryptBufferProperty(hKey, "PCP_TPM12_IDACTIVATION")
 }
 
 // openPCP initializes a reference to the Microsoft PCP provider.
@@ -688,12 +521,9 @@ func openPCP() (*winPCP, error) {
 		return nil, err
 	}
 
-	r, _, err := nCryptOpenStorageProvider.Call(uintptr(unsafe.Pointer(&h.hProv)), uintptr(unsafe.Pointer(&pname[0])), 0)
+	r, _, _ := nCryptOpenStorageProvider.Call(uintptr(unsafe.Pointer(&h.hProv)), uintptr(unsafe.Pointer(&pname[0])), 0)
 	if r != 0 { // r is non-zero on error, err is always populated in this case.
-		if tpmErr := maybeWinErr(r); tpmErr != nil {
-			return nil, tpmErr
-		}
-		return nil, err
+		return nil, fmt.Errorf("NCryptOpenStorageProvider returned %X (%v)", r, winErrCodeToString(r))
 	}
 	return &h, nil
 }
