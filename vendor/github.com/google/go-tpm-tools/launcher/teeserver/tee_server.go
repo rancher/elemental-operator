@@ -6,21 +6,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"strings"
 
-	"github.com/google/go-tpm-tools/launcher/agent"
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
+	"github.com/google/go-tpm-tools/agent"
+	keymanager "github.com/google/go-tpm-tools/keymanager/km_common/proto"
+	wsd "github.com/google/go-tpm-tools/keymanager/workload_service"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/spec"
+	tspb "github.com/google/go-tpm-tools/launcher/teeserver/proto/gen/teeserver"
 	"github.com/google/go-tpm-tools/verifier"
 	"github.com/google/go-tpm-tools/verifier/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
-	gcaEndpoint = "/v1/token"
-	itaEndpoint = "/v1/intel/token"
+	gcaEndpoint             = "/v1/token"
+	itaEndpoint             = "/v1/intel/token"
+	evidenceEndpoint        = "/v1/evidence"
+	endorsementEndpoint     = "/v1/keys:getEndorsement"
+	hostAttestationEndpoint = "/v1/hostAttestation"
 )
 
 var clientErrorCodes = map[codes.Code]struct{}{
@@ -45,9 +56,10 @@ type attestHandler struct {
 	ctx         context.Context
 	attestAgent agent.AttestationAgent
 	// defaultTokenFile string
-	logger     logging.Logger
-	launchSpec spec.LaunchSpec
-	clients    AttestClients
+	logger            logging.Logger
+	launchSpec        spec.LaunchSpec
+	clients           AttestClients
+	keyClaimsProvider wsd.KeyClaimsProvider
 }
 
 // TeeServer is a server that can be called from a container through a unix
@@ -58,22 +70,27 @@ type TeeServer struct {
 }
 
 // New takes in a socket and start to listen to it, and create a server
-func New(ctx context.Context, unixSock string, a agent.AttestationAgent, logger logging.Logger, launchSpec spec.LaunchSpec, clients AttestClients) (*TeeServer, error) {
+func New(ctx context.Context, unixSock string, a agent.AttestationAgent, logger logging.Logger, launchSpec spec.LaunchSpec, clients AttestClients, keyClaimsProvider wsd.KeyClaimsProvider) (*TeeServer, error) {
 	var err error
 	nl, err := net.Listen("unix", unixSock)
 	if err != nil {
 		return nil, fmt.Errorf("cannot listen to the socket [%s]: %v", unixSock, err)
 	}
 
+	if launchSpec.Experiments.EnableKeyManager && keyClaimsProvider == nil {
+		return nil, fmt.Errorf("key claims provider cannot be nil when key manager is enabled")
+	}
+
 	teeServer := TeeServer{
 		netListener: nl,
 		server: &http.Server{
 			Handler: (&attestHandler{
-				ctx:         ctx,
-				attestAgent: a,
-				logger:      logger,
-				launchSpec:  launchSpec,
-				clients:     clients,
+				ctx:               ctx,
+				attestAgent:       a,
+				logger:            logger,
+				launchSpec:        launchSpec,
+				clients:           clients,
+				keyClaimsProvider: keyClaimsProvider,
 			}).Handler(),
 		},
 	}
@@ -87,9 +104,15 @@ func (a *attestHandler) Handler() http.Handler {
 	// to test custom token:
 	// curl -d '{"audience":"<aud>", "nonces":["<nonce1>"]}' -H "Content-Type: application/json" -X POST
 	//   --unix-socket /tmp/container_launcher/teeserver.sock http://localhost/v1/token
+	// to test attestation evidence:
+	// curl -d '{"challenge":"<challenge>"}' -H "Content-Type: application/json" -X POST
+	//   --unix-socket /tmp/container_launcher/teeserver.sock http://localhost/v1/evidence
 
 	mux.HandleFunc(gcaEndpoint, a.getToken)
 	mux.HandleFunc(itaEndpoint, a.getITAToken)
+	mux.HandleFunc(evidenceEndpoint, a.getAttestationEvidence)
+	mux.HandleFunc(endorsementEndpoint, a.getKeyEndorsement)
+	mux.HandleFunc(hostAttestationEndpoint, a.getHostAttestation)
 	return mux
 }
 
@@ -106,8 +129,6 @@ func (a *attestHandler) getToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 
 	a.logger.Info(fmt.Sprintf("%s called", gcaEndpoint))
-
-	// If the handler does not have an GCA client, return error.
 	if a.clients.GCA == nil {
 		errStr := "no GCA verifier client present, please try rebooting your VM"
 		a.logAndWriteError(errStr, http.StatusInternalServerError, w)
@@ -133,6 +154,192 @@ func (a *attestHandler) getITAToken(w http.ResponseWriter, r *http.Request) {
 	a.attest(w, r, a.clients.ITA)
 }
 
+// getAttestationEvidence retrieves the attestation evidence.
+// It returns partial response with query parameter support.
+// It currently supports "label", "challenge", "quote", "extraData", and "deviceReports" params.
+// The default response with no query parameter will return all fields except device reports.
+// If the fields param is "*", it will return all fields including device reports.
+func (a *attestHandler) getAttestationEvidence(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed"))
+		return
+	}
+
+	a.logger.Info(fmt.Sprintf("%s called", evidenceEndpoint))
+
+	var req tspb.GetAttestationEvidenceRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to read request body: %v", err))
+		return
+	}
+	if err := protojson.Unmarshal(body, &req); err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to decode request: %v", err))
+		return
+	}
+	if len(req.Challenge) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("challenge is required"))
+		return
+	}
+
+	fields := r.URL.Query().Get("fields")
+	attestOpts := agent.AttestAgentOpts{
+		DeviceReportOpts: &agent.DeviceReportOpts{
+			EnableRuntimeGPUAttestation: fields == "*" || strings.Contains(fields, "deviceReports"),
+		},
+	}
+	evidence, err := a.attestAgent.AttestationEvidence(a.ctx, req.Challenge, nil, attestOpts)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	partialEvidence, err := filterVMAttestationFields(evidence, fields)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("invalid fields parameter: %v", err))
+		return
+	}
+
+	evidenceBytes, err := protojson.Marshal(partialEvidence)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal evidence: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(evidenceBytes)
+}
+
+// filterVMAttestationFields return a partial VM Attestation based on the query parameters.
+func filterVMAttestationFields(att *attestationpb.VmAttestation, fields string) (*attestationpb.VmAttestation, error) {
+	if fields == "" || fields == "*" {
+		return att, nil
+	}
+	fieldSlice := strings.Split(fields, ",")
+	fieldMap := make(map[string]bool)
+	for _, f := range fieldSlice {
+		fieldMap[strings.TrimSpace(f)] = true
+	}
+
+	out := &attestationpb.VmAttestation{}
+	if fieldMap["label"] {
+		out.Label = att.GetLabel()
+	}
+	if fieldMap["challenge"] {
+		out.Challenge = att.GetChallenge()
+	}
+	if fieldMap["extraData"] {
+		out.ExtraData = att.GetExtraData()
+	}
+	if fieldMap["quote"] {
+		out.Quote = att.GetQuote()
+	}
+	if fieldMap["deviceReports"] {
+		out.DeviceReports = att.GetDeviceReports()
+	}
+	return out, nil
+}
+
+// getKeyEndorsement retrieves the attestation evidence with KEM and binding key claims.
+func (a *attestHandler) getKeyEndorsement(w http.ResponseWriter, r *http.Request) {
+	if !a.launchSpec.Experiments.EnableKeyManager {
+		a.logAndWriteHTTPError(w, http.StatusForbidden, fmt.Errorf("keymanager not enabled"))
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed"))
+		return
+	}
+
+	a.logger.Info(fmt.Sprintf("%s called", endorsementEndpoint))
+
+	var req tspb.GetKeyEndorsementRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to read request body: %v", err))
+		return
+	}
+
+	if err := protojson.Unmarshal(body, &req); err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to decode request: %v", err))
+		return
+	}
+
+	if len(req.Challenge) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("challenge is required"))
+		return
+	}
+
+	if len(req.KeyHandle.Handle) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("key_handle is required"))
+		return
+	}
+
+	kemKeyClaims, err := a.keyClaimsProvider.GetKeyClaims(a.ctx, req.KeyHandle.Handle, keymanager.KeyType_KEY_TYPE_VM_PROTECTION_KEY)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get KEM key claims"))
+		return
+	}
+
+	bindingKeyClaims, err := a.keyClaimsProvider.GetKeyClaims(a.ctx, req.KeyHandle.Handle, keymanager.KeyType_KEY_TYPE_VM_PROTECTION_BINDING)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to get binding key claims"))
+		return
+	}
+
+	bindingBytes, err := proto.Marshal(bindingKeyClaims)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal binding key claims: %v", err))
+		return
+	}
+
+	kemBytes, err := proto.Marshal(kemKeyClaims)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal KEM key claims: %v", err))
+		return
+	}
+
+	attestOpts := agent.AttestAgentOpts{
+		AcpiOpts: &agent.AcpiOpts{
+			RetrieveAcpiData: req.GetRequestAcpiData(),
+		},
+	}
+	kemEvidence, err := a.attestAgent.AttestationEvidence(a.ctx, req.Challenge, kemBytes, attestOpts)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to collect attestation evidence with kem key claims"))
+		return
+	}
+
+	bindingEvidence, err := a.attestAgent.AttestationEvidence(a.ctx, req.Challenge, bindingBytes, attestOpts)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to collect attestation evidence with binding key claims"))
+		return
+	}
+
+	keyEndorsement := &attestationpb.KeyEndorsement{
+		Endorsement: &attestationpb.KeyEndorsement_VmProtectedKeyEndorsement{
+			VmProtectedKeyEndorsement: &attestationpb.VmProtectedKeyEndorsement{
+				BindingKeyAttestation: &attestationpb.KeyAttestation{
+					Attestation: bindingEvidence,
+				},
+				ProtectedKeyAttestation: &attestationpb.KeyAttestation{
+					Attestation: kemEvidence,
+				},
+			},
+		},
+	}
+
+	keyEndorsementBytes, err := protojson.Marshal(keyEndorsement)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal evidence: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(keyEndorsementBytes)
+}
+
 func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client verifier.Client) {
 	switch r.Method {
 	case http.MethodGet:
@@ -141,7 +348,9 @@ func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client ve
 			return
 		}
 
-		token, err := a.attestAgent.AttestWithClient(a.ctx, agent.AttestAgentOpts{}, client)
+		token, err := a.attestAgent.AttestWithClient(a.ctx, agent.AttestAgentOpts{
+			DeviceReportOpts: &agent.DeviceReportOpts{EnableRuntimeGPUAttestation: true},
+		}, client)
 		if err != nil {
 			a.handleAttestError(w, err, "failed to retrieve attestation service token")
 			return
@@ -177,7 +386,8 @@ func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client ve
 
 		// Do not check that TokenTypeOptions matches TokenType in the launcher.
 		opts := agent.AttestAgentOpts{
-			TokenOptions: &tokenOptions,
+			TokenOptions:     &tokenOptions,
+			DeviceReportOpts: &agent.DeviceReportOpts{EnableRuntimeGPUAttestation: true},
 		}
 		tok, err := a.attestAgent.AttestWithClient(a.ctx, opts, client)
 		if err != nil {
@@ -193,6 +403,60 @@ func (a *attestHandler) attest(w http.ResponseWriter, r *http.Request, client ve
 		err := fmt.Errorf("TEE server received an invalid HTTP method: %s", r.Method)
 		a.logAndWriteHTTPError(w, http.StatusBadRequest, err)
 	}
+}
+
+func (a *attestHandler) getHostAttestation(w http.ResponseWriter, r *http.Request) {
+	if !a.launchSpec.Experiments.EnableHostAttestation {
+		a.logAndWriteHTTPError(w, http.StatusForbidden, fmt.Errorf("host attestation not enabled"))
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		a.logAndWriteHTTPError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed"))
+		return
+	}
+
+	a.logger.Info(fmt.Sprintf("%s called", hostAttestationEndpoint))
+
+	var req tspb.GetHostAttestationRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to read request body: %v", err))
+		return
+	}
+	if err := protojson.Unmarshal(body, &req); err != nil {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("failed to decode request: %v", err))
+		return
+	}
+	if len(req.Challenge) == 0 {
+		a.logAndWriteHTTPError(w, http.StatusBadRequest, fmt.Errorf("challenge is required"))
+		return
+	}
+
+	evidence := &attestationpb.HostAttestation{}
+	if !a.launchSpec.Experiments.BcMode {
+		// vg has host attestation enabled and should use dummy implementation
+		evidence = dummyHostAttestation(req.Challenge)
+	} else {
+		hostAttBytes, err := a.attestAgent.AttestHost(a.ctx, req.Challenge)
+		if err != nil {
+			a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to fetch host attestation: %v", err))
+			return
+		}
+		if err := proto.Unmarshal(hostAttBytes, evidence); err != nil {
+			a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to unmarshal host attestation: %v", err))
+			return
+		}
+	}
+
+	evidenceBytes, err := protojson.Marshal(evidence)
+	if err != nil {
+		a.logAndWriteHTTPError(w, http.StatusInternalServerError, fmt.Errorf("failed to marshal evidence: %v", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(evidenceBytes)
 }
 
 func (a *attestHandler) logAndWriteHTTPError(w http.ResponseWriter, statusCode int, err error) {

@@ -3,24 +3,18 @@ package server
 import (
 	"bytes"
 	"crypto"
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-configfs-tsm/configfs/fakertmr"
-	configfstsmrtmr "github.com/google/go-configfs-tsm/rtmr"
-	"github.com/google/go-eventlog/proto/state"
-	"github.com/google/go-eventlog/register"
-	"github.com/google/go-tpm-tools/cel"
+	gepb "github.com/google/go-eventlog/proto/state"
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal/test"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
 	pb "github.com/google/go-tpm-tools/proto/tpm"
 	"github.com/google/go-tpm/legacy/tpm2"
-	"github.com/google/go-tpm/tpmutil"
 	"google.golang.org/protobuf/testing/protocmp"
 )
 
@@ -602,7 +596,6 @@ var CGKE251000 = eventLog{
 }
 
 func TestParseEventLogs(t *testing.T) {
-	sbatErrorStr := "asn1: structure error: tags don't match (16 vs {class:0 tag:24 length:10 isCompound:true})"
 	logs := []struct {
 		eventLog
 		name string
@@ -615,10 +608,8 @@ func TestParseEventLogs(t *testing.T) {
 		{Debian10GCE, "Debian10GCE", VerifyOpts{Loader: UnsupportedLoader}, nil},
 		{Rhel8GCE, "Rhel8GCE", VerifyOpts{Loader: GRUB}, nil},
 		{UbuntuAmdSevGCE, "UbuntuAmdSevGCE", VerifyOpts{Loader: GRUB}, nil},
-		// TODO: remove once the fix is pulled in
-		// https://github.com/google/go-attestation/pull/222
-		{Ubuntu2104NoDbxGCE, "Ubuntu2104NoDbxGCE", VerifyOpts{Loader: GRUB}, []string{sbatErrorStr}},
-		{Ubuntu2104NoSecureBootGCE, "Ubuntu2104NoSecureBootGCE", VerifyOpts{Loader: GRUB}, []string{sbatErrorStr}},
+		{Ubuntu2104NoDbxGCE, "Ubuntu2104NoDbxGCE", VerifyOpts{Loader: GRUB}, nil},
+		{Ubuntu2104NoSecureBootGCE, "Ubuntu2104NoSecureBootGCE", VerifyOpts{Loader: GRUB}, nil},
 		// This event log has a SecureBoot variable length of 0.
 		{ArchLinuxWorkstation, "ArchLinuxWorkstation", VerifyOpts{Loader: UnsupportedLoader, AllowEFIAppBeforeCallingEvent: true}, archLinuxKnownParsingFailures},
 		{COS85AmdSev, "COS85AmdSev", VerifyOpts{Loader: GRUB}, nil},
@@ -637,15 +628,21 @@ func TestParseEventLogs(t *testing.T) {
 			subtestName := fmt.Sprintf("%s-%s", log.name, hashName)
 			t.Run(subtestName, func(t *testing.T) {
 				if _, err := parsePCClientEventLog(rawLog, bank, log.opts); err != nil {
-					gErr, ok := err.(*GroupedError)
-					if !ok {
-						t.Errorf("ParseMachineState should return a GroupedError")
+					if uw, ok := err.(interface{ Unwrap() []error }); ok {
+						errs := uw.Unwrap()
+						for _, err := range errs {
+							for _, expectedErr := range log.errorSubstrs {
+								if !strings.Contains(err.Error(), expectedErr) {
+									t.Errorf("got unexpected error when parsing eventlog: %v", expectedErr)
+								}
+							}
+						}
+					} else {
+						t.Errorf("got unexpected error when unwrapping err: %v", err)
 					}
-					if len(log.errorSubstrs) == 0 {
-						t.Errorf("expected no errors in GroupedError, received (%v)", err)
-					}
-					if !gErr.containsKnownSubstrings(log.errorSubstrs) {
-						t.Errorf("failed to parse and replay log: %v", err)
+				} else {
+					if log.errorSubstrs != nil {
+						t.Errorf("expected errors when parsing %v, received nil", log.errorSubstrs)
 					}
 				}
 			})
@@ -653,7 +650,7 @@ func TestParseEventLogs(t *testing.T) {
 	}
 }
 
-func TestParseMachineStateReplayFail(t *testing.T) {
+func TestParseMachineStateFail(t *testing.T) {
 	badPcrs := pb.PCRs{Hash: pb.HashAlgo_SHA1}
 	pcrMap := make(map[uint32][]byte)
 	pcrMap[0] = []byte{0, 0, 0, 0}
@@ -661,11 +658,7 @@ func TestParseMachineStateReplayFail(t *testing.T) {
 
 	_, err := parsePCClientEventLog(Debian10GCE.RawLog, &badPcrs, VerifyOpts{Loader: UnsupportedLoader})
 	if err == nil {
-		t.Errorf("ParseMachineState should fail to replay the event log")
-	}
-	_, ok := err.(*GroupedError)
-	if !ok {
-		t.Errorf("ParseMachineState should return a GroupedError")
+		t.Errorf("parsePCClientEventLog should fail to replay the event log")
 	}
 }
 
@@ -797,332 +790,238 @@ func TestParseSecureBootState(t *testing.T) {
 	}
 }
 
-func convertToPCRBank(t *testing.T, pcrs *pb.PCRs) register.PCRBank {
-	pcrBank := register.PCRBank{TCGHashAlgo: state.HashAlgo(pcrs.Hash)}
-	digestAlg, err := pcrBank.TCGHashAlgo.CryptoHash()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for ind, dgst := range pcrs.GetPcrs() {
-		pcrBank.PCRs = append(pcrBank.PCRs, register.PCR{
-			Index:     int(ind),
-			Digest:    dgst,
-			DigestAlg: digestAlg},
-		)
-	}
-	return pcrBank
-}
-
-func getRTMRBank(t *testing.T, fakeRTMR *fakertmr.RtmrSubsystem) register.RTMRBank {
-	rtmrBank := register.RTMRBank{}
-	// RTMR 0 to 3
-	for i := 0; i < 4; i++ {
-		digest, err := configfstsmrtmr.GetDigest(fakeRTMR, i)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rtmrBank.RTMRs = append(rtmrBank.RTMRs, register.RTMR{Index: i, Digest: digest.Digest})
-	}
-	return rtmrBank
-}
-
-func TestParsingRTMREventlog(t *testing.T) {
-	coscel := &cel.CEL{}
-	emptyCosState := attestpb.ContainerState{}
-	emptyHealthMonitoringState := attestpb.HealthMonitoringState{}
-	emptyGpuDeviceState := attestpb.GpuDeviceState{}
-
-	var buf bytes.Buffer
-	// First, encode an empty CEL and try to parse it.
-	if err := coscel.EncodeCEL(&buf); err != nil {
-		t.Fatal(err)
-	}
-
-	fakeRTMR := fakertmr.CreateRtmrSubsystem(t.TempDir())
-	rtmrBank := getRTMRBank(t, fakeRTMR)
-
-	acosState, err := ParseCosCELRTMR(buf.Bytes(), rtmrBank)
-	if err != nil {
-		t.Errorf("expecting no error from ParseCosCELRTMR(), but get %v", err)
-	}
-	if diff := cmp.Diff(acosState.Container, &emptyCosState, protocmp.Transform()); diff != "" {
-		t.Errorf("unexpected container state difference:\n%v", diff)
-	}
-	if diff := cmp.Diff(acosState.HealthMonitoring, &emptyHealthMonitoringState, protocmp.Transform()); diff != "" {
-		t.Errorf("unexpected health monitoring difference:\n%v", diff)
-	}
-	if acosState.HealthMonitoring.MemoryEnabled != nil {
-		t.Errorf("unexpected MemoryEnabled state, want nil, but got %v", *acosState.HealthMonitoring.MemoryEnabled)
-	}
-	if diff := cmp.Diff(acosState.GpuDeviceState, &emptyGpuDeviceState, protocmp.Transform()); diff != "" {
-		t.Errorf("unexpected GPU device state difference:\n%v", diff)
-	}
-
-	// add events
-	testCELEvents := []struct {
-		cosNestedEventType cel.CosType
-		register           int
-		eventPayload       []byte
+func TestMatchWellKnownCert(t *testing.T) {
+	tests := []struct {
+		name    string
+		cert    *gepb.Certificate
+		want    attestpb.WellKnownCertificate
+		wantErr bool
 	}{
-		{cel.ImageRefType, cel.CosRTMR, []byte("docker.io/bazel/experimental/test:latest")},
-		{cel.ImageDigestType, cel.CosRTMR, []byte("sha256:781d8dfdd92118436bd914442c8339e653b83f6bf3c1a7a98efcfb7c4fed7483")},
-		{cel.RestartPolicyType, cel.CosRTMR, []byte(attestpb.RestartPolicy_Always.String())},
-		{cel.ImageIDType, cel.CosRTMR, []byte("sha256:5DF4A1AC347DCF8CF5E9D0ABC04B04DB847D1B88D3B1CC1006F0ACB68E5A1F4B")},
-		{cel.EnvVarType, cel.CosRTMR, []byte("foo=bar")},
-		{cel.EnvVarType, cel.CosRTMR, []byte("bar=baz")},
-		{cel.EnvVarType, cel.CosRTMR, []byte("baz=foo=bar")},
-		{cel.EnvVarType, cel.CosRTMR, []byte("empty=")},
-		{cel.ArgType, cel.CosRTMR, []byte("--x")},
-		{cel.ArgType, cel.CosRTMR, []byte("--y")},
-		{cel.ArgType, cel.CosRTMR, []byte("")},
-		{cel.MemoryMonitorType, cel.CosRTMR, []byte{1}},
-		{cel.GpuCCModeType, cel.CosRTMR, []byte(attestpb.GPUDeviceCCMode_ON.String())},
+		{
+			name: "Well-known certificate",
+			cert: &gepb.Certificate{
+				Representation: &gepb.Certificate_WellKnown{
+					WellKnown: gepb.WellKnownCertificate_GCE_DEFAULT_PK,
+				}},
+			want:    attestpb.WellKnownCertificate_GCE_DEFAULT_PK,
+			wantErr: false,
+		},
+		{
+			name: "Unknown well-known certificate",
+			cert: &gepb.Certificate{
+				Representation: &gepb.Certificate_WellKnown{
+					WellKnown: gepb.WellKnownCertificate_UNKNOWN,
+				}},
+			want:    attestpb.WellKnownCertificate_UNKNOWN,
+			wantErr: true,
+		},
+		{
+			name: "Certificate with DER",
+			cert: &gepb.Certificate{
+				Representation: &gepb.Certificate_Der{
+					Der: []byte("some DER bytes"),
+				}},
+			want:    attestpb.WellKnownCertificate_UNKNOWN,
+			wantErr: true,
+		},
 	}
-
-	expectedEnvVars := make(map[string]string)
-	expectedEnvVars["foo"] = "bar"
-	expectedEnvVars["bar"] = "baz"
-	expectedEnvVars["baz"] = "foo=bar"
-	expectedEnvVars["empty"] = ""
-
-	wantContainerState := attestpb.ContainerState{
-		ImageReference: string(testCELEvents[0].eventPayload),
-		ImageDigest:    string(testCELEvents[1].eventPayload),
-		RestartPolicy:  attestpb.RestartPolicy_Always,
-		ImageId:        string(testCELEvents[3].eventPayload),
-		EnvVars:        expectedEnvVars,
-		Args:           []string{string(testCELEvents[8].eventPayload), string(testCELEvents[9].eventPayload), string(testCELEvents[10].eventPayload)},
-	}
-	enabled := true
-	wantHealthMonitoringState := attestpb.HealthMonitoringState{
-		MemoryEnabled: &enabled,
-	}
-	wantGpuDeviceState := attestpb.GpuDeviceState{
-		CcMode: attestpb.GPUDeviceCCMode_ON,
-	}
-
-	for _, testEvent := range testCELEvents {
-		cosEvent := cel.CosTlv{EventType: testEvent.cosNestedEventType, EventContent: testEvent.eventPayload}
-		if err := coscel.AppendEventRTMR(fakeRTMR, testEvent.register, cosEvent); err != nil {
-			t.Fatal(err)
-		}
-	}
-	buf = bytes.Buffer{}
-	if err := coscel.EncodeCEL(&buf); err != nil {
-		t.Fatal(err)
-	}
-
-	rtmrBank = getRTMRBank(t, fakeRTMR)
-
-	if acosState, err := ParseCosCELRTMR(buf.Bytes(), rtmrBank); err != nil {
-		t.Errorf("expecting no error from ParseCosCELRTMR(), but get %v", err)
-	} else {
-		if diff := cmp.Diff(acosState.Container, &wantContainerState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected container state difference:\n%v", diff)
-		}
-		if diff := cmp.Diff(acosState.HealthMonitoring, &wantHealthMonitoringState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected health monitoring state difference:\n%v", diff)
-		}
-		if diff := cmp.Diff(acosState.GpuDeviceState, &wantGpuDeviceState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected GPU device state difference:\n%v", diff)
-		}
-	}
-
-	// Faking PCR with RTMR should fail
-	imposterPcrBank := map[uint32][]byte{}
-	imposterPcrBank[1] = rtmrBank.RTMRs[0].Digest
-	imposterPcrBank[2] = rtmrBank.RTMRs[1].Digest
-	imposterPcrBank[3] = rtmrBank.RTMRs[2].Digest
-	imposterPcrBank[4] = rtmrBank.RTMRs[3].Digest
-	imposterPcrs := &pb.PCRs{Hash: pb.HashAlgo_SHA384, Pcrs: imposterPcrBank}
-	hackedPCRBank := convertToPCRBank(t, imposterPcrs)
-	if _, err = ParseCosCELPCR(buf.Bytes(), hackedPCRBank); err == nil {
-		t.Errorf("expecting error from ParseCosCELPCR() when using RTMR CEL Log, but get nil")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := matchWellKnownCert(tt.cert)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("matchWellKnownCert() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("matchWellKnownCert() got = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestParsingCELEventLog(t *testing.T) {
-	test.SkipForRealTPM(t)
-	tpm := test.GetTPM(t)
-	defer client.CheckedClose(t, tpm)
-
-	coscel := &cel.CEL{}
-	emptyCosState := attestpb.ContainerState{}
-	emptyHealthMonitoringState := attestpb.HealthMonitoringState{}
-	emptyGpuDeviceState := attestpb.GpuDeviceState{}
-
-	var buf bytes.Buffer
-	// First, encode an empty CEL and try to parse it.
-	if err := coscel.EncodeCEL(&buf); err != nil {
-		t.Fatal(err)
-	}
-	banks, err := client.ReadAllPCRs(tpm)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	implementedHashes := []crypto.Hash{}
-	// get all implmented hash algo in the TPM
-	for _, h := range banks {
-		hsh, err := tpm2.Algorithm(h.Hash).Hash()
-		if err != nil {
-			t.Fatal(err)
-		}
-		implementedHashes = append(implementedHashes, crypto.Hash(hsh))
-	}
-
-	for _, bank := range banks {
-		pcrBank := convertToPCRBank(t, bank)
-		// pcrs can have any value here, since the coscel has no records, the replay should always success.
-		acosState, err := ParseCosCELPCR(buf.Bytes(), pcrBank)
-		if err != nil {
-			t.Errorf("expecting no error from ParseCosCELPCR(), but get %v", err)
-		}
-		if diff := cmp.Diff(acosState.Container, &emptyCosState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected container state difference:\n%v", diff)
-		}
-		if diff := cmp.Diff(acosState.HealthMonitoring, &emptyHealthMonitoringState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected health monitoring difference:\n%v", diff)
-		}
-		if acosState.HealthMonitoring.MemoryEnabled != nil {
-			t.Errorf("unexpected MemoryEnabled state, want nil, but got %v", *acosState.HealthMonitoring.MemoryEnabled)
-		}
-		if diff := cmp.Diff(acosState.GpuDeviceState, &emptyGpuDeviceState, protocmp.Transform()); diff != "" {
-			t.Errorf("unexpected GPU device state difference:\n%v", diff)
-		}
-	}
-
-	// Secondly, append some real COS events to the CEL. This time we should get content in the CosState.
-	testCELEvents := []struct {
-		cosNestedEventType cel.CosType
-		pcr                int
-		eventPayload       []byte
+func TestConvertToPbDatabase(t *testing.T) {
+	tests := []struct {
+		name   string
+		gepbdb *gepb.Database
+		want   *attestpb.Database
 	}{
-		{cel.ImageRefType, cel.CosEventPCR, []byte("docker.io/bazel/experimental/test:latest")},
-		{cel.ImageDigestType, cel.CosEventPCR, []byte("sha256:781d8dfdd92118436bd914442c8339e653b83f6bf3c1a7a98efcfb7c4fed7483")},
-		{cel.RestartPolicyType, cel.CosEventPCR, []byte(attestpb.RestartPolicy_Always.String())},
-		{cel.ImageIDType, cel.CosEventPCR, []byte("sha256:5DF4A1AC347DCF8CF5E9D0ABC04B04DB847D1B88D3B1CC1006F0ACB68E5A1F4B")},
-		{cel.EnvVarType, cel.CosEventPCR, []byte("foo=bar")},
-		{cel.EnvVarType, cel.CosEventPCR, []byte("bar=baz")},
-		{cel.EnvVarType, cel.CosEventPCR, []byte("baz=foo=bar")},
-		{cel.EnvVarType, cel.CosEventPCR, []byte("empty=")},
-		{cel.ArgType, cel.CosEventPCR, []byte("--x")},
-		{cel.ArgType, cel.CosEventPCR, []byte("--y")},
-		{cel.ArgType, cel.CosEventPCR, []byte("")},
-		{cel.MemoryMonitorType, cel.CosEventPCR, []byte{1}},
-		{cel.GpuCCModeType, cel.CosEventPCR, []byte(attestpb.GPUDeviceCCMode_OFF.String())},
+		{
+			name:   "Empty database",
+			gepbdb: &gepb.Database{},
+			want: &attestpb.Database{
+				Certs:  []*attestpb.Certificate{},
+				Hashes: [][]byte{},
+			},
+		},
+		{
+			name: "Database with DER certificate",
+			gepbdb: &gepb.Database{
+				Certs: []*gepb.Certificate{
+					{
+						Representation: &gepb.Certificate_Der{
+							Der: []byte("test_der_cert"),
+						},
+					},
+				},
+				Hashes: [][]byte{[]byte("test_hash")},
+			},
+			want: &attestpb.Database{
+				Certs: []*attestpb.Certificate{
+					{
+						Representation: &attestpb.Certificate_Der{
+							Der: []byte("test_der_cert"),
+						},
+					},
+				},
+				Hashes: [][]byte{[]byte("test_hash")},
+			},
+		},
+		{
+			name: "Database with well-known certificate",
+			gepbdb: &gepb.Database{
+				Certs: []*gepb.Certificate{
+					{
+						Representation: &gepb.Certificate_WellKnown{
+							WellKnown: gepb.WellKnownCertificate_GCE_DEFAULT_PK,
+						},
+					},
+				},
+			},
+			want: &attestpb.Database{
+				Certs: []*attestpb.Certificate{
+					{
+						Representation: &attestpb.Certificate_WellKnown{
+							WellKnown: attestpb.WellKnownCertificate_GCE_DEFAULT_PK,
+						},
+					},
+				},
+				Hashes: [][]byte{},
+			},
+		},
 	}
-
-	expectedEnvVars := make(map[string]string)
-	expectedEnvVars["foo"] = "bar"
-	expectedEnvVars["bar"] = "baz"
-	expectedEnvVars["baz"] = "foo=bar"
-	expectedEnvVars["empty"] = ""
-
-	wantContainerState := attestpb.ContainerState{
-		ImageReference: string(testCELEvents[0].eventPayload),
-		ImageDigest:    string(testCELEvents[1].eventPayload),
-		RestartPolicy:  attestpb.RestartPolicy_Always,
-		ImageId:        string(testCELEvents[3].eventPayload),
-		EnvVars:        expectedEnvVars,
-		Args:           []string{string(testCELEvents[8].eventPayload), string(testCELEvents[9].eventPayload), string(testCELEvents[10].eventPayload)},
-	}
-	enabled := true
-	wantHealthMonitoringState := attestpb.HealthMonitoringState{
-		MemoryEnabled: &enabled,
-	}
-	wantGpuDeviceState := attestpb.GpuDeviceState{
-		CcMode: attestpb.GPUDeviceCCMode_OFF,
-	}
-	for _, testEvent := range testCELEvents {
-		cosEvent := cel.CosTlv{EventType: testEvent.cosNestedEventType, EventContent: testEvent.eventPayload}
-
-		if err := coscel.AppendEventPCR(tpm, testEvent.pcr, cosEvent); err != nil {
-			t.Fatal(err)
-		}
-	}
-	buf = bytes.Buffer{}
-	if err := coscel.EncodeCEL(&buf); err != nil {
-		t.Fatal(err)
-	}
-	banks, err = client.ReadAllPCRs(tpm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, bank := range banks {
-		pcrBank := convertToPCRBank(t, bank)
-
-		if acosState, err := ParseCosCELPCR(buf.Bytes(), pcrBank); err != nil {
-			t.Errorf("expecting no error from ParseCosCELPCR(), but get %v", err)
-		} else {
-			if diff := cmp.Diff(acosState.Container, &wantContainerState, protocmp.Transform()); diff != "" {
-				t.Errorf("unexpected container state difference:\n%v", diff)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convertToPbDatabase(tt.gepbdb)
+			if diff := cmp.Diff(got, tt.want, protocmp.Transform()); diff != "" {
+				t.Errorf("unexpected convertToPbDatabase diff: %s", diff)
 			}
-			if diff := cmp.Diff(acosState.HealthMonitoring, &wantHealthMonitoringState, protocmp.Transform()); diff != "" {
-				t.Errorf("unexpected health monitoring state difference:\n%v", diff)
-			}
-			if diff := cmp.Diff(acosState.GpuDeviceState, &wantGpuDeviceState, protocmp.Transform()); diff != "" {
-				t.Errorf("unexpected GPU device state difference:\n%v", diff)
-			}
-		}
-	}
-
-	// Thirdly, append a random non-COS event, encode and try to parse it.
-	// Because there is no COS TLV event, attestation should fail as we do not
-	// understand the content type.
-	event, err := generateNonCosCelEvent(implementedHashes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	coscel.Records = append(coscel.Records, event)
-	buf = bytes.Buffer{}
-	if err := coscel.EncodeCEL(&buf); err != nil {
-		t.Fatal(err)
-	}
-	// extend digests to the PCR
-	for _, hash := range implementedHashes {
-		algo, err := tpm2.HashToAlgorithm(hash)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := tpm2.PCRExtend(tpm, tpmutil.Handle(cel.CosEventPCR), algo, event.Digests[hash], ""); err != nil {
-			t.Fatal(err)
-		}
-	}
-	banks, err = client.ReadAllPCRs(tpm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, bank := range banks {
-		pcrBank := convertToPCRBank(t, bank)
-		_, err := ParseCosCELPCR(buf.Bytes(), pcrBank)
-		if err == nil {
-			t.Errorf("expected error when parsing event log with unknown content type")
-		}
+		})
 	}
 }
 
-func generateNonCosCelEvent(hashAlgoList []crypto.Hash) (cel.Record, error) {
-	randRecord := cel.Record{}
-	randRecord.RecNum = 0
-	randRecord.Index = cel.CosEventPCR
-	contentValue := make([]byte, 10)
-	rand.Read(contentValue)
-	randRecord.Content = cel.TLV{Type: 250, Value: contentValue}
-	contentBytes, err := randRecord.Content.MarshalBinary()
-	if err != nil {
-		return cel.Record{}, err
+func TestConvertToMachineState(t *testing.T) {
+	tests := []struct {
+		name   string
+		gepbdb *gepb.FirmwareLogState
+		want   *attestpb.MachineState
+	}{
+		{
+			name:   "Empty state",
+			gepbdb: &gepb.FirmwareLogState{},
+			want:   &attestpb.MachineState{},
+		},
+		{
+			name: "Full state",
+			gepbdb: &gepb.FirmwareLogState{
+				Platform: &gepb.PlatformState{
+					Technology: gepb.GCEConfidentialTechnology_AMD_SEV,
+					Firmware:   &gepb.PlatformState_GceVersion{GceVersion: 1},
+				},
+				SecureBoot: &gepb.SecureBootState{
+					Enabled: true,
+					Db: &gepb.Database{
+						Certs: []*gepb.Certificate{
+							{Representation: &gepb.Certificate_Der{Der: []byte("db_cert_der")}},
+						},
+					},
+					Kek: &gepb.Database{
+						Certs: []*gepb.Certificate{
+							{Representation: &gepb.Certificate_WellKnown{WellKnown: gepb.WellKnownCertificate_MS_THIRD_PARTY_KEK_CA_2011}},
+						},
+					},
+				},
+				RawEvents: []*gepb.Event{{
+					PcrIndex: 0,
+					Data:     []byte("12345678"),
+					Digest:   []byte("aabbccdd"),
+				}},
+				Efi: &gepb.EfiState{
+					Apps: []*gepb.EfiApp{
+						{
+							Digest: []byte("aabbccdd"),
+						},
+					},
+				},
+				Hash: gepb.HashAlgo_SHA256,
+				Grub: &gepb.GrubState{
+					Files: []*gepb.GrubFile{{Digest: []byte("aabbcc")}},
+				},
+				LinuxKernel: &gepb.LinuxKernelState{
+					CommandLine: "abcdefge",
+				},
+				LogType: gepb.LogType_LOG_TYPE_TCG2, // this will be ignored by the conversion
+			},
+			want: &attestpb.MachineState{
+				Platform: &attestpb.PlatformState{
+					Technology: attestpb.GCEConfidentialTechnology_AMD_SEV,
+					Firmware:   &attestpb.PlatformState_GceVersion{GceVersion: 1},
+				},
+				SecureBoot: &attestpb.SecureBootState{
+					Enabled: true,
+					Db: &attestpb.Database{
+						Certs: []*attestpb.Certificate{
+							{Representation: &attestpb.Certificate_Der{Der: []byte("db_cert_der")}},
+						},
+					},
+					Kek: &attestpb.Database{
+						Certs: []*attestpb.Certificate{
+							{Representation: &attestpb.Certificate_WellKnown{WellKnown: attestpb.WellKnownCertificate_MS_THIRD_PARTY_KEK_CA_2011}},
+						},
+					},
+				},
+				RawEvents: []*attestpb.Event{{
+					PcrIndex: 0,
+					Data:     []byte("12345678"),
+					Digest:   []byte("aabbccdd"),
+				}},
+				Efi: &attestpb.EfiState{
+					Apps: []*attestpb.EfiApp{
+						{
+							Digest: []byte("aabbccdd"),
+						},
+					},
+				},
+				Hash: pb.HashAlgo_SHA256,
+				Grub: &attestpb.GrubState{
+					Files: []*attestpb.GrubFile{{Digest: []byte("aabbcc")}},
+				},
+				LinuxKernel: &attestpb.LinuxKernelState{
+					CommandLine: "abcdefge",
+				},
+			},
+		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ConvertToMachineState(tt.gepbdb)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(got, tt.want, protocmp.Transform()); diff != "" {
+				t.Errorf("unexpected converted machinestate diff: %s", diff)
+			}
 
-	digestMap := make(map[crypto.Hash][]byte)
-	for _, hash := range hashAlgoList {
-		h := hash.New()
-		h.Write(contentBytes)
-		digestMap[hash] = h.Sum(nil)
+			// convert the result machine state back to a firmware state for safety check
+			ms, err := ConvertToFirmwareState(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// ignore the log_type as it is lost during the conversion
+			if diff := cmp.Diff(ms, tt.gepbdb, protocmp.Transform(), protocmp.IgnoreFields(&gepb.FirmwareLogState{}, "log_type")); diff != "" {
+				t.Errorf("unexpected inverse converted machinestate diff: %s", diff)
+			}
+		})
 	}
-	randRecord.Digests = digestMap
-
-	return randRecord, nil
 }
 
 func TestParseLinuxKernelState(t *testing.T) {
@@ -1158,45 +1057,6 @@ func TestParseLinuxKernelState(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestNullTerminatedDataDigest(t *testing.T) {
-	rawdata := []byte("123456")
-	rawdataNullTerminated := []byte("123456\x00")
-	rawdataModifyLastByte := []byte("123456\xff")
-	hash := crypto.SHA256
-	hasher := hash.New()
-	hasher.Write(rawdata)
-	rawDigest := hasher.Sum(nil)
-	hasher.Reset()
-	hasher.Write(rawdataNullTerminated)
-	nullTerminatedDigest := hasher.Sum(nil)
-	hasher.Reset()
-
-	if err := verifyDataDigest(hasher, rawdata, rawDigest); err != nil {
-		t.Error(err)
-	}
-	if err := verifyDataDigest(hasher, rawdata, nullTerminatedDigest); err == nil {
-		t.Errorf("non null-terminated data should not match the null-terminated digest")
-	}
-
-	// "rawdata + '\x00'" can be verified with digest("rawdata") as well as digest("rawdata + '\x00'")
-	if err := verifyNullTerminatedDataDigest(hasher, rawdataNullTerminated, nullTerminatedDigest); err != nil {
-		t.Error(err)
-	}
-	if err := verifyNullTerminatedDataDigest(hasher, rawdataNullTerminated, rawDigest); err != nil {
-		t.Error(err)
-	}
-
-	if err := verifyNullTerminatedDataDigest(hasher, rawdata, nullTerminatedDigest); err == nil {
-		t.Errorf("non null-terminated data should always fail")
-	}
-	if err := verifyNullTerminatedDataDigest(hasher, rawdataModifyLastByte, nullTerminatedDigest); err == nil {
-		t.Errorf("manipulated null terminated data should fail")
-	}
-	if err := verifyNullTerminatedDataDigest(hasher, []byte{}, []byte{}); err == nil {
-		t.Errorf("len() == 0 should always fail")
 	}
 }
 
@@ -1245,16 +1105,12 @@ func TestParseGrubStateFail(t *testing.T) {
 		hashName := pb.HashAlgo_name[int32(bank.Hash)]
 		subtestName := fmt.Sprintf("GlinuxNoSecureBootLaptop-%s", hashName)
 		t.Run(subtestName, func(t *testing.T) {
-			_, err := parsePCClientEventLog(eventlog.RawLog, bank, VerifyOpts{Loader: GRUB})
-			if err == nil {
-				t.Error("expected error when parsing GRUB state")
-			}
-			gErr, ok := err.(*GroupedError)
-			if !ok {
-				t.Errorf("ParseMachineState should return a GroupedError")
-			}
-			if !gErr.containsSubstring("no GRUB measurements found") {
-				t.Errorf("expected GroupedError (%s) to contain no GRUB measurements error", err)
+			if _, err := parsePCClientEventLog(eventlog.RawLog, bank, VerifyOpts{Loader: GRUB}); err == nil {
+				t.Errorf("expected error when parsing GRUB state")
+			} else {
+				if !strings.Contains(err.Error(), "no GRUB measurements found") {
+					t.Errorf("expected error containing 'no GRUB measurements found'")
+				}
 			}
 		})
 	}
@@ -1306,38 +1162,6 @@ func TestParseEfiState(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestGetGrubStateWithModifiedNullTerminator(t *testing.T) {
-	// Choose an eventlog with GRUB.
-	eventlog := UbuntuAmdSevGCE
-	// Just use the SHA256 bank.
-	events, err := parseReplayHelper(eventlog.RawLog, eventlog.Banks[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	cryptoHash, _ := tpm2.Algorithm(eventlog.Banks[1].Hash).Hash()
-
-	// Make sure the original events can parse successfully.
-	pbEvents := convertToPbEvents(cryptoHash, events)
-	if _, err := getGrubState(cryptoHash, pbEvents); err != nil {
-		t.Fatal(err)
-	}
-
-	// Change the null terminator.
-	for _, e := range events {
-		if e.Index == 8 {
-			if e.Data[len(e.Data)-1] == '\x00' {
-				e.Data[len(e.Data)-1] = '\xff'
-			}
-		}
-	}
-
-	// Parse again, make sure it will fail.
-	pbEvents = convertToPbEvents(cryptoHash, events)
-	if _, err := getGrubState(cryptoHash, pbEvents); err == nil {
-		t.Error("Expected getGrubState to fail after modifying the null terminator")
 	}
 }
 

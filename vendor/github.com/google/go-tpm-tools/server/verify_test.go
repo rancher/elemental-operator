@@ -13,12 +13,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal"
 	"github.com/google/go-tpm-tools/internal/test"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
+	tpmquote "github.com/google/go-tpm-tools/quote"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	"github.com/google/logger"
@@ -106,7 +107,7 @@ func TestVerifyHappyCases(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to quote: %v", err)
 			}
-			err = internal.VerifyQuote(quote, ak.PublicKey(), subtest.extraData)
+			err = tpmquote.Verify(quote, ak.PublicKey(), subtest.extraData)
 			if err != nil {
 				t.Fatalf("failed to verify: %v", err)
 			}
@@ -148,7 +149,7 @@ func TestVerifyPCRChanged(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to read PCRs: %v", err)
 	}
-	err = internal.VerifyQuote(quote, ak.PublicKey(), nonce)
+	err = tpmquote.Verify(quote, ak.PublicKey(), nonce)
 	if err == nil {
 		t.Errorf("Verify should fail as Verify read a modified PCR")
 	}
@@ -188,7 +189,7 @@ func TestVerifyUsingDifferentPCR(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to read PCRs: %v", err)
 	}
-	err = internal.VerifyQuote(quote, ak.PublicKey(), nonce)
+	err = tpmquote.Verify(quote, ak.PublicKey(), nonce)
 	if err == nil {
 		t.Errorf("Verify should fail as Verify read a different PCR")
 	}
@@ -221,6 +222,7 @@ func TestVerifyWithTrustedAK(t *testing.T) {
 }
 
 func TestVerifySHA1Attestation(t *testing.T) {
+	// If running against a real TPM which supports less usual hash algos, this test might fail.
 	rwc := test.GetTPM(t)
 	defer client.CheckedClose(t, rwc)
 
@@ -236,7 +238,7 @@ func TestVerifySHA1Attestation(t *testing.T) {
 		t.Fatalf("failed to attest: %v", err)
 	}
 
-	// We should get a SHA-256 state, even if we allow SHA-1
+	// We should at least get a SHA-256 state, even if we allow SHA-1
 	opts := VerifyOpts{
 		Nonce:      nonce,
 		TrustedAKs: []crypto.PublicKey{ak.PublicKey()},
@@ -247,13 +249,15 @@ func TestVerifySHA1Attestation(t *testing.T) {
 		t.Errorf("failed to verify: %v", err)
 	}
 	h := tpm2.Algorithm(state.GetHash())
-	if h != tpm2.AlgSHA256 {
-		t.Errorf("expected SHA-256 state, got: %v", h)
+	if h != tpm2.AlgSHA256 && h != tpm2.AlgSHA384 && h != tpm2.AlgSHA512 {
+		t.Errorf("expected at least a non SHA-1 state, got: %v", h)
 	}
 
-	// Now we mess up the SHA-256 state to force SHA-1 fallback
+	// Now we mess up all other states to force SHA-1 fallback
 	for _, quote := range attestation.GetQuotes() {
-		if tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA256 {
+		if tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA256 ||
+			tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA384 ||
+			tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA512 {
 			quote.Quote = nil
 		}
 	}
@@ -788,6 +792,89 @@ func TestValidateAKGCEAndGetGCEInstanceInfo(t *testing.T) {
 			} else {
 				t.Log(gceInfo)
 				fmt.Print(gceInfo)
+			}
+		})
+	}
+}
+
+func TestVerifyAttestationHashAlgo(t *testing.T) {
+	tests := []struct {
+		name       string
+		allowSHA1  bool
+		hashAlgo   tpm2.Algorithm
+		wantErrStr string
+	}{
+		{
+			"SHA1, Allowed",
+			true,
+			tpm2.AlgSHA1,
+			"",
+		},
+		{
+			"SHA1, Not Allowed",
+			false,
+			tpm2.AlgSHA1,
+			errSHA1NotAllowed.Error(),
+		},
+		{
+			"SHA256",
+			false,
+			tpm2.AlgSHA256,
+			"",
+		},
+		{
+			"SHA384",
+			false,
+			tpm2.AlgSHA384,
+			"",
+		},
+		{
+			"SHA256, SHA1 Allowed",
+			true,
+			tpm2.AlgSHA256,
+			"",
+		},
+		{
+			"SHA384, SHA1 Allowed",
+			true,
+			tpm2.AlgSHA384,
+			"",
+		},
+		{
+			"SHA512",
+			false,
+			tpm2.AlgSHA512,
+			errNoSupportedQuote.Error(),
+		},
+		{
+			"AES",
+			false,
+			tpm2.AlgAES,
+			"hash algorithm AES is not supported",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attestBytes := test.COS85NoNonce
+			att := &attestpb.Attestation{}
+			if err := proto.Unmarshal(attestBytes, att); err != nil {
+				t.Fatalf("failed to unmarshal attestation: %v", err)
+			}
+
+			_, err := VerifyAttestation(att, VerifyOpts{
+				AllowSHA1:         tc.allowSHA1,
+				HashAlgo:          tc.hashAlgo,
+				TrustedRootCerts:  GceEKRoots,
+				IntermediateCerts: GceEKIntermediates,
+			})
+			if tc.wantErrStr == "" {
+				if err != nil {
+					t.Errorf("VerifyAttestation(%v) unexpected error: %v", tc.name, err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrStr) {
+					t.Errorf("VerifyAttestation(%v) err = %v, want substring = %v", tc.name, err, tc.wantErrStr)
+				}
 			}
 		})
 	}

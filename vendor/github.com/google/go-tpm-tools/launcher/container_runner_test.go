@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -21,8 +22,10 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/go-cmp/cmp"
+	gecel "github.com/google/go-eventlog/cel"
+	"github.com/google/go-tpm-tools/agent"
 	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/launcher/agent"
+	"github.com/google/go-tpm-tools/launcher/internal/gpu"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/launcherfile"
 	"github.com/google/go-tpm-tools/launcher/spec"
@@ -31,6 +34,8 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/oauth2"
+
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 )
 
 const (
@@ -39,7 +44,7 @@ const (
 
 // Fake attestation agent.
 type fakeAttestationAgent struct {
-	measureEventFunc func(cel.Content) error
+	measureEventFunc func(gecel.Content) error
 	attestFunc       func(context.Context, agent.AttestAgentOpts) ([]byte, error)
 	sigsCache        []string
 	sigsFetcherFunc  func(context.Context) []string
@@ -49,7 +54,7 @@ type fakeAttestationAgent struct {
 	attempts int
 }
 
-func (f *fakeAttestationAgent) MeasureEvent(event cel.Content) error {
+func (f *fakeAttestationAgent) MeasureEvent(event gecel.Content) error {
 	if f.measureEventFunc != nil {
 		return f.measureEventFunc(event)
 	}
@@ -69,6 +74,10 @@ func (f *fakeAttestationAgent) AttestWithClient(_ context.Context, _ agent.Attes
 	return nil, fmt.Errorf("unimplemented")
 }
 
+func (f *fakeAttestationAgent) AttestationEvidence(_ context.Context, _ []byte, _ []byte, _ agent.AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+	return nil, fmt.Errorf("unimplemented")
+}
+
 // Refresh simulates the behavior of an actual agent.
 func (f *fakeAttestationAgent) Refresh(ctx context.Context) error {
 	if f.sigsFetcherFunc != nil {
@@ -78,6 +87,25 @@ func (f *fakeAttestationAgent) Refresh(ctx context.Context) error {
 }
 
 func (f *fakeAttestationAgent) Close() error {
+	return nil
+}
+
+func (f *fakeAttestationAgent) AttestHost(_ context.Context, _ []byte) ([]byte, error) {
+	return nil, fmt.Errorf("AttestHost unimplemented")
+}
+
+type fakeGPUAttester struct {
+	attestFunc func(nonce []byte) (any, error)
+}
+
+func (f *fakeGPUAttester) Attest(nonce []byte) (any, error) {
+	if f.attestFunc != nil {
+		return f.attestFunc(nonce)
+	}
+	return &attestationpb.NvidiaAttestationReport{}, nil
+}
+
+func (f *fakeGPUAttester) EnableReadyState() error {
 	return nil
 }
 
@@ -282,6 +310,83 @@ func TestRefreshTokenError(t *testing.T) {
 				t.Error("refreshToken succeeded, expected error.")
 			}
 
+		})
+	}
+}
+
+func TestMeasureGPUAttestationEvidence(t *testing.T) {
+	testCases := []struct {
+		name        string
+		gpuAttester gpu.Attester
+		attestAgent *fakeAttestationAgent
+		wantErr     bool
+		wantErrStr  string
+	}{
+		{
+			name:        "Success",
+			gpuAttester: &fakeGPUAttester{},
+			attestAgent: &fakeAttestationAgent{
+				measureEventFunc: func(gecel.Content) error { return nil },
+			},
+			wantErr: false,
+		},
+		{
+			name:        "NilGpuAttester",
+			gpuAttester: nil,
+			attestAgent: &fakeAttestationAgent{},
+			wantErr:     false,
+		},
+		{
+			name: "AttestError",
+			gpuAttester: &fakeGPUAttester{
+				attestFunc: func(_ []byte) (any, error) {
+					return nil, errors.New("attest failed")
+				},
+			},
+			attestAgent: &fakeAttestationAgent{},
+			wantErr:     true,
+			wantErrStr:  "failed to collect GPU evidence",
+		},
+		{
+			name: "WrongEvidenceType",
+			gpuAttester: &fakeGPUAttester{
+				attestFunc: func(_ []byte) (any, error) {
+					return "wrong type", nil
+				},
+			},
+			attestAgent: &fakeAttestationAgent{},
+			wantErr:     true,
+			wantErrStr:  "unexpected evidence type",
+		},
+		{
+			name:        "MeasureEventError",
+			gpuAttester: &fakeGPUAttester{},
+			attestAgent: &fakeAttestationAgent{
+				measureEventFunc: func(gecel.Content) error {
+					return errors.New("measure event failed")
+				},
+			},
+			wantErr:    true,
+			wantErrStr: "failed to measure GPU attestation",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &ContainerRunner{
+				// The fakeGPUAttester doesn't have EnableReadyState, so we wrap it.
+				gpuAttester: tc.gpuAttester,
+				attestAgent: tc.attestAgent,
+				logger:      logging.SimpleLogger(),
+			}
+
+			err := r.measureGPUAttestationEvidence()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("measureGPUAttestationEvidence() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr && err != nil && !strings.Contains(err.Error(), tc.wantErrStr) {
+				t.Errorf("measureGPUAttestationEvidence() error = %q, want err containing %q", err, tc.wantErrStr)
+			}
 		})
 	}
 }
@@ -588,12 +693,14 @@ func TestMeasureCELEvents(t *testing.T) {
 				cel.EnvVarType,
 				cel.OverrideEnvType,
 				cel.OverrideArgType,
+				cel.GPUDeviceAttestationBindingType,
 				cel.MemoryMonitorType,
 				cel.LaunchSeparatorType,
 			},
 			launchSpec: spec.LaunchSpec{
-				Envs: []spec.EnvVar{{Name: "hello", Value: "world"}},
-				Cmd:  []string{"hello world"},
+				Envs:             []spec.EnvVar{{Name: "hello", Value: "world"}},
+				Cmd:              []string{"hello world"},
+				InstallGpuDriver: true,
 			},
 		},
 		{
@@ -607,6 +714,10 @@ func TestMeasureCELEvents(t *testing.T) {
 				cel.EnvVarType,
 				cel.MemoryMonitorType,
 				cel.LaunchSeparatorType,
+				// GPUDeviceAttestationBindingType is NOT here because InstallGpuDriver is false
+			},
+			launchSpec: spec.LaunchSpec{
+				InstallGpuDriver: false,
 			},
 		},
 	}
@@ -616,17 +727,27 @@ func TestMeasureCELEvents(t *testing.T) {
 			gotEvents := []cel.CosType{}
 
 			fakeAgent := &fakeAttestationAgent{
-				measureEventFunc: func(content cel.Content) error {
-					got, _ := content.GetTLV()
-					tlv := &cel.TLV{}
+				measureEventFunc: func(content gecel.Content) error {
+					got, _ := content.TLV()
+					tlv := &gecel.TLV{}
 					tlv.UnmarshalBinary(got.Value)
 					gotEvents = append(gotEvents, cel.CosType(tlv.Type))
 					return nil
 				},
 			}
 
+			var fakeGpu gpu.Attester
+			if tc.launchSpec.InstallGpuDriver {
+				fakeGpu = &fakeGPUAttester{
+					attestFunc: func(_ []byte) (any, error) {
+						return &attestationpb.NvidiaAttestationReport{}, nil
+					},
+				}
+			}
+
 			r := ContainerRunner{
 				attestAgent: fakeAgent,
+				gpuAttester: fakeGpu,
 				container:   fakeContainer,
 				launchSpec:  tc.launchSpec,
 				logger:      logging.SimpleLogger(),

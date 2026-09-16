@@ -3,6 +3,7 @@ package launcher
 
 import (
 	"context"
+	cryt "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
@@ -25,9 +27,12 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/remotes"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/go-tpm-tools/agent"
 	"github.com/google/go-tpm-tools/cel"
 	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/launcher/agent"
+	keymanager "github.com/google/go-tpm-tools/keymanager/km_common/proto"
+	workloadservice "github.com/google/go-tpm-tools/keymanager/workload_service"
+	"github.com/google/go-tpm-tools/launcher/internal/gpu"
 	"github.com/google/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
@@ -42,6 +47,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/oauth2"
+	"google.golang.org/protobuf/proto"
 )
 
 // ContainerRunner contains information about the container settings
@@ -50,12 +56,14 @@ type ContainerRunner struct {
 	launchSpec    spec.LaunchSpec
 	attestAgent   agent.AttestationAgent
 	logger        logging.Logger
+	gpuAttester   gpu.Attester
 	serialConsole *os.File
 }
 
 const tokenFileTmp = ".token.tmp"
 
 const teeServerSocket = "teeserver.sock"
+const keyManagerSocket = "kmaserver.sock"
 
 // Since we only allow one container on a VM, using a deterministic id is probably fine
 const (
@@ -191,6 +199,45 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	}
 	specOpts = append(specOpts, cgroupOpts...)
 
+	var deviceROTs []agent.DeviceROT
+	nvidiaAttester := gpu.NewNvidiaAttester(launchSpec.InstallGpuDriver)
+	if launchSpec.InstallGpuDriver {
+		gpuMounts := []specs.Mount{
+			{
+				Type:        "volume",
+				Source:      fmt.Sprintf("%s/lib64", gpu.InstallationHostDir),
+				Destination: fmt.Sprintf("%s/lib64", gpu.InstallationContainerDir),
+				Options:     []string{"rbind", "rw"},
+			}, {
+				Type:        "volume",
+				Source:      fmt.Sprintf("%s/bin", gpu.InstallationHostDir),
+				Destination: fmt.Sprintf("%s/bin", gpu.InstallationContainerDir),
+				Options:     []string{"rbind", "rw"},
+			},
+		}
+		specOpts = append(specOpts, oci.WithMounts(gpuMounts))
+
+		// /dev/nvidia-caps/* will not be listed here and will not be passed to
+		// the container workload
+		//
+		// following devices should be listed:
+		// /dev/nvidiactl
+		// /dev/nvidia-uvm
+		// /dev/nvidia-uvm-tools
+		// /dev/nvidia{0,1,2,...}
+		// /dev/nvidia-modeset
+		gpuDeviceFiles, err := listFilesWithPrefix("/dev", "nvidia")
+		if err != nil {
+			return nil, fmt.Errorf("failed to list nvidia devices: [%w]", err)
+		}
+
+		for _, deviceFile := range gpuDeviceFiles {
+			logger.Info(fmt.Sprintf("Detected nvidia device : %s", deviceFile))
+			specOpts = append(specOpts, oci.WithDevices(deviceFile, deviceFile, "crw-rw-rw-"))
+		}
+		deviceROTs = append(deviceROTs, nvidiaAttester)
+	}
+
 	container, err = cdClient.NewContainer(
 		ctx,
 		containerID,
@@ -238,7 +285,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		return tokens, nil
 	}
 
-	asAddr := launchSpec.AttestationServiceAddr
+	asAddr := launchSpec.GcaAddress
 
 	var verifierClient verifier.Client
 	if launchSpec.FakeVerifierEnabled {
@@ -255,7 +302,12 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	// Create a new signaturediscovery client to fetch signatures.
 	sdClient := getSignatureDiscoveryClient(cdClient, mdsClient, image.Target())
 
-	attestAgent, err := agent.CreateAttestationAgent(tpm, client.GceAttestationKeyECC, verifierClient, principalFetcherWithImpersonate, sdClient, launchSpec, logger)
+	exps := agent.Experiments{
+		EnableAttestationEvidence: launchSpec.Experiments.EnableAttestationEvidence,
+		EnableGpuGcaSupport:       launchSpec.Experiments.EnableGpuGcaSupport,
+		BcMode:                    launchSpec.Experiments.BcMode,
+	}
+	attestAgent, err := agent.CreateAttestationAgent(tpm, client.GceAttestationKeyECC, verifierClient, principalFetcherWithImpersonate, sdClient, exps, logger, deviceROTs, launchSpec.SignedImageRepos)
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +316,7 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		launchSpec,
 		attestAgent,
 		logger,
+		nvidiaAttester,
 		serialConsole,
 	}, nil
 }
@@ -340,6 +393,11 @@ func (r *ContainerRunner) measureCELEvents(ctx context.Context) error {
 	if err := r.measureContainerClaims(ctx); err != nil {
 		return fmt.Errorf("failed to measure container claims: %v", err)
 	}
+
+	if err := r.measureGPUAttestationEvidence(); err != nil {
+		return fmt.Errorf("failed to measure GPU claims: %v", err)
+	}
+
 	if err := r.measureMemoryMonitor(); err != nil {
 		return fmt.Errorf("failed to measure memory monitoring state: %v", err)
 	}
@@ -407,6 +465,48 @@ func (r *ContainerRunner) measureContainerClaims(ctx context.Context) error {
 	return nil
 }
 
+// measureGPUAttestationEvidence will measure GPU attestation claims into the COS
+// eventlog in the AttestationAgent.
+func (r *ContainerRunner) measureGPUAttestationEvidence() error {
+	if r.gpuAttester == nil {
+		return nil
+	}
+
+	nonce := make([]byte, 32)
+	if _, err := cryt.Read(nonce); err != nil {
+		return fmt.Errorf("failed to generate random nonce: %v", err)
+	}
+
+	evidence, err := r.gpuAttester.Attest(nonce)
+	if err != nil {
+		return fmt.Errorf("failed to collect GPU evidence: %w", err)
+	}
+
+	gpuEvidence, ok := evidence.(*attestationpb.NvidiaAttestationReport)
+	if !ok {
+		return fmt.Errorf("unexpected evidence type: %T", evidence)
+	}
+
+	evidenceBytes, err := proto.Marshal(gpuEvidence)
+	if err != nil {
+		return fmt.Errorf("failed to marshal GPU evidence: %w", err)
+	}
+
+	event := cel.CosTlv{
+		EventType:    cel.GPUDeviceAttestationBindingType,
+		EventContent: evidenceBytes,
+	}
+	if err := r.attestAgent.MeasureEvent(event); err != nil {
+		return fmt.Errorf("failed to measure GPU attestation: %w", err)
+	}
+
+	if err := r.gpuAttester.EnableReadyState(); err != nil {
+		return fmt.Errorf("failed to set GPU ready state: %w", err)
+	}
+	r.logger.Info("Successfully measured GPU device attestation binding event and set GPU state to ready")
+	return nil
+}
+
 // measureMemoryMonitor will measure memory monitoring claims into the COS
 // eventlog in the AttestationAgent.
 func (r *ContainerRunner) measureMemoryMonitor() error {
@@ -430,7 +530,7 @@ func (r *ContainerRunner) refreshToken(ctx context.Context) (time.Duration, erro
 	}
 
 	// request a default token
-	token, err := r.attestAgent.Attest(ctx, agent.AttestAgentOpts{})
+	token, err := r.attestAgent.Attest(ctx, agent.AttestAgentOpts{DeviceReportOpts: &agent.DeviceReportOpts{EnableRuntimeGPUAttestation: true}})
 	if err != nil {
 		return 0, fmt.Errorf("failed to retrieve attestation service token: %v", err)
 	}
@@ -584,8 +684,9 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to measure CEL events: %v", err)
 	}
 
-	// Only refresh token if agent has a default GCA client (not ITA use case).
-	if r.launchSpec.ITAConfig.ITARegion == "" {
+	// Only refresh token if agent has a default GCA client (not ITA use case)
+	// AND GcaRefresh is not disabled
+	if r.launchSpec.ITAConfig.ITARegion == "" && !r.launchSpec.DisableGcaRefresh {
 		if err := r.fetchAndWriteToken(ctx); err != nil {
 			return fmt.Errorf("failed to fetch and write OIDC token: %v", err)
 		}
@@ -608,15 +709,32 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 
 		attestClients.ITA = itaClient
 	} else {
-		gcaClient, err := util.NewRESTClient(ctx, r.launchSpec.AttestationServiceAddr, r.launchSpec.ProjectID, r.launchSpec.Region)
+		gcaClient, err := util.NewRESTClient(ctx, r.launchSpec.GcaAddress, r.launchSpec.ProjectID, r.launchSpec.Region)
 		if err != nil {
-			return fmt.Errorf("failed to create REST verifier client: %v", err)
+			if !r.launchSpec.DisableGcaRefresh {
+				return fmt.Errorf("failed to create REST verifier client: %v", err)
+			}
+			// If GCA refresh is disabled, swallow the error and continue.
+			r.logger.Info("Failed to create the GCA client, but GCA refresh is disabled so the launch will continue: %v", err)
+			gcaClient = nil
 		}
-
 		attestClients.GCA = gcaClient
 	}
 
-	teeServer, err := teeserver.New(ctx, path.Join(launcherfile.HostTmpPath, teeServerSocket), r.attestAgent, r.logger, r.launchSpec, attestClients)
+	var workloadService *workloadservice.Server
+	// create and start the key manager server
+	if r.launchSpec.Experiments.EnableKeyManager {
+		r.logger.Info("EnableKeyManager experiment is enabled: initializing KeyManager server.")
+		keyManagerServer, err := workloadservice.New(ctx, path.Join(launcherfile.HostTmpPath, keyManagerSocket), keymanager.KeyProtectionMechanism_KEY_PROTECTION_VM_EMULATED)
+		if err != nil {
+			return fmt.Errorf("failed to create the KeyManager server: %v", err)
+		}
+		workloadService = keyManagerServer
+		go keyManagerServer.Serve()
+		defer keyManagerServer.Shutdown(ctx)
+	}
+
+	teeServer, err := teeserver.New(ctx, path.Join(launcherfile.HostTmpPath, teeServerSocket), r.attestAgent, r.logger, r.launchSpec, attestClients, workloadService)
 	if err != nil {
 		return fmt.Errorf("failed to create the TEE server: %v", err)
 	}

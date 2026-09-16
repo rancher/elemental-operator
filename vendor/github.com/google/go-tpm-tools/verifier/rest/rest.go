@@ -14,11 +14,11 @@ import (
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
 	"github.com/google/go-tpm-tools/verifier"
 	"github.com/google/go-tpm-tools/verifier/models"
-	"github.com/google/go-tpm-tools/verifier/oci"
 	"github.com/googleapis/gax-go/v2"
 
 	v1 "cloud.google.com/go/confidentialcomputing/apiv1"
 	ccpb "cloud.google.com/go/confidentialcomputing/apiv1/confidentialcomputingpb"
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	locationpb "google.golang.org/genproto/googleapis/cloud/location"
@@ -301,25 +301,6 @@ func convertResponseFromREST(resp *ccpb.VerifyAttestationResponse) (*verifier.Ve
 	}, nil
 }
 
-func convertOCISignatureToREST(signature oci.Signature) (*ccpb.ContainerImageSignature, error) {
-	payload, err := signature.Payload()
-	if err != nil {
-		return nil, err
-	}
-	b64Sig, err := signature.Base64Encoded()
-	if err != nil {
-		return nil, err
-	}
-	sigBytes, err := encoding.DecodeString(b64Sig)
-	if err != nil {
-		return nil, err
-	}
-	return &ccpb.ContainerImageSignature{
-		Payload:   payload,
-		Signature: sigBytes,
-	}, nil
-}
-
 func convertSEVSNPProtoToREST(att *spb.Attestation) (*ccpb.VerifyAttestationRequest_SevSnpAttestation, error) {
 	auxBlob := sabi.CertsFromProto(att.GetCertificateChain()).Marshal()
 	rawReport, err := sabi.ReportToAbiBytes(att.GetReport())
@@ -390,6 +371,8 @@ func convertCSRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Ver
 			AkCert:      verifyAttRequest.TpmAttestation.AkCert,
 			AkCertChain: verifyAttRequest.TpmAttestation.CertChain,
 		}
+
+		csReq.NvidiaAttestation = convertNvidiaAttestationToREST(request.NvidiaAttestation)
 	} else { // TPM Attestation.
 		csReq.TeeAttestation = &ccpb.VerifyConfidentialSpaceRequest_TpmAttestation{
 			TpmAttestation: verifyAttRequest.TpmAttestation,
@@ -399,6 +382,38 @@ func convertCSRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Ver
 	csReq.Options = convertToCSOpts(verifyAttRequest.TokenOptions)
 
 	return csReq
+}
+
+func convertNvidiaAttestationToREST(nvAtt *attestationpb.NvidiaAttestationReport) *ccpb.NvidiaAttestation {
+	// GCA only supports SPT attestation.
+	if nvAtt.GetSpt() != nil {
+		return &ccpb.NvidiaAttestation{
+			CcFeature: &ccpb.NvidiaAttestation_Spt{
+				Spt: &ccpb.NvidiaAttestation_SinglePassthroughAttestation{
+					GpuQuote: &ccpb.NvidiaAttestation_GpuInfo{
+						Uuid:                        nvAtt.GetSpt().GetGpuQuote().GetUuid(),
+						DriverVersion:               nvAtt.GetSpt().GetGpuQuote().GetDriverVersion(),
+						VbiosVersion:                nvAtt.GetSpt().GetGpuQuote().GetVbiosVersion(),
+						GpuArchitectureType:         convertGPUArchToREST(nvAtt.GetSpt().GetGpuQuote().GetGpuArchitectureType()),
+						AttestationCertificateChain: nvAtt.GetSpt().GetGpuQuote().GetAttestationCertificateChain(),
+						AttestationReport:           nvAtt.GetSpt().GetGpuQuote().GetAttestationReport(),
+					},
+				},
+			},
+		}
+	}
+	return nil
+}
+
+func convertGPUArchToREST(arch attestationpb.GpuArchitectureType) ccpb.NvidiaAttestation_GpuArchitectureType {
+	switch arch {
+	case attestationpb.GpuArchitectureType_GPU_ARCHITECTURE_TYPE_HOPPER:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_HOPPER
+	case attestationpb.GpuArchitectureType_GPU_ARCHITECTURE_TYPE_BLACKWELL:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_BLACKWELL
+	default:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_UNSPECIFIED
+	}
 }
 
 func convertToCSOpts(tokenOpts *ccpb.TokenOptions) *ccpb.VerifyConfidentialSpaceRequest_ConfidentialSpaceOptions {
