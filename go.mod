@@ -1,6 +1,6 @@
 module github.com/rancher/elemental-operator
 
-go 1.25.0
+go 1.26
 
 replace k8s.io/client-go => k8s.io/client-go v0.35.0
 
