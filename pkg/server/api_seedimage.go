@@ -62,12 +62,12 @@ func (i *InventoryServer) apiSeedImage(resp http.ResponseWriter, req *http.Reque
 		http.Error(resp, errMsg.Error(), http.StatusInternalServerError)
 		return errMsg
 	}
-	director := func(r *http.Request) {
-		r.URL = seedImgURL
-	}
 
+	rewrite := func(preq *httputil.ProxyRequest) {
+		preq.Out.URL = seedImgURL
+	}
 	reverseProxy := &httputil.ReverseProxy{
-		Director: director,
+		Rewrite: rewrite,
 	}
 	reverseProxy.ServeHTTP(resp, req)
 
