@@ -12,18 +12,58 @@ func TestExperiments(t *testing.T) {
 		expectedExps Experiments
 	}{
 		{
-			input: "{\"EnableTestFeatureForImage\":true,\"EnableItaVerifier\":true}",
+			input: "{\"EnableH100DriverInstallation\":true,\"EnableB200DriverInstallation\":true,\"EnableTestFeatureForImage\":true,\"EnableItaVerifier\":true,\"EnableKeyManager\":false}",
 			expectedExps: Experiments{
-				EnableTestFeatureForImage: true,
-				EnableItaVerifier:         true,
+				EnableTestFeatureForImage:    true,
+				EnableItaVerifier:            true,
+				EnableB200DriverInstallation: true,
+				EnableH100DriverInstallation: true,
+				EnableKeyManager:             false,
+				EnableGpuGcaSupport:          false,
 			},
 		},
 		{
-			input: "{\"EnableTestFeatureForImage\":true,\"EnableSignedContainerImage\":true,\"EnableItaVerifier\":true,\"FloatFeature\":-5.6,\"OtherTestFeatureForImage\":false,\"EnableVerifyCS\":true}",
+			input: "{\"EnableB200DriverInstallation\":true}",
+			expectedExps: Experiments{
+				EnableB200DriverInstallation: true,
+				EnableKeyManager:             false,
+				EnableGpuGcaSupport:          false,
+				EnableHostAttestation:        false,
+			},
+		},
+		{
+			input: "{\"EnableTestFeatureForImage\":true,\"EnableSignedContainerImage\":true,\"EnableItaVerifier\":true,\"FloatFeature\":-5.6,\"OtherTestFeatureForImage\":false,\"EnableHostAttestation\":true}",
 			expectedExps: Experiments{
 				EnableTestFeatureForImage: true,
 				EnableItaVerifier:         true,
-				EnableVerifyCS:            true,
+				EnableGpuGcaSupport:       false,
+				EnableHostAttestation:     true,
+			},
+		},
+		{
+			input: "{\"EnableB200DriverInstallation\":true,\"EnableKeyManager\":true}",
+			expectedExps: Experiments{
+				EnableB200DriverInstallation: true,
+				EnableKeyManager:             true,
+				EnableGpuGcaSupport:          false,
+			},
+		},
+		{
+			input: "{\"EnableGpuGcaSupport\":true,\"EnableH100DriverInstallation\":true,\"EnableB200DriverInstallation\":false,\"EnableTestFeatureForImage\":true,\"EnableItaVerifier\":true,\"EnableKeyManager\":false}",
+			expectedExps: Experiments{
+				EnableTestFeatureForImage:    true,
+				EnableItaVerifier:            true,
+				EnableB200DriverInstallation: false,
+				EnableH100DriverInstallation: true,
+				EnableKeyManager:             false,
+				EnableGpuGcaSupport:          true,
+			},
+		},
+		{
+			input: "{\"EnableTestFeatureForImage\":true,\"EnableItaVerifier\":false,\"NonExistantExperiment\":true,\"EnableVerifyCS\":true}",
+			expectedExps: Experiments{
+				EnableTestFeatureForImage: true,
+				EnableItaVerifier:         false,
 			},
 		},
 	}

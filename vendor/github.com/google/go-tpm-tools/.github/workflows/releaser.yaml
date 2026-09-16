@@ -30,6 +30,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.refToBuild }}
+          submodules: recursive
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
@@ -42,10 +43,20 @@ jobs:
           path: dist/${{ matrix.os }}
           key: ${{ matrix.go }}-${{ env.sha_short }}
       - name: Install Linux packages
-        run: sudo apt-get -y install libssl-dev
+        run: sudo apt-get update && sudo apt-get -y install libssl-dev cmake clang pkg-config
+        if: runner.os == 'Linux'
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install bindgen-cli
+        run: cargo install bindgen-cli
+        if: runner.os == 'Linux'
+      - name: Build KeyManager Rust library
+        run: |
+          cd keymanager
+          cargo build --release
         if: runner.os == 'Linux'
       - name: Build all modules
-        run: go build -v ./... ./cmd/... ./launcher/... ./verifier/...
+        run: go build -v ./... ./agent/... ./cmd/... ./launcher/... ./verifier/...
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         if: success() && (startsWith(github.ref, 'refs/tags/') || startsWith(inputs.refToBuild, 'refs/tags/')) && steps.cache.outputs.cache-hit != 'true'

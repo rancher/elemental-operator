@@ -1,10 +1,10 @@
-go 1.24.0
-
-toolchain go1.24.4
+go 1.24.8
 
 use (
 	.
+	./agent
 	./cmd
+	./keymanager
 	./launcher
 	./verifier
 )
@@ -12,3 +12,5 @@ use (
 replace github.com/google/go-tpm-tools v0.4.4 => ./
 
 replace github.com/google/go-tpm-tools/verifier v0.4.4 => ./
+
+replace github.com/google/go-tpm-tools/agent v0.4.4 => ./agent

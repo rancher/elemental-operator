@@ -1,0 +1,810 @@
+// Package agent coordinates the communication between the TPM and the remote
+// attestation service. It handles:
+//   - All TPM-related functionality (quotes, logs, certs, etc...)
+//   - Fetching the relevant principal ID tokens
+//   - Calling VerifyAttestation on the remote service
+package agent
+
+import (
+	"bytes"
+	"context"
+	"crypto"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"sync"
+	"time"
+
+	"github.com/cenkalti/backoff/v4"
+	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/tpmutil"
+
+	tg "github.com/google/go-tdx-guest/client"
+	tlabi "github.com/google/go-tdx-guest/client/linuxabi"
+	"github.com/google/go-tdx-guest/rtmr"
+	"github.com/mdlayher/vsock"
+
+	gecel "github.com/google/go-eventlog/cel"
+
+	"github.com/GoogleCloudPlatform/confidential-space/server/labels"
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
+	hostservicepb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/hostservice"
+	"github.com/google/go-tpm-tools/cel"
+	"github.com/google/go-tpm-tools/client"
+	"github.com/google/go-tpm-tools/internal"
+	pb "github.com/google/go-tpm-tools/proto/attest"
+	"github.com/google/go-tpm-tools/verifier"
+	"github.com/google/go-tpm-tools/verifier/models"
+	"github.com/google/go-tpm-tools/verifier/oci"
+	"github.com/google/go-tpm-tools/verifier/util"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
+)
+
+// Logger defines the interface for the agent logger.
+type Logger interface {
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+// SignatureFetcher defines the interface for fetching container image signatures.
+type SignatureFetcher interface {
+	FetchImageSignatures(ctx context.Context, targetRepository string) ([]oci.Signature, error)
+}
+
+const (
+	audienceSTS = "https://sts.googleapis.com"
+)
+
+type principalIDTokenFetcher func(audience string) ([][]byte, error)
+
+// AttestationAgent is an agent that interacts with GCE's Attestation Service
+// to Verify an attestation message. It is an interface instead of a concrete
+// struct to make testing easier.
+type AttestationAgent interface {
+	MeasureEvent(gecel.Content) error
+	Attest(context.Context, AttestAgentOpts) ([]byte, error)
+	AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error)
+	AttestationEvidence(ctx context.Context, challenge []byte, extraData []byte, opts AttestAgentOpts) (*attestationpb.VmAttestation, error)
+	Refresh(context.Context) error
+	Close() error
+	AttestHost(ctx context.Context, challenge []byte) ([]byte, error)
+}
+
+type attestRoot interface {
+	// Extend measures the cel content into a measurement register and appends to the CEL.
+	Extend(gecel.Content) error
+	// GetCEL fetches the CEL with events corresponding to the sequence of Extended measurements
+	// to this attestation root
+	GetCEL() gecel.CEL
+	// Attest fetches a technology-specific quote from the root of trust.
+	Attest(nonce []byte) (any, error)
+	// ComputeNonce hashes the challenge and extraData using the algorithm preferred by the attestation root.
+	ComputeNonce(challenge []byte, extraData []byte) []byte
+	// AddDeviceROTs adds detected device RoTs(root of trust).
+	AddDeviceROTs([]DeviceROT)
+	// AttestDeviceROTs fetches a list of runtime device attestation report.
+	AttestDeviceROTs(nonce []byte) ([]any, error)
+}
+
+// DeviceROT defines an interface for all attached devices to collect attestation.
+type DeviceROT interface {
+	// Attest fetches an attestation from the attached device detected by launcher.
+	Attest(nonce []byte) (any, error)
+}
+
+// AttestAgentOpts contains user generated options when calling the
+// VerifyAttestation API
+type AttestAgentOpts struct {
+	TokenOptions *models.TokenOptions
+	*DeviceReportOpts
+	*AcpiOpts
+}
+
+// DeviceReportOpts contains options for runtime device attestations.
+type DeviceReportOpts struct {
+	EnableRuntimeGPUAttestation bool
+}
+
+// AcpiOpts contains options for platform ACPI data.
+type AcpiOpts struct {
+	RetrieveAcpiData bool
+}
+
+// Experiments contains the experiment flags for the AttestationAgent.
+type Experiments struct {
+	// EnableGpuGcaSupport enables the GPU attestation.
+	EnableGpuGcaSupport bool
+	// EnableAttestationEvidence enables the attestation evidence endpoint.
+	EnableAttestationEvidence bool
+	// BcMode enables baremetal execution mode.
+	BcMode bool
+}
+
+type agent struct {
+	measuredRots     []attestRoot
+	avRot            attestRoot
+	fetchedAK        *client.Key
+	client           verifier.Client
+	principalFetcher principalIDTokenFetcher
+	sigsFetcher      SignatureFetcher
+	experiments      Experiments
+	logger           Logger
+	sigsCache        *sigsCache
+	signedImageRepos []string
+}
+
+type bcAgent struct {
+	*agent
+}
+
+// CreateAttestationAgent returns an agent capable of performing remote
+// attestation using the machine's (v)TPM to GCE's Attestation Service.
+// - tpm is a handle to the TPM on the instance
+// - akFetcher is a func to fetch an attestation key: see go-tpm-tools/client.
+// - principalFetcher is a func to fetch GCE principal tokens for a given audience.
+// - signaturesFetcher is a func to fetch container image signatures associated with the running workload.
+// - logger will log any partial errors returned by VerifyAttestation.
+func CreateAttestationAgent(tpm io.ReadWriteCloser, akFetcher util.TpmKeyFetcher, verifierClient verifier.Client, principalFetcher principalIDTokenFetcher, sigsFetcher SignatureFetcher, exps Experiments, logger Logger, deviceROTs []DeviceROT, signedImageRepos []string) (AttestationAgent, error) {
+	if exps.BcMode {
+		return createBCAgent(principalFetcher, sigsFetcher, exps, logger, deviceROTs, signedImageRepos)
+	}
+
+	// Fetched the AK and save it, so the agent doesn't need to create a new key everytime
+	ak, err := akFetcher(tpm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create an Attestation Agent: %w", err)
+	}
+
+	attestAgent := &agent{
+		client:           verifierClient,
+		fetchedAK:        ak,
+		principalFetcher: principalFetcher,
+		sigsFetcher:      sigsFetcher,
+		experiments:      exps,
+		logger:           logger,
+		sigsCache:        &sigsCache{},
+		signedImageRepos: signedImageRepos,
+	}
+
+	// Add TPM
+	logger.Info("Adding TPM PCRs for measurement.")
+
+	pcrSels, err := client.AllocatedPCRs(tpm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PCR selections: %v", err)
+	}
+
+	var hashAlgos []crypto.Hash
+	for _, sel := range pcrSels {
+		hashAlgo, err := sel.Hash.Hash()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get TPM hash algorithm: %v", err)
+		}
+		hashAlgos = append(hashAlgos, hashAlgo)
+	}
+
+	var tpmAR = &tpmAttestRoot{
+		fetchedAK: ak,
+		tpm:       tpm,
+		hashAlgos: hashAlgos,
+		cosCel:    gecel.NewPCR(),
+	}
+	attestAgent.measuredRots = append(attestAgent.measuredRots, tpmAR)
+	attestAgent.avRot = tpmAR // Set as default fallback
+
+	// check if is a TDX machine
+	hasTDX, err := attestAgent.addTDXAttestRoot()
+	if err != nil {
+		return nil, err
+	}
+	if !hasTDX {
+		logger.Info("Using TPM PCR as attestation root.")
+	}
+
+	// Add deviceRoTs to the CPU attestation root.
+	attestAgent.avRot.AddDeviceROTs(deviceROTs)
+	return attestAgent, nil
+}
+
+func createBCAgent(principalFetcher principalIDTokenFetcher, sigsFetcher SignatureFetcher, exps Experiments, logger Logger, deviceROTs []DeviceROT, signedImageRepos []string) (AttestationAgent, error) {
+	logger.Info("Running in BC mode, skipping Attestation Key fetching.")
+
+	baseAgent := &agent{
+		principalFetcher: principalFetcher,
+		sigsFetcher:      sigsFetcher,
+		experiments:      exps,
+		logger:           logger,
+		sigsCache:        &sigsCache{},
+		signedImageRepos: signedImageRepos,
+	}
+
+	hasTDX, err := baseAgent.addTDXAttestRoot()
+	if err != nil {
+		return nil, err
+	}
+	if !hasTDX {
+		return nil, fmt.Errorf("running in BC mode but TDX not supported")
+	}
+
+	baseAgent.avRot.AddDeviceROTs(deviceROTs)
+	return &bcAgent{agent: baseAgent}, nil
+}
+
+func (a *agent) addTDXAttestRoot() (bool, error) {
+	qp, err := tg.GetQuoteProvider()
+	if err != nil {
+		return false, err
+	}
+	if qp.IsSupported() == nil {
+		a.logger.Info("Adding TDX RTMRs for measurement.")
+		var tdxAR = &tdxAttestRoot{
+			qp:     qp,
+			cosCel: gecel.NewConfComputeMR(),
+		}
+		a.measuredRots = append(a.measuredRots, tdxAR)
+
+		a.logger.Info("Using TDX RTMR as attestation root.")
+		a.avRot = tdxAR
+		return true, nil
+	}
+	return false, nil
+}
+
+// Close cleans up the agent
+func (a *agent) Close() error {
+	if a.fetchedAK != nil {
+		a.fetchedAK.Close()
+	}
+	return nil
+}
+
+// MeasureEvent takes in a cel.Content and appends it to the CEL eventlog
+// under the attestation agent.
+// MeasureEvent measures to all Attest Roots.
+func (a *agent) MeasureEvent(event gecel.Content) error {
+	for _, attestRoot := range a.measuredRots {
+		if err := attestRoot.Extend(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Attest fetches the nonce and connection ID from the Attestation Service,
+// creates an attestation message, and returns the resultant
+// principalIDTokens and Metadata Server-generated ID tokens for the instance.
+// When possible, Attest uses the technology-specific attestation root-of-trust
+// (TDX RTMR), otherwise falls back to the vTPM.
+func (a *agent) Attest(ctx context.Context, opts AttestAgentOpts) ([]byte, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("attest agent does not have initialized verifier client")
+	}
+
+	return a.AttestWithClient(ctx, opts, a.client)
+}
+
+// AttestWithClient fetches the nonce and connection ID from the Attestation Service via the provided client,
+// creates an attestation message, and returns the resultant
+// principalIDTokens and Metadata Server-generated ID tokens for the instance.
+// When possible, Attest uses the technology-specific attestation root-of-trust
+// (TDX RTMR), otherwise falls back to the vTPM.
+func (a *agent) AttestWithClient(ctx context.Context, opts AttestAgentOpts, client verifier.Client) ([]byte, error) {
+	challenge, err := client.CreateChallenge(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenOpts := opts.TokenOptions
+	if tokenOpts == nil {
+		tokenOpts = &models.TokenOptions{TokenType: "OIDC"}
+	}
+
+	// The customer is responsible for providing an audience if they provided nonces.
+	if tokenOpts.Audience == "" && len(tokenOpts.Nonces) == 0 {
+		tokenOpts.Audience = audienceSTS
+	}
+
+	principalTokens, err := a.principalFetcher(challenge.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get principal tokens: %w", err)
+	}
+
+	// attResult can be tdx or tpm or other attest root
+	attResult, err := a.avRot.Attest(challenge.Nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attest: %v", err)
+	}
+
+	var cosCel bytes.Buffer
+	if err := a.avRot.GetCEL().EncodeCEL(&cosCel); err != nil {
+		return nil, err
+	}
+
+	req := verifier.VerifyAttestationRequest{
+		Challenge:      challenge,
+		GcpCredentials: principalTokens,
+		TokenOptions:   tokenOpts,
+	}
+
+	switch v := attResult.(type) {
+	case *pb.Attestation:
+		a.logger.Info("attestation through TPM quote")
+
+		v.CanonicalEventLog = cosCel.Bytes()
+		req.Attestation = v
+	case *verifier.TDCCELAttestation:
+		a.logger.Info("attestation through TDX quote")
+
+		v.CanonicalEventLog = cosCel.Bytes()
+
+		certChain, err := internal.GetCertificateChain(a.fetchedAK.Cert(), http.DefaultClient)
+		if err != nil {
+			return nil, fmt.Errorf("failed when fetching certificate chain: %w", err)
+		}
+		v.IntermediateCerts = certChain
+		v.AkCert = a.fetchedAK.CertDERBytes()
+
+		req.TDCCELAttestation = v
+	default:
+		return nil, fmt.Errorf("received an unsupported attestation type! %v", v)
+	}
+
+	if a.experiments.EnableGpuGcaSupport {
+		deviceReports, err := a.attestDeviceROTs(challenge.Nonce, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to attest device RoTs: %v", err)
+		}
+		for _, dr := range deviceReports {
+			if dr.GetNvidiaReport() != nil {
+				a.logger.Info("Adding GPU device reports to attestation request.")
+				req.NvidiaAttestation = dr.GetNvidiaReport()
+			}
+		}
+	}
+
+	signatures := a.sigsCache.get()
+	if len(signatures) > 0 {
+		for _, sig := range signatures {
+			verifierSig, err := convertOCIToContainerSignature(sig)
+			if err != nil {
+				a.logger.Error(fmt.Sprintf("error converting container signatures: %v", err))
+				continue
+			}
+			req.ContainerImageSignatures = append(req.ContainerImageSignatures, verifierSig)
+		}
+		a.logger.Info("Found container image signatures: %v\n", signatures)
+	}
+
+	resp, err := a.verify(ctx, req, client)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.PartialErrs) > 0 {
+		a.logger.Error(fmt.Sprintf("Partial errors from VerifyAttestation: %v", resp.PartialErrs))
+	}
+	return resp.ClaimsToken, nil
+}
+
+// AttestHost fetches the host attestation from the host service via VSOCK.
+func (a *agent) AttestHost(_ context.Context, _ []byte) ([]byte, error) {
+	return nil, fmt.Errorf("host attestation is only supported in BC mode")
+}
+
+// AttestHost fetches the host attestation from the host service via VSOCK.
+func (a *bcAgent) AttestHost(ctx context.Context, challenge []byte) ([]byte, error) {
+	const hostServicePort = 600613
+	// Connect to host service using gRPC over VSOCK
+	grpcConn, err := grpc.NewClient("passthrough:///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(_ context.Context, _ string) (net.Conn, error) {
+		return vsock.Dial(2, hostServicePort, nil)
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial host service: %w", err)
+	}
+	defer grpcConn.Close()
+
+	client := hostservicepb.NewHostServiceClient(grpcConn)
+	resp, err := client.GetHostAttestation(ctx, &hostservicepb.GetHostAttestationRequest{
+		Challenge: challenge,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host attestation: %w", err)
+	}
+
+	return proto.Marshal(resp.GetHostAttestation())
+}
+
+// Attest is not supported in BC mode.
+func (a *bcAgent) Attest(_ context.Context, _ AttestAgentOpts) ([]byte, error) {
+	return nil, fmt.Errorf("attestation token is not supported in BC mode")
+}
+
+// AttestWithClient is not supported in BC mode.
+func (a *bcAgent) AttestWithClient(_ context.Context, _ AttestAgentOpts, _ verifier.Client) ([]byte, error) {
+	return nil, fmt.Errorf("attestation token is not supported in BC mode")
+}
+
+// AttestationEvidence returns the attestation evidence (TPM or TDX).
+func (a *agent) AttestationEvidence(_ context.Context, challenge []byte, extraData []byte, opts AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+	if !a.experiments.EnableAttestationEvidence {
+		return nil, fmt.Errorf("attestation evidence is disabled")
+	}
+
+	if a.avRot == nil {
+		return nil, fmt.Errorf("attestation agent does not have an initialized attestation root")
+	}
+
+	// Use nested hashing to separate the prefix, the challenge, and extraData
+	// and normalize input length.
+	finalNonce := a.avRot.ComputeNonce(challenge, extraData)
+	attResult, err := a.avRot.Attest(finalNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to attest: %v", err)
+	}
+	var cosCel bytes.Buffer
+	if err := a.avRot.GetCEL().EncodeCEL(&cosCel); err != nil {
+		return nil, err
+	}
+	attestation := &attestationpb.VmAttestation{
+		Label:     []byte(labels.WorkloadAttestation),
+		Challenge: challenge,
+		ExtraData: extraData,
+		Quote:     &attestationpb.VmAttestationQuote{},
+	}
+
+	switch v := attResult.(type) {
+	case *pb.Attestation:
+		v.CanonicalEventLog = cosCel.Bytes()
+		attestation.Quote.Quote = &attestationpb.VmAttestationQuote_TpmQuote{
+			TpmQuote: convertToTPMQuote(v),
+		}
+	case *verifier.TDCCELAttestation:
+		attestation.Quote.Quote = &attestationpb.VmAttestationQuote_TdxCcelQuote{
+			TdxCcelQuote: &attestationpb.TdxCcelQuote{
+				CcelBootEventLog:  v.CcelData,
+				CelLaunchEventLog: cosCel.Bytes(),
+				TdQuote:           v.TdQuote,
+			},
+		}
+	default:
+		return nil, fmt.Errorf("unknown attestation type: %T", v)
+	}
+
+	deviceReports, err := a.attestDeviceROTs(finalNonce, opts)
+	if err != nil {
+		return nil, err
+	}
+	attestation.DeviceReports = deviceReports
+
+	// ACPI data is currently only available in BcMode and only if requested.
+	if a.experiments.BcMode && opts.AcpiOpts != nil && opts.AcpiOpts.RetrieveAcpiData {
+		acpi, err := getAcpiData()
+		if err != nil {
+			return nil, err
+		}
+		attestation.AcpiData = acpi
+	}
+	return attestation, nil
+}
+
+func getAcpiData() (*attestationpb.AcpiData, error) {
+	tables, err := os.ReadFile("/sys/firmware/qemu_fw_cfg/by_name/etc/acpi/tables/raw")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read ACPI tables: %v", err)
+	}
+	rsdp, err := os.ReadFile("/sys/firmware/qemu_fw_cfg/by_name/etc/acpi/rsdp/raw")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read RSDP: %v", err)
+	}
+	tableLoader, err := os.ReadFile("/sys/firmware/qemu_fw_cfg/by_name/etc/table-loader/raw")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read table loader: %v", err)
+	}
+
+	return &attestationpb.AcpiData{
+		Tables:      tables,
+		Rsdp:        rsdp,
+		TableLoader: tableLoader,
+	}, nil
+}
+
+func (a *agent) attestDeviceROTs(nonce []byte, opts AttestAgentOpts) ([]*attestationpb.DeviceAttestationReport, error) {
+	if opts.DeviceReportOpts == nil {
+		return nil, nil
+	}
+	deviceROTs, err := a.avRot.AttestDeviceROTs(nonce)
+	if err != nil {
+		return nil, err
+	}
+
+	var deviceReports []*attestationpb.DeviceAttestationReport
+	for _, dr := range deviceROTs {
+		switch v := dr.(type) {
+		case *attestationpb.NvidiaAttestationReport:
+			if opts.DeviceReportOpts.EnableRuntimeGPUAttestation {
+				deviceReports = append(deviceReports, &attestationpb.DeviceAttestationReport{
+					Report: &attestationpb.DeviceAttestationReport_NvidiaReport{
+						NvidiaReport: v,
+					},
+				})
+			}
+		}
+	}
+	return deviceReports, nil
+}
+
+func (a *agent) verify(ctx context.Context, req verifier.VerifyAttestationRequest, client verifier.Client) (*verifier.VerifyAttestationResponse, error) {
+	return client.VerifyConfidentialSpace(ctx, req)
+}
+
+func convertOCIToContainerSignature(ociSig oci.Signature) (*verifier.ContainerSignature, error) {
+	payload, err := ociSig.Payload()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payload from signature [%v]: %v", ociSig, err)
+	}
+	b64Sig, err := ociSig.Base64Encoded()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base64 signature from signature [%v]: %v", ociSig, err)
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(b64Sig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode signature for signature [%v]: %v", ociSig, err)
+	}
+	return &verifier.ContainerSignature{
+		Payload:   payload,
+		Signature: sigBytes,
+	}, nil
+}
+
+type tpmAttestRoot struct {
+	tpmMu      sync.Mutex
+	fetchedAK  *client.Key
+	tpm        io.ReadWriteCloser
+	cosCel     gecel.CEL
+	hashAlgos  []crypto.Hash
+	deviceROTs []DeviceROT
+}
+
+func (t *tpmAttestRoot) GetCEL() gecel.CEL {
+	return t.cosCel
+}
+
+func (t *tpmAttestRoot) Extend(c gecel.Content) error {
+	return t.cosCel.AppendEvent(c, t.hashAlgos, cel.CosEventPCR, func(hs crypto.Hash, pcr int, digest []byte) error {
+		tpm2Alg, err := tpm2.HashToAlgorithm(hs)
+		if err != nil {
+			return err
+		}
+		if err := tpm2.PCRExtend(t.tpm, tpmutil.Handle(pcr), tpm2Alg, digest, ""); err != nil {
+			return fmt.Errorf("failed to extend event to PCR%d: %v", pcr, err)
+		}
+		return nil
+	})
+}
+
+func (t *tpmAttestRoot) Attest(nonce []byte) (any, error) {
+	t.tpmMu.Lock()
+	defer t.tpmMu.Unlock()
+
+	return t.fetchedAK.Attest(client.AttestOpts{
+		Nonce:            nonce,
+		CertChainFetcher: http.DefaultClient,
+	})
+}
+
+func (t *tpmAttestRoot) ComputeNonce(challenge []byte, extraData []byte) []byte {
+	challengeData := challenge
+	if extraData != nil {
+		extraDataDigest := sha256.Sum256(extraData)
+		challengeData = append(challenge, extraDataDigest[:]...)
+	}
+	challengeDigest := sha256.Sum256(challengeData)
+	finalNonce := sha256.Sum256(append([]byte(labels.WorkloadAttestation), challengeDigest[:]...))
+	return finalNonce[:]
+}
+
+func (t *tpmAttestRoot) AddDeviceROTs(deviceROTs []DeviceROT) {
+	t.deviceROTs = append(t.deviceROTs, deviceROTs...)
+}
+
+func (t *tpmAttestRoot) AttestDeviceROTs(nonce []byte) ([]any, error) {
+	t.tpmMu.Lock()
+	defer t.tpmMu.Unlock()
+
+	return doAttestDeviceROTs(t.deviceROTs, nonce)
+}
+
+type tdxAttestRoot struct {
+	tdxMu      sync.Mutex
+	qp         *tg.LinuxConfigFsQuoteProvider
+	cosCel     gecel.CEL
+	deviceROTs []DeviceROT
+}
+
+func (t *tdxAttestRoot) GetCEL() gecel.CEL {
+	return t.cosCel
+}
+
+func (t *tdxAttestRoot) Extend(c gecel.Content) error {
+	return t.cosCel.AppendEvent(c, []crypto.Hash{crypto.SHA384}, cel.CosCCELMRIndex, func(_ crypto.Hash, mrIndex int, digest []byte) error {
+		return rtmr.ExtendDigestSysfs(mrIndex-1, digest) // MR_INDEX - 1 == RTMR_INDEX
+	})
+}
+
+func (t *tdxAttestRoot) Attest(nonce []byte) (any, error) {
+	t.tdxMu.Lock()
+	defer t.tdxMu.Unlock()
+
+	var tdxNonce [tlabi.TdReportDataSize]byte
+	copy(tdxNonce[:], nonce)
+
+	rawQuote, err := tg.GetRawQuote(t.qp, tdxNonce)
+	if err != nil {
+		return nil, err
+	}
+
+	ccelData, err := os.ReadFile("/sys/firmware/acpi/tables/data/CCEL")
+	if err != nil {
+		return nil, err
+	}
+
+	// CCEL may contain a lot of trailing 0xFF padding bytes, trimming
+	// them can save bandwidth.
+	// Normally, the eventlog is ended with "Exit Boot Services Returned
+	// with Success", So it's safe to just trim all trailing "\xff".
+	//
+	// In some rare cases, where the last few bytes are actually "\xff",
+	// This naive trimming logic may cause the replay to fail.
+	ccelData = bytes.TrimRight(ccelData, "\xff")
+
+	ccelTable, err := os.ReadFile("/sys/firmware/acpi/tables/CCEL")
+	if err != nil {
+		return nil, err
+	}
+
+	return &verifier.TDCCELAttestation{
+		CcelAcpiTable: ccelTable,
+		CcelData:      ccelData,
+		TdQuote:       rawQuote,
+	}, nil
+}
+
+func (t *tdxAttestRoot) AttestDeviceROTs(nonce []byte) ([]any, error) {
+	t.tdxMu.Lock()
+	defer t.tdxMu.Unlock()
+
+	return doAttestDeviceROTs(t.deviceROTs, nonce)
+}
+
+func (t *tdxAttestRoot) ComputeNonce(challenge []byte, extraData []byte) []byte {
+	challengeData := challenge
+	if extraData != nil {
+		extraDataDigest := sha512.Sum512(extraData)
+		challengeData = append(challenge, extraDataDigest[:]...)
+	}
+	challengeDigest := sha512.Sum512(challengeData)
+	finalNonce := sha512.Sum512(append([]byte(labels.WorkloadAttestation), challengeDigest[:]...))
+	return finalNonce[:]
+}
+
+func (t *tdxAttestRoot) AddDeviceROTs(deviceROTs []DeviceROT) {
+	t.deviceROTs = append(t.deviceROTs, deviceROTs...)
+}
+
+// Refresh refreshes the internal state of the attestation agent.
+// It will reset the container image signatures for now.
+func (a *agent) Refresh(ctx context.Context) error {
+	signatures := fetchContainerImageSignatures(ctx, a.sigsFetcher, a.signedImageRepos, defaultRetryPolicy, a.logger)
+	a.sigsCache.set(signatures)
+	a.logger.Info("Refreshed container image signature cache", "signatures", signatures)
+	return nil
+}
+
+func fetchContainerImageSignatures(ctx context.Context, fetcher SignatureFetcher, targetRepos []string, retry func() backoff.BackOff, logger Logger) []oci.Signature {
+	signatures := make([][]oci.Signature, len(targetRepos))
+
+	var wg sync.WaitGroup
+	for i, repo := range targetRepos {
+		wg.Add(1)
+		go func(targetRepo string, index int) {
+			defer wg.Done()
+
+			// backoff independently per repo
+			var sigs []oci.Signature
+			err := backoff.RetryNotify(
+				func() error {
+					s, err := fetcher.FetchImageSignatures(ctx, targetRepo)
+					sigs = s
+					return err
+				},
+				retry(),
+				func(err error, _ time.Duration) {
+					logger.Error(fmt.Sprintf("Failed to fetch container image signatures from repo: %v", err.Error()), "repo", targetRepo)
+				})
+			if err != nil {
+				logger.Error(fmt.Sprintf("Failed all attempts to refresh container signatures from repo: %v", err.Error()), "repo", targetRepo)
+			} else {
+				signatures[index] = sigs
+			}
+
+		}(repo, i)
+	}
+	wg.Wait()
+
+	var foundSigs []oci.Signature
+	for _, sigs := range signatures {
+		foundSigs = append(foundSigs, sigs...)
+	}
+	return foundSigs
+}
+
+func defaultRetryPolicy() backoff.BackOff {
+	b := backoff.NewConstantBackOff(time.Millisecond * 300)
+	return backoff.WithMaxRetries(b, 3)
+}
+
+type sigsCache struct {
+	mu    sync.RWMutex
+	items []oci.Signature
+}
+
+func (c *sigsCache) set(sigs []oci.Signature) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = make([]oci.Signature, len(sigs))
+	copy(c.items, sigs)
+}
+
+func (c *sigsCache) get() []oci.Signature {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.items
+}
+
+func convertToTPMQuote(v *pb.Attestation) *attestationpb.TpmQuote {
+	var quotes []*attestationpb.TpmQuote_SignedQuote
+	for _, q := range v.GetQuotes() {
+		quote := &attestationpb.TpmQuote_SignedQuote{
+			TpmsAttest:    q.GetQuote(),
+			TpmtSignature: q.GetRawSig(),
+		}
+		if pcrs := q.GetPcrs(); pcrs != nil {
+			quote.HashAlgorithm = uint32(pcrs.GetHash())
+			quote.PcrValues = pcrs.GetPcrs()
+		}
+		quotes = append(quotes, quote)
+	}
+
+	return &attestationpb.TpmQuote{
+		Quotes:               quotes,
+		PcclientBootEventLog: v.GetEventLog(),
+		CelLaunchEventLog:    v.GetCanonicalEventLog(),
+		Endorsement: &attestationpb.TpmAttestationEndorsement{
+			Endorsement: &attestationpb.TpmAttestationEndorsement_AkCertEndorsement_{
+				AkCertEndorsement: &attestationpb.TpmAttestationEndorsement_AkCertEndorsement{
+					AkCert:      v.GetAkCert(),
+					AkCertChain: v.GetIntermediateCerts(),
+				},
+			},
+		},
+	}
+}
+
+func doAttestDeviceROTs(deviceROTs []DeviceROT, nonce []byte) ([]any, error) {
+	var deviceReports []any
+	for _, deviceROT := range deviceROTs {
+		deviceReport, err := deviceROT.Attest(nonce)
+		if err != nil {
+			return nil, err
+		}
+		deviceReports = append(deviceReports, deviceReport)
+	}
+	return deviceReports, nil
+}

@@ -1,0 +1,258 @@
+substitutions:
+  '_BASE_IMAGE': ''
+  '_BASE_IMAGE_PROJECT': ''
+  '_BUCKET_NAME': ''
+  '_IMAGE_ENV': ''
+  '_OUTPUT_IMAGE_NAME': ''
+  '_OUTPUT_IMAGE_FAMILY': ''
+  '_WSD_CONTAINER_IMAGE_REF': ''
+
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'ExportBaseImage'
+    args:
+      - 'gcloud'
+      - 'compute'
+      - 'images'
+      - 'export'
+      - '--image=${_BASE_IMAGE}'
+      - '--image-project=${_BASE_IMAGE_PROJECT}'
+      - '--destination-uri=gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_BASE_IMAGE}.tar.gz'
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'DownloadImageFromGCS'
+    entrypoint: 'gcloud'
+    args: ['storage',
+           'cp',
+           'gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_BASE_IMAGE}.tar.gz',
+           './src_image.tar.gz']
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'SaveWSDContainerImage'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        docker pull ${_WSD_CONTAINER_IMAGE_REF}
+        mkdir -p /workspace/wsd_image
+        docker save ${_WSD_CONTAINER_IMAGE_REF} -o /workspace/wsd_image/image.tar
+  - name: 'alpine'
+    id: 'ExtractRawImage'
+    args: ['tar', '-xf', './src_image.tar.gz']
+
+  - name: 'alpine'
+    id: 'PrepareOEMInstallDir'
+    entrypoint: 'sh'
+    args:
+      - -c
+      - |
+        set -eu
+        rm -rf /workspace/oem-install
+        mkdir -p /workspace/oem-install/confidential_space
+        mkdir -p /workspace/oem-install/confidential_space/nodeproblemdetector
+        mkdir -p /workspace/oem-install/wsd
+
+        cp ./launcher/image/bc-guest/bcentrypoint.sh /workspace/oem-install/entrypoint.sh
+        cp ./launcher/image/bc-guest/bcexperiment.json \
+           ./launcher/image/launcher \
+           ./launcher/image/container-runner.service \
+           ./launcher/image/fluent-bit-cs.conf \
+           ./launcher/image/exit_script.sh \
+           ./launcher/image/bc-guest/bc_network_setup.sh \
+           ./launcher/image/bc-guest/bc_network_optimization.sh \
+           ./launcher/image/bc-guest/bc_network_runtime_optimization.sh \
+           ./launcher/image/bc-guest/bc_network_monitor.sh \
+           ./launcher/image/bc-guest/bc_network_rebind.sh \
+           /workspace/oem-install/confidential_space/
+        cp ./launcher/image/nodeproblemdetector/* /workspace/oem-install/confidential_space/nodeproblemdetector/
+        cp ./launcher/image/bc-guest/wsd/* /workspace/oem-install/wsd/
+        if [ -f /workspace/wsd_image/image.tar ]; then
+            cp /workspace/wsd_image/image.tar /workspace/oem-install/wsd/image.tar
+        fi
+
+        cat << EOF > /workspace/oem-install/wsd/image.env
+        IMAGE_PATH="/usr/share/oem/wsd/image.tar"
+        IMAGE_REF="${_WSD_CONTAINER_IMAGE_REF}"
+        CONTAINER_NAME="workload-service-daemon"
+        KPS_VM_IP="192.168.100.3"
+        EOF
+
+        cp /workspace/oem-install/confidential_space/launcher /workspace/oem-install/confidential_space/cs_container_launcher
+        # Disabled because cloud-init is not used.
+        # cp ./launcher/image/bc-guest/meta-data /workspace/oem-install/meta-data
+        chmod +x /workspace/oem-install/confidential_space/cs_container_launcher || true
+        chmod +x /workspace/oem-install/confidential_space/exit_script.sh || true
+        chmod +x /workspace/oem-install/confidential_space/bc_network_setup.sh || true
+        chmod +x /workspace/oem-install/confidential_space/bc_network_optimization.sh || true
+        chmod +x /workspace/oem-install/confidential_space/bc_network_runtime_optimization.sh || true
+        chmod +x /workspace/oem-install/confidential_space/bc_network_monitor.sh || true
+        chmod +x /workspace/oem-install/confidential_space/bc_network_rebind.sh || true
+        chmod +x /workspace/oem-install/entrypoint.sh || true
+        chmod +x /workspace/oem-install/wsd/wsd_runner.sh || true
+        chmod +x /workspace/oem-install/wsd/exit_script.sh || true
+
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'DownloadVmlinux'
+    entrypoint: 'bash'
+    env:
+      - 'BASE_IMAGE=${_BASE_IMAGE}'
+      - 'IMAGE_ENV=${_IMAGE_ENV}'
+    args:
+      - '-c'
+      - |
+        set -ex
+        VERSION=$$(echo "$${BASE_IMAGE}" | grep -oE '[0-9]+-[0-9]+-[0-9]+$$' | tr '-' '.')
+        if [[ -z "$${VERSION}" ]]; then
+          echo "Failed to extract version from $${BASE_IMAGE}"
+          exit 1
+        fi
+
+        if [[ "$${IMAGE_ENV}" == "debug" ]]; then
+          TARGET="cchostdebug-amd64-gcp"
+        else
+          TARGET="cchost-amd64-gcp"
+        fi
+
+        gcloud storage cp "gs://cos-tools/$${VERSION}/$${TARGET}/vmlinux" ./vmlinux
+  - name: 'gcr.io/cos-cloud/oem-preloader:latest'
+    id: 'RunOEMPreloader'
+    env:
+      - 'IMAGE_ENV=${_IMAGE_ENV}'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -ex
+        COMMON_COMMANDS=(
+          # Disabled for cchost base image: Entrypoint is handled directly by systemd, not Cloud-Init.
+          # "s|cros_efi|cros_efi ds=nocloud;s=/usr/share/oem/|g"
+          "s|cros_efi|cros_efi cos.protected_stateful_partition=m|g"
+          "s|cros_efi|cros_efi systemd.default_timeout_start_sec=900s|g"
+          "s|cros_efi|cros_efi swiotlb=16777216,force,any|g"
+          "s|systemd.mask=usr-share-oem.mount||g"
+          "s|dm-m2d|dm-mod|g"
+          "s|,oemroot|;oemroot|g"
+        )
+
+        DEBUG_COMMANDS=(
+          "s|cros_efi|cros_efi systemd.mask=konlet-startup.service|g"
+          "s|cros_efi|cros_efi systemd.mask=update-engine.service|g"
+          "s|cros_efi|cros_efi confidential-space.hardened=false|g"
+        )
+
+        HARDENED_COMMANDS=(
+          "s|cros_efi|cros_efi systemd.wants=basic.target|g"
+          "s|cros_efi|cros_efi systemd.wants=systemd-resolved.service|g"
+          "s|cros_efi|cros_efi systemd.wants=network-online.target|g"
+          "s|cros_efi|cros_efi systemd.wants=gcr-online.target|g"
+          # Disabled because no cloud-init
+          # "s|cros_efi|cros_efi systemd.unit=cloud-final.service|g"
+          "s|cros_efi|cros_efi systemd.mask=var-lib-docker.mount|g"
+          "s|cros_efi|cros_efi systemd.mask=docker.service|g"
+          "s|cros_efi|cros_efi systemd.mask=google-guest-agent.service|g"
+          "s|cros_efi|cros_efi systemd.mask=google-osconfig-init.service|g"
+          "s|cros_efi|cros_efi systemd.mask=google-osconfig-agent.service|g"
+          "s|cros_efi|cros_efi systemd.mask=google-startup-scripts.service|g"
+          "s|cros_efi|cros_efi systemd.mask=google-shutdown-scripts.service|g"
+          "s|cros_efi|cros_efi systemd.mask=konlet-startup.service|g"
+          "s|cros_efi|cros_efi systemd.mask=crash-reporter.service|g"
+          "s|cros_efi|cros_efi systemd.mask=device_policy_manager.service|g"
+          "s|cros_efi|cros_efi systemd.mask=docker-events-collector-fluent-bit.service|g"
+          "s|cros_efi|cros_efi systemd.mask=sshd.service|g"
+          "s|cros_efi|cros_efi systemd.mask=var-lib-toolbox.mount|g"
+          "s|cros_efi|cros_efi systemd.mask=update-engine.service|g"
+          "s|cros_efi|cros_efi confidential-space.hardened=true|g"
+        )
+
+        CMD=(
+          "/oem-preloader"
+          "--vmlinux=./vmlinux"
+          "--src-image=./disk.raw"
+          "--out-image=output.bin"
+          "--oem-fs-size=500M"
+          "--disk-size-gb=15"
+          "--install-dir=/workspace/oem-install/"
+        )
+        for cmd in "$${COMMON_COMMANDS[@]}"; do
+          CMD+=(--cmdline-sed-command="$${cmd}")
+        done
+        if [[ "$${IMAGE_ENV}" == "debug" ]]; then
+          for cmd in "$${DEBUG_COMMANDS[@]}"; do
+            CMD+=(--cmdline-sed-command="$${cmd}")
+          done
+        elif [[ "$${IMAGE_ENV}" == "hardened" ]]; then
+          for cmd in "$${HARDENED_COMMANDS[@]}"; do
+            CMD+=(--cmdline-sed-command="$${cmd}")
+          done
+        fi
+
+        "$${CMD[@]}"
+  - name: 'alpine'
+    id: 'RenameOutputImage'
+    args: ['mv', 'output.bin', 'disk.raw']
+  - name: 'us-docker.pkg.dev/confidential-space-images-dev/cs-tools/measure@sha256:5c2eaaa70438126877de51b44914d3751ba242aed7f4d99d485833629f3958bc'
+    id: 'MeasureImage'
+    env:
+      - 'IMAGE_ENV=${_IMAGE_ENV}'
+      - 'OUTPUT_IMAGE_NAME=${_OUTPUT_IMAGE_NAME}'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -exuo pipefail
+        echo "measuring BC image $${OUTPUT_IMAGE_NAME} (env=$${IMAGE_ENV})"
+        /usr/local/bin/measure.sh ./disk.raw measure_output_bc_$${IMAGE_ENV}.json        "$${IMAGE_ENV}" x86_64 sha256
+        /usr/local/bin/measure.sh ./disk.raw measure_output_bc_$${IMAGE_ENV}_sha384.json "$${IMAGE_ENV}" x86_64 sha384
+
+        gcloud storage cp measure_output_bc_$${IMAGE_ENV}.json        gs://${PROJECT_ID}-rims/bc/$${OUTPUT_IMAGE_NAME}.json
+        gcloud storage cp measure_output_bc_$${IMAGE_ENV}_sha384.json gs://${PROJECT_ID}-rims/bc/$${OUTPUT_IMAGE_NAME}_sha384.json
+  - name: 'alpine'
+    id: 'TarOutputImage'
+    args: ['tar', '-zcf', './out_image.tar.gz', 'disk.raw']
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'UploadToGCS'
+    entrypoint: 'gcloud'
+    args: ['storage',
+           'cp',
+           './out_image.tar.gz',
+           'gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_OUTPUT_IMAGE_NAME}.tar.gz']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'FetchBaseImageFeatures'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        gcloud compute images describe ${_BASE_IMAGE} --project=${_BASE_IMAGE_PROJECT} --format="value(guestOsFeatures.type)" | paste -sd, - | tr ';' ',' | tr -d '\n' > /workspace/features.txt
+        sed -i 's/SECURE_BOOT//g' /workspace/features.txt
+        sed -i 's/,,/,/g' /workspace/features.txt
+        sed -i 's/^,//; s/,$//' /workspace/features.txt
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'CreateGCEImage'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        FEATURES=$$(cat /workspace/features.txt)
+        if [ -z "$$FEATURES" ]; then
+          FEATURES="UEFI_COMPATIBLE"
+        fi
+        if gcloud compute images describe ${_OUTPUT_IMAGE_NAME} > /dev/null 2>&1; then
+          echo "Result image ${_OUTPUT_IMAGE_NAME} already exists in project. Exiting."
+          exit 0
+        fi
+        gcloud compute images create ${_OUTPUT_IMAGE_NAME} \
+          --family=${_OUTPUT_IMAGE_FAMILY} \
+          --source-uri=gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_OUTPUT_IMAGE_NAME}.tar.gz \
+          --guest-os-features="$$FEATURES"
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'RemoveGCSFiles'
+    entrypoint: 'gcloud'
+    args: ['storage',
+           'rm',
+           'gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_BASE_IMAGE}.tar.gz',
+           'gs://${_BUCKET_NAME}/oem-preloader-${BUILD_ID}/${_OUTPUT_IMAGE_NAME}.tar.gz']
+
+timeout: '3000s'
+
+options:
+  machine_type: 'E2_HIGHCPU_32'
+  dynamic_substitutions: true

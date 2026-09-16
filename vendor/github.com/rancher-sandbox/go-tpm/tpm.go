@@ -19,9 +19,8 @@ import (
 // GenerateChallenge generates a challenge from attestation data and a public endorsed key
 func GenerateChallenge(ek *attest.EK, attestationData *AttestationData) ([]byte, []byte, error) {
 	ap := attest.ActivationParameters{
-		TPMVersion: attest.TPMVersion20,
-		EK:         ek.Public,
-		AK:         *attestationData.AK,
+		EK: ek.Public,
+		AK: *attestationData.AK,
 	}
 
 	secret, ec, err := ap.Generate()
@@ -69,9 +68,7 @@ func GetPubHash(opts ...Option) (string, error) {
 
 func getTPM(c *config) (*attest.TPM, error) {
 
-	cfg := &attest.OpenConfig{
-		TPMVersion: attest.TPMVersion20,
-	}
+	cfg := &attest.OpenConfig{}
 	if c.commandChannel != nil {
 		cfg.CommandChannel = c.commandChannel
 	}
@@ -95,23 +92,22 @@ func getTPM(c *config) (*attest.TPM, error) {
 }
 
 func getEK(c *config) (*attest.EK, error) {
-	var err error
-
 	tpm, err := getTPM(c)
 	if err != nil {
 		return nil, fmt.Errorf("opening tpm for decoding EK: %w", err)
 	}
 	defer tpm.Close()
+	return tpmGetEK(tpm)
+}
 
+func tpmGetEK(tpm *attest.TPM) (*attest.EK, error) {
 	eks, err := tpm.EKs()
 	if err != nil {
 		return nil, fmt.Errorf("getting eks: %w", err)
 	}
-
 	if len(eks) == 0 {
 		return nil, fmt.Errorf("failed to find EK")
 	}
-
 	return &eks[0], nil
 }
 
@@ -125,17 +121,22 @@ func getToken(data *AttestationData) (string, error) {
 }
 
 func getAttestationData(c *config) (*AttestationData, []byte, error) {
-	var err error
-
 	tpm, err := getTPM(c)
 	if err != nil {
 		return nil, nil, fmt.Errorf("opening tpm for getting attestation data: %w", err)
 	}
 	defer tpm.Close()
+	return tpmGetAttestationData(tpm)
+}
 
+func tpmGetAttestationData(tpm *attest.TPM) (*AttestationData, []byte, error) {
 	eks, err := tpm.EKs()
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if len(eks) == 0 {
+		return nil, nil, fmt.Errorf("failed to find EK")
 	}
 
 	ak, err := tpm.NewAK(nil)
@@ -146,12 +147,7 @@ func getAttestationData(c *config) (*AttestationData, []byte, error) {
 
 	params := ak.AttestationParameters()
 
-	if len(eks) == 0 {
-		return nil, nil, fmt.Errorf("failed to find EK")
-	}
-
-	ek := &eks[0]
-	ekBytes, err := encodeEK(ek)
+	ekBytes, err := encodeEK(&eks[0])
 	if err != nil {
 		return nil, nil, err
 	}
