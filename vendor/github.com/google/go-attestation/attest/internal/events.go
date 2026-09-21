@@ -1,3 +1,5 @@
+// Package internal contains internal structures and functions for parsing
+// TCG event logs.
 package internal
 
 import (
@@ -59,7 +61,7 @@ const (
 	EventTag             EventType = 0x00000006
 	SCRTMContents        EventType = 0x00000007
 	SCRTMVersion         EventType = 0x00000008
-	CpuMicrocode         EventType = 0x00000009
+	CPUMicrocode         EventType = 0x00000009
 	PlatformConfigFlags  EventType = 0x0000000A
 	TableOfDevices       EventType = 0x0000000B
 	CompactHash          EventType = 0x0000000C
@@ -119,7 +121,7 @@ var eventTypeNames = map[EventType]string{
 	EventTag:             "Event Tag",
 	SCRTMContents:        "S-CRTM Contents",
 	SCRTMVersion:         "S-CRTM Version",
-	CpuMicrocode:         "CPU Microcode",
+	CPUMicrocode:         "CPU Microcode",
 	PlatformConfigFlags:  "Platform Config Flags",
 	TableOfDevices:       "Table of Devices",
 	CompactHash:          "Compact Hash",
@@ -234,13 +236,17 @@ type UEFIVariableData struct {
 // a UEFI variable.
 //
 // https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_Specific_Platform_Profile_for_TPM_2p0_1p04_PUBLIC.pdf#page=100
-func ParseUEFIVariableData(r io.Reader) (ret UEFIVariableData, err error) {
+func ParseUEFIVariableData(data []byte) (ret UEFIVariableData, err error) {
+	r := &io.LimitedReader{R: bytes.NewReader(data), N: int64(len(data))}
 	err = binary.Read(r, binary.LittleEndian, &ret.Header)
 	if err != nil {
 		return
 	}
 	if ret.Header.UnicodeNameLength > maxNameLen {
 		return UEFIVariableData{}, fmt.Errorf("unicode name too long: %d > %d", ret.Header.UnicodeNameLength, maxNameLen)
+	}
+	if int64(ret.Header.UnicodeNameLength)*2 > r.N {
+		return UEFIVariableData{}, fmt.Errorf("unicode name length (%d bytes) larger than remaining capacity (%d bytes)", ret.Header.UnicodeNameLength*2, r.N)
 	}
 	ret.UnicodeName = make([]uint16, ret.Header.UnicodeNameLength)
 	for i := 0; uint64(i) < ret.Header.UnicodeNameLength; i++ {
@@ -252,15 +258,20 @@ func ParseUEFIVariableData(r io.Reader) (ret UEFIVariableData, err error) {
 	if ret.Header.VariableDataLength > maxDataLen {
 		return UEFIVariableData{}, fmt.Errorf("variable data too long: %d > %d", ret.Header.VariableDataLength, maxDataLen)
 	}
+	if int64(ret.Header.VariableDataLength) > r.N {
+		return UEFIVariableData{}, fmt.Errorf("variable data length (%d bytes) larger than remaining capacity (%d bytes)", ret.Header.VariableDataLength, r.N)
+	}
 	ret.VariableData = make([]byte, ret.Header.VariableDataLength)
 	_, err = io.ReadFull(r, ret.VariableData)
 	return
 }
 
+// VarName returns the variable name from the UEFI variable data.
 func (v *UEFIVariableData) VarName() string {
 	return string(utf16.Decode(v.UnicodeName))
 }
 
+// SignatureData returns the signature data from the UEFI variable data.
 func (v *UEFIVariableData) SignatureData() (certs []x509.Certificate, hashes [][]byte, err error) {
 	return parseEfiSignatureList(v.VariableData)
 }
@@ -279,10 +290,10 @@ func ParseUEFIVariableAuthority(v UEFIVariableData) (UEFIVariableAuthority, erro
 	if v.Header.VariableName == shimLockGUID && (
 	// Skip parsing new SBAT section logged by shim.
 	// See https://github.com/rhboot/shim/blob/main/SBAT.md for more.
-	unicodeNameEquals(v, shimSbatVarName) || //https://github.com/rhboot/shim/blob/20e4d9486fcae54ee44d2323ae342ffe68c920e6/include/sbat.h#L9-L12
+	unicodeNameEquals(v, shimSbatVarName) || // https://github.com/rhboot/shim/blob/20e4d9486fcae54ee44d2323ae342ffe68c920e6/include/sbat.h#L9-L12
 		// Skip parsing new MokListTrusted section logged by shim.
 		// See https://github.com/rhboot/shim/blob/main/MokVars.txt for more.
-		unicodeNameEquals(v, shimMokListTrustedVarName)) { //https://github.com/rhboot/shim/blob/4e513405b4f1641710115780d19dcec130c5208f/mok.c#L169-L182
+		unicodeNameEquals(v, shimMokListTrustedVarName)) { // https://github.com/rhboot/shim/blob/4e513405b4f1641710115780d19dcec130c5208f/mok.c#L169-L182
 		return UEFIVariableAuthority{}, nil
 	}
 	certs, err := parseEfiSignature(v.VariableData)
@@ -323,18 +334,28 @@ type efiSignatureList struct {
 	Signatures    []byte
 }
 
+const (
+	// efiGUIDSize is the binary size of efiGUID:
+	// uint32(4) + uint16(2) + uint16(2) + [8]byte(8) = 16 bytes.
+	efiGUIDSize = 16
+
+	// efiSignatureListHeaderSize is the binary size of efiSignatureListHeader:
+	// efiGUID(16) + SignatureListSize uint32(4) + SignatureHeaderSize uint32(4) + SignatureSize uint32(4) = 28 bytes.
+	efiSignatureListHeaderSize = efiGUIDSize + 4 + 4 + 4
+)
+
 // parseEfiSignatureList parses a EFI_SIGNATURE_LIST structure.
 // The structure and related GUIDs are defined at:
 // https://uefi.org/sites/default/files/resources/UEFI_Spec_2_8_final.pdf#page=1790
 func parseEfiSignatureList(b []byte) ([]x509.Certificate, [][]byte, error) {
-	if len(b) < 28 {
+	if len(b) < efiSignatureListHeaderSize {
 		// Being passed an empty signature list here appears to be valid
 		return nil, nil, nil
 	}
 	signatures := efiSignatureList{}
 	buf := bytes.NewReader(b)
-	certificates := []x509.Certificate{}
-	hashes := [][]byte{}
+	var certificates []x509.Certificate
+	var hashes [][]byte
 
 	for buf.Len() > 0 {
 		err := binary.Read(buf, binary.LittleEndian, &signatures.Header)
@@ -348,13 +369,47 @@ func parseEfiSignatureList(b []byte) ([]x509.Certificate, [][]byte, error) {
 		if signatures.Header.SignatureListSize > maxDataLen {
 			return nil, nil, fmt.Errorf("signature list too large: %d > %d", signatures.Header.SignatureListSize, maxDataLen)
 		}
+		// Guard against uint32 underflow and OOM: SignatureListSize and SignatureSize
+		// are attacker-controlled fields. Without these checks, the subtractions
+		// below (SignatureListSize-efiSignatureListHeaderSize, SignatureSize-efiGUIDSize) would wrap around,
+		// causing an infinite loop or an OOM panic via make([]byte, ~4 GiB).
+		if signatures.Header.SignatureListSize < efiSignatureListHeaderSize {
+			return nil, nil, fmt.Errorf("SignatureListSize %d is smaller than the minimum header size of %d", signatures.Header.SignatureListSize, efiSignatureListHeaderSize)
+		}
+		if signatures.Header.SignatureSize < efiGUIDSize {
+			return nil, nil, fmt.Errorf("SignatureSize %d is smaller than the minimum entry size of %d", signatures.Header.SignatureSize, efiGUIDSize)
+		}
+		// Guard against OOM: SignatureSize is unbounded by the prior checks, allowing
+		// a crafted event log to set SignatureSize=0xFFFFFFFF while providing only a
+		// few bytes of actual data, causing make([]byte, SignatureSize-efiGUIDSize) to
+		// attempt a ~4 GiB allocation before binary.Read fails.
+		// SignatureSize must not exceed the remaining space within the signature list.
+		remainingListSize := signatures.Header.SignatureListSize - efiSignatureListHeaderSize
+		if signatures.Header.SignatureSize > remainingListSize {
+			return nil, nil, fmt.Errorf("SignatureSize %d exceeds remaining signature list space %d", signatures.Header.SignatureSize, remainingListSize)
+		}
+		// Guard against hash injection via oversized SignatureHeaderSize.
+		// Per UEFI spec section 31.4.1, SignatureHeaderSize bytes of vendor data
+		// appear between the fixed header and the actual signature entries.
+		// SignatureHeaderSize must not consume the entire remaining list space.
+		if signatures.Header.SignatureHeaderSize >= remainingListSize {
+			return nil, nil, fmt.Errorf("SignatureHeaderSize %d exceeds remaining signature list space %d", signatures.Header.SignatureHeaderSize, remainingListSize)
+		}
+		// Skip the vendor-specific SignatureHeader bytes per UEFI spec section 31.4.1.
+		// Without this, vendor bytes are misread as signature entries, allowing a
+		// crafted event log to inject arbitrary hashes into the trusted hash list.
+		if signatures.Header.SignatureHeaderSize > 0 {
+			if _, err := buf.Seek(int64(signatures.Header.SignatureHeaderSize), io.SeekCurrent); err != nil {
+				return nil, nil, fmt.Errorf("seeking past signature vendor header: %w", err)
+			}
+		}
 
 		signatureType := signatures.Header.SignatureType
 		switch signatureType {
 		case certX509SigGUID: // X509 certificate
-			for sigOffset := 0; uint32(sigOffset) < signatures.Header.SignatureListSize-28; {
+			for sigOffset := int(signatures.Header.SignatureHeaderSize); uint32(sigOffset) < signatures.Header.SignatureListSize-efiSignatureListHeaderSize; {
 				signature := efiSignatureData{}
-				signature.SignatureData = make([]byte, signatures.Header.SignatureSize-16)
+				signature.SignatureData = make([]byte, signatures.Header.SignatureSize-efiGUIDSize)
 				err := binary.Read(buf, binary.LittleEndian, &signature.SignatureOwner)
 				if err != nil {
 					return nil, nil, err
@@ -371,9 +426,9 @@ func parseEfiSignatureList(b []byte) ([]x509.Certificate, [][]byte, error) {
 				certificates = append(certificates, *cert)
 			}
 		case hashSHA256SigGUID: // SHA256
-			for sigOffset := 0; uint32(sigOffset) < signatures.Header.SignatureListSize-28; {
+			for sigOffset := int(signatures.Header.SignatureHeaderSize); uint32(sigOffset) < signatures.Header.SignatureListSize-efiSignatureListHeaderSize; {
 				signature := efiSignatureData{}
-				signature.SignatureData = make([]byte, signatures.Header.SignatureSize-16)
+				signature.SignatureData = make([]byte, signatures.Header.SignatureSize-efiGUIDSize)
 				err := binary.Read(buf, binary.LittleEndian, &signature.SignatureOwner)
 				if err != nil {
 					return nil, nil, err
@@ -424,15 +479,15 @@ type EFISignatureData struct {
 }
 
 func parseEfiSignature(b []byte) ([]x509.Certificate, error) {
-	certificates := []x509.Certificate{}
+	var certificates []x509.Certificate
 
-	if len(b) < 16 {
-		return nil, fmt.Errorf("invalid signature: buffer smaller than header (%d < %d)", len(b), 16)
+	if len(b) < efiGUIDSize {
+		return nil, fmt.Errorf("invalid signature: buffer smaller than header (%d < %d)", len(b), efiGUIDSize)
 	}
 
 	buf := bytes.NewReader(b)
 	signature := EFISignatureData{}
-	signature.SignatureData = make([]byte, len(b)-16)
+	signature.SignatureData = make([]byte, len(b)-efiGUIDSize)
 
 	if err := binary.Read(buf, binary.LittleEndian, &signature.SignatureOwner); err != nil {
 		return certificates, err
@@ -457,6 +512,7 @@ func parseEfiSignature(b []byte) ([]x509.Certificate, error) {
 	return certificates, err
 }
 
+// EFIDevicePathElement represents an EFI_DEVICE_PATH_ELEMENT structure.
 type EFIDevicePathElement struct {
 	Type    EFIDeviceType
 	Subtype uint8
@@ -469,6 +525,7 @@ type EFIImageLoad struct {
 	DevPathData []byte
 }
 
+// EFIImageLoadHeader represents the EFI_IMAGE_LOAD_EVENT structure.
 type EFIImageLoadHeader struct {
 	LoadAddr      uint64
 	Length        uint64
@@ -476,7 +533,7 @@ type EFIImageLoadHeader struct {
 	DevicePathLen uint64
 }
 
-func parseDevicePathElement(r io.Reader) (EFIDevicePathElement, error) {
+func parseDevicePathElement(r *io.LimitedReader) (EFIDevicePathElement, error) {
 	var (
 		out     EFIDevicePathElement
 		dataLen uint16
@@ -497,6 +554,9 @@ func parseDevicePathElement(r io.Reader) (EFIDevicePathElement, error) {
 	if dataLen < 4 {
 		return EFIDevicePathElement{}, fmt.Errorf("device path data too short: %d < %d", dataLen, 4)
 	}
+	if int64(dataLen-4) > r.N {
+		return EFIDevicePathElement{}, fmt.Errorf("device path element data (%d bytes) larger than remaining capacity (%d bytes)", dataLen-4, r.N)
+	}
 	out.Data = make([]byte, dataLen-4)
 	if err := binary.Read(r, binary.LittleEndian, &out.Data); err != nil {
 		return EFIDevicePathElement{}, fmt.Errorf("reading data: %v", err)
@@ -504,13 +564,14 @@ func parseDevicePathElement(r io.Reader) (EFIDevicePathElement, error) {
 	return out, nil
 }
 
+// DevicePath returns the device path elements from the EFI_IMAGE_LOAD_EVENT structure.
 func (h *EFIImageLoad) DevicePath() ([]EFIDevicePathElement, error) {
 	var (
-		r   = bytes.NewReader(h.DevPathData)
+		r   = &io.LimitedReader{R: bytes.NewReader(h.DevPathData), N: int64(len(h.DevPathData))}
 		out []EFIDevicePathElement
 	)
 
-	for r.Len() > 0 {
+	for r.N > 0 {
 		e, err := parseDevicePathElement(r)
 		if err != nil {
 			return nil, err
@@ -528,13 +589,17 @@ func (h *EFIImageLoad) DevicePath() ([]EFIDevicePathElement, error) {
 // ParseEFIImageLoad parses an EFI_IMAGE_LOAD_EVENT structure.
 //
 // https://trustedcomputinggroup.org/wp-content/uploads/TCG_EFI_Platform_1_22_Final_-v15.pdf#page=17
-func ParseEFIImageLoad(r io.Reader) (ret EFIImageLoad, err error) {
+func ParseEFIImageLoad(data []byte) (ret EFIImageLoad, err error) {
+	r := &io.LimitedReader{R: bytes.NewReader(data), N: int64(len(data))}
 	err = binary.Read(r, binary.LittleEndian, &ret.Header)
 	if err != nil {
 		return
 	}
 	if ret.Header.DevicePathLen > maxNameLen {
 		return EFIImageLoad{}, fmt.Errorf("device path structure too long: %d > %d", ret.Header.DevicePathLen, maxNameLen)
+	}
+	if int64(ret.Header.DevicePathLen) > r.N {
+		return EFIImageLoad{}, fmt.Errorf("device path structure size (%d bytes) larger than remaining capacity (%d bytes)", ret.Header.DevicePathLen, r.N)
 	}
 	ret.DevPathData = make([]byte, ret.Header.DevicePathLen)
 	err = binary.Read(r, binary.LittleEndian, &ret.DevPathData)
