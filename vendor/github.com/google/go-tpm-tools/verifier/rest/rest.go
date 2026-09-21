@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"time"
 
 	sabi "github.com/google/go-sev-guest/abi"
@@ -14,11 +13,11 @@ import (
 	tpb "github.com/google/go-tdx-guest/proto/tdx"
 	"github.com/google/go-tpm-tools/verifier"
 	"github.com/google/go-tpm-tools/verifier/models"
-	"github.com/google/go-tpm-tools/verifier/oci"
 	"github.com/googleapis/gax-go/v2"
 
 	v1 "cloud.google.com/go/confidentialcomputing/apiv1"
 	ccpb "cloud.google.com/go/confidentialcomputing/apiv1/confidentialcomputingpb"
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	locationpb "google.golang.org/genproto/googleapis/cloud/location"
@@ -133,7 +132,10 @@ func (c *restClient) VerifyAttestation(ctx context.Context, request verifier.Ver
 		return nil, fmt.Errorf("neither TPM nor TDX attestation is present")
 	}
 
-	req := convertRequestToREST(request)
+	req, err := convertRequestToREST(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert request to REST: %w", err)
+	}
 	req.Challenge = request.Challenge.Name
 
 	response, err := c.v1Client.VerifyAttestation(ctx, req)
@@ -152,7 +154,10 @@ func (c *restClient) VerifyConfidentialSpace(ctx context.Context, request verifi
 		return nil, fmt.Errorf("neither TPM nor TDX attestation is present")
 	}
 
-	csReq := convertCSRequestToREST(request)
+	csReq, err := convertCSRequestToREST(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert CS request to REST: %w", err)
+	}
 	csReq.Challenge = request.Challenge.Name
 
 	response, err := c.v1Client.VerifyConfidentialSpace(ctx, csReq)
@@ -203,7 +208,7 @@ func convertTokenOptionsToREST(tokenOpts *models.TokenOptions) *ccpb.TokenOption
 	return optsPb
 }
 
-func convertRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.VerifyAttestationRequest {
+func convertRequestToREST(request verifier.VerifyAttestationRequest) (*ccpb.VerifyAttestationRequest, error) {
 	idTokens := make([]string, len(request.GcpCredentials))
 	for i, token := range request.GcpCredentials {
 		idTokens[i] = string(token)
@@ -225,6 +230,7 @@ func convertRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Verif
 			SignedEntities: []*ccpb.SignedEntity{{ContainerImageSignatures: signatures}},
 		},
 		TokenOptions: convertTokenOptionsToREST(request.TokenOptions),
+		Instance:     request.GCEInstance,
 	}
 
 	if request.Attestation != nil {
@@ -260,7 +266,7 @@ func convertRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Verif
 		if request.Attestation.GetSevSnpAttestation() != nil {
 			sevsnp, err := convertSEVSNPProtoToREST(request.Attestation.GetSevSnpAttestation())
 			if err != nil {
-				log.Fatalf("Failed to convert SEVSNP proto to API proto: %v", err)
+				return nil, fmt.Errorf("failed to convert SEVSNP proto to API proto: %w", err)
 			}
 			verifyReq.TeeAttestation = sevsnp
 		}
@@ -268,18 +274,11 @@ func convertRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Verif
 		if request.Attestation.GetTdxAttestation() != nil {
 			tdx, err := convertTDXProtoToREST(request.Attestation.GetTdxAttestation())
 			if err != nil {
-				log.Fatalf("Failed to convert TD quote proto to API proto: %v", err)
+				return nil, fmt.Errorf("failed to convert TD quote proto to API proto: %w", err)
 			}
 			verifyReq.TeeAttestation = tdx
 		}
 	} else if request.TDCCELAttestation != nil {
-		// TDX attestation route
-		// still need AK for GCE info!
-		verifyReq.TpmAttestation = &ccpb.TpmAttestation{
-			AkCert:    request.TDCCELAttestation.AkCert,
-			CertChain: request.TDCCELAttestation.IntermediateCerts,
-		}
-
 		verifyReq.TeeAttestation = &ccpb.VerifyAttestationRequest_TdCcel{
 			TdCcel: &ccpb.TdxCcelAttestation{
 				TdQuote:           request.TDCCELAttestation.TdQuote,
@@ -290,7 +289,7 @@ func convertRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Verif
 		}
 	}
 
-	return verifyReq
+	return verifyReq, nil
 }
 
 func convertResponseFromREST(resp *ccpb.VerifyAttestationResponse) (*verifier.VerifyAttestationResponse, error) {
@@ -298,25 +297,6 @@ func convertResponseFromREST(resp *ccpb.VerifyAttestationResponse) (*verifier.Ve
 	return &verifier.VerifyAttestationResponse{
 		ClaimsToken: token,
 		PartialErrs: resp.PartialErrors,
-	}, nil
-}
-
-func convertOCISignatureToREST(signature oci.Signature) (*ccpb.ContainerImageSignature, error) {
-	payload, err := signature.Payload()
-	if err != nil {
-		return nil, err
-	}
-	b64Sig, err := signature.Base64Encoded()
-	if err != nil {
-		return nil, err
-	}
-	sigBytes, err := encoding.DecodeString(b64Sig)
-	if err != nil {
-		return nil, err
-	}
-	return &ccpb.ContainerImageSignature{
-		Payload:   payload,
-		Signature: sigBytes,
 	}, nil
 }
 
@@ -370,9 +350,12 @@ func setAwsPrincipalTagOptions(requestTokenOptions *models.TokenOptions) *ccpb.T
 	return options
 }
 
-func convertCSRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.VerifyConfidentialSpaceRequest {
+func convertCSRequestToREST(request verifier.VerifyAttestationRequest) (*ccpb.VerifyConfidentialSpaceRequest, error) {
 	// Use convertRequestToREST to avoid duplicating conversion logic.
-	verifyAttRequest := convertRequestToREST(request)
+	verifyAttRequest, err := convertRequestToREST(request)
+	if err != nil {
+		return nil, err
+	}
 
 	csReq := &ccpb.VerifyConfidentialSpaceRequest{
 		Challenge:      verifyAttRequest.Challenge,
@@ -387,9 +370,11 @@ func convertCSRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Ver
 
 		// Set AK cert info.
 		csReq.GceShieldedIdentity = &ccpb.GceShieldedIdentity{
-			AkCert:      verifyAttRequest.TpmAttestation.AkCert,
-			AkCertChain: verifyAttRequest.TpmAttestation.CertChain,
+			AkCert:      request.TDCCELAttestation.AkCert,
+			AkCertChain: request.TDCCELAttestation.IntermediateCerts,
 		}
+
+		csReq.NvidiaAttestation = convertNvidiaAttestationToREST(request.NvidiaAttestation)
 	} else { // TPM Attestation.
 		csReq.TeeAttestation = &ccpb.VerifyConfidentialSpaceRequest_TpmAttestation{
 			TpmAttestation: verifyAttRequest.TpmAttestation,
@@ -398,7 +383,39 @@ func convertCSRequestToREST(request verifier.VerifyAttestationRequest) *ccpb.Ver
 
 	csReq.Options = convertToCSOpts(verifyAttRequest.TokenOptions)
 
-	return csReq
+	return csReq, nil
+}
+
+func convertNvidiaAttestationToREST(nvAtt *attestationpb.NvidiaAttestationReport) *ccpb.NvidiaAttestation {
+	// GCA only supports SPT attestation.
+	if nvAtt.GetSpt() != nil {
+		return &ccpb.NvidiaAttestation{
+			CcFeature: &ccpb.NvidiaAttestation_Spt{
+				Spt: &ccpb.NvidiaAttestation_SinglePassthroughAttestation{
+					GpuQuote: &ccpb.NvidiaAttestation_GpuInfo{
+						Uuid:                        nvAtt.GetSpt().GetGpuQuote().GetUuid(),
+						DriverVersion:               nvAtt.GetSpt().GetGpuQuote().GetDriverVersion(),
+						VbiosVersion:                nvAtt.GetSpt().GetGpuQuote().GetVbiosVersion(),
+						GpuArchitectureType:         convertGPUArchToREST(nvAtt.GetSpt().GetGpuQuote().GetGpuArchitectureType()),
+						AttestationCertificateChain: nvAtt.GetSpt().GetGpuQuote().GetAttestationCertificateChain(),
+						AttestationReport:           nvAtt.GetSpt().GetGpuQuote().GetAttestationReport(),
+					},
+				},
+			},
+		}
+	}
+	return nil
+}
+
+func convertGPUArchToREST(arch attestationpb.GpuArchitectureType) ccpb.NvidiaAttestation_GpuArchitectureType {
+	switch arch {
+	case attestationpb.GpuArchitectureType_GPU_ARCHITECTURE_TYPE_HOPPER:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_HOPPER
+	case attestationpb.GpuArchitectureType_GPU_ARCHITECTURE_TYPE_BLACKWELL:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_BLACKWELL
+	default:
+		return ccpb.NvidiaAttestation_GPU_ARCHITECTURE_TYPE_UNSPECIFIED
+	}
 }
 
 func convertToCSOpts(tokenOpts *ccpb.TokenOptions) *ccpb.VerifyConfidentialSpaceRequest_ConfidentialSpaceOptions {
