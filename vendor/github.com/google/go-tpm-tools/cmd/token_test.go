@@ -23,8 +23,13 @@ import (
 )
 
 func TestTokenWithGCEAK(t *testing.T) {
+	teeNonce = nil
+	teeTechnology = ""
 	rwc := test.GetTPM(t)
 	defer client.CheckedClose(t, rwc)
+
+	test.SkipForRealTPM(t)
+
 	ExternalTPM = rwc
 	secretFile1 := makeOutputFile(t, "token")
 	defer os.RemoveAll(secretFile1)
