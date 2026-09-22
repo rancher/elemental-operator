@@ -196,8 +196,8 @@ github.com/prometheus/procfs v0.16.1 h1:hZ15bTNuirocR6u0JZ6BAHHmwS1p8B4P6MRqxtzM
 github.com/prometheus/procfs v0.16.1/go.mod h1:teAbpZRB1iIAJYREa1LsoWUXykVXA1KlTmWl8x/U+Is=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21 h1:HiCx5MUE8Y3o9K+YV8fMPPbzqSm7r6klDQ8erJbIw9E=
 github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21/go.mod h1:Ex+a/ng4u2BvcGQdQjTHI48h88bQ6k2a7q8rnvU0XbQ=
-github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f h1:xLHoIE3BBhr/4Nyma51MNdjfGZrty725vtmLMJB8e0o=
-github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f/go.mod h1:QVZbmJLF2H9dt+ntpjnsrR2/6tfYvoASIrtY0HPoJMQ=
+github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9 h1:l+70fUWYK6wuVL1mYJsMBehzXJkkZtkep/WqiOB9Nig=
+github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9/go.mod h1:TGHFtvUwkE3JhLPwJiqga3GrNHQZvY+YmOffr/H/CuY=
 github.com/rancher/aks-operator v1.13.0 h1:VBiKT++Qt2nmu229WfjuHHfBD3xBEIOxdnVtu9xsn08=
 github.com/rancher/aks-operator v1.13.0/go.mod h1:1ZjZB6zGHK+NGchN9KLplq+xPxRRi+q6Uzet5bjFwxo=
 github.com/rancher/ali-operator v1.13.0 h1:lraROOPu/akAiBlRuskGRic7w7gBqGnbYSt9m6P0TUg=
