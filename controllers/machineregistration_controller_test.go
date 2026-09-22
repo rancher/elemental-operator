@@ -152,7 +152,11 @@ var _ = Describe("setRegistrationTokenAndURL", func() {
 	})
 
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, mRegistration)).To(Succeed())
+		role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: mRegistration.Name, Namespace: mRegistration.Namespace}}
+		sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: mRegistration.Name, Namespace: mRegistration.Namespace}}
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: mRegistration.Name + elementalv1.SASecretSuffix, Namespace: mRegistration.Namespace}}
+		roleBinding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: mRegistration.Name, Namespace: mRegistration.Namespace}}
+		Expect(test.CleanupAndWait(ctx, cl, mRegistration, role, sa, roleBinding, secret)).To(Succeed())
 	})
 
 	It("should successfully set registration token and url", func() {
