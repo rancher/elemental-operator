@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	clogging "cloud.google.com/go/logging"
 	"github.com/google/go-cmp/cmp"
@@ -149,7 +151,7 @@ func (s *testSLogWriter) checkLogLevel(level slog.Level) error {
 	return nil
 }
 
-func TestWriteLog(t *testing.T) {
+func TestCloudLogger(t *testing.T) {
 	testResource := &mrpb.MonitoredResource{
 		Type: "gce_instance",
 		Labels: map[string]string{
@@ -159,15 +161,10 @@ func TestWriteLog(t *testing.T) {
 		},
 	}
 
-	// Redirect loggers to buffers.
-	cloudLogger := &testCLogger{}
-	serialLogs := &testSLogWriter{}
-
-	testLogger := &logger{
-		cloudLogger:  cloudLogger,
-		serialLogger: slog.New(slog.NewTextHandler(serialLogs, nil)),
+	cloudC := &testCLogger{}
+	cl := &cloudLogger{
+		cloudLogger:  cloudC,
 		resource:     testResource,
-
 		instanceName: "test-instance",
 	}
 
@@ -178,7 +175,44 @@ func TestWriteLog(t *testing.T) {
 		"key3": false,
 	}
 
-	testLogger.writeLog(clogging.Info, testMsg, toArgs(testPayload)...)
+	cl.Log(clogging.Info, testMsg, toArgs(testPayload)...)
+
+	// Add message and hostnames values to expected payload.
+	testPayload[payloadMessageKey] = testMsg
+	testPayload[payloadInstanceNameKey] = cl.instanceName
+
+	if !cmp.Equal(cloudC.log.Payload, testPayload) {
+		t.Errorf("Did not get expected payload in cloud logs: got %v, want %v", cloudC.log.Payload, testPayload)
+	}
+
+	if cloudC.log.Severity != clogging.Info {
+		t.Errorf("Did not get expected severity in cloud logs: got %v, want %v", cloudC.log.Severity, clogging.Info)
+	}
+
+	// Compare monitored resource.
+	if cloudC.log.Resource.Type != testResource.Type {
+		t.Errorf("Did not get expected monitored resource tyoe: got %v, want %v", cloudC.log.Resource.Type, testResource.Type)
+	}
+
+	if !cmp.Equal(cloudC.log.Resource.Labels, testResource.Labels) {
+		t.Errorf("Did not get expected monitored resource labels in cloud logs: got %v, want %v", cloudC.log.Resource.Labels, testResource.Labels)
+	}
+}
+
+func TestSerialLogger(t *testing.T) {
+	serialLogs := &testSLogWriter{}
+	sl := &serialLogger{
+		slg: slog.New(slog.NewTextHandler(serialLogs, nil)),
+	}
+
+	testMsg := "test message"
+	testPayload := payload{
+		"key1": "value1",
+		"key2": 2,
+		"key3": false,
+	}
+
+	sl.Log(clogging.Info, testMsg, toArgs(testPayload)...)
 
 	if err := serialLogs.checkLogContains(testMsg, testPayload); err != nil {
 		t.Errorf("Error validating Serial Log contents: %v", err)
@@ -187,26 +221,31 @@ func TestWriteLog(t *testing.T) {
 	if err := serialLogs.checkLogLevel(slog.LevelInfo); err != nil {
 		t.Errorf("Error validating Serial Log level: %v", err)
 	}
+}
 
-	// Add message and hostnames values to expected payload.
-	testPayload[payloadMessageKey] = testMsg
-	testPayload[payloadInstanceNameKey] = testLogger.instanceName
-
-	if !cmp.Equal(cloudLogger.log.Payload, testPayload) {
-		t.Errorf("Did not get expected payload in cloud logs: got %v, want %v", cloudLogger.log.Payload, testPayload)
+func TestDualLogger(t *testing.T) {
+	cloudC := &testCLogger{}
+	cl := &cloudLogger{
+		cloudLogger:  cloudC,
+		resource:     &mrpb.MonitoredResource{},
+		instanceName: "test-instance",
 	}
 
-	if cloudLogger.log.Severity != clogging.Info {
-		t.Errorf("Did not get expected severity in cloud logs: got %v, want %v", cloudLogger.log.Severity, clogging.Info)
+	serialLogs := &testSLogWriter{}
+	sl := &serialLogger{
+		slg: slog.New(slog.NewTextHandler(serialLogs, nil)),
 	}
 
-	// Compare monitored resource.
-	if cloudLogger.log.Resource.Type != testResource.Type {
-		t.Errorf("Did not get expected monitored resource tyoe: got %v, want %v", cloudLogger.log.Resource.Type, testResource.Type)
-	}
+	dLogger := DualLogger(cl, sl)
 
-	if !cmp.Equal(cloudLogger.log.Resource.Labels, testResource.Labels) {
-		t.Errorf("Did not get expected monitored resource labels in cloud logs: got %v, want %v", cloudLogger.log.Resource.Labels, testResource.Labels)
+	testMsg := "test message"
+	dLogger.Log(clogging.Info, testMsg)
+
+	if cloudC.log.Severity != clogging.Info {
+		t.Errorf("DualLogger: cloud logger did not receive log")
+	}
+	if err := serialLogs.checkLogContains(testMsg, payload{}); err != nil {
+		t.Errorf("DualLogger: serial logger did not receive log: %v", err)
 	}
 }
 
@@ -215,13 +254,13 @@ func TestLogFunctions(t *testing.T) {
 		name          string
 		cloudSeverity clogging.Severity
 		serialLevel   slog.Level
-		logFunc       func(lgr *logger, msg string)
+		logFunc       func(lgr Logger, msg string)
 	}{
 		{
 			name:          "logger.Info",
 			cloudSeverity: clogging.Info,
 			serialLevel:   slog.LevelInfo,
-			logFunc: func(lgr *logger, msg string) {
+			logFunc: func(lgr Logger, msg string) {
 				lgr.Info(msg)
 			},
 		},
@@ -229,7 +268,7 @@ func TestLogFunctions(t *testing.T) {
 			name:          "logger.Warn",
 			cloudSeverity: clogging.Warning,
 			serialLevel:   slog.LevelWarn,
-			logFunc: func(lgr *logger, msg string) {
+			logFunc: func(lgr Logger, msg string) {
 				lgr.Warn(msg)
 			},
 		},
@@ -237,7 +276,7 @@ func TestLogFunctions(t *testing.T) {
 			name:          "logger.Error",
 			cloudSeverity: clogging.Error,
 			serialLevel:   slog.LevelError,
-			logFunc: func(lgr *logger, msg string) {
+			logFunc: func(lgr Logger, msg string) {
 				lgr.Error(msg)
 			},
 		},
@@ -246,22 +285,25 @@ func TestLogFunctions(t *testing.T) {
 	msg := "test message"
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			// Redirect loggers to buffers.
 			cloudLogs := &testCLogger{}
-			serialLogs := &testSLogWriter{}
-
-			testLogger := &logger{
+			cl := &cloudLogger{
 				cloudLogger:  cloudLogs,
-				serialLogger: slog.New(slog.NewTextHandler(serialLogs, nil)),
+				resource:     &mrpb.MonitoredResource{},
 				instanceName: "test-instance",
 			}
 
-			tc.logFunc(testLogger, msg)
+			serialLogs := &testSLogWriter{}
+			sl := &serialLogger{
+				slg: slog.New(slog.NewTextHandler(serialLogs, nil)),
+			}
+
+			mLogger := DualLogger(cl, sl)
+
+			tc.logFunc(mLogger, msg)
 
 			expectedPayload := payload{
 				payloadMessageKey:      msg,
-				payloadInstanceNameKey: testLogger.instanceName,
+				payloadInstanceNameKey: cl.instanceName,
 			}
 
 			if cloudLogs.log.Severity != tc.cloudSeverity {
@@ -281,4 +323,128 @@ func TestLogFunctions(t *testing.T) {
 			}
 		})
 	}
+}
+
+type errorWriter struct {
+	err error
+}
+
+func (e *errorWriter) Write(_ []byte) (int, error) {
+	return 0, e.err
+}
+
+func TestJSONSeverityWriter(t *testing.T) {
+	t.Run("single line", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := &JSONSeverityWriter{Target: &buf, Severity: "ERROR"}
+
+		input := "workload error line\n"
+		n, err := writer.Write([]byte(input))
+		if err != nil || n != len(input) {
+			t.Fatalf("Write failed: n=%d, err=%v", n, err)
+		}
+
+		want := `{"message":"workload error line","severity":"ERROR"}` + "\n"
+		if buf.String() != want {
+			t.Errorf("JSONSeverityWriter output = %q, want %q", buf.String(), want)
+		}
+	})
+
+	t.Run("multi line", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := &JSONSeverityWriter{Target: &buf, Severity: "INFO"}
+
+		input := "first line\r\nsecond line\nthird line\n"
+		n, err := writer.Write([]byte(input))
+		if err != nil || n != len(input) {
+			t.Fatalf("Write failed: n=%d, err=%v", n, err)
+		}
+
+		want := `{"message":"first line","severity":"INFO"}` + "\n" +
+			`{"message":"second line","severity":"INFO"}` + "\n" +
+			`{"message":"third line","severity":"INFO"}` + "\n"
+		if buf.String() != want {
+			t.Errorf("JSONSeverityWriter output = %q, want %q", buf.String(), want)
+		}
+	})
+
+	t.Run("empty or whitespace only", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := &JSONSeverityWriter{Target: &buf, Severity: "INFO"}
+
+		input := "\r\n\n"
+		n, err := writer.Write([]byte(input))
+		if err != nil || n != len(input) {
+			t.Fatalf("Write failed: n=%d, err=%v", n, err)
+		}
+
+		if buf.Len() != 0 {
+			t.Errorf("JSONSeverityWriter output = %q, want empty", buf.String())
+		}
+	})
+
+	t.Run("constructor helpers", func(t *testing.T) {
+		infoW := NewJSONInfoWriter()
+		jsonInfo, ok := infoW.(*JSONSeverityWriter)
+		if !ok || jsonInfo.Target != os.Stdout || jsonInfo.Severity != "INFO" {
+			t.Errorf("NewJSONInfoWriter() = %+v, want Target:os.Stdout, Severity:INFO", infoW)
+		}
+
+		errW := NewJSONErrorWriter()
+		jsonErr, ok := errW.(*JSONSeverityWriter)
+		if !ok || jsonErr.Target != os.Stderr || jsonErr.Severity != "ERROR" {
+			t.Errorf("NewJSONErrorWriter() = %+v, want Target:os.Stderr, Severity:ERROR", errW)
+		}
+	})
+
+	t.Run("target write error", func(t *testing.T) {
+		errWriter := &errorWriter{err: errors.New("underlying write error")}
+		writer := &JSONSeverityWriter{Target: errWriter, Severity: "ERROR"}
+
+		input := "error triggering payload\n"
+		n, err := writer.Write([]byte(input))
+		if err == nil {
+			t.Fatal("Expected error from writer.Write, got nil")
+		}
+		if n >= len(input) {
+			t.Errorf("Expected n < len(input) on error per io.Writer standard, got n=%d, len=%d", n, len(input))
+		}
+	})
+
+	t.Run("high throughput burst", func(t *testing.T) {
+		var buf bytes.Buffer
+		writer := &JSONSeverityWriter{Target: &buf, Severity: "INFO"}
+
+		const lineCount = 50000
+		start := time.Now()
+
+		for i := 1; i <= lineCount; i++ {
+			msg := fmt.Sprintf("high rate log message sequence=%d\n", i)
+			n, err := writer.Write([]byte(msg))
+			if err != nil || n != len(msg) {
+				t.Fatalf("Write %d failed: n=%d, err=%v", i, n, err)
+			}
+		}
+
+		elapsed := time.Since(start)
+		t.Logf("Wrote and verified %d structured JSON log lines in %v", lineCount, elapsed)
+
+		// Verify line count in output buffer
+		output := buf.String()
+		lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+		if len(lines) != lineCount {
+			t.Fatalf("Expected %d formatted JSON lines, got %d", lineCount, len(lines))
+		}
+
+		// Verify first and last line formatting
+		firstWant := `{"message":"high rate log message sequence=1","severity":"INFO"}`
+		if lines[0] != firstWant {
+			t.Errorf("First line = %q, want %q", lines[0], firstWant)
+		}
+
+		lastWant := fmt.Sprintf(`{"message":"high rate log message sequence=%d","severity":"INFO"}`, lineCount)
+		if lines[lineCount-1] != lastWant {
+			t.Errorf("Last line = %q, want %q", lines[lineCount-1], lastWant)
+		}
+	})
 }

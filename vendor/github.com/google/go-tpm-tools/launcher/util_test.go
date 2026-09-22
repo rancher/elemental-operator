@@ -2,6 +2,9 @@ package launcher
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"reflect"
 
 	"context"
 	"encoding/json"
@@ -14,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-tpm-tools/client"
 	"github.com/google/go-tpm-tools/internal/test"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"google.golang.org/api/option"
 )
 
@@ -77,6 +81,24 @@ func TestTPMDAOps(t *testing.T) {
 	}
 }
 
+func TestGetCapabilityProperty(t *testing.T) {
+	rwc := test.GetTPM(t)
+	defer client.CheckedClose(t, rwc)
+
+	prop, err := getCapabilityProperty(rwc, tpm2.TPMAStartupClear)
+	if err != nil {
+		t.Fatalf("getCapabilityProperty failed for TPMAStartupClear: %v", err)
+	}
+	if prop.Tag != tpm2.TPMAStartupClear {
+		t.Errorf("got Tag %v, want %v", prop.Tag, tpm2.TPMAStartupClear)
+	}
+
+	_, err = getCapabilityProperty(rwc, tpm2.TPMProp(0xFFFFFFFF))
+	if err == nil {
+		t.Errorf("getCapabilityProperty for 0xFFFFFFFF succeeded, expected error")
+	}
+}
+
 func TestFetchImpersonatedToken(t *testing.T) {
 	token, err := FetchImpersonatedToken(context.Background(), expectedEmail, "test_aud", option.WithHTTPClient(testClient))
 	if err != nil {
@@ -112,4 +134,68 @@ func (t *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 type idTokenResp struct {
 	Token string `json:"token"`
+}
+
+func TestListFilesWithPrefix(t *testing.T) {
+
+	tmpDir := t.TempDir()
+	file1 := filepath.Join(tmpDir, "file1.txt")
+	file2 := filepath.Join(tmpDir, "file2.txt")
+	file3 := filepath.Join(tmpDir, "dir", "file3.txt")
+
+	var testCases = []struct {
+		dir     string
+		pattern string
+		want    []string
+		wantErr bool
+	}{
+		{
+			dir:     tmpDir,
+			pattern: "file",
+			want:    []string{file1, file2},
+			wantErr: false,
+		},
+		{
+			dir:     filepath.Join(tmpDir, "dir"),
+			pattern: "file",
+			want:    []string{file3},
+			wantErr: false,
+		},
+		{
+			dir:     tmpDir,
+			pattern: "newfile",
+			wantErr: false,
+		},
+		{
+			dir:     "otherdir",
+			pattern: "file",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			dir:     "otherdir",
+			pattern: "tmpfile",
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	// Create test files
+	os.WriteFile(file1, []byte("File 1 content"), 0644)
+	os.WriteFile(file2, []byte("File 2 content"), 0644)
+	os.MkdirAll(filepath.Dir(file3), 0755)
+	os.WriteFile(file3, []byte("File 3 content"), 0644)
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("Dir: %s, Pattern: %s", tc.dir, tc.pattern), func(t *testing.T) {
+			got, err := listFilesWithPrefix(tc.dir, tc.pattern)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("listFilesWithPrefix(%s, %s): got error: %v, want error: %v", tc.dir, tc.pattern, err, tc.wantErr)
+				return
+			}
+			if !tc.wantErr && !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("listFilesWithPrefix(%s, %s): got: %v, want: %v", tc.dir, tc.pattern, got, tc.want)
+			}
+		})
+	}
 }
