@@ -12,8 +12,10 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/compute/metadata"
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/containerd/containerd/v2/pkg/cap"
 	"github.com/google/go-tpm-tools/cel"
@@ -76,28 +78,38 @@ const (
 
 // Metadata variable names.
 const (
-	fakeVerifierKey            = "test-fake-verifier"
-	imageRefKey                = "tee-image-reference"
-	signedImageRepos           = "tee-signed-image-repos"
-	restartPolicyKey           = "tee-restart-policy"
-	cmdKey                     = "tee-cmd"
-	envKeyPrefix               = "tee-env-"
-	impersonateServiceAccounts = "tee-impersonate-service-accounts"
-	attestationServiceAddrKey  = "tee-attestation-service-endpoint"
-	logRedirectKey             = "tee-container-log-redirect"
-	memoryMonitoringEnable     = "tee-monitoring-memory-enable"
-	monitoringEnable           = "tee-monitoring-enable"
-	devShmSizeKey              = "tee-dev-shm-size-kb"
-	mountKey                   = "tee-mount"
-	itaRegion                  = "ita-region"
+	// keep-sorted start by_regex="([^"]+)"
+	gcaServiceEnv              = "gca-service-env"
 	itaKey                     = "ita-api-key"
+	itaRegion                  = "ita-region"
 	addedCaps                  = "tee-added-capabilities"
 	cgroupNS                   = "tee-cgroup-ns"
+	cmdKey                     = "tee-cmd"
+	logRedirectKey             = "tee-container-log-redirect"
+	devShmSizeKey              = "tee-dev-shm-size-kb"
+	disableGcaRefreshKey       = "tee-disable-gca-refresh"
+	envKeyPrefix               = "tee-env-"
+	imageRefKey                = "tee-image-reference"
+	impersonateServiceAccounts = "tee-impersonate-service-accounts"
+	installGpuDriver           = "tee-install-gpu-driver"
+	monitoringEnable           = "tee-monitoring-enable"
+	memoryMonitoringEnable     = "tee-monitoring-memory-enable"
+	mountKey                   = "tee-mount"
+	restartPolicyKey           = "tee-restart-policy"
+	signedImageRepos           = "tee-signed-image-repos"
+	fakeVerifierKey            = "test-fake-verifier"
+	// keep-sorted end
 )
 
 const (
 	instanceAttributesQuery = "instance/attributes/?recursive=true"
 )
+
+var gcaInstances = map[string]string{
+	"prod":     "https://confidentialcomputing.googleapis.com",
+	"autopush": "https://autopush-confidentialcomputing.sandbox.googleapis.com",
+	"staging":  "https://staging-confidentialcomputing.sandbox.googleapis.com",
+}
 
 var errImageRefNotSpecified = fmt.Errorf("%s is not specified in the custom metadata", imageRefKey)
 
@@ -107,6 +119,16 @@ type EnvVar struct {
 	Value string
 }
 
+// String implements fmt.Stringer to prevent accidental exposure of Value in logs and errors.
+func (e EnvVar) String() string {
+	return e.Name
+}
+
+// GoString implements fmt.GoStringer so that %#v also redacts the Value.
+func (e EnvVar) GoString() string {
+	return fmt.Sprintf("spec.EnvVar{Name: %q}", e.Name)
+}
+
 // LaunchSpec contains specification set by the operator who wants to
 // launch a container.
 type LaunchSpec struct {
@@ -114,24 +136,27 @@ type LaunchSpec struct {
 	FakeVerifierEnabled bool
 
 	// MDS-based values.
-	ImageRef                   string
-	SignedImageRepos           []string
-	RestartPolicy              RestartPolicy
+	// keep-sorted start case=no
+	AddedCapabilities          []string
+	CgroupNamespace            bool
 	Cmd                        []string
+	DevShmSize                 int64 // DevShmSize is specified in kiB.
+	DisableGcaRefresh          bool
 	Envs                       []EnvVar
-	AttestationServiceAddr     string
+	GcaAddress                 string
+	Hardened                   bool
+	ImageRef                   string
 	ImpersonateServiceAccounts []string
+	InstallGpuDriver           bool
+	ITAConfig                  verifier.ITAConfig
+	LogRedirect                LogRedirectLocation
+	MonitoringEnabled          MonitoringType
+	Mounts                     []launchermount.Mount
 	ProjectID                  string
 	Region                     string
-	Hardened                   bool
-	MonitoringEnabled          MonitoringType
-	LogRedirect                LogRedirectLocation
-	Mounts                     []launchermount.Mount
-	ITAConfig                  verifier.ITAConfig
-	// DevShmSize is specified in kiB.
-	DevShmSize        int64
-	AddedCapabilities []string
-	CgroupNamespace   bool
+	RestartPolicy              RestartPolicy
+	SignedImageRepos           []string
+	// keep-sorted end
 }
 
 // UnmarshalJSON unmarshals an instance attributes list in JSON format from the metadata
@@ -147,6 +172,12 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 		var err error
 		if s.FakeVerifierEnabled, err = strconv.ParseBool(val); err != nil {
 			return fmt.Errorf("invalid value for %v (not a boolean): %w", fakeVerifierKey, err)
+		}
+	}
+
+	if val, ok := unmarshaledMap[installGpuDriver]; ok && val != "" {
+		if boolValue, err := strconv.ParseBool(val); err == nil {
+			s.InstallGpuDriver = boolValue
 		}
 	}
 
@@ -231,7 +262,9 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 		return err
 	}
 
-	s.AttestationServiceAddr = unmarshaledMap[attestationServiceAddrKey]
+	if err := s.setAttestationServiceVars(unmarshaledMap); err != nil {
+		return err
+	}
 
 	// Populate /dev/shm size override.
 	if val, ok := unmarshaledMap[devShmSizeKey]; ok && val != "" {
@@ -290,6 +323,25 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 		}
 	}
 
+	if val, ok := unmarshaledMap[disableGcaRefreshKey]; ok && val != "" {
+		var err error
+		if s.DisableGcaRefresh, err = strconv.ParseBool(val); err != nil {
+			return fmt.Errorf("invalid value for %v (not a boolean): %w", disableGcaRefreshKey, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *LaunchSpec) setAttestationServiceVars(unmarshaledMap map[string]string) error {
+	if gcaServiceEnv, ok := unmarshaledMap[gcaServiceEnv]; ok {
+		v, ok := gcaInstances[strings.ToLower(gcaServiceEnv)]
+		if !ok {
+			return fmt.Errorf("the gca service env is not within the allowlist, want %+v, got %s", gcaInstances, gcaServiceEnv)
+		}
+		s.GcaAddress = v
+	}
+
 	return nil
 }
 
@@ -297,7 +349,15 @@ func (s *LaunchSpec) UnmarshalJSON(b []byte) error {
 func (s *LaunchSpec) LogFriendly() LaunchSpec {
 	safeSpec := *s
 	safeSpec.ITAConfig.ITAKey = strings.Repeat("*", len(s.ITAConfig.ITAKey))
-
+	var safeEnvs []EnvVar
+	for _, envVar := range s.Envs {
+		if envVar.Value != "" {
+			safeEnvs = append(safeEnvs, EnvVar{envVar.Name, "[REDACTED]"})
+		} else {
+			safeEnvs = append(safeEnvs, envVar)
+		}
+	}
+	safeSpec.Envs = safeEnvs
 	return safeSpec
 }
 
@@ -325,6 +385,10 @@ func GetLaunchSpec(ctx context.Context, logger logging.Logger, client *metadata.
 	}
 	if len(errs) != 0 {
 		return LaunchSpec{}, fmt.Errorf("failed to validate mounts: %v", errors.Join(errs...))
+	}
+
+	if !spec.Experiments.EnableB200DriverInstallation && !spec.Experiments.EnableH100DriverInstallation && spec.InstallGpuDriver {
+		return LaunchSpec{}, fmt.Errorf("GPU Driver installation is not supported")
 	}
 
 	if err := validateMemorySizeKb(uint64(spec.DevShmSize)); err != nil {
@@ -366,17 +430,48 @@ func isHardened(kernelCmd string) bool {
 func fetchExperiments(logger logging.Logger) experiments.Experiments {
 	experimentsFile := path.Join(launcherfile.HostTmpPath, experimentDataFile)
 
-	args := fmt.Sprintf("-output=%s", experimentsFile)
-	err := exec.Command(binaryPath, args).Run()
-	if err != nil {
-		logger.Error(fmt.Sprintf("failure during experiment sync: %v\n", err))
+	var e experiments.Experiments
+	// If a pre-loaded experiments file already exists (e.g. for VG/BC modes),
+	// skip the sync phase and load it directly.
+	if _, err := os.Stat(experimentsFile); err == nil {
+		logger.Info("Pre-loaded experiments file found; skipping sync.")
+		var err error
+		e, err = experiments.New(experimentsFile)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to read pre-loaded experiment file: %v\n", err))
+		}
+		return e
 	}
-	e, err := experiments.New(experimentsFile)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to read experiment file: %v\n", err))
-		// do not fail if experiment retrieval fails
+
+	args := fmt.Sprintf("-output=%s", experimentsFile)
+	if err := backoff.Retry(func() error {
+		if err := exec.Command(binaryPath, args).Run(); err != nil {
+			logger.Error(fmt.Sprintf("failure during experiment sync: %v\n", err))
+		}
+		var err error
+		e, err = experiments.New(experimentsFile)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to read experiment file: %v\n", err))
+		}
+		// This is expected to be true if experiment sync is successful.
+		if !e.EnableTestFeatureForImage {
+			return fmt.Errorf("experiments synced but EnableTestFeatureForImage is false")
+		}
+		return nil
+	}, experimentSyncBackoffPolicy()); err != nil {
+		logger.Error(fmt.Sprintf("experiment retrieval failed after retries: %v\n", err))
+		// Do not fail if experiment retrieval fails.
 	}
 	return e
+}
+
+func experimentSyncBackoffPolicy() backoff.BackOff {
+	b := backoff.NewExponentialBackOff()
+	b.InitialInterval = 2 * time.Second
+	b.MaxInterval = 8 * time.Second
+	b.Multiplier = 2.0
+	b.RandomizationFactor = 0.1
+	return backoff.WithMaxRetries(b, 3)
 }
 
 func processMount(singleMount string) (launchermount.Mount, error) {
