@@ -308,7 +308,7 @@ github.com/prometheus/procfs/internal/util
 github.com/rancher-sandbox/ele-testhelpers/helpers
 github.com/rancher-sandbox/ele-testhelpers/http
 github.com/rancher-sandbox/ele-testhelpers/kubectl
-# github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f
+# github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9
 ## explicit; go 1.24.0
 github.com/rancher-sandbox/go-tpm
 github.com/rancher-sandbox/go-tpm/backend

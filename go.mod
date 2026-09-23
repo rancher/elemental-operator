@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.0
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21
-	github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f
+	github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9
 	github.com/rancher/fleet/pkg/apis v0.14.0
 	github.com/rancher/lasso v0.2.7
 	github.com/rancher/rancher/pkg/apis v0.0.0-20251125015639-f94ac947f75e

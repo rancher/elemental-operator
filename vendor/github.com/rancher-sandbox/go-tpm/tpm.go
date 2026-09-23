@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm-tools/simulator"
+	gotpm2 "github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/tpmutil"
 	"github.com/pkg/errors"
 
 	"github.com/rancher-sandbox/go-tpm/backend"
@@ -66,6 +69,44 @@ func GetPubHash(opts ...Option) (string, error) {
 	return hash, nil
 }
 
+// srkHandle is the standard persistent handle for the Storage Root Key.
+const srkHandleValue = tpmutil.Handle(0x81000001)
+
+// defaultRSASRKTemplate matches go-attestation's internal SRK template.
+var defaultRSASRKTemplate = gotpm2.Public{
+	Type:       gotpm2.AlgRSA,
+	NameAlg:    gotpm2.AlgSHA256,
+	Attributes: gotpm2.FlagStorageDefault | gotpm2.FlagNoDA,
+	RSAParameters: &gotpm2.RSAParams{
+		Symmetric: &gotpm2.SymScheme{
+			Alg:     gotpm2.AlgAES,
+			KeyBits: 128,
+			Mode:    gotpm2.AlgCFB,
+		},
+		ModulusRaw: make([]byte, 256),
+		KeyBits:    2048,
+	},
+}
+
+// provisionSRK creates and persists an RSA SRK under the Owner hierarchy, if
+// one is not already present.
+// This is to workaround the go-attestation SRK-creation fallback logic which
+// uses the Endorsement hierarchy.
+func provisionSRK(rwc io.ReadWriter) error {
+	if _, _, _, err := gotpm2.ReadPublic(rwc, srkHandleValue); err == nil {
+		return nil
+	}
+	keyHnd, _, err := gotpm2.CreatePrimary(rwc, gotpm2.HandleOwner, gotpm2.PCRSelection{}, "", "", defaultRSASRKTemplate)
+	if err != nil {
+		return fmt.Errorf("CreatePrimary: %w", err)
+	}
+	defer gotpm2.FlushContext(rwc, keyHnd)
+	if err := gotpm2.EvictControl(rwc, "", gotpm2.HandleOwner, keyHnd, srkHandleValue); err != nil {
+		return fmt.Errorf("EvictControl: %w", err)
+	}
+	return nil
+}
+
 func getTPM(c *config) (*attest.TPM, error) {
 
 	cfg := &attest.OpenConfig{}
@@ -83,6 +124,15 @@ func getTPM(c *config) (*attest.TPM, error) {
 		}
 		if err != nil {
 			return nil, err
+		}
+		// Pre-provision the SRK under the Owner hierarchy before handing the
+		// simulator to go-attestation. Without this, go-attestation falls back
+		// to creating the SRK internally via a code path that uses
+		// HandleEndorsement (wrong hierarchy), producing a different key
+		// across simulator sessions with the same seed.
+		if err := provisionSRK(sim); err != nil {
+			_ = sim.Close()
+			return nil, fmt.Errorf("provisioning SRK: %w", err)
 		}
 		cfg.CommandChannel = backend.Fake(sim)
 	}
