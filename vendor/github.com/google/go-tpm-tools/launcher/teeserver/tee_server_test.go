@@ -7,18 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	// Bootstrap environment flags to prevent duplicate proto registration panics.
+	_ "github.com/google/go-tpm-tools/launcher/teeserver/envinit"
+
 	gecel "github.com/google/go-eventlog/cel"
 	"github.com/google/go-tpm-tools/agent"
+
 	keymanager "github.com/google/go-tpm-tools/keymanager/km_common/proto"
-	"github.com/google/go-tpm-tools/launcher/internal/experiments"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
-	"github.com/google/go-tpm-tools/launcher/spec"
+
+	tspb "github.com/google/go-tpm-tools/launcher/teeserver/proto/gen/teeserver"
 	"github.com/google/go-tpm-tools/verifier"
 	"github.com/google/go-tpm-tools/verifier/models"
 	"google.golang.org/grpc/codes"
@@ -28,6 +34,7 @@ import (
 
 	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // Implements verifier.Client interface so it can be used to initialize test attestHandlers
@@ -65,14 +72,14 @@ func (f fakeAttestationAgent) AttestationEvidence(c context.Context, nonce []byt
 	if err != nil {
 		return nil, err
 	}
-	if opts.DeviceReportOpts != nil && opts.DeviceReportOpts.EnableRuntimeGPUAttestation {
+	if opts.DeviceReportOpts != nil && opts.EnableRuntimeGPUAttestation {
 		attestation.DeviceReports = append(attestation.DeviceReports, &attestationpb.DeviceAttestationReport{
 			Report: &attestationpb.DeviceAttestationReport_NvidiaReport{
 				NvidiaReport: &attestationpb.NvidiaAttestationReport{},
 			},
 		})
 	}
-	if opts.AcpiOpts != nil && opts.AcpiOpts.RetrieveAcpiData {
+	if opts.AcpiOpts != nil && opts.RetrieveAcpiData {
 		attestation.AcpiData = &attestationpb.AcpiData{}
 	}
 	return attestation, nil
@@ -105,6 +112,36 @@ func (m *mockClaimsProvider) GetKeyClaims(_ context.Context, _ string, kt keyman
 		return nil, m.err
 	}
 	return m.claims[kt], nil
+}
+
+type fakeKEMAttester struct {
+	getKeyEndorsementFunc func(context.Context, *tspb.GetKeyEndorsementRequest, agent.AttestAgentOpts) (*attestationpb.VmAttestation, error)
+}
+
+func (f fakeKEMAttester) GetKeyEndorsement(ctx context.Context, req *tspb.GetKeyEndorsementRequest, opts agent.AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+	if f.getKeyEndorsementFunc != nil {
+		return f.getKeyEndorsementFunc(ctx, req, opts)
+	}
+	return nil, fmt.Errorf("GetKeyEndorsement unimplemented")
+}
+
+func (f fakeKEMAttester) Close() error {
+	return nil
+}
+
+type fakeBindingKeyAttester struct {
+	getKeyEndorsementFunc func(context.Context, *tspb.GetKeyEndorsementRequest, agent.AttestAgentOpts) (*attestationpb.VmAttestation, error)
+}
+
+func (f fakeBindingKeyAttester) GetKeyEndorsement(ctx context.Context, req *tspb.GetKeyEndorsementRequest, opts agent.AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+	if f.getKeyEndorsementFunc != nil {
+		return f.getKeyEndorsementFunc(ctx, req, opts)
+	}
+	return nil, fmt.Errorf("GetKeyEndorsement unimplemented")
+}
+
+func (f fakeBindingKeyAttester) Close() error {
+	return nil
 }
 
 func TestGetDefaultToken(t *testing.T) {
@@ -644,6 +681,7 @@ func TestAttestationEvidence(t *testing.T) {
 		method                  string
 		url                     string
 		body                    string
+		headers                 map[string]string
 		attestationEvidenceFunc func(context.Context, []byte, []byte) (*attestationpb.VmAttestation, error)
 		wantStatusCode          int
 		wantBodyContains        string
@@ -671,7 +709,7 @@ func TestAttestationEvidence(t *testing.T) {
 			wantBodyContains: `{"label":"dGVzdC1sYWJlbA==","challenge":"dGVzdC1jaGFsbGVuZ2U=","extraData":"dGVzdC1leHRyYS1kYXRh","quote":{"tdxCcelQuote":{}},"deviceReports":[{"nvidiaReport":{}}]}`,
 		},
 		{
-			name:           "success with fields",
+			name:           "success with fields query param",
 			method:         http.MethodPost,
 			url:            "/v1/evidence?fields=label,quote",
 			body:           `{"challenge": "dGVzdA=="}`,
@@ -681,6 +719,30 @@ func TestAttestationEvidence(t *testing.T) {
 			},
 			wantBodyContains: `{"label":"dGVzdC1sYWJlbA==","quote":{"tdxCcelQuote":{}}}`,
 		},
+		{
+			name:           "success with $fields query param",
+			method:         http.MethodPost,
+			url:            "/v1/evidence?$fields=label,quote",
+			body:           `{"challenge": "dGVzdA=="}`,
+			wantStatusCode: http.StatusOK,
+			attestationEvidenceFunc: func(_ context.Context, _ []byte, _ []byte) (*attestationpb.VmAttestation, error) {
+				return testAttestation, nil
+			},
+			wantBodyContains: `{"label":"dGVzdC1sYWJlbA==","quote":{"tdxCcelQuote":{}}}`,
+		},
+		{
+			name:           "success with X-Goog-FieldMask header",
+			method:         http.MethodPost,
+			url:            "/v1/evidence",
+			body:           `{"challenge": "dGVzdA=="}`,
+			headers:        map[string]string{"X-Goog-FieldMask": "label,quote"},
+			wantStatusCode: http.StatusOK,
+			attestationEvidenceFunc: func(_ context.Context, _ []byte, _ []byte) (*attestationpb.VmAttestation, error) {
+				return testAttestation, nil
+			},
+			wantBodyContains: `{"label":"dGVzdC1sYWJlbA==","quote":{"tdxCcelQuote":{}}}`,
+		},
+
 		{
 			name:             "wrong method",
 			method:           http.MethodGet,
@@ -734,6 +796,9 @@ func TestAttestationEvidence(t *testing.T) {
 			}
 
 			req := httptest.NewRequest(tc.method, tc.url, strings.NewReader(tc.body))
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
 			w := httptest.NewRecorder()
 
 			ah.getAttestationEvidence(w, req)
@@ -785,13 +850,13 @@ func TestFilterVMAttestationFields(t *testing.T) {
 
 	testCases := []struct {
 		name   string
-		fields string
+		mask   *fieldmaskpb.FieldMask
 		mutate func(att *attestationpb.VmAttestation)
 		want   *attestationpb.VmAttestation
 	}{
 		{
-			name:   "no fields",
-			fields: "",
+			name: "no fields",
+			mask: nil,
 			mutate: func(att *attestationpb.VmAttestation) {
 				att.DeviceReports = nil
 			},
@@ -803,71 +868,98 @@ func TestFilterVMAttestationFields(t *testing.T) {
 			},
 		},
 		{
-			name:   "single field label",
-			fields: "label",
+			name: "single field label",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"label"}},
 			want: &attestationpb.VmAttestation{
 				Label: fullAttestation.Label,
 			},
 		},
 		{
-			name:   "single field challenge",
-			fields: "challenge",
+			name: "single field challenge",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"challenge"}},
 			want: &attestationpb.VmAttestation{
 				Challenge: fullAttestation.Challenge,
 			},
 		},
 		{
-			name:   "single field extraData",
-			fields: "extraData",
+			name: "single field extraData camelCase",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"extraData"}},
 			want: &attestationpb.VmAttestation{
 				ExtraData: fullAttestation.ExtraData,
 			},
 		},
 		{
-			name:   "single field quote",
-			fields: "quote",
+			name: "single field extra_data snake_case",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"extra_data"}},
+			want: &attestationpb.VmAttestation{
+				ExtraData: fullAttestation.ExtraData,
+			},
+		},
+		{
+			name: "single field quote",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"quote"}},
 			want: &attestationpb.VmAttestation{
 				Quote: fullAttestation.Quote,
 			},
 		},
 		{
-			name:   "single field deviceReports",
-			fields: "deviceReports",
+			name: "single field deviceReports camelCase",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"deviceReports"}},
 			want: &attestationpb.VmAttestation{
 				DeviceReports: fullAttestation.DeviceReports,
 			},
 		},
 		{
-			name:   "multiple fields",
-			fields: "label,quote",
+			name: "single field device_reports snake_case",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"device_reports"}},
+			want: &attestationpb.VmAttestation{
+				DeviceReports: fullAttestation.DeviceReports,
+			},
+		},
+		{
+			name: "multiple fields",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"label", "quote"}},
 			want: &attestationpb.VmAttestation{
 				Label: fullAttestation.Label,
 				Quote: fullAttestation.Quote,
 			},
 		},
 		{
-			name:   "all fields",
-			fields: "label,challenge,extraData,quote,deviceReports",
-			want:   fullAttestation,
+			name: "all fields",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"label", "challenge", "extraData", "quote", "deviceReports"}},
+			want: fullAttestation,
 		},
 		{
-			name:   "fields with whitespace",
-			fields: " label , deviceReports ",
+			name: "fields with whitespace",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{" label ", " deviceReports "}},
 			want: &attestationpb.VmAttestation{
 				Label:         fullAttestation.Label,
 				DeviceReports: fullAttestation.DeviceReports,
 			},
 		},
 		{
-			name:   "all fields with *",
-			fields: "*",
-			want:   fullAttestation,
+			name: "all fields with *",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"*"}},
+			want: fullAttestation,
 		},
 		{
-			name:   "unknown fields are ignored",
-			fields: "label,foo,bar",
+			name: "unknown fields are ignored",
+			mask: &fieldmaskpb.FieldMask{Paths: []string{"label", "foo", "bar"}},
 			want: &attestationpb.VmAttestation{
 				Label: fullAttestation.Label,
+			},
+		},
+		{
+			name: "empty mask",
+			mask: &fieldmaskpb.FieldMask{},
+			mutate: func(att *attestationpb.VmAttestation) {
+				att.DeviceReports = nil
+			},
+			want: &attestationpb.VmAttestation{
+				Label:     fullAttestation.Label,
+				Challenge: fullAttestation.Challenge,
+				ExtraData: fullAttestation.ExtraData,
+				Quote:     fullAttestation.Quote,
 			},
 		},
 	}
@@ -878,7 +970,7 @@ func TestFilterVMAttestationFields(t *testing.T) {
 			if tc.mutate != nil {
 				tc.mutate(attestation)
 			}
-			got, err := filterVMAttestationFields(attestation, tc.fields)
+			got, err := filterVMAttestationFields(attestation, tc.mask)
 			if err != nil {
 				t.Fatalf("filterVMAttestationFields() returned an unexpected error: %v", err)
 			}
@@ -889,18 +981,75 @@ func TestFilterVMAttestationFields(t *testing.T) {
 	}
 }
 
+func TestParseFieldMask(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		headers map[string]string
+		want    *fieldmaskpb.FieldMask
+	}{
+		{
+			name: "no field mask parameters",
+			url:  "http://localhost/v1/evidence",
+			want: nil,
+		},
+		{
+			name: "fields query param",
+			url:  "http://localhost/v1/evidence?fields=label,quote",
+			want: &fieldmaskpb.FieldMask{Paths: []string{"label", "quote"}},
+		},
+		{
+			name: "$fields query param",
+			url:  "http://localhost/v1/evidence?$fields=challenge,extra_data",
+			want: &fieldmaskpb.FieldMask{Paths: []string{"challenge", "extra_data"}},
+		},
+		{
+			name:    "X-Goog-FieldMask header",
+			url:     "http://localhost/v1/evidence",
+			headers: map[string]string{"X-Goog-FieldMask": "deviceReports"},
+			want:    &fieldmaskpb.FieldMask{Paths: []string{"deviceReports"}},
+		},
+		{
+			name: "fields query param precedence over $fields",
+			url:  "http://localhost/v1/evidence?fields=label&$fields=quote",
+			want: &fieldmaskpb.FieldMask{Paths: []string{"label"}},
+		},
+		{
+			name:    "$fields query param precedence over X-Goog-FieldMask header",
+			url:     "http://localhost/v1/evidence?$fields=label",
+			headers: map[string]string{"X-Goog-FieldMask": "quote"},
+			want:    &fieldmaskpb.FieldMask{Paths: []string{"label"}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.url, nil)
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			got := parseFieldMask(req)
+			if diff := cmp.Diff(tc.want, got, protocmp.Transform()); diff != "" {
+				t.Errorf("parseFieldMask() returned diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestGetKeyEndorsement(t *testing.T) {
 	testHandle := "66eeec4b-0b20-4b30-987b-9c46b74ecc16"
 	testChallenge := []byte("test-challenge")
 
 	tests := []struct {
-		name         string
-		reqBody      interface{}
-		enableKM     bool
-		claimsErr    error
-		attestErr    error
-		wantStatus   int
-		expectErrMsg string
+		name             string
+		reqBody          interface{}
+		enableKM         bool
+		bcMode           bool
+		claimsErr        error
+		kemAttestErr     error
+		bindingAttestErr error
+		wantStatus       int
+		expectErrMsg     string
 	}{
 		{
 			name: "success",
@@ -931,6 +1080,16 @@ func TestGetKeyEndorsement(t *testing.T) {
 			wantStatus: http.StatusForbidden,
 		},
 		{
+			name: "bc mode without key manager",
+			reqBody: map[string]interface{}{
+				"challenge":  testChallenge,
+				"key_handle": map[string]string{"handle": testHandle},
+			},
+			enableKM:   false,
+			bcMode:     true,
+			wantStatus: http.StatusOK,
+		},
+		{
 			name: "missing key handle",
 			reqBody: map[string]interface{}{
 				"challenge":  testChallenge,
@@ -940,52 +1099,93 @@ func TestGetKeyEndorsement(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "claims provider error",
+			name: "omitted key handle",
 			reqBody: map[string]interface{}{
-				"challenge":  testChallenge,
-				"key_handle": map[string]string{"handle": testHandle},
+				"challenge": testChallenge,
 			},
 			enableKM:   true,
-			claimsErr:  fmt.Errorf("internal provider error"),
-			wantStatus: http.StatusInternalServerError,
+			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "attestation agent error",
+			name: "binding attestation error",
 			reqBody: map[string]interface{}{
 				"challenge":  testChallenge,
 				"key_handle": map[string]string{"handle": testHandle},
 			},
-			enableKM:   true,
-			attestErr:  fmt.Errorf("tpm failure"),
-			wantStatus: http.StatusInternalServerError,
+			enableKM:         true,
+			bindingAttestErr: fmt.Errorf("binding key tpm failure"),
+			wantStatus:       http.StatusInternalServerError,
+		},
+		{
+			name: "kem attestation error",
+			reqBody: map[string]interface{}{
+				"challenge":  testChallenge,
+				"key_handle": map[string]string{"handle": testHandle},
+			},
+			enableKM:     true,
+			kemAttestErr: fmt.Errorf("kem key tpm failure"),
+			wantStatus:   http.StatusInternalServerError,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mClaims := &mockClaimsProvider{
-				err: tt.claimsErr,
-				claims: map[keymanager.KeyType]*keymanager.KeyClaims{
-					keymanager.KeyType_KEY_TYPE_VM_PROTECTION_KEY:     {Claims: &keymanager.KeyClaims_VmKeyClaims{}},
-					keymanager.KeyType_KEY_TYPE_VM_PROTECTION_BINDING: {Claims: &keymanager.KeyClaims_VmBindingClaims{}},
-				},
+			var mClaims *mockClaimsProvider
+			if tt.enableKM {
+				mClaims = &mockClaimsProvider{
+					err: tt.claimsErr,
+					claims: map[keymanager.KeyType]*keymanager.KeyClaims{
+						keymanager.KeyType_KEY_TYPE_VM_PROTECTION_KEY:     {Claims: &keymanager.KeyClaims_VmKeyClaims{}},
+						keymanager.KeyType_KEY_TYPE_VM_PROTECTION_BINDING: {Claims: &keymanager.KeyClaims_VmBindingClaims{}},
+					},
+				}
 			}
 			mAgent := &fakeAttestationAgent{
 				attestationEvidenceFunc: func(_ context.Context, _, b2 []byte) (*attestationpb.VmAttestation, error) {
-					if tt.attestErr != nil {
-						return nil, tt.attestErr
-					}
 					return &attestationpb.VmAttestation{ExtraData: b2}, nil
 				},
 			}
-			handler := &attestHandler{
-				ctx:               context.Background(),
-				attestAgent:       mAgent,
-				keyClaimsProvider: mClaims,
-				logger:            logging.SimpleLogger(),
-				launchSpec: spec.LaunchSpec{
-					Experiments: experiments.Experiments{EnableKeyManager: tt.enableKM},
+
+			// Capture parameters passed to the KEM attester to verify `attestOpts` injection
+			mKEM := fakeKEMAttester{
+				getKeyEndorsementFunc: func(_ context.Context, req *tspb.GetKeyEndorsementRequest, opts agent.AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+					if tt.kemAttestErr != nil {
+						return nil, tt.kemAttestErr
+					}
+					// Assert option mapping parameters
+					expectedAcpi := req.GetRequestAcpiData()
+					if opts.AcpiOpts == nil || opts.RetrieveAcpiData != expectedAcpi {
+						t.Errorf("KEM Attester: expected Acpi option propagation to be %t", expectedAcpi)
+					}
+					return &attestationpb.VmAttestation{}, nil
 				},
+			}
+
+			// Capture parameters passed to the updated Binding Key Attester
+			mBinding := fakeBindingKeyAttester{
+				getKeyEndorsementFunc: func(_ context.Context, req *tspb.GetKeyEndorsementRequest, opts agent.AttestAgentOpts) (*attestationpb.VmAttestation, error) {
+					if tt.bindingAttestErr != nil {
+						return nil, tt.bindingAttestErr
+					}
+					// Assert option mapping parameters
+					expectedAcpi := req.GetRequestAcpiData()
+					if opts.AcpiOpts == nil || opts.RetrieveAcpiData != expectedAcpi {
+						t.Errorf("Binding Attester: expected Acpi option propagation to be %t", expectedAcpi)
+					}
+					return &attestationpb.VmAttestation{}, nil
+				},
+			}
+
+			handler := &attestHandler{
+				ctx:                context.Background(),
+				attestAgent:        mAgent,
+				logger:             logging.SimpleLogger(),
+				bcMode:             tt.bcMode,
+				kemAttester:        mKEM,
+				bindingKeyAttester: mBinding,
+			}
+			if tt.enableKM {
+				handler.keyClaimsProvider = mClaims
 			}
 			body, _ := json.Marshal(tt.reqBody)
 			req := httptest.NewRequest(http.MethodPost, endorsementEndpoint, bytes.NewBuffer(body))
@@ -999,16 +1199,136 @@ func TestGetKeyEndorsement(t *testing.T) {
 				var endorsement attestationpb.KeyEndorsement
 				if err := protojson.Unmarshal(rr.Body.Bytes(), &endorsement); err != nil {
 					t.Fatalf("failed to unmarshal response: %v", err)
+					return
 				}
 				vmEndorsement := endorsement.GetVmProtectedKeyEndorsement()
 				if vmEndorsement == nil {
 					t.Fatal("response missing VmProtectedKeyEndorsement")
+					return
 				}
-				if vmEndorsement.BindingKeyAttestation.Attestation == nil ||
-					vmEndorsement.ProtectedKeyAttestation.Attestation == nil {
+				if vmEndorsement.GetBindingKeyAttestation().GetAttestation() == nil ||
+					vmEndorsement.GetProtectedKeyAttestation().GetAttestation() == nil {
 					t.Error("one or both attestations are nil")
 				}
 			}
 		})
 	}
 }
+
+func TestInitKEMAttester(t *testing.T) {
+	mClaims := &mockClaimsProvider{}
+	mAgent := &fakeAttestationAgent{}
+
+	tests := []struct {
+		name       string
+		bcMode     bool
+		verifyType func(t *testing.T, attester KeyEndorsementAttester)
+	}{
+		{
+			name:   "local KEM attester",
+			bcMode: false,
+			verifyType: func(t *testing.T, attester KeyEndorsementAttester) {
+				if _, ok := attester.(*localKEMAttester); !ok {
+					t.Errorf("returned %T, want *localKEMAttester", attester)
+				}
+			},
+		},
+		{
+			name:   "remote KEM attester",
+			bcMode: true,
+			verifyType: func(t *testing.T, attester KeyEndorsementAttester) {
+				if _, ok := attester.(*remoteKEMAttester); !ok {
+					t.Errorf("returned %T, want *remoteKEMAttester", attester)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attester, err := initKEMAttester(tc.bcMode, mClaims, mAgent)
+			if err != nil {
+				t.Fatalf("initKEMAttester(%t) failed: %v", tc.bcMode, err)
+			}
+			if attester == nil {
+				t.Fatal("returned nil attester")
+			}
+			defer attester.Close()
+			tc.verifyType(t, attester)
+		})
+	}
+}
+
+func TestInitBindingKeyAttester(t *testing.T) {
+	mClaims := &mockClaimsProvider{}
+	mAgent := &fakeAttestationAgent{}
+
+	tests := []struct {
+		name       string
+		bcMode     bool
+		verifyType func(t *testing.T, attester KeyEndorsementAttester)
+	}{
+		{
+			name:   "local binding key attester",
+			bcMode: false,
+			verifyType: func(t *testing.T, attester KeyEndorsementAttester) {
+				if _, ok := attester.(*localBindingKeyAttester); !ok {
+					t.Errorf("returned %T, want *localBindingKeyAttester", attester)
+				}
+			},
+		},
+		{
+			name:   "remote binding key attester",
+			bcMode: true,
+			verifyType: func(t *testing.T, attester KeyEndorsementAttester) {
+				if _, ok := attester.(*bcBindingKeyAttester); !ok {
+					t.Errorf("returned %T, want *bcBindingKeyAttester", attester)
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attester, err := initBindingKeyAttester(tc.bcMode, mClaims, mAgent)
+			if err != nil {
+				t.Fatalf("initBindingKeyAttester(%t) failed: %v", tc.bcMode, err)
+			}
+			if attester == nil {
+				t.Fatal("returned nil attester")
+			}
+			defer attester.Close()
+			tc.verifyType(t, attester)
+		})
+	}
+}
+
+func TestTeeServer_Shutdown(t *testing.T) {
+	sockDir := t.TempDir()
+	sockPath := path.Join(sockDir, "test_shutdown.sock")
+	nl, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("net.Listen() err = %v, want nil", err)
+	}
+
+	server, err := New(
+		t.Context(),
+		nl,
+		&fakeAttestationAgent{},
+		logging.SimpleLogger(),
+		false,
+		false,
+		AttestClients{},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("New() err = %v, want nil", err)
+	}
+
+	go func() { _ = server.Serve() }()
+
+	if err := server.Shutdown(t.Context()); err != nil {
+		t.Errorf("server.Shutdown() err = %v, want nil", err)
+	}
+}
+

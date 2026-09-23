@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.0
 	github.com/rancher-sandbox/ele-testhelpers v0.0.0-20240926104948-8ac88aebed21
-	github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f
+	github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9
 	github.com/rancher/fleet/pkg/apis v0.14.0
 	github.com/rancher/lasso v0.2.7
 	github.com/rancher/rancher/pkg/apis v0.0.0-20251125015639-f94ac947f75e
@@ -81,7 +81,7 @@ require (
 	github.com/google/certificate-transparency-go v1.3.3 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
-	github.com/google/go-tpm-tools v0.4.9 // indirect
+	github.com/google/go-tpm-tools v0.4.10 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
