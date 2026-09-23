@@ -155,8 +155,8 @@ github.com/google/go-tpm/tpm2
 github.com/google/go-tpm/tpm2/transport
 github.com/google/go-tpm/tpmutil
 github.com/google/go-tpm/tpmutil/tbs
-# github.com/google/go-tpm-tools v0.4.9
-## explicit; go 1.24.0
+# github.com/google/go-tpm-tools v0.4.10
+## explicit; go 1.26
 github.com/google/go-tpm-tools/simulator
 github.com/google/go-tpm-tools/simulator/internal
 # github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83
@@ -308,7 +308,7 @@ github.com/prometheus/procfs/internal/util
 github.com/rancher-sandbox/ele-testhelpers/helpers
 github.com/rancher-sandbox/ele-testhelpers/http
 github.com/rancher-sandbox/ele-testhelpers/kubectl
-# github.com/rancher-sandbox/go-tpm v0.0.0-20260916141341-fdf0cbae943f
+# github.com/rancher-sandbox/go-tpm v0.0.0-20260923094453-c051c2d297d9
 ## explicit; go 1.24.0
 github.com/rancher-sandbox/go-tpm
 github.com/rancher-sandbox/go-tpm/backend

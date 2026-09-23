@@ -9,61 +9,51 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
-	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
-	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/oci"
 	"github.com/containerd/containerd/remotes"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/go-tpm-tools/agent"
+	"github.com/google/go-tpm-tools/agent/device"
 	"github.com/google/go-tpm-tools/cel"
-	"github.com/google/go-tpm-tools/client"
-	keymanager "github.com/google/go-tpm-tools/keymanager/km_common/proto"
-	workloadservice "github.com/google/go-tpm-tools/keymanager/workload_service"
-	"github.com/google/go-tpm-tools/launcher/internal/gpu"
 	"github.com/google/go-tpm-tools/launcher/internal/healthmonitoring/nodeproblemdetector"
 	"github.com/google/go-tpm-tools/launcher/internal/logging"
 	"github.com/google/go-tpm-tools/launcher/internal/signaturediscovery"
 	"github.com/google/go-tpm-tools/launcher/launcherfile"
 	"github.com/google/go-tpm-tools/launcher/registryauth"
 	"github.com/google/go-tpm-tools/launcher/spec"
-	"github.com/google/go-tpm-tools/launcher/teeserver"
-	"github.com/google/go-tpm-tools/verifier"
-	"github.com/google/go-tpm-tools/verifier/fake"
-	"github.com/google/go-tpm-tools/verifier/ita"
-	"github.com/google/go-tpm-tools/verifier/util"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"golang.org/x/oauth2"
+	"github.com/opencontainers/image-spec/specs-go/v1"
 	"google.golang.org/protobuf/proto"
+
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 )
 
 // ContainerRunner contains information about the container settings
 type ContainerRunner struct {
-	container     containerd.Container
-	launchSpec    spec.LaunchSpec
-	attestAgent   agent.AttestationAgent
-	logger        logging.Logger
-	gpuAttester   gpu.Attester
-	serialConsole *os.File
+	container        containerd.Container
+	launchSpec       spec.LaunchSpec
+	attestAgent      agent.AttestationAgent
+	logger           logging.Logger
+	deviceROTManager *device.ROTManager
+	serialConsole    *os.File
+	powerButton      *powerButtonListener // Populated only for a hardened image
 }
 
 const tokenFileTmp = ".token.tmp"
-
-const teeServerSocket = "teeserver.sock"
-const keyManagerSocket = "kmaserver.sock"
 
 // Since we only allow one container on a VM, using a deterministic id is probably fine
 const (
@@ -89,26 +79,33 @@ const (
 // Default OOM score for a CS container.
 const defaultOOMScore = 1000
 
-// NewRunner returns a runner.
-func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.Token, launchSpec spec.LaunchSpec, mdsClient *metadata.Client, tpm io.ReadWriteCloser, logger logging.Logger, serialConsole *os.File) (*ContainerRunner, error) {
-	image, err := initImage(ctx, cdClient, launchSpec, token)
-	if err != nil {
-		return nil, err
-	}
+// ContainerdClient abstracts the subset of containerd.Client methods used by the
+// runner. This enables unit testing by allowing a mock client to be injected.
+type ContainerdClient interface {
+	LoadContainer(ctx context.Context, id string) (containerd.Container, error)
+	NewContainer(ctx context.Context, id string, opts ...containerd.NewContainerOpts) (containerd.Container, error)
+	Pull(ctx context.Context, ref string, opts ...containerd.RemoteOpt) (containerd.Image, error)
+}
 
-	var mounts []specs.Mount
-	for _, lsMnt := range launchSpec.Mounts {
-		mounts = append(mounts, lsMnt.SpecsMount())
-	}
-	mounts = appendTokenMounts(mounts)
-	var cgroupOpts []oci.SpecOpts
-	if launchSpec.CgroupNamespace {
-		mounts = appendCgroupRw(mounts)
-		cgroupOpts = []oci.SpecOpts{
-			oci.WithNamespacedCgroup(),
-			oci.WithLinuxNamespace(specs.LinuxNamespace{Type: specs.CgroupNamespace}),
-		}
-	}
+// RunnerConfig contains the configuration for creating a ContainerRunner.
+type RunnerConfig struct {
+	ContainerdClient ContainerdClient
+	Image            containerd.Image
+	AttestAgent      agent.AttestationAgent
+	DeviceROTManager *device.ROTManager
+	LaunchSpec       spec.LaunchSpec
+	Logger           logging.Logger
+	SerialConsole    *os.File
+}
+
+// NewRunner returns a runner.
+func NewRunner(ctx context.Context, cfg *RunnerConfig) (*ContainerRunner, error) {
+	cdClient := cfg.ContainerdClient
+	launchSpec := cfg.LaunchSpec
+	logger := cfg.Logger
+	serialConsole := cfg.SerialConsole
+	image := cfg.Image
+	attestAgent := cfg.AttestAgent
 
 	envs, err := formatEnvVars(launchSpec.Envs)
 	if err != nil {
@@ -118,13 +115,24 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	container, err := cdClient.LoadContainer(ctx, containerID)
 	if err == nil {
 		// container exists, delete it first
-		container.Delete(ctx, containerd.WithSnapshotCleanup)
+		// TODO: consider handling or logging cleanup error.
+		_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
+	}
+
+	var loggedEnvs []string
+	for _, env := range envs {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			loggedEnvs = append(loggedEnvs, parts[0]+"=[REDACTED]")
+		} else {
+			loggedEnvs = append(loggedEnvs, env)
+		}
 	}
 
 	logger.Info("Preparing Container Runner",
 		"operator_input_image_ref", image.Name(),
 		"image_digest", image.Target().Digest,
-		"operator_override_env_vars", envs,
+		"operator_override_env_vars", loggedEnvs,
 		"operator_override_cmd", launchSpec.Cmd,
 	)
 
@@ -169,73 +177,9 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 		)
 	}
 
-	hostname, err := os.Hostname()
+	specOpts, err := createOCISpecOpts(image, launchSpec, envs, listFilesWithPrefix, logger)
 	if err != nil {
-		return nil, &RetryableError{fmt.Errorf("cannot get hostname: [%w]", err)}
-	}
-
-	rlimits := []specs.POSIXRlimit{{
-		Type: "RLIMIT_NOFILE",
-		Hard: nofile,
-		Soft: nofile,
-	}}
-
-	specOpts := []oci.SpecOpts{
-		oci.WithImageConfigArgs(image, launchSpec.Cmd),
-		oci.WithEnv(envs),
-		oci.WithMounts(mounts),
-		// following 4 options are here to allow the container to have
-		// the host network (same effect as --net-host in ctr command)
-		oci.WithHostHostsFile,
-		oci.WithHostResolvconf,
-		oci.WithHostNamespace(specs.NetworkNamespace),
-		oci.WithEnv([]string{fmt.Sprintf("HOSTNAME=%s", hostname)}),
-		oci.WithAddedCapabilities(launchSpec.AddedCapabilities),
-		withRlimits(rlimits),
-		withOOMScoreAdj(defaultOOMScore),
-	}
-	if launchSpec.DevShmSize != 0 {
-		specOpts = append(specOpts, oci.WithDevShmSize(launchSpec.DevShmSize))
-	}
-	specOpts = append(specOpts, cgroupOpts...)
-
-	var deviceROTs []agent.DeviceROT
-	nvidiaAttester := gpu.NewNvidiaAttester(launchSpec.InstallGpuDriver)
-	if launchSpec.InstallGpuDriver {
-		gpuMounts := []specs.Mount{
-			{
-				Type:        "volume",
-				Source:      fmt.Sprintf("%s/lib64", gpu.InstallationHostDir),
-				Destination: fmt.Sprintf("%s/lib64", gpu.InstallationContainerDir),
-				Options:     []string{"rbind", "rw"},
-			}, {
-				Type:        "volume",
-				Source:      fmt.Sprintf("%s/bin", gpu.InstallationHostDir),
-				Destination: fmt.Sprintf("%s/bin", gpu.InstallationContainerDir),
-				Options:     []string{"rbind", "rw"},
-			},
-		}
-		specOpts = append(specOpts, oci.WithMounts(gpuMounts))
-
-		// /dev/nvidia-caps/* will not be listed here and will not be passed to
-		// the container workload
-		//
-		// following devices should be listed:
-		// /dev/nvidiactl
-		// /dev/nvidia-uvm
-		// /dev/nvidia-uvm-tools
-		// /dev/nvidia{0,1,2,...}
-		// /dev/nvidia-modeset
-		gpuDeviceFiles, err := listFilesWithPrefix("/dev", "nvidia")
-		if err != nil {
-			return nil, fmt.Errorf("failed to list nvidia devices: [%w]", err)
-		}
-
-		for _, deviceFile := range gpuDeviceFiles {
-			logger.Info(fmt.Sprintf("Detected nvidia device : %s", deviceFile))
-			specOpts = append(specOpts, oci.WithDevices(deviceFile, deviceFile, "crw-rw-rw-"))
-		}
-		deviceROTs = append(deviceROTs, nvidiaAttester)
+		return nil, err
 	}
 
 	container, err = cdClient.NewContainer(
@@ -247,7 +191,8 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 	)
 	if err != nil {
 		if container != nil {
-			container.Delete(ctx, containerd.WithSnapshotCleanup)
+			// TODO: consider handling or logging cleanup error.
+			_ = container.Delete(ctx, containerd.WithSnapshotCleanup)
 		}
 		return nil, &RetryableError{fmt.Errorf("failed to create a container: [%w]", err)}
 	}
@@ -267,57 +212,22 @@ func NewRunner(ctx context.Context, cdClient *containerd.Client, token oauth2.To
 				len(containerSpec.Process.Args), len(launchSpec.Cmd))
 	}
 
-	principalFetcherWithImpersonate := func(audience string) ([][]byte, error) {
-		tokens, err := util.PrincipalFetcher(audience, mdsClient)
+	var powerButton *powerButtonListener
+	if launchSpec.Hardened {
+		powerButton, err = newPowerButtonListener(logger)
 		if err != nil {
-			return nil, err
+			logger.Error(err.Error())
 		}
-
-		// Fetch impersonated ID tokens.
-		for _, sa := range launchSpec.ImpersonateServiceAccounts {
-			idToken, err := FetchImpersonatedToken(ctx, sa, audience)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get impersonated token for %v: %w", sa, err)
-			}
-
-			tokens = append(tokens, idToken)
-		}
-		return tokens, nil
 	}
 
-	asAddr := launchSpec.GcaAddress
-
-	var verifierClient verifier.Client
-	if launchSpec.FakeVerifierEnabled {
-		verifierClient = fake.NewClient(nil)
-	} else if launchSpec.ITAConfig.ITARegion == "" {
-		gcaClient, err := util.NewRESTClient(ctx, asAddr, launchSpec.ProjectID, launchSpec.Region)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create REST verifier client: %v", err)
-		}
-
-		verifierClient = gcaClient
-	}
-
-	// Create a new signaturediscovery client to fetch signatures.
-	sdClient := getSignatureDiscoveryClient(cdClient, mdsClient, image.Target())
-
-	exps := agent.Experiments{
-		EnableAttestationEvidence: launchSpec.Experiments.EnableAttestationEvidence,
-		EnableGpuGcaSupport:       launchSpec.Experiments.EnableGpuGcaSupport,
-		BcMode:                    launchSpec.Experiments.BcMode,
-	}
-	attestAgent, err := agent.CreateAttestationAgent(tpm, client.GceAttestationKeyECC, verifierClient, principalFetcherWithImpersonate, sdClient, exps, logger, deviceROTs, launchSpec.SignedImageRepos)
-	if err != nil {
-		return nil, err
-	}
 	return &ContainerRunner{
-		container,
-		launchSpec,
-		attestAgent,
-		logger,
-		nvidiaAttester,
-		serialConsole,
+		container:        container,
+		launchSpec:       launchSpec,
+		attestAgent:      attestAgent,
+		logger:           logger,
+		deviceROTManager: cfg.DeviceROTManager,
+		serialConsole:    serialConsole,
+		powerButton:      powerButton,
 	}, nil
 }
 
@@ -325,13 +235,14 @@ func enableMonitoring(enabled spec.MonitoringType, logger logging.Logger) error 
 	if enabled != spec.None {
 		logger.Info("Health Monitoring is enabled by the VM operator")
 
-		if enabled == spec.All {
+		switch enabled {
+		case spec.All:
 			logger.Info("All health monitoring metrics enabled")
 			if err := nodeproblemdetector.EnableAllConfig(); err != nil {
 				logger.Error("Failed to enable full monitoring config: %v", err)
 				return err
 			}
-		} else if enabled == spec.MemoryOnly {
+		case spec.MemoryOnly:
 			logger.Info("memory/bytes_used enabled")
 		}
 
@@ -346,9 +257,9 @@ func enableMonitoring(enabled spec.MonitoringType, logger logging.Logger) error 
 	return nil
 }
 
-func getSignatureDiscoveryClient(cdClient *containerd.Client, mdsClient *metadata.Client, imageDesc v1.Descriptor) signaturediscovery.Fetcher {
+func getSignatureDiscoveryClient(cdClient ContainerdClient, mdsClient *metadata.Client, imageDesc v1.Descriptor, googleHTTPClient *http.Client) signaturediscovery.Fetcher {
 	resolverFetcher := func(ctx context.Context) (remotes.Resolver, error) {
-		return registryauth.RefreshResolver(ctx, mdsClient)
+		return registryauth.RefreshResolver(ctx, mdsClient, googleHTTPClient)
 	}
 	imageFetcher := func(ctx context.Context, imageRef string, opts ...containerd.RemoteOpt) (containerd.Image, error) {
 		image, err := pullImageWithRetries(
@@ -365,37 +276,13 @@ func getSignatureDiscoveryClient(cdClient *containerd.Client, mdsClient *metadat
 	return signaturediscovery.New(imageDesc, resolverFetcher, imageFetcher)
 }
 
-// formatEnvVars formats the environment variables to the oci format
-func formatEnvVars(envVars []spec.EnvVar) ([]string, error) {
-	var result []string
-	for _, envVar := range envVars {
-		ociFormat, err := cel.FormatEnvVar(envVar.Name, envVar.Value)
-		if err != nil {
-			return nil, fmt.Errorf("failed to format env var: %v", err)
-		}
-		result = append(result, ociFormat)
-	}
-	return result, nil
-}
-
-// appendTokenMounts appends the default mount specs for the OIDC token
-func appendTokenMounts(mounts []specs.Mount) []specs.Mount {
-	m := specs.Mount{}
-	m.Destination = launcherfile.ContainerRuntimeMountPath
-	m.Type = "bind"
-	m.Source = launcherfile.HostTmpPath
-	m.Options = []string{"rbind", "ro"}
-
-	return append(mounts, m)
-}
-
 func (r *ContainerRunner) measureCELEvents(ctx context.Context) error {
 	if err := r.measureContainerClaims(ctx); err != nil {
 		return fmt.Errorf("failed to measure container claims: %v", err)
 	}
 
 	if err := r.measureGPUAttestationEvidence(); err != nil {
-		return fmt.Errorf("failed to measure GPU claims: %v", err)
+		return fmt.Errorf("failed to measure device attestation claims: %v", err)
 	}
 
 	if err := r.measureMemoryMonitor(); err != nil {
@@ -468,42 +355,60 @@ func (r *ContainerRunner) measureContainerClaims(ctx context.Context) error {
 // measureGPUAttestationEvidence will measure GPU attestation claims into the COS
 // eventlog in the AttestationAgent.
 func (r *ContainerRunner) measureGPUAttestationEvidence() error {
-	if r.gpuAttester == nil {
+	if r.deviceROTManager == nil {
 		return nil
 	}
 
+	if err := r.deviceROTManager.ValidateROTs(); err != nil {
+		return err
+	}
+
 	nonce := make([]byte, 32)
-	if _, err := cryt.Read(nonce); err != nil {
-		return fmt.Errorf("failed to generate random nonce: %v", err)
+	cryt.Read(nonce)
+
+	for _, rot := range r.deviceROTManager.Lookup(device.NvidiaGPU) {
+		evidence, err := rot.Attest(nonce)
+		if err != nil {
+			return fmt.Errorf("failed to collect evidence for device %v: %w", rot.Vendor(), err)
+		}
+
+		pbEvidence, ok := evidence.(proto.Message)
+		if !ok {
+			return fmt.Errorf("unexpected evidence type %T from device %v", evidence, rot.Vendor())
+		}
+
+		evidenceBytes, err := proto.Marshal(pbEvidence)
+		if err != nil {
+			return fmt.Errorf("failed to marshal evidence from device %v: %w", rot.Vendor(), err)
+		}
+
+		var eventType cel.CosType
+		switch rot.Vendor() {
+		case device.NvidiaGPU:
+			if _, ok := evidence.(*attestationpb.NvidiaAttestationReport); !ok {
+				return fmt.Errorf("unexpected evidence type %T for Nvidia GPU", evidence)
+			}
+			eventType = cel.GPUDeviceAttestationBindingType
+		default:
+			return fmt.Errorf("unsupported vendor %v for event log measurement", rot.Vendor())
+		}
+
+		event := cel.CosTlv{
+			EventType:    eventType,
+			EventContent: evidenceBytes,
+		}
+		if err := r.attestAgent.MeasureEvent(event); err != nil {
+			return fmt.Errorf("failed to measure attestation event for device %v: %w", rot.Vendor(), err)
+		}
+
+		if enabler, ok := rot.(device.ReadyStateEnabler); ok {
+			if err := enabler.EnableReadyState(); err != nil {
+				return fmt.Errorf("failed to enable ready state for device %v: %w", rot.Vendor(), err)
+			}
+		}
 	}
 
-	evidence, err := r.gpuAttester.Attest(nonce)
-	if err != nil {
-		return fmt.Errorf("failed to collect GPU evidence: %w", err)
-	}
-
-	gpuEvidence, ok := evidence.(*attestationpb.NvidiaAttestationReport)
-	if !ok {
-		return fmt.Errorf("unexpected evidence type: %T", evidence)
-	}
-
-	evidenceBytes, err := proto.Marshal(gpuEvidence)
-	if err != nil {
-		return fmt.Errorf("failed to marshal GPU evidence: %w", err)
-	}
-
-	event := cel.CosTlv{
-		EventType:    cel.GPUDeviceAttestationBindingType,
-		EventContent: evidenceBytes,
-	}
-	if err := r.attestAgent.MeasureEvent(event); err != nil {
-		return fmt.Errorf("failed to measure GPU attestation: %w", err)
-	}
-
-	if err := r.gpuAttester.EnableReadyState(); err != nil {
-		return fmt.Errorf("failed to set GPU ready state: %w", err)
-	}
-	r.logger.Info("Successfully measured GPU device attestation binding event and set GPU state to ready")
+	r.logger.Info("Successfully measured device attestation binding events and enabled ready states")
 	return nil
 }
 
@@ -511,7 +416,7 @@ func (r *ContainerRunner) measureGPUAttestationEvidence() error {
 // eventlog in the AttestationAgent.
 func (r *ContainerRunner) measureMemoryMonitor() error {
 	var enabled uint8
-	if r.launchSpec.MonitoringEnabled == spec.MemoryOnly {
+	if r.launchSpec.MonitoringEnabled == spec.MemoryOnly || r.launchSpec.MonitoringEnabled == spec.All {
 		enabled = 1
 	}
 	if err := r.attestAgent.MeasureEvent(cel.CosTlv{EventType: cel.MemoryMonitorType, EventContent: []byte{enabled}}); err != nil {
@@ -666,11 +571,6 @@ func defaultRetryPolicy() *backoff.ExponentialBackOff {
 	return expBack
 }
 
-func pullImageBackoffPolicy() backoff.BackOff {
-	b := backoff.NewConstantBackOff(time.Millisecond * 500)
-	return backoff.WithMaxRetries(b, 3)
-}
-
 // Run the container
 // Container output will always be redirected to logger writer for now
 func (r *ContainerRunner) Run(ctx context.Context) error {
@@ -692,55 +592,6 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		}
 	}
 
-	// create and start the TEE server
-	r.logger.Info("EnableOnDemandAttestation is enabled: initializing TEE server.")
-
-	attestClients := teeserver.AttestClients{}
-
-	if r.launchSpec.FakeVerifierEnabled {
-		fakeClient := fake.NewClient(nil)
-		attestClients.GCA = fakeClient
-		attestClients.ITA = fakeClient
-	} else if r.launchSpec.ITAConfig.ITARegion != "" {
-		itaClient, err := ita.NewClient(r.launchSpec.ITAConfig)
-		if err != nil {
-			return fmt.Errorf("failed to create ITA client: %v", err)
-		}
-
-		attestClients.ITA = itaClient
-	} else {
-		gcaClient, err := util.NewRESTClient(ctx, r.launchSpec.GcaAddress, r.launchSpec.ProjectID, r.launchSpec.Region)
-		if err != nil {
-			if !r.launchSpec.DisableGcaRefresh {
-				return fmt.Errorf("failed to create REST verifier client: %v", err)
-			}
-			// If GCA refresh is disabled, swallow the error and continue.
-			r.logger.Info("Failed to create the GCA client, but GCA refresh is disabled so the launch will continue: %v", err)
-			gcaClient = nil
-		}
-		attestClients.GCA = gcaClient
-	}
-
-	var workloadService *workloadservice.Server
-	// create and start the key manager server
-	if r.launchSpec.Experiments.EnableKeyManager {
-		r.logger.Info("EnableKeyManager experiment is enabled: initializing KeyManager server.")
-		keyManagerServer, err := workloadservice.New(ctx, path.Join(launcherfile.HostTmpPath, keyManagerSocket), keymanager.KeyProtectionMechanism_KEY_PROTECTION_VM_EMULATED)
-		if err != nil {
-			return fmt.Errorf("failed to create the KeyManager server: %v", err)
-		}
-		workloadService = keyManagerServer
-		go keyManagerServer.Serve()
-		defer keyManagerServer.Shutdown(ctx)
-	}
-
-	teeServer, err := teeserver.New(ctx, path.Join(launcherfile.HostTmpPath, teeServerSocket), r.attestAgent, r.logger, r.launchSpec, attestClients, workloadService)
-	if err != nil {
-		return fmt.Errorf("failed to create the TEE server: %v", err)
-	}
-	go teeServer.Serve()
-	defer teeServer.Shutdown(ctx)
-
 	// Avoids breaking existing memory monitoring tests that depend on this log.
 	if r.launchSpec.MonitoringEnabled == spec.None {
 		r.logger.Info("MemoryMonitoring is disabled by the VM operator")
@@ -752,12 +603,11 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		streamOpt = cio.WithStreams(nil, nil, nil)
 		r.logger.Info("Container stdout/stderr will not be redirected.")
 	case spec.Everywhere:
-		w := io.MultiWriter(os.Stdout, r.serialConsole)
-		streamOpt = cio.WithStreams(nil, w, w)
+		streamOpt = cio.WithStreams(nil, io.MultiWriter(logging.NewJSONInfoWriter(), r.serialConsole), io.MultiWriter(logging.NewJSONErrorWriter(), r.serialConsole))
 		r.logger.Info("Container stdout/stderr will be redirected to serial and Cloud Logging. This may result in performance issues due to slow serial console writes.")
 	case spec.CloudLogging:
-		streamOpt = cio.WithStreams(nil, os.Stdout, os.Stdout)
-		r.logger.Info("Container stdout/stderr will be redirected to Cloud Logging.")
+		streamOpt = cio.WithStreams(nil, logging.NewJSONInfoWriter(), logging.NewJSONErrorWriter())
+		r.logger.Info("Container stdout/stderr will be redirected to journald (JSON) for FluentBit scraping.")
 	case spec.Serial:
 		streamOpt = cio.WithStreams(nil, r.serialConsole, r.serialConsole)
 		r.logger.Info("Container stdout/stderr will be redirected to serial logging. This may result in performance issues due to slow serial console writes.")
@@ -770,6 +620,13 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 		return &RetryableError{err}
 	}
 	defer task.Delete(ctx)
+	defer func() {
+		if task.IO() != nil {
+			task.IO().Wait()
+		}
+	}()
+
+	r.enableGracefulShutdown(ctx, task)
 
 	setupDuration := time.Since(start)
 	r.logger.Info("Workload setup completed",
@@ -780,6 +637,7 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	if err != nil {
 		r.logger.Error(err.Error())
 	}
+
 	// Start timer for workload execution.
 	start = time.Now()
 	r.logger.Info("workload task started")
@@ -807,43 +665,44 @@ func (r *ContainerRunner) Run(ctx context.Context) error {
 	return nil
 }
 
-func pullImageWithRetries(f func() (containerd.Image, error), retry func() backoff.BackOff) (containerd.Image, error) {
-	var err error
-	var image containerd.Image
-	err = backoff.Retry(func() error {
-		image, err = f()
-		return err
-	}, retry())
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull image with retries, the last error is: %w", err)
-	}
-	return image, nil
-}
-
-func initImage(ctx context.Context, cdClient *containerd.Client, launchSpec spec.LaunchSpec, token oauth2.Token) (containerd.Image, error) {
-	if token.Valid() {
-		remoteOpt := containerd.WithResolver(registryauth.Resolver(token.AccessToken))
-		image, err := pullImageWithRetries(
-			func() (containerd.Image, error) {
-				return cdClient.Pull(ctx, launchSpec.ImageRef, containerd.WithPullUnpack, remoteOpt)
-			},
-			pullImageBackoffPolicy,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("cannot pull the image: %w", err)
+func (r *ContainerRunner) enableGracefulShutdown(ctx context.Context, task containerd.Task) {
+	// In a hardened image, the launcher monitors the power button to signal a shutdown.
+	if r.launchSpec.Hardened {
+		// May be nil if listener initialization failed, which is not critical and is logged at that time.
+		if r.powerButton != nil {
+			go func() {
+				err := r.powerButton.waitForShutdown()
+				// Upon an error, we do not send SIGTERM to the task.
+				if err != nil {
+					if !errors.Is(err, os.ErrClosed) {
+						r.logger.Error(err.Error())
+					}
+					return
+				}
+				if err = task.Kill(ctx, syscall.SIGTERM); err != nil {
+					r.logger.Error(err.Error())
+				}
+			}()
 		}
-		return image, nil
+		return
 	}
-	image, err := pullImageWithRetries(
-		func() (containerd.Image, error) {
-			return cdClient.Pull(ctx, launchSpec.ImageRef, containerd.WithPullUnpack)
-		},
-		pullImageBackoffPolicy,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("cannot pull the image (no token, only works for a public image): %w", err)
-	}
-	return image, nil
+
+	// In a debug image, the launcher relays SIGTERM from logind to the container.
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGTERM)
+		defer signal.Stop(sig)
+
+		select {
+		case <-ctx.Done():
+			return
+		case s := <-sig:
+			r.logger.Info("received a signal", "sig", s)
+			if err := task.Kill(ctx, syscall.SIGTERM); err != nil {
+				r.logger.Error(err.Error())
+			}
+		}
+	}()
 }
 
 // openPorts writes firewall rules to accept all traffic into that port and protocol using iptables.
@@ -904,38 +763,17 @@ func getImageConfig(ctx context.Context, image containerd.Image) (v1.ImageConfig
 
 // Close the container runner
 func (r *ContainerRunner) Close(ctx context.Context) {
+	if r.powerButton != nil {
+		if err := r.powerButton.Close(); err != nil {
+			r.logger.Error("failed to close power button listener", "err", err.Error())
+		}
+	}
+
 	// close the agent
 	r.attestAgent.Close()
 
 	// Exit gracefully:
 	// Delete container and close connection to attestation service.
-	r.container.Delete(ctx, containerd.WithSnapshotCleanup)
-}
-
-// withRlimits sets the rlimit (like the max file descriptor) for the container process
-func withRlimits(rlimits []specs.POSIXRlimit) oci.SpecOpts {
-	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
-		s.Process.Rlimits = rlimits
-		return nil
-	}
-}
-
-// Set the container process's OOM score.
-func withOOMScoreAdj(oomScore int) oci.SpecOpts {
-	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
-		s.Process.OOMScoreAdj = &oomScore
-		return nil
-	}
-}
-
-// appendCgroupRw mount maps a cgroup as read-write.
-func appendCgroupRw(mounts []specs.Mount) []specs.Mount {
-	m := specs.Mount{
-		Destination: "/sys/fs/cgroup",
-		Type:        "cgroup",
-		Source:      "cgroup",
-		Options:     []string{"rw", "nosuid", "noexec", "nodev"},
-	}
-
-	return append(mounts, m)
+	// TODO: consider handling or logging cleanup error.
+	_ = r.container.Delete(ctx, containerd.WithSnapshotCleanup)
 }

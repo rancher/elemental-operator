@@ -257,13 +257,13 @@ func QueryCCMode(ccModeCmd, devToolsCmd NvidiaSmiCmdOutput) (attest.GPUDeviceCCM
 		return attest.GPUDeviceCCMode_UNSET, err
 	}
 
-	if strings.Contains(string(ccModeOutput), "CC status: ON") {
+	if strings.Contains(strings.ToLower(string(ccModeOutput)), "cc status: on") {
 		ccMode = attest.GPUDeviceCCMode_ON
-	} else if strings.Contains(string(ccModeOutput), "CC status: OFF") {
+	} else if strings.Contains(strings.ToLower(string(ccModeOutput)), "cc status: off") {
 		ccMode = attest.GPUDeviceCCMode_OFF
 	}
 
-	if ccMode == attest.GPUDeviceCCMode_ON && strings.Contains(string(devToolsOutput), "DevTools Mode: ON") {
+	if ccMode == attest.GPUDeviceCCMode_ON && strings.Contains(strings.ToLower(string(devToolsOutput)), "devtools mode: on") {
 		ccMode = attest.GPUDeviceCCMode_DEVTOOLS
 	}
 
@@ -283,6 +283,19 @@ func launchNvidiaPersistencedProcess(logger logging.Logger) error {
 // NvidiaSmiOutputFunc returns a function which executes the nvidia-smi command with the given arguments
 // and returns the raw byte output and any error.
 func NvidiaSmiOutputFunc(args ...string) NvidiaSmiCmdOutput {
-	cmd := fmt.Sprintf("%s/bin/nvidia-smi", InstallationHostDir)
-	return func() ([]byte, error) { return exec.Command(cmd, args...).Output() }
+	var cmdPath string
+
+	builtInPath := fmt.Sprintf("%s/bin/nvidia-smi", BuiltInInstallation610_57_04HostDir)
+	if _, err := os.Stat(builtInPath); err == nil {
+		cmdPath = builtInPath
+	} else {
+		cmdPath = fmt.Sprintf("%s/bin/nvidia-smi", InstallationHostDir)
+	}
+
+	return func() ([]byte, error) {
+		if _, err := os.Stat(cmdPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("nvidia-smi not found in any expected directory")
+		}
+		return exec.Command(cmdPath, args...).Output()
+	}
 }

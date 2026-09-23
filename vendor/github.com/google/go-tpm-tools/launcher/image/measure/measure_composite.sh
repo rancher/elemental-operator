@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 # Verify dependencies proactively
 check_dependencies() {
     local missing_cmds=0
-    local deps=(cgpt debugfs qemu-img dd)
+    local deps=(cgpt debugfs qemu-img dd tar find)
     if [[ -n "${NESTED_IMAGES:-}" ]]; then
         for cmd in "${deps[@]}"; do
             if ! command -v "$cmd" &>/dev/null; then
@@ -36,8 +36,102 @@ check_dependencies() {
 run_dual_measurements() {
     local target_image="$1"
     local output_base="$2"
-    /usr/local/bin/measure.sh "$target_image" "${output_base}_sha256.json" "$CHANNEL" "$ARCH" sha256
-    /usr/local/bin/measure.sh "$target_image" "${output_base}_sha384.json" "$CHANNEL" "$ARCH" sha384
+    local measure_cmd="/usr/local/bin/measure.sh"
+    if [[ ! -x "$measure_cmd" && -f "$(dirname "$0")/measure.sh" ]]; then
+        measure_cmd="$(dirname "$0")/measure.sh"
+    fi
+    "$measure_cmd" "$target_image" "${output_base}_sha256.json" "$CHANNEL" "$ARCH" sha256
+    "$measure_cmd" "$target_image" "${output_base}_sha384.json" "$CHANNEL" "$ARCH" sha384
+}
+
+# Helper to extract OVMF firmware from ext4 partition layers and compute offline MRTD
+extract_and_measure_ovmf() {
+    local part_ext4="$1"
+    local output_base="$2"
+
+    local ovmf_tmp="$TMP_DIR/ovmf"
+    mkdir -p "$ovmf_tmp"
+
+    local out_fd_file="$ovmf_tmp/OVMF.fd"
+
+    # 1. Attempt exact path extraction based on host-acos directory layout (/tdx-qemu-app/usr/share/ovmf/OVMF.inteltdx.fd)
+    debugfs -R "dump /tdx-qemu-app/usr/share/ovmf/OVMF.inteltdx.fd $out_fd_file" "$part_ext4" 2>/dev/null || true
+
+    # 2. If directory path not found, attempt extraction from legacy tarball layout (/tdx-qemu-app.tar)
+    if [[ ! -f "$out_fd_file" || ! -s "$out_fd_file" ]]; then
+        debugfs -R "dump /tdx-qemu-app.tar $ovmf_tmp/tdx-qemu-app.tar" "$part_ext4" 2>/dev/null || true
+        if [[ -f "$ovmf_tmp/tdx-qemu-app.tar" && -s "$ovmf_tmp/tdx-qemu-app.tar" ]]; then
+            tar -xf "$ovmf_tmp/tdx-qemu-app.tar" -O usr/share/ovmf/OVMF.inteltdx.fd > "$out_fd_file" 2>/dev/null || \
+            tar -xf "$ovmf_tmp/tdx-qemu-app.tar" -O /usr/share/ovmf/OVMF.inteltdx.fd > "$out_fd_file" 2>/dev/null || true
+        fi
+    fi
+
+    if [[ -f "$out_fd_file" && -s "$out_fd_file" ]]; then
+        echo "Calculating OVMF MRTD (using $out_fd_file)..."
+        local extract_cmd="/usr/local/bin/extract_image_ovmf"
+        if [[ ! -x "$extract_cmd" && -x "$(dirname "$0")/extract_image_ovmf/extract_image_ovmf" ]]; then
+            extract_cmd="$(dirname "$0")/extract_image_ovmf/extract_image_ovmf"
+        fi
+        local mrtd_hex
+        mrtd_hex=$("$extract_cmd" "$out_fd_file" | sed -n 's/^MRTD: //p')
+
+        if [[ -n "$mrtd_hex" ]]; then
+            jq -n --arg mrtd "$mrtd_hex" '{mrtd: $mrtd}' > "${output_base}_mrtd.json"
+        fi
+    else
+        echo "Error: Expected active OVMF firmware (/tdx-qemu-app/usr/share/ovmf/OVMF.inteltdx.fd) not found in partition." >&2
+        rm -f "$out_fd_file"
+        exit 1
+    fi
+}
+
+# Helper to extract an Intel SGX signed enclave binary from ext4 partition layers
+extract_enclave() {
+    local part_ext4="$1"
+    local output_base="$2"
+    local enclave_name="$3"
+
+    local enclave_tmp="$TMP_DIR/${enclave_name}"
+    mkdir -p "$enclave_tmp"
+
+    local out_so_file="$enclave_tmp/${enclave_name}.signed.so"
+    local enclave_dir="/pcs-client-tool-go/usr/lib/x86_64-linux-gnu"
+
+    local real_file
+    real_file=$(debugfs -R "ls -l $enclave_dir" "$part_ext4" 2>/dev/null | awk -v pat="${enclave_name}\\.signed\\.so" '$2 ~ /^100/ && $NF ~ pat {print $NF; exit}')
+    if [[ -n "$real_file" ]]; then
+        debugfs -R "dump $enclave_dir/$real_file $out_so_file" "$part_ext4" 2>/dev/null || true
+    fi
+
+    if [[ -f "$out_so_file" && -s "$out_so_file" ]]; then
+        echo "Extracting Intel SGX SIGSTRUCT from ${enclave_name} ($out_so_file)..."
+        local extract_cmd="/usr/local/bin/extract_sigstruct"
+        if [[ ! -x "$extract_cmd" && -x "$(dirname "$0")/extract_sigstruct/extract_sigstruct" ]]; then
+            extract_cmd="$(dirname "$0")/extract_sigstruct/extract_sigstruct"
+        fi
+
+        local out_dir
+        out_dir="$(dirname "$output_base")"
+        local sig_out="${out_dir}/${enclave_name}.sigstruct"
+        local json_out="${output_base}_${enclave_name}_sigstruct.json"
+
+        "$extract_cmd" "$out_so_file" "$sig_out" "$json_out"
+        if [[ "${out_dir}/${enclave_name}.sigstruct" != "${output_base}_${enclave_name}.sigstruct" ]]; then
+            cp "$sig_out" "${output_base}_${enclave_name}.sigstruct"
+        fi
+    else
+        echo "Error: Expected signed enclave ($enclave_dir/${enclave_name}.signed.so*) not found in partition." >&2
+        rm -f "$out_so_file"
+        exit 1
+    fi
+}
+
+extract_sgx_enclaves() {
+    local part_ext4="$1"
+    local output_base="$2"
+
+    extract_enclave "$part_ext4" "$output_base" "libsgx_tdqe"
+    extract_enclave "$part_ext4" "$output_base" "libsgx_pce"
 }
 
 if ! check_dependencies; then
@@ -82,6 +176,16 @@ if [[ -n "${NESTED_IMAGES:-}" ]]; then
         # Extract just the partition
         dd if="$OS_IMAGE" of="$PART_EXT4" skip="$SKIP_BYTES" count="$COUNT_BYTES" iflag=skip_bytes,count_bytes bs=4M status=none 2>/dev/null || \
         dd if="$OS_IMAGE" of="$PART_EXT4" skip="$SKIP_SECTORS" count="$SIZE_SECTORS" bs=512 status=none
+
+        # Extract OVMF and measure MRTD once from partition layer if not already measured
+        if [[ ! -f "${BASE_OUT}_mrtd.json" ]]; then
+            extract_and_measure_ovmf "$PART_EXT4" "${BASE_OUT}"
+        fi
+
+        # Extract SGX signed enclaves (TDQE and PCE) once from partition layer if not already extracted
+        if [[ ! -f "${BASE_OUT}_libsgx_tdqe.sigstruct" && ! -f "$(dirname "${BASE_OUT}")/libsgx_tdqe.sigstruct" ]]; then
+            extract_sgx_enclaves "$PART_EXT4" "${BASE_OUT}"
+        fi
 
         # Extract the nested image from the ext4 partition, capture debugfs errors
         debugfs_err="$TMP_DIR/debugfs_${SUFFIX}.err"
