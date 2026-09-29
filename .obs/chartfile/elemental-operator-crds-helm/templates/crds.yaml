@@ -4042,6 +4042,23 @@ spec:
                 description: CloudConfig contains cloud-config data to be put in the
                   generated iso.
                 x-kubernetes-preserve-unknown-fields: true
+              proxy:
+                description: |-
+                  Proxy defines the proxy settings for the seed image build pod.
+                  When set, its values override the proxy configuration the operator
+                  propagates from its own environment.
+                properties:
+                  httpProxy:
+                    description: HTTPProxy is the URL of the proxy for HTTP requests.
+                    type: string
+                  httpsProxy:
+                    description: HTTPSProxy is the URL of the proxy for HTTPS requests.
+                    type: string
+                  noProxy:
+                    description: NoProxy is a comma-separated list of hosts that should
+                      bypass the proxy.
+                    type: string
+                type: object
               registrationRef:
                 description: MachineRegistrationRef a reference to the related MachineRegistration.
                 properties:
