@@ -10,14 +10,11 @@ linters:
     - depguard
     - errcheck
     - errorlint
-    - gocritic
     - godot
     - gosec
     - govet
     - ineffassign
     - misspell
-    - modernize
-    - noctx
     - perfsprint
     - revive
     - staticcheck
@@ -89,28 +86,6 @@ linters:
           deny:
             - pkg: go.opentelemetry.io/otel/exporters/otlp/otlptrace/internal
               desc: Do not use cross-module internal packages.
-        semconv:
-          list-mode: lax
-          files:
-            - "!**/semconv/**"
-            - "!**/exporters/zipkin/**"
-          deny:
-            - pkg: go.opentelemetry.io/otel/semconv
-              desc: "Use go.opentelemetry.io/otel/semconv/v1.40.0 instead. If a newer semconv version has been released, update the depguard rule."
-          allow:
-            - go.opentelemetry.io/otel/semconv/v1.40.0
-    gocritic:
-      disabled-checks:
-        - appendAssign
-        - commentedOutCode
-        - dupArg
-        - hugeParam
-        - importShadow
-        - preferDecodeRune
-        - rangeValCopy
-        - unnamedResult
-        - whyNoLint
-      enable-all: true
     godot:
       exclude:
         # Exclude links.
@@ -123,9 +98,6 @@ linters:
       locale: US
       ignore-rules:
         - cancelled
-    modernize:
-      disable:
-        - omitzero
     perfsprint:
       int-conversion: true
       err-error: true
@@ -195,17 +167,13 @@ linters:
             - fmt.Print
             - fmt.Printf
             - fmt.Println
-        - name: unused-parameter
-        - name: unused-receiver
         - name: unnecessary-stmt
-        - name: use-any
         - name: useless-break
         - name: var-declaration
         - name: var-naming
           arguments:
             - ["ID"] # AllowList
             - ["Otel", "Aws", "Gcp"] # DenyList
-            - - skip-package-name-collision-with-go-std: true
         - name: waitgroup-by-value
     testifylint:
       enable-all: true
@@ -213,9 +181,6 @@ linters:
         - float-compare
         - go-require
         - require-error
-    usetesting:
-      context-background: true
-      context-todo: true
   exclusions:
     generated: lax
     presets:
@@ -259,6 +224,10 @@ linters:
       - linters:
           - gosec
         text: 'G402: TLS MinVersion too low.'
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -268,12 +237,14 @@ formatters:
     - goimports
     - golines
   settings:
-    gofumpt:
-      extra-rules: true
     goimports:
       local-prefixes:
-        - go.opentelemetry.io/otel
+        - go.opentelemetry.io
     golines:
       max-len: 120
   exclusions:
     generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
