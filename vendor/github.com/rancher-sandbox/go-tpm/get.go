@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -93,14 +92,25 @@ func Get(url string, opts ...Option) ([]byte, error) {
 		}
 	}
 
-	attestationData, aikBytes, err := getAttestationData(c)
+	tpm, err := getTPM(c)
+	if err != nil {
+		return nil, fmt.Errorf("opening tpm: %w", err)
+	}
+	defer tpm.Close()
+
+	attestationData, aikBytes, err := tpmGetAttestationData(tpm)
 	if err != nil {
 		return nil, err
 	}
 
-	hash, err := GetPubHash(opts...)
+	ek, err := tpmGetEK(tpm)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting EK: %w", err)
+	}
+
+	hash, err := DecodePubHash(ek)
+	if err != nil {
+		return nil, fmt.Errorf("hashing EK: %w", err)
 	}
 
 	token, err := getToken(attestationData)
@@ -115,7 +125,7 @@ func Get(url string, opts ...Option) ([]byte, error) {
 	if err != nil {
 		if resp != nil {
 			if resp.StatusCode == http.StatusUnauthorized {
-				data, err := ioutil.ReadAll(resp.Body)
+				data, err := io.ReadAll(resp.Body)
 				if err == nil {
 					return nil, errors.New(string(data))
 				}
@@ -137,7 +147,7 @@ func Get(url string, opts ...Option) ([]byte, error) {
 		return nil, fmt.Errorf("unmarshaling Challenge: %w", err)
 	}
 
-	challengeResp, err := getChallengeResponse(c, challenge.EC, aikBytes)
+	challengeResp, err := tpmGetChallengeResponse(tpm, challenge.EC, aikBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +171,7 @@ func Get(url string, opts ...Option) ([]byte, error) {
 		return nil, fmt.Errorf("reading payload from tpm get: %w", err)
 	}
 
-	return ioutil.ReadAll(msg)
+	return io.ReadAll(msg)
 }
 
 func getChallengeResponse(c *config, ec *attest.EncryptedCredential, aikBytes []byte) (*ChallengeResponse, error) {
@@ -170,7 +180,10 @@ func getChallengeResponse(c *config, ec *attest.EncryptedCredential, aikBytes []
 		return nil, fmt.Errorf("opening tpm: %w", err)
 	}
 	defer tpm.Close()
+	return tpmGetChallengeResponse(tpm, ec, aikBytes)
+}
 
+func tpmGetChallengeResponse(tpm *attest.TPM, ec *attest.EncryptedCredential, aikBytes []byte) (*ChallengeResponse, error) {
 	aik, err := tpm.LoadAK(aikBytes)
 	if err != nil {
 		return nil, err
