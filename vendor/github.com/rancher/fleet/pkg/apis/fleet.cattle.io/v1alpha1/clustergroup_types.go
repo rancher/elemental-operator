@@ -1,13 +1,16 @@
 package v1alpha1
 
 import (
-	"github.com/rancher/wrangler/v2/pkg/genericcondition"
+	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func init() {
-	SchemeBuilder.Register(&ClusterGroup{}, &ClusterGroupList{})
+	InternalSchemeBuilder.Register(&ClusterGroup{}, &ClusterGroupList{})
 }
+
+// ClusterGroupConditionProcessed indicates that the status fields have been processed.
+const ClusterGroupConditionProcessed = "Processed"
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -64,7 +67,7 @@ type ClusterGroupStatus struct {
 	Display ClusterGroupDisplay `json:"display,omitempty"`
 	// ResourceCounts contains the number of resources in each state over
 	// all bundles in the cluster group.
-	ResourceCounts GitRepoResourceCounts `json:"resourceCounts,omitempty"`
+	ResourceCounts ResourceCounts `json:"resourceCounts,omitempty"`
 }
 
 type ClusterGroupDisplay struct {

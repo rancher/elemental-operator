@@ -79,6 +79,21 @@ The clusterconnected controller in Rancher uses the established tunnel to check
 that clusters are still responsive and sets alert conditions on the cluster
 object if they are not.
 
+#### HA operation (peering)
+
+remotedialer supports a mode where multiple servers can be configured as peers.
+In that mode all servers maintain a mapping of all remotedialer client connections
+to all other servers, and can route incoming requests appropriately.
+
+Therefore, http requests referring any of the remotedialer clients can be resolved
+by any of the peer servers. This is useful for high availability, and Rancher
+leverages that functionality to distribute downstream clusters (running agents
+acting as remotedialer clients) among replica pods (acting as remotedialer
+server peers). In case one Rancher replica pod breaks down, Rancher will
+reassign its downstream clusters to others.
+
+Peers authenticate to one another via a shared token.
+
 Running Locally
 ---------------
 
@@ -91,8 +106,8 @@ standalone mode FOR TESTING ONLY. These are found in the `server/` and
 Compile the server and client:
 
 ```
-go build -o server/server server/main.go
-go build -o client/client client/main.go
+make server
+make client
 ```
 
 ### Run
@@ -112,7 +127,7 @@ target. The remotedialer server also needs to be reachable by the client.
 For testing purposes, a basic HTTP file server is provided. Build the server with:
 
 ```
-go build -o dummy/dummy dummy/main.go
+make dummy
 ```
 
 Create a directory with files to serve, then run the web server from that directory:
@@ -150,3 +165,36 @@ curl http://192.168.0.42:8123/client/foo/http/127.0.0.1:8125/bigfile
 where `foo` is the hardcoded client ID for this test server.
 
 This test server only supports GET requests.
+
+### HA Usage
+
+To test remotedialer in HA mode, first start the dummy server from an appropriate directory, eg.:
+
+```shell
+cd /tmp
+mkdir www
+cd www
+echo 'hello' > bigfile
+/path/to/dummy -listen :8125
+```
+
+Then start two peer remotedialer servers with the `-peers id:token:url` flag:
+
+```shell
+./server/server -debug -id first -token aaa -listen :8123 -peers second:aaa:ws://localhost:8124/connect &
+./server/server -debug -id second -token aaa -listen :8124 -peers first:aaa:ws://localhost:8123/connect
+```
+
+Then connect a client to the first server, eg:
+```shell
+./client/client -id foo -connect ws://localhost:8123/connect
+```
+
+Finally, use the second server to make a request to the client via the first server:
+```
+curl http://localhost:8124/client/foo/http/127.0.0.1:8125/
+```
+
+# Versioning
+
+See [VERSION.md](VERSION.md).
