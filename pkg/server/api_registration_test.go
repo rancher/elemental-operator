@@ -748,9 +748,10 @@ func TestRegistrationDynamicLabels(t *testing.T) {
 
 func TestAgentTLSMode(t *testing.T) {
 	type test struct {
-		name              string
-		agentTLSModeValue *string
-		wantStrictTLSMode bool
+		name                string
+		agentTLSModeValue   *string
+		agentTLSModeDefault string
+		wantStrictTLSMode   bool
 	}
 
 	tests := []test{
@@ -769,6 +770,25 @@ func TestAgentTLSMode(t *testing.T) {
 			agentTLSModeValue: ptr.To("system-store"),
 			wantStrictTLSMode: false,
 		},
+		{
+			// Rancher installs upgraded from < v2.9 default to system-store
+			name:                "empty agent-tls-mode with system-store default",
+			agentTLSModeValue:   ptr.To(""),
+			agentTLSModeDefault: "system-store",
+			wantStrictTLSMode:   false,
+		},
+		{
+			name:                "empty agent-tls-mode with strict default",
+			agentTLSModeValue:   ptr.To(""),
+			agentTLSModeDefault: "strict",
+			wantStrictTLSMode:   true,
+		},
+		{
+			name:                "system-store agent-tls-mode overrides strict default",
+			agentTLSModeValue:   ptr.To("system-store"),
+			agentTLSModeDefault: "strict",
+			wantStrictTLSMode:   false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -781,7 +801,8 @@ func TestAgentTLSMode(t *testing.T) {
 						Name: "agent-tls-mode",
 					},
 
-					Value: *tt.agentTLSModeValue,
+					Value:   *tt.agentTLSModeValue,
+					Default: tt.agentTLSModeDefault,
 				})
 			}
 
