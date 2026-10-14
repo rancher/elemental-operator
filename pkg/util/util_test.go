@@ -129,27 +129,64 @@ var _ = Describe("IsHTTP", func() {
 	})
 })
 
-var _ = Describe("GetRancherCacert", func() {
+var _ = Describe("GetSettingsValue", func() {
 	var setting *managementv3.Setting
 	BeforeEach(func() {
 		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "agent-tls-mode",
+				Namespace: "default",
+			},
+			Default: "system-store",
+		}
+	})
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
+	})
+	It("should return the value if set", func() {
+		setting.Value = "strict"
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+		Expect(GetSettingsValue(ctx, cl, "agent-tls-mode")).To(Equal("strict"))
+	})
+	It("should return the default if the value is empty", func() {
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+		Expect(GetSettingsValue(ctx, cl, "agent-tls-mode")).To(Equal("system-store"))
+	})
+	It("should return an error if the setting is not found", func() {
+		_, err := GetSettingsValue(ctx, cl, "agent-tls-mode")
+		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("GetRancherCacert", func() {
+	var internalSetting *managementv3.Setting
+	BeforeEach(func() {
+		internalSetting = &managementv3.Setting{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "internal-cacerts",
 				Namespace: "default",
 			},
 			Value: "internalcertificate",
 		}
-		Expect(cl.Create(ctx, setting)).To(Succeed())
+		Expect(cl.Create(ctx, internalSetting)).To(Succeed())
 	})
 	AfterEach(func() {
-		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, internalSetting)).To(Succeed())
 	})
-	It("should return the internal certificate", func() {
-		Expect(GetRancherCACert(ctx, cl)).To(Equal("internalcertificate"))
-	})
-	It("should return an empty string if internal certificate is not found", func() {
-		Expect(cl.Delete(ctx, setting)).To(Succeed())
+	It("should return an empty string if cacerts is not found", func() {
 		Expect(GetRancherCACert(ctx, cl)).To(BeEmpty())
+	})
+	It("should return an empty string if cacerts is empty, ignoring internal-cacerts", func() {
+		cacertsSetting := &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cacerts",
+				Namespace: "default",
+			},
+			Value: "",
+		}
+		Expect(cl.Create(ctx, cacertsSetting)).To(Succeed())
+		Expect(GetRancherCACert(ctx, cl)).To(BeEmpty())
+		Expect(test.CleanupAndWait(ctx, cl, cacertsSetting)).To(Succeed())
 	})
 	It("should returns the default cacerts if found", func() {
 		cacertsSetting := &managementv3.Setting{
@@ -161,6 +198,6 @@ var _ = Describe("GetRancherCacert", func() {
 		}
 		Expect(cl.Create(ctx, cacertsSetting)).To(Succeed())
 		Expect(GetRancherCACert(ctx, cl)).To(Equal("mycertificate"))
-		Expect(cl.Delete(ctx, cacertsSetting)).To(Succeed())
+		Expect(test.CleanupAndWait(ctx, cl, cacertsSetting)).To(Succeed())
 	})
 })

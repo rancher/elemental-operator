@@ -90,29 +90,30 @@ func JSONObjectToYamlBytes(object map[string]runtime.RawExtension) ([]byte, erro
 	return yamlData, nil
 }
 
-// GetSettingsValue find the given name in Rancher settings and returns its value if found
+// GetSettingsValue find the given name in Rancher settings and returns its value if found.
+// As Rancher does, the setting default is returned when no value is set. This matters for
+// settings like agent-tls-mode, whose default differs between fresh and upgraded installs.
 func GetSettingsValue(ctx context.Context, cli client.Client, name string) (string, error) {
 	setting := &managementv3.Setting{}
 	if err := cli.Get(ctx, types.NamespacedName{Name: name}, setting); err != nil {
 		log.Errorf("Error getting %s setting: %s", name, err.Error())
 		return "", err
 	}
+	if setting.Value == "" {
+		return setting.Default, nil
+	}
 	return setting.Value, nil
 }
 
 // GetRancherCACert returns the cacerts included within Rancher settings. If not configured
-// returns an empty string
+// returns an empty string, meaning Rancher is served with a certificate signed by a publicly
+// trusted CA and the OS trust store should be used. The internal-cacerts setting is not a
+// valid fallback: it only applies to Rancher's internal endpoint, not to the server-url.
 func GetRancherCACert(ctx context.Context, cli client.Client) string {
 	cacert, err := GetSettingsValue(ctx, cli, "cacerts")
 	if err != nil {
 		log.Errorf("Error getting cacerts: %s", err.Error())
-	}
-
-	if cacert == "" {
-		if cacert, err = GetSettingsValue(ctx, cli, "internal-cacerts"); err != nil {
-			log.Errorf("Error getting internal-cacerts: %s", err.Error())
-			return ""
-		}
+		return ""
 	}
 	return cacert
 }
