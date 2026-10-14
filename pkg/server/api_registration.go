@@ -208,13 +208,7 @@ func (i *InventoryServer) getRancherCACert() string {
 	cacert, err := i.getValue("cacerts")
 	if err != nil {
 		log.Errorf("Error getting cacerts: %s", err.Error())
-	}
-
-	if cacert == "" {
-		if cacert, err = i.getValue("internal-cacerts"); err != nil {
-			log.Errorf("Error getting internal-cacerts: %s", err.Error())
-			return ""
-		}
+		return ""
 	}
 	return cacert
 }
