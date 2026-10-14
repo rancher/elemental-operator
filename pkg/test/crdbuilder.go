@@ -84,6 +84,10 @@ func generateCRD(gvk schema.GroupVersionKind, scope apiextensionsv1.ResourceScop
 									Type:                   "string",
 									XPreserveUnknownFields: ptr.To(true),
 								},
+								"default": {
+									Type:                   "string",
+									XPreserveUnknownFields: ptr.To(true),
+								},
 								"status": {
 									Type:                   "object",
 									XPreserveUnknownFields: ptr.To(true),

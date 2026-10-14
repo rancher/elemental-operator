@@ -129,6 +129,35 @@ var _ = Describe("IsHTTP", func() {
 	})
 })
 
+var _ = Describe("GetSettingsValue", func() {
+	var setting *managementv3.Setting
+	BeforeEach(func() {
+		setting = &managementv3.Setting{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "agent-tls-mode",
+				Namespace: "default",
+			},
+			Default: "system-store",
+		}
+	})
+	AfterEach(func() {
+		Expect(test.CleanupAndWait(ctx, cl, setting)).To(Succeed())
+	})
+	It("should return the value if set", func() {
+		setting.Value = "strict"
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+		Expect(GetSettingsValue(ctx, cl, "agent-tls-mode")).To(Equal("strict"))
+	})
+	It("should return the default if the value is empty", func() {
+		Expect(cl.Create(ctx, setting)).To(Succeed())
+		Expect(GetSettingsValue(ctx, cl, "agent-tls-mode")).To(Equal("system-store"))
+	})
+	It("should return an error if the setting is not found", func() {
+		_, err := GetSettingsValue(ctx, cl, "agent-tls-mode")
+		Expect(err).To(HaveOccurred())
+	})
+})
+
 var _ = Describe("GetRancherCacert", func() {
 	var internalSetting *managementv3.Setting
 	BeforeEach(func() {
