@@ -791,6 +791,86 @@ func TestAgentTLSMode(t *testing.T) {
 
 }
 
+func TestRancherCACert(t *testing.T) {
+	type test struct {
+		name                string
+		cacertsValue        *string
+		internalCACertValue *string
+		wantCACert          string
+	}
+
+	tests := []test{
+		{
+			name:                "cacerts set",
+			cacertsValue:        ptr.To("cacerts"),
+			internalCACertValue: ptr.To("internal-cacerts"),
+			wantCACert:          "cacerts",
+		},
+		{
+			name:                "empty cacerts does not fall back to internal-cacerts",
+			cacertsValue:        ptr.To(""),
+			internalCACertValue: ptr.To("internal-cacerts"),
+			wantCACert:          "",
+		},
+		{
+			name:                "missing cacerts does not fall back to internal-cacerts",
+			cacertsValue:        nil,
+			internalCACertValue: ptr.To("internal-cacerts"),
+			wantCACert:          "",
+		},
+		{
+			name:                "no CA settings",
+			cacertsValue:        nil,
+			internalCACertValue: nil,
+			wantCACert:          "",
+		},
+	}
+
+	for _, tt := range tests {
+		server := NewInventoryServer(&FakeAuthServer{})
+
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.cacertsValue != nil {
+				server.Client.Create(context.Background(), &managementv3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cacerts",
+					},
+
+					Value: *tt.cacertsValue,
+				})
+			}
+			if tt.internalCACertValue != nil {
+				server.Client.Create(context.Background(), &managementv3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "internal-cacerts",
+					},
+
+					Value: *tt.internalCACertValue,
+				})
+			}
+
+			assert.Equal(t, server.getRancherCACert(), tt.wantCACert)
+
+			registration := elementalv1.MachineRegistration{}
+			registration.Status.RegistrationURL = "https://rancher/url"
+			registration.Status.Conditions = []metav1.Condition{
+				{
+					Type:               elementalv1.ReadyCondition,
+					Reason:             elementalv1.SuccessfullyCreatedReason,
+					Status:             metav1.ConditionTrue,
+					LastTransitionTime: metav1.Now(),
+				},
+			}
+			buffer := new(bytes.Buffer)
+			assert.NilError(t, server.unauthenticatedResponse(&registration, buffer))
+
+			conf := elementalv1.Config{}
+			assert.NilError(t, yaml.NewDecoder(buffer).Decode(&conf))
+			assert.Equal(t, conf.Elemental.Registration.CACert, tt.wantCACert)
+		})
+	}
+}
+
 func NewInventoryServer(auth authenticator) *InventoryServer {
 	scheme := runtime.NewScheme()
 	elementalv1.AddToScheme(scheme)

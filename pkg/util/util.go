@@ -101,18 +101,14 @@ func GetSettingsValue(ctx context.Context, cli client.Client, name string) (stri
 }
 
 // GetRancherCACert returns the cacerts included within Rancher settings. If not configured
-// returns an empty string
+// returns an empty string, meaning Rancher is served with a certificate signed by a publicly
+// trusted CA and the OS trust store should be used. The internal-cacerts setting is not a
+// valid fallback: it only applies to Rancher's internal endpoint, not to the server-url.
 func GetRancherCACert(ctx context.Context, cli client.Client) string {
 	cacert, err := GetSettingsValue(ctx, cli, "cacerts")
 	if err != nil {
 		log.Errorf("Error getting cacerts: %s", err.Error())
-	}
-
-	if cacert == "" {
-		if cacert, err = GetSettingsValue(ctx, cli, "internal-cacerts"); err != nil {
-			log.Errorf("Error getting internal-cacerts: %s", err.Error())
-			return ""
-		}
+		return ""
 	}
 	return cacert
 }
