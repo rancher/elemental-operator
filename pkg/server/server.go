@@ -26,8 +26,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	managementv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
@@ -36,6 +34,7 @@ import (
 	"github.com/rancher/elemental-operator/pkg/plainauth"
 	"github.com/rancher/elemental-operator/pkg/register"
 	"github.com/rancher/elemental-operator/pkg/tpm"
+	"github.com/rancher/elemental-operator/pkg/util"
 )
 
 type authenticator interface {
@@ -121,12 +120,7 @@ func upgrade(resp http.ResponseWriter, req *http.Request) (*websocket.Conn, erro
 }
 
 func (i *InventoryServer) getValue(name string) (string, error) {
-	setting := &managementv3.Setting{}
-	if err := i.Get(i, types.NamespacedName{Name: name}, setting); err != nil {
-		log.Errorf("Error getting %s setting: %s", name, err.Error())
-		return "", err
-	}
-	return setting.Value, nil
+	return util.GetSettingsValue(i, i.Client, name)
 }
 
 func (i *InventoryServer) authMachine(conn *websocket.Conn, req *http.Request, registerNamespace string) (*elementalv1.MachineInventory, error) {
