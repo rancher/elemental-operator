@@ -90,12 +90,17 @@ func JSONObjectToYamlBytes(object map[string]runtime.RawExtension) ([]byte, erro
 	return yamlData, nil
 }
 
-// GetSettingsValue find the given name in Rancher settings and returns its value if found
+// GetSettingsValue find the given name in Rancher settings and returns its value if found.
+// As Rancher does, the setting default is returned when no value is set. This matters for
+// settings like agent-tls-mode, whose default differs between fresh and upgraded installs.
 func GetSettingsValue(ctx context.Context, cli client.Client, name string) (string, error) {
 	setting := &managementv3.Setting{}
 	if err := cli.Get(ctx, types.NamespacedName{Name: name}, setting); err != nil {
 		log.Errorf("Error getting %s setting: %s", name, err.Error())
 		return "", err
+	}
+	if setting.Value == "" {
+		return setting.Default, nil
 	}
 	return setting.Value, nil
 }
