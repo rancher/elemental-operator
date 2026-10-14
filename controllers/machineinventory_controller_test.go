@@ -786,6 +786,78 @@ var _ = Describe("handle unmanaged finalizer", func() {
 	})
 })
 
+var _ = Describe("handle unmanaged finalizer with legacy labelPrefix annotations", func() {
+	DescribeTable("should select the unmanaged reset plan",
+		func(unmanagedKey string) {
+			r := &MachineInventoryReconciler{
+				Client: cl,
+			}
+
+			mInventory := &elementalv1.MachineInventory{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{elementalv1.MachineInventoryResettableAnnotation: "true", unmanagedKey: "true"},
+					Finalizers:  []string{elementalv1.MachineInventoryFinalizer},
+					Name:        "machine-inventory-suite-legacy-unmanaged",
+					Namespace:   "default",
+				},
+			}
+			planSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      mInventory.Name,
+					Namespace: mInventory.Namespace,
+				},
+			}
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: mInventory.Namespace,
+					Name:      mInventory.Name,
+				},
+			}
+
+			// 1. Create initial MachineInventory
+			Expect(cl.Create(ctx, mInventory)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(test.CleanupAndWait(ctx, cl, mInventory, planSecret)).To(Succeed())
+			})
+			// 2. Create initial plan Secret
+			_, err := r.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+			// 3. Update meta.DeletionTimestamp
+			Expect(cl.Delete(ctx, mInventory)).To(Succeed())
+			// 4. Update secret with reset plan
+			_, err = r.Reconcile(ctx, req)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(planSecret), planSecret)).To(Succeed())
+
+			_, wantPlan, err := r.newUnmanagedResetPlan(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(planSecret.Annotations[elementalv1.PlanTypeAnnotation]).To(Equal(elementalv1.PlanTypeReset))
+			Expect(string(planSecret.Data["plan"])).To(Equal(string(wantPlan)))
+		},
+		Entry("with empty labelPrefix", "os.unmanaged"),
+		Entry("with custom labelPrefix", "custom.prefix/os.unmanaged"),
+	)
+})
+
+var _ = Describe("isUnmanaged", func() {
+	DescribeTable("should detect the os.unmanaged annotation",
+		func(annotations map[string]string, want bool) {
+			mInventory := &elementalv1.MachineInventory{
+				ObjectMeta: metav1.ObjectMeta{Annotations: annotations},
+			}
+			Expect(isUnmanaged(mInventory)).To(Equal(want))
+		},
+		Entry("well-known annotation", map[string]string{elementalv1.MachineInventoryOSUnmanagedAnnotation: "true"}, true),
+		Entry("unprefixed annotation", map[string]string{"os.unmanaged": "true"}, true),
+		Entry("custom prefixed annotation", map[string]string{"custom.prefix/os.unmanaged": "true"}, true),
+		Entry("annotation not true", map[string]string{elementalv1.MachineInventoryOSUnmanagedAnnotation: "false"}, false),
+		Entry("unrelated annotation", map[string]string{"elemental.cattle.io/os.unmanaged-not": "true"}, false),
+		Entry("no annotations", nil, false),
+	)
+})
+
 type machineInventoryFailingClient struct {
 	client.Client
 }
