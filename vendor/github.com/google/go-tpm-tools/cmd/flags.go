@@ -15,19 +15,25 @@ import (
 )
 
 var (
-	output      string
-	input       string
-	nvIndex     uint32
-	nonce       []byte
-	teeNonce    []byte
-	keyAlgo     = tpm2.AlgRSA
-	pcrs        []int
-	format      string
-	asAddress   string
-	audience    string
-	eventLog    string
-	cloudLog    bool
-	customNonce []string
+	output        string
+	input         string
+	nvIndex       uint32
+	nonce         []byte
+	teeNonce      []byte
+	teeTechnology string
+	keyAlgo       = tpm2.AlgRSA
+	pcrs          []int
+	format        string
+	key           string
+	eventLog      string
+)
+
+// Add constants for other devices when required
+const (
+	// sevSNP is a constant denotes device name for teeTechnology
+	sevSNP = "sev-snp"
+	// tdx is a constant denotes device name for teeTechnology
+	tdx = "tdx"
 )
 
 type pcrsFlag struct {
@@ -129,29 +135,6 @@ func addInputFlag(cmd *cobra.Command) {
 		"input file (defaults to stdin)")
 }
 
-// Lets this command specify an Attestation Server Address.
-func addAsAddressFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&asAddress, "verifier-endpoint", "https://confidentialcomputing.googleapis.com",
-		"the attestation verifier endpoint used to retrieve an attestation claims token")
-}
-
-// Lets this command enable Cloud logging.
-func addCloudLoggingFlag(cmd *cobra.Command) {
-	cmd.Flags().BoolVar(&cloudLog, "cloud-log", false, "logs the attestation and token to Cloud Logging for auditing purposes. Requires the audience flag.")
-}
-
-// Lets this command specify custom audience field of the attestation token.
-func addAudienceFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&audience, "audience", "",
-		"the audience field in the claims token. Cannot be sts.googleapis.com.")
-}
-
-// Lets this command specify custom nonce field of the attestation token.
-func addCustomNonceFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringArrayVar(&customNonce, "custom-nonce", nil,
-		"the custom nonce field in the claims token. use this flag multiple times to add multiple custom nonces.")
-}
-
 // Lets this command specify event log path.
 func addEventLogFlag(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&eventLog, "event-log", "/sys/kernel/security/tpm0/binary_bios_measurements", "specifies the event log file path.")
@@ -166,6 +149,10 @@ func addIndexFlag(cmd *cobra.Command) {
 // Lets this command specify some number of PCR arguments, check if in range.
 func addPCRsFlag(cmd *cobra.Command) {
 	cmd.PersistentFlags().Var(&pcrsFlag{&pcrs}, "pcrs", "comma separated list of PCR numbers")
+}
+
+func addKeyFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(&key, "key", "AK", "indicates type of attestation key to use <gceAK|AK>")
 }
 
 // Lets this command specify the public key algorithm.
@@ -190,6 +177,10 @@ func addFormatFlag(cmd *cobra.Command) {
 
 func addTeeNonceflag(cmd *cobra.Command) {
 	cmd.PersistentFlags().BytesHexVar(&teeNonce, "tee-nonce", []byte{}, "hex encoded teenonce for hardware attestation, can be empty")
+}
+
+func addTeeTechnology(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(&teeTechnology, "tee-technology", "", "indicates the type of TEE hardware. Should be either empty or one of sev-snp or tdx")
 }
 
 // alwaysError implements io.ReadWriter by always returning an error
@@ -265,11 +256,9 @@ func dataInput() io.Reader {
 	return file
 }
 
-var errMustSpecifyPath = errors.New("must specify path to read file")
-
 func readBytes(path string) ([]byte, error) {
 	if path == "" {
-		return nil, errMustSpecifyPath
+		return nil, errors.New("must specify path to read file")
 	}
 	file, err := os.Open(path)
 	if err != nil {
