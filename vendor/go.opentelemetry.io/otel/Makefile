@@ -34,18 +34,17 @@ $(TOOLS)/%: $(TOOLS_MOD_DIR)/go.mod | $(TOOLS)
 MULTIMOD = $(TOOLS)/multimod
 $(TOOLS)/multimod: PACKAGE=go.opentelemetry.io/build-tools/multimod
 
+SEMCONVGEN = $(TOOLS)/semconvgen
+$(TOOLS)/semconvgen: PACKAGE=go.opentelemetry.io/build-tools/semconvgen
+
 CROSSLINK = $(TOOLS)/crosslink
 $(TOOLS)/crosslink: PACKAGE=go.opentelemetry.io/build-tools/crosslink
 
 SEMCONVKIT = $(TOOLS)/semconvkit
-SEMCONVKIT_FILES := $(sort $(shell find $(TOOLS_MOD_DIR)/semconvkit -type f))
 $(TOOLS)/semconvkit: PACKAGE=go.opentelemetry.io/otel/$(TOOLS_MOD_DIR)/semconvkit
-$(TOOLS)/semconvkit: $(SEMCONVKIT_FILES)
 
 VERIFYREADMES = $(TOOLS)/verifyreadmes
-VERIFYREADMES_FILES := $(sort $(shell find $(TOOLS_MOD_DIR)/verifyreadmes -type f))
 $(TOOLS)/verifyreadmes: PACKAGE=go.opentelemetry.io/otel/$(TOOLS_MOD_DIR)/verifyreadmes
-$(TOOLS)/verifyreadmes: $(VERIFYREADMES_FILES)
 
 GOLANGCI_LINT = $(TOOLS)/golangci-lint
 $(TOOLS)/golangci-lint: PACKAGE=github.com/golangci/golangci-lint/v2/cmd/golangci-lint
@@ -72,7 +71,7 @@ GOVULNCHECK = $(TOOLS)/govulncheck
 $(TOOLS)/govulncheck: PACKAGE=golang.org/x/vuln/cmd/govulncheck
 
 .PHONY: tools
-tools: $(CROSSLINK) $(GOLANGCI_LINT) $(MISSPELL) $(GOCOVMERGE) $(STRINGER) $(PORTO) $(VERIFYREADMES) $(MULTIMOD) $(SEMCONVKIT) $(GOTMPL) $(GORELEASE)
+tools: $(CROSSLINK) $(GOLANGCI_LINT) $(MISSPELL) $(GOCOVMERGE) $(STRINGER) $(PORTO) $(SEMCONVGEN) $(VERIFYREADMES) $(MULTIMOD) $(SEMCONVKIT) $(GOTMPL) $(GORELEASE)
 
 # Virtualized python tools via docker
 
@@ -150,12 +149,11 @@ build-tests/%:
 
 # Tests
 
-TEST_TARGETS := test-default test-bench test-short test-verbose test-race test-concurrent-safe test-fuzz
+TEST_TARGETS := test-default test-bench test-short test-verbose test-race test-concurrent-safe
 .PHONY: $(TEST_TARGETS) test
 test-default test-race: ARGS=-race
 test-bench:   ARGS=-run=xxxxxMatchNothingxxxxx -test.benchtime=1ms -bench=.
 test-short:   ARGS=-short
-test-fuzz:    ARGS=-fuzztime=10s -fuzz
 test-verbose: ARGS=-v -race
 test-concurrent-safe: ARGS=-run=ConcurrentSafe -count=100 -race
 test-concurrent-safe: TIMEOUT=120
@@ -189,10 +187,11 @@ test-coverage: $(GOCOVMERGE)
 .PHONY: benchmark
 benchmark: $(OTEL_GO_MOD_DIRS:%=benchmark/%)
 benchmark/%:
-	cd $* && $(GO) test -run='^$$' -bench=. $(ARGS) ./...
-
-print-sharded-benchmarks:
-	@echo $(OTEL_GO_MOD_DIRS) | jq -cR 'split(" ")'
+	@echo "$(GO) test -run=xxxxxMatchNothingxxxxx -bench=. $*..." \
+		&& cd $* \
+		&& $(GO) list ./... \
+		| grep -v third_party \
+		| xargs $(GO) test -run=xxxxxMatchNothingxxxxx -bench=.
 
 .PHONY: golangci-lint golangci-lint-fix
 golangci-lint-fix: ARGS=--fix
@@ -218,7 +217,7 @@ go-mod-tidy/%: crosslink
 		&& $(GO) mod tidy -compat=1.21
 
 .PHONY: lint
-lint: misspell go-mod-tidy golangci-lint
+lint: misspell go-mod-tidy golangci-lint govulncheck
 
 .PHONY: vanity-import-check
 vanity-import-check: $(PORTO)
@@ -285,7 +284,7 @@ semconv-generate: $(SEMCONVKIT)
 	docker run --rm \
 		-u $(DOCKER_USER) \
 		--env HOME=/tmp/weaver \
-		--mount 'type=bind,source=$(PWD)/semconv/templates,target=/home/weaver/templates,readonly' \
+		--mount 'type=bind,source=$(PWD)/semconv,target=/home/weaver/templates/registry/go,readonly' \
 		--mount 'type=bind,source=$(PWD)/semconv/${TAG},target=/home/weaver/target' \
 		--mount 'type=bind,source=$(HOME)/.weaver,target=/tmp/weaver/.weaver' \
 		$(WEAVER_IMAGE) registry generate \

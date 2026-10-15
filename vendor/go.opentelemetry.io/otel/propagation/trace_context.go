@@ -36,7 +36,7 @@ var (
 )
 
 // Inject injects the trace context from ctx into carrier.
-func (TraceContext) Inject(ctx context.Context, carrier TextMapCarrier) {
+func (tc TraceContext) Inject(ctx context.Context, carrier TextMapCarrier) {
 	sc := trace.SpanContextFromContext(ctx)
 	if !sc.IsValid() {
 		return
@@ -46,8 +46,8 @@ func (TraceContext) Inject(ctx context.Context, carrier TextMapCarrier) {
 		carrier.Set(tracestateHeader, ts)
 	}
 
-	// Preserve only the spec-defined flags: sampled (0x01) and random (0x02).
-	flags := sc.TraceFlags() & (trace.FlagsSampled | trace.FlagsRandom)
+	// Clear all flags other than the trace-context supported sampling bit.
+	flags := sc.TraceFlags() & trace.FlagsSampled
 
 	var sb strings.Builder
 	sb.Grow(2 + 32 + 16 + 2 + 3)
@@ -77,7 +77,7 @@ func (tc TraceContext) Extract(ctx context.Context, carrier TextMapCarrier) cont
 	return trace.ContextWithRemoteSpanContext(ctx, sc)
 }
 
-func (TraceContext) extract(carrier TextMapCarrier) trace.SpanContext {
+func (tc TraceContext) extract(carrier TextMapCarrier) trace.SpanContext {
 	h := carrier.Get(traceparentHeader)
 	if h == "" {
 		return trace.SpanContext{}
@@ -104,13 +104,14 @@ func (TraceContext) extract(carrier TextMapCarrier) trace.SpanContext {
 	if !extractPart(opts[:], &h, 2) {
 		return trace.SpanContext{}
 	}
-	if version == 0 && (h != "" || opts[0] > 3) {
-		// version 0 does not allow extra fields or reserved flag bits.
+	if version == 0 && (h != "" || opts[0] > 2) {
+		// version 0 not allow extra
+		// version 0 not allow other flag
 		return trace.SpanContext{}
 	}
 
-	scc.TraceFlags = trace.TraceFlags(opts[0]) & //nolint:gosec // slice size already checked.
-		(trace.FlagsSampled | trace.FlagsRandom)
+	// Clear all flags other than the trace-context supported sampling bit.
+	scc.TraceFlags = trace.TraceFlags(opts[0]) & trace.FlagsSampled
 
 	// Ignore the error returned here. Failure to parse tracestate MUST NOT
 	// affect the parsing of traceparent according to the W3C tracecontext
@@ -150,6 +151,6 @@ func extractPart(dst []byte, h *string, n int) bool {
 }
 
 // Fields returns the keys who's values are set with Inject.
-func (TraceContext) Fields() []string {
+func (tc TraceContext) Fields() []string {
 	return []string{traceparentHeader, tracestateHeader}
 }
