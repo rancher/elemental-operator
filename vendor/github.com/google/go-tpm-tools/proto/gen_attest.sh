@@ -1,3 +1,14 @@
 #!/bin/bash
 
-protoc -I. -I`go list -m -f "{{.Dir}}" github.com/google/go-sev-guest` -I`go list -m -f "{{.Dir}}" github.com/google/go-tdx-guest` --go_out=. --go_opt=module=github.com/google/go-tpm-tools/proto  --experimental_allow_proto3_optional attest.proto
+# Only download the specific modules we need include paths for
+go mod download github.com/google/go-sev-guest \
+                github.com/google/go-tdx-guest \
+                github.com/google/go-eventlog \
+                github.com/GoogleCloudPlatform/confidential-space/server
+protoc -I. \
+  -I$(go list -m -f "{{.Dir}}" github.com/google/go-sev-guest) \
+  -I$(go list -m -f "{{.Dir}}" github.com/google/go-tdx-guest) \
+  -I$(go list -m -f "{{.Dir}}" github.com/google/go-eventlog) \
+  -I$(go list -m -f "{{.Dir}}" github.com/GoogleCloudPlatform/confidential-space/server)/proto \
+  --go_out=. --go_opt=module=github.com/google/go-tpm-tools/proto \
+  --experimental_allow_proto3_optional attest.proto

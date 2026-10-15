@@ -5,6 +5,7 @@ package verifier
 import (
 	"context"
 
+	attestationpb "github.com/GoogleCloudPlatform/confidential-space/server/proto/gen/attestation"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
 	"github.com/google/go-tpm-tools/verifier/models"
 	"google.golang.org/genproto/googleapis/rpc/status"
@@ -48,6 +49,8 @@ type VerifyAttestationRequest struct {
 	TokenOptions             *models.TokenOptions
 	// TDCCELAttestation is for TDX CCEL RTMR attestation
 	TDCCELAttestation *TDCCELAttestation
+	NvidiaAttestation *attestationpb.NvidiaAttestationReport
+	GCEInstance       string
 }
 
 type TDCCELAttestation struct {
@@ -80,7 +83,7 @@ type AttestClients struct {
 	ITA Client
 }
 
-// HasThirdPartyClient returns true if AttestClients contains an initialzied
+// HasThirdPartyClient returns true if AttestClients contains an initialized
 // third-party verifier client.
 func (ac *AttestClients) HasThirdPartyClient() bool {
 	return ac.ITA != nil

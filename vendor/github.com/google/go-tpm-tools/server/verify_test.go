@@ -13,12 +13,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-tpm-tools/client"
-	"github.com/google/go-tpm-tools/internal"
 	"github.com/google/go-tpm-tools/internal/test"
 	attestpb "github.com/google/go-tpm-tools/proto/attest"
+	tpmquote "github.com/google/go-tpm-tools/quote"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	"github.com/google/logger"
@@ -33,9 +34,10 @@ func getDigestHash(input string) []byte {
 
 func extendPCRsRandomly(rwc io.ReadWriteCloser, selpcr tpm2.PCRSelection) error {
 	var pcrExtendValue []byte
-	if selpcr.Hash == tpm2.AlgSHA256 {
+	switch selpcr.Hash {
+	case tpm2.AlgSHA256:
 		pcrExtendValue = make([]byte, 32)
-	} else if selpcr.Hash == tpm2.AlgSHA1 {
+	case tpm2.AlgSHA1:
 		pcrExtendValue = make([]byte, 20)
 	}
 
@@ -65,48 +67,54 @@ func TestVerifyHappyCases(t *testing.T) {
 	twoPCR := append(onePCR, test.ApplicationPCR)
 	dupePCR := append(twoPCR, twoPCR...)
 
+	rsaAK, err := client.AttestationKeyRSA(rwc)
+	if err != nil {
+		t.Fatalf("failed to generate RSA AK: %v", err)
+	}
+	defer rsaAK.Close()
+
+	eccAK, err := client.AttestationKeyECC(rwc)
+	if err != nil {
+		t.Fatalf("failed to generate ECC AK: %v", err)
+	}
+	defer eccAK.Close()
+
 	subtests := []struct {
 		name         string
-		getKey       func(io.ReadWriter) (*client.Key, error)
+		ak           *client.Key
 		pcrHashAlgo  tpm2.Algorithm
 		quotePCRList []int
 		extraData    []byte
 	}{
-		{"AK-RSA_SHA1_2PCRs_nonce", client.AttestationKeyRSA, tpm2.AlgSHA1, twoPCR, getDigestHash("test")},
-		{"AK-RSA_SHA1_1PCR_nonce", client.AttestationKeyRSA, tpm2.AlgSHA1, onePCR, getDigestHash("t")},
-		{"AK-RSA_SHA1_1PCR_no-nonce", client.AttestationKeyRSA, tpm2.AlgSHA1, onePCR, nil},
-		{"AK-RSA_SHA256_2PCRs_nonce", client.AttestationKeyRSA, tpm2.AlgSHA256, twoPCR, getDigestHash("test")},
-		{"AK-RSA_SHA256_2PCR_empty-nonce", client.AttestationKeyRSA, tpm2.AlgSHA256, twoPCR, []byte{}},
-		{"AK-RSA_SHA256_dupePCrSel_nonce", client.AttestationKeyRSA, tpm2.AlgSHA256, dupePCR, getDigestHash("")},
+		{"AK-RSA_SHA1_2PCRs_nonce", rsaAK, tpm2.AlgSHA1, twoPCR, getDigestHash("test")},
+		{"AK-RSA_SHA1_1PCR_nonce", rsaAK, tpm2.AlgSHA1, onePCR, getDigestHash("t")},
+		{"AK-RSA_SHA1_1PCR_no-nonce", rsaAK, tpm2.AlgSHA1, onePCR, nil},
+		{"AK-RSA_SHA256_2PCRs_nonce", rsaAK, tpm2.AlgSHA256, twoPCR, getDigestHash("test")},
+		{"AK-RSA_SHA256_2PCR_empty-nonce", rsaAK, tpm2.AlgSHA256, twoPCR, []byte{}},
+		{"AK-RSA_SHA256_dupePCrSel_nonce", rsaAK, tpm2.AlgSHA256, dupePCR, getDigestHash("")},
 
-		{"AK-ECC_SHA1_2PCRs_nonce", client.AttestationKeyECC, tpm2.AlgSHA1, twoPCR, getDigestHash("test")},
-		{"AK-ECC_SHA1_1PCR_nonce", client.AttestationKeyECC, tpm2.AlgSHA1, onePCR, getDigestHash("t")},
-		{"AK-ECC_SHA1_1PCR_no-nonce", client.AttestationKeyECC, tpm2.AlgSHA1, onePCR, nil},
-		{"AK-ECC_SHA256_2PCRs_nonce", client.AttestationKeyECC, tpm2.AlgSHA256, twoPCR, getDigestHash("test")},
-		{"AK-ECC_SHA256_2PCR_empty-nonce", client.AttestationKeyECC, tpm2.AlgSHA256, twoPCR, []byte{}},
-		{"AK-ECC_SHA256_dupePCrSel_nonce", client.AttestationKeyECC, tpm2.AlgSHA256, dupePCR, getDigestHash("")},
+		{"AK-ECC_SHA1_2PCRs_nonce", eccAK, tpm2.AlgSHA1, twoPCR, getDigestHash("test")},
+		{"AK-ECC_SHA1_1PCR_nonce", eccAK, tpm2.AlgSHA1, onePCR, getDigestHash("t")},
+		{"AK-ECC_SHA1_1PCR_no-nonce", eccAK, tpm2.AlgSHA1, onePCR, nil},
+		{"AK-ECC_SHA256_2PCRs_nonce", eccAK, tpm2.AlgSHA256, twoPCR, getDigestHash("test")},
+		{"AK-ECC_SHA256_2PCR_empty-nonce", eccAK, tpm2.AlgSHA256, twoPCR, []byte{}},
+		{"AK-ECC_SHA256_dupePCrSel_nonce", eccAK, tpm2.AlgSHA256, dupePCR, getDigestHash("")},
 	}
 	for _, subtest := range subtests {
 		t.Run(subtest.name, func(t *testing.T) {
-			ak, err := subtest.getKey(rwc)
-			if err != nil {
-				t.Errorf("failed to generate AK: %v", err)
-			}
-			defer ak.Close()
-
 			selpcr := tpm2.PCRSelection{
 				Hash: subtest.pcrHashAlgo,
 				PCRs: subtest.quotePCRList,
 			}
-			err = extendPCRsRandomly(rwc, selpcr)
+			err := extendPCRsRandomly(rwc, selpcr)
 			if err != nil {
 				t.Fatalf("failed to extend test PCRs: %v", err)
 			}
-			quote, err := ak.Quote(selpcr, subtest.extraData)
+			quote, err := subtest.ak.Quote(selpcr, subtest.extraData)
 			if err != nil {
 				t.Fatalf("failed to quote: %v", err)
 			}
-			err = internal.VerifyQuote(quote, ak.PublicKey(), subtest.extraData)
+			err = tpmquote.Verify(quote, subtest.ak.PublicKey(), subtest.extraData)
 			if err != nil {
 				t.Fatalf("failed to verify: %v", err)
 			}
@@ -148,7 +156,7 @@ func TestVerifyPCRChanged(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to read PCRs: %v", err)
 	}
-	err = internal.VerifyQuote(quote, ak.PublicKey(), nonce)
+	err = tpmquote.Verify(quote, ak.PublicKey(), nonce)
 	if err == nil {
 		t.Errorf("Verify should fail as Verify read a modified PCR")
 	}
@@ -188,7 +196,7 @@ func TestVerifyUsingDifferentPCR(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to read PCRs: %v", err)
 	}
-	err = internal.VerifyQuote(quote, ak.PublicKey(), nonce)
+	err = tpmquote.Verify(quote, ak.PublicKey(), nonce)
 	if err == nil {
 		t.Errorf("Verify should fail as Verify read a different PCR")
 	}
@@ -221,6 +229,7 @@ func TestVerifyWithTrustedAK(t *testing.T) {
 }
 
 func TestVerifySHA1Attestation(t *testing.T) {
+	// If running against a real TPM which supports less usual hash algos, this test might fail.
 	rwc := test.GetTPM(t)
 	defer client.CheckedClose(t, rwc)
 
@@ -236,7 +245,7 @@ func TestVerifySHA1Attestation(t *testing.T) {
 		t.Fatalf("failed to attest: %v", err)
 	}
 
-	// We should get a SHA-256 state, even if we allow SHA-1
+	// We should at least get a SHA-256 state, even if we allow SHA-1
 	opts := VerifyOpts{
 		Nonce:      nonce,
 		TrustedAKs: []crypto.PublicKey{ak.PublicKey()},
@@ -247,13 +256,15 @@ func TestVerifySHA1Attestation(t *testing.T) {
 		t.Errorf("failed to verify: %v", err)
 	}
 	h := tpm2.Algorithm(state.GetHash())
-	if h != tpm2.AlgSHA256 {
-		t.Errorf("expected SHA-256 state, got: %v", h)
+	if h != tpm2.AlgSHA256 && h != tpm2.AlgSHA384 && h != tpm2.AlgSHA512 {
+		t.Errorf("expected at least a non SHA-1 state, got: %v", h)
 	}
 
-	// Now we mess up the SHA-256 state to force SHA-1 fallback
+	// Now we mess up all other states to force SHA-1 fallback
 	for _, quote := range attestation.GetQuotes() {
-		if tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA256 {
+		if tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA256 ||
+			tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA384 ||
+			tpm2.Algorithm(quote.GetPcrs().GetHash()) == tpm2.AlgSHA512 {
 			quote.Quote = nil
 		}
 	}
@@ -343,15 +354,11 @@ func TestVerifySucceedsWithOverlappingIntermediatesInOptionsAndAttestation(t *te
 }
 
 func TestValidateOptsFailWithCertsAndPubkey(t *testing.T) {
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
 	opts := VerifyOpts{
 		Nonce:             nil,
 		TrustedRootCerts:  GceEKRoots,
 		IntermediateCerts: GceEKIntermediates,
-		TrustedAKs:        []crypto.PublicKey{priv.Public()},
+		TrustedAKs:        []crypto.PublicKey{&rsa.PublicKey{}},
 	}
 	if err := validateOpts(opts); err == nil {
 		t.Error("Verified attestation even with multiple trust methods")
@@ -788,6 +795,89 @@ func TestValidateAKGCEAndGetGCEInstanceInfo(t *testing.T) {
 			} else {
 				t.Log(gceInfo)
 				fmt.Print(gceInfo)
+			}
+		})
+	}
+}
+
+func TestVerifyAttestationHashAlgo(t *testing.T) {
+	tests := []struct {
+		name       string
+		allowSHA1  bool
+		hashAlgo   tpm2.Algorithm
+		wantErrStr string
+	}{
+		{
+			"SHA1, Allowed",
+			true,
+			tpm2.AlgSHA1,
+			"",
+		},
+		{
+			"SHA1, Not Allowed",
+			false,
+			tpm2.AlgSHA1,
+			errSHA1NotAllowed.Error(),
+		},
+		{
+			"SHA256",
+			false,
+			tpm2.AlgSHA256,
+			"",
+		},
+		{
+			"SHA384",
+			false,
+			tpm2.AlgSHA384,
+			"",
+		},
+		{
+			"SHA256, SHA1 Allowed",
+			true,
+			tpm2.AlgSHA256,
+			"",
+		},
+		{
+			"SHA384, SHA1 Allowed",
+			true,
+			tpm2.AlgSHA384,
+			"",
+		},
+		{
+			"SHA512",
+			false,
+			tpm2.AlgSHA512,
+			errNoSupportedQuote.Error(),
+		},
+		{
+			"AES",
+			false,
+			tpm2.AlgAES,
+			"hash algorithm AES is not supported",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attestBytes := test.COS85NoNonce
+			att := &attestpb.Attestation{}
+			if err := proto.Unmarshal(attestBytes, att); err != nil {
+				t.Fatalf("failed to unmarshal attestation: %v", err)
+			}
+
+			_, err := VerifyAttestation(att, VerifyOpts{
+				AllowSHA1:         tc.allowSHA1,
+				HashAlgo:          tc.hashAlgo,
+				TrustedRootCerts:  GceEKRoots,
+				IntermediateCerts: GceEKIntermediates,
+			})
+			if tc.wantErrStr == "" {
+				if err != nil {
+					t.Errorf("VerifyAttestation(%v) unexpected error: %v", tc.name, err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrStr) {
+					t.Errorf("VerifyAttestation(%v) err = %v, want substring = %v", tc.name, err, tc.wantErrStr)
+				}
 			}
 		})
 	}
