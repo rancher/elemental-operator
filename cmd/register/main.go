@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/twpayne/go-vfs"
 	"github.com/twpayne/go-vfsafero"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	"github.com/rancher/elemental-operator/pkg/install"

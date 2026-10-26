@@ -27,7 +27,7 @@ import (
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/rancher/wrangler/v3/pkg/name"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
