@@ -27,7 +27,7 @@ import (
 	"github.com/jaypipes/ghw/pkg/block"
 	"github.com/rancher/yip/pkg/schema"
 	"github.com/twpayne/go-vfs"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"

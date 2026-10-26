@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	systemagent "github.com/rancher/elemental-operator/internal/system-agent"

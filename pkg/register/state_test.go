@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/twpayne/go-vfs"
 	"github.com/twpayne/go-vfs/vfst"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestRegister(t *testing.T) {

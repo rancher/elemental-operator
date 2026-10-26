@@ -26,7 +26,7 @@ import (
 
 	"github.com/rancher/elemental-operator/pkg/log"
 	"github.com/twpayne/go-vfs"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 type State struct {

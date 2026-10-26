@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	"github.com/drone/envsubst/v2"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 type E2EConfig struct {
