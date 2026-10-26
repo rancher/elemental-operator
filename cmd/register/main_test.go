@@ -29,7 +29,7 @@ import (
 	"github.com/twpayne/go-vfs"
 	"github.com/twpayne/go-vfs/vfst"
 	"go.uber.org/mock/gomock"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	elementalv1 "github.com/rancher/elemental-operator/api/v1beta1"
 	imocks "github.com/rancher/elemental-operator/pkg/install/mocks"
