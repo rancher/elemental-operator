@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
     - name: Install docker
       uses: docker-practice/actions-setup-docker@fd7ecdac7caf8e2c541a48c9bcc280aae59a8461 # v1
       timeout-minutes: 12
