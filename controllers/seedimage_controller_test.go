@@ -802,7 +802,7 @@ var _ = Describe("fillBuildImagePod", func() {
 			},
 		}
 
-		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever)
+		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever, elementalv1.ProxySettings{})
 
 		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
@@ -824,7 +824,7 @@ var _ = Describe("fillBuildImagePod", func() {
 			},
 		}
 
-		pod := fillBuildImagePod(seedImg, "", corev1.PullNever)
+		pod := fillBuildImagePod(seedImg, "", corev1.PullNever, elementalv1.ProxySettings{})
 
 		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(buildImg))
@@ -840,11 +840,82 @@ var _ = Describe("fillBuildImagePod", func() {
 			},
 		}
 
-		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever)
+		pod := fillBuildImagePod(seedImg, defaultBuildImg, corev1.PullNever, elementalv1.ProxySettings{})
 
 		Expect(len(pod.Spec.InitContainers)).To(Equal(2))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
 		Expect(pod.Spec.InitContainers[0].Args[0]).To(ContainSubstring("elemental pull-image --platform=linux/riscv64"))
 
+	})
+})
+
+var _ = Describe("fillBuildImagePod proxy injection", func() {
+	// An image-reference base image produces two init containers: "baseiso"
+	// (which otherwise carries no env) followed by "build".
+	newImageRefSeedImg := func(proxy *elementalv1.ProxySettings) *elementalv1.SeedImage {
+		return &elementalv1.SeedImage{
+			Spec: elementalv1.SeedImageSpec{
+				BaseImage: "registry.example.com/elemental/iso:latest",
+				Proxy:     proxy,
+			},
+		}
+	}
+
+	It("should not inject any proxy env when no proxy is configured", func() {
+		pod := fillBuildImagePod(newImageRefSeedImg(nil), "builder:latest", corev1.PullNever, elementalv1.ProxySettings{})
+
+		for _, c := range pod.Spec.InitContainers {
+			Expect(c.Env).NotTo(ContainElement(HaveField("Name", "HTTP_PROXY")))
+			Expect(c.Env).NotTo(ContainElement(HaveField("Name", "HTTPS_PROXY")))
+			Expect(c.Env).NotTo(ContainElement(HaveField("Name", "NO_PROXY")))
+		}
+	})
+
+	It("should inject the operator default proxy into every init container", func() {
+		defaultProxy := elementalv1.ProxySettings{
+			HTTPProxy:  "http://proxy:3128",
+			HTTPSProxy: "http://proxy:3128",
+			NoProxy:    "10.0.0.0/8",
+		}
+
+		pod := fillBuildImagePod(newImageRefSeedImg(nil), "builder:latest", corev1.PullNever, defaultProxy)
+
+		Expect(len(pod.Spec.InitContainers)).To(Equal(2))
+		Expect(pod.Spec.InitContainers[0].Name).To(Equal("baseiso"))
+		for _, c := range pod.Spec.InitContainers {
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "HTTP_PROXY", Value: "http://proxy:3128"}))
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "http_proxy", Value: "http://proxy:3128"}))
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "HTTPS_PROXY", Value: "http://proxy:3128"}))
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "NO_PROXY", Value: "10.0.0.0/8"}))
+			Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "no_proxy", Value: "10.0.0.0/8"}))
+		}
+	})
+
+	It("should let spec.proxy override the operator default per field", func() {
+		defaultProxy := elementalv1.ProxySettings{
+			HTTPProxy:  "http://default:3128",
+			HTTPSProxy: "http://default:3128",
+			NoProxy:    "10.0.0.0/8",
+		}
+		// Override only HTTPProxy; HTTPSProxy and NoProxy fall back to the default.
+		override := &elementalv1.ProxySettings{HTTPProxy: "http://override:8080"}
+
+		pod := fillBuildImagePod(newImageRefSeedImg(override), "builder:latest", corev1.PullNever, defaultProxy)
+
+		build := pod.Spec.InitContainers[len(pod.Spec.InitContainers)-1]
+		Expect(build.Env).To(ContainElement(corev1.EnvVar{Name: "HTTP_PROXY", Value: "http://override:8080"}))
+		Expect(build.Env).To(ContainElement(corev1.EnvVar{Name: "HTTPS_PROXY", Value: "http://default:3128"}))
+		Expect(build.Env).To(ContainElement(corev1.EnvVar{Name: "NO_PROXY", Value: "10.0.0.0/8"}))
+	})
+
+	It("should not inject anything when only NoProxy is set", func() {
+		defaultProxy := elementalv1.ProxySettings{NoProxy: "10.0.0.0/8"}
+
+		pod := fillBuildImagePod(newImageRefSeedImg(nil), "builder:latest", corev1.PullNever, defaultProxy)
+
+		for _, c := range pod.Spec.InitContainers {
+			Expect(c.Env).NotTo(ContainElement(HaveField("Name", "NO_PROXY")))
+			Expect(c.Env).NotTo(ContainElement(HaveField("Name", "HTTP_PROXY")))
+		}
 	})
 })

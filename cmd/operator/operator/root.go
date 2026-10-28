@@ -314,6 +314,11 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		Client:                   mgr.GetClient(),
 		SeedImageImage:           config.seedimageImage,
 		SeedImageImagePullPolicy: corev1.PullPolicy(config.seedimageImagePullPolicy),
+		DefaultProxy: elementalv1.ProxySettings{
+			HTTPProxy:  os.Getenv("HTTP_PROXY"),
+			HTTPSProxy: os.Getenv("HTTPS_PROXY"),
+			NoProxy:    os.Getenv("NO_PROXY"),
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "SeedImage")
 		os.Exit(1)

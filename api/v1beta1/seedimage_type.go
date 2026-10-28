@@ -40,6 +40,11 @@ type SeedImageSpec struct {
 	// +kubebuilder:default:=60
 	// +optional
 	LifetimeMinutes int32 `json:"cleanupAfterMinutes"`
+	// Proxy defines the proxy settings for the seed image build pod.
+	// When set, its values override the proxy configuration the operator
+	// propagates from its own environment.
+	// +optional
+	Proxy *ProxySettings `json:"proxy,omitempty"`
 	// RetriggerBuild triggers to build again a cleaned up seed image.
 	// +optional
 	RetriggerBuild bool `json:"retriggerBuild"`
@@ -121,6 +126,22 @@ type SeedImageStatus struct {
 	// +kubebuilder:validation:Enum=Initialized;Started;Completed;Failed;NotStarted
 	// +optional
 	State SeedImageState `json:"state,omitempty"`
+}
+
+// ProxySettings defines the proxy configuration injected into the seed image
+// build pod.
+type ProxySettings struct {
+	// HTTPProxy is the URL of the proxy for HTTP requests.
+	// +optional
+	HTTPProxy string `json:"httpProxy,omitempty"`
+
+	// HTTPSProxy is the URL of the proxy for HTTPS requests.
+	// +optional
+	HTTPSProxy string `json:"httpsProxy,omitempty"`
+
+	// NoProxy is a comma-separated list of hosts that should bypass the proxy.
+	// +optional
+	NoProxy string `json:"noProxy,omitempty"`
 }
 
 // +kubebuilder:object:root=true

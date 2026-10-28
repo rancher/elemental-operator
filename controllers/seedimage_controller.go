@@ -49,6 +49,10 @@ type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
 	SeedImageImagePullPolicy corev1.PullPolicy
+	// DefaultProxy holds the proxy configuration the operator propagates to the
+	// build pod when a SeedImage does not specify its own spec.proxy. It is
+	// populated from the operator's own HTTP_PROXY/HTTPS_PROXY/NO_PROXY env.
+	DefaultProxy elementalv1.ProxySettings
 }
 
 const (
@@ -260,7 +264,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy, r.DefaultProxy)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -567,7 +571,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy, defaultProxy elementalv1.ProxySettings) *corev1.Pod {
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
@@ -579,6 +583,14 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 		initContainers = defaultInitContainers(seedImg, buildImg, pullPolicy)
 	} else {
 		initContainers = userDefinedInitContainers(seedImg)
+	}
+
+	// Inject proxy env vars into every init container: these are the ones
+	// performing outbound network I/O (curl, pull-image, build-disk).
+	if proxyEnv := proxyEnvVars(seedImg.Spec.Proxy, defaultProxy); len(proxyEnv) > 0 {
+		for i := range initContainers {
+			initContainers[i].Env = append(initContainers[i].Env, proxyEnv...)
+		}
 	}
 
 	pod := &corev1.Pod{
@@ -862,6 +874,47 @@ func defaultEnvVars(seedImgName string) []corev1.EnvVar {
 			},
 		},
 	}
+}
+
+// proxyEnvVars returns the proxy environment variables to inject into the build
+// pod. The per-SeedImage override takes precedence per-field, falling back to
+// the operator's default proxy for any empty field. No variables are returned
+// (NO_PROXY included) unless an HTTP or HTTPS proxy is effectively set, so that
+// non-proxied deployments are left unchanged. Both the upper and lower case
+// variants are emitted since some tools (e.g. curl) only honor the lower case.
+func proxyEnvVars(override *elementalv1.ProxySettings, def elementalv1.ProxySettings) []corev1.EnvVar {
+	httpProxy, httpsProxy, noProxy := def.HTTPProxy, def.HTTPSProxy, def.NoProxy
+	if override != nil {
+		if override.HTTPProxy != "" {
+			httpProxy = override.HTTPProxy
+		}
+		if override.HTTPSProxy != "" {
+			httpsProxy = override.HTTPSProxy
+		}
+		if override.NoProxy != "" {
+			noProxy = override.NoProxy
+		}
+	}
+
+	if httpProxy == "" && httpsProxy == "" {
+		return nil
+	}
+
+	var envVars []corev1.EnvVar
+	addVar := func(upper, lower, value string) {
+		if value == "" {
+			return
+		}
+		envVars = append(envVars,
+			corev1.EnvVar{Name: upper, Value: value},
+			corev1.EnvVar{Name: lower, Value: value},
+		)
+	}
+	addVar("HTTP_PROXY", "http_proxy", httpProxy)
+	addVar("HTTPS_PROXY", "https_proxy", httpsProxy)
+	addVar("NO_PROXY", "no_proxy", noProxy)
+
+	return envVars
 }
 
 func (r *SeedImageReconciler) createBuildImageService(ctx context.Context, seedImg *elementalv1.SeedImage) error {
