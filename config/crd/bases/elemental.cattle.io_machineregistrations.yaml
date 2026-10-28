@@ -143,32 +143,51 @@ spec:
                         type: object
                       reset:
                         default:
+                          enabled: false
                           reboot: true
                           reset-oem: true
                           reset-persistent: true
+                        description: Contains the reset configuration that would be
+                          applied via elemental-register --reset, when booted from
+                          the recovery partition and passed to elemental reset
                         properties:
                           config-urls:
+                            description: Cloud-init config files
                             items:
                               type: string
                             type: array
                           debug:
+                            description: Enable debug output
                             type: boolean
                           disable-boot-entry:
                             type: boolean
                           enabled:
+                            default: false
+                            description: MachineInventories created from this MachineRegistration
+                              will have reset functionality enabled. Defaults to false.
                             type: boolean
                           poweroff:
+                            description: Shutdown the system after reset
                             type: boolean
                           reboot:
                             default: true
+                            description: Reboot the system after reset. Defaults to
+                              true.
                             type: boolean
                           reset-oem:
                             default: true
+                            description: Format the COS_OEM partition. Defaults to
+                              true.
                             type: boolean
                           reset-persistent:
                             default: true
+                            description: Format the COS_PERSISTENT partition. Defaults
+                              to true.
                             type: boolean
                           system-uri:
+                            description: Sets the system image source and its type
+                              (e.g. 'docker:registry.org/image:tag') instead of using
+                              the running ISO
                             type: string
                         type: object
                       system-agent:
