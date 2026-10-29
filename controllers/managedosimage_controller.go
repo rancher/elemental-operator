@@ -59,6 +59,7 @@ type ManagedOSImageReconciler struct {
 	client.Client
 	DefaultRegistry string
 	Scheme          *runtime.Scheme
+	PullSecrets     []string
 }
 
 // +kubebuilder:rbac:groups=elemental.cattle.io,resources=managedosimages,verbs=get;list;watch;create;update;patch;delete
@@ -260,6 +261,11 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	// we just do a safe name conversion here.
 	uniqueName = toDNSLabel(uniqueName)
 
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range r.PullSecrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
@@ -342,7 +348,8 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 					Name: uniqueName,
 					Path: "/run/data",
 				}},
-				Upgrade: upgradeContainerSpec,
+				Upgrade:          upgradeContainerSpec,
+				ImagePullSecrets: pullSecrets,
 			},
 		},
 	}

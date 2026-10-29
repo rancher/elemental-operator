@@ -54,6 +54,9 @@ noProxy: 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.svc,.cluster.local
 global:
   cattle:
     systemDefaultRegistry: ""
+    # Optional pull secrets for private registries.
+    # Referenced secrets must exist in the chart release namespace.
+    imagePullSecrets: []
 
 # used only if systemDefaultRegistry is empty
 registryUrl: "%%IMG_REPO%%"

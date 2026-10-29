@@ -83,6 +83,7 @@ type rootConfig struct {
 	watchNamespace              string
 	seedimageImage              string
 	seedimageImagePullPolicy    string
+	pullSecrets                 []string
 }
 
 func init() {
@@ -176,6 +177,9 @@ func NewOperatorCommand() *cobra.Command {
 
 	cmd.PersistentFlags().StringVar(&config.seedimageImagePullPolicy, "seedimage-image-pullpolicy", "IfNotPresent", "PullPolicy for the SeedImage builder image.")
 	_ = viper.BindPFlag("seedimage-image-pullpolicy", cmd.PersistentFlags().Lookup("seedimage-image-pullpolicy"))
+
+	cmd.PersistentFlags().StringArrayVar(&config.pullSecrets, "image-pull-secret", nil, "Secret to use in ImagePullSecrets in Pods handled by the operator")
+	_ = viper.BindPFlag("image-pull-secret", cmd.PersistentFlags().Lookup("image-pull-secret"))
 
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 
@@ -299,6 +303,7 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		Client:          mgr.GetClient(),
 		DefaultRegistry: config.defaultRegistry,
 		Scheme:          scheme,
+		PullSecrets:     config.pullSecrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSImage")
 		os.Exit(1)
@@ -306,6 +311,7 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 	if err := (&controllers.ManagedOSVersionChannelReconciler{
 		Client:        mgr.GetClient(),
 		OperatorImage: config.operatorImage,
+		PullSecrets:   config.pullSecrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "ManagedOSVersionChannel")
 		os.Exit(1)
@@ -314,6 +320,7 @@ func setupReconcilers(mgr ctrl.Manager, config *rootConfig) {
 		Client:                   mgr.GetClient(),
 		SeedImageImage:           config.seedimageImage,
 		SeedImageImagePullPolicy: corev1.PullPolicy(config.seedimageImagePullPolicy),
+		PullSecrets:              config.pullSecrets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create reconciler", "controller", "SeedImage")
 		os.Exit(1)

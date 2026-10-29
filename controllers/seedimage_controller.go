@@ -49,6 +49,7 @@ type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
 	SeedImageImagePullPolicy corev1.PullPolicy
+	PullSecrets              []string
 }
 
 const (
@@ -260,7 +261,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy, r.PullSecrets...)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -567,7 +568,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy, secrets ...string) *corev1.Pod {
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
@@ -579,6 +580,11 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 		initContainers = defaultInitContainers(seedImg, buildImg, pullPolicy)
 	} else {
 		initContainers = userDefinedInitContainers(seedImg)
+	}
+
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range secrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
 	}
 
 	pod := &corev1.Pod{
@@ -625,7 +631,8 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 					},
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
+			ImagePullSecrets: pullSecrets,
+			RestartPolicy:    corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
 				{
 					Name: "iso-storage",
