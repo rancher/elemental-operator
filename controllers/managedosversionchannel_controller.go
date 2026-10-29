@@ -58,6 +58,7 @@ type ManagedOSVersionChannelReconciler struct {
 	client.Client
 	kcl           *kubernetes.Clientset
 	OperatorImage string
+	PullSecrets   []string
 	// syncerProvider is mostly an interface to facilitate unit tests
 	syncerProvider syncer.Provider
 	// skipNameValidation is used to allow initiating multiple controllers
@@ -476,6 +477,11 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Launching syncer", "pod", ch.Name)
 
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range r.PullSecrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+
 	serviceAccount := false
 	pod := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -513,6 +519,7 @@ func (r *ManagedOSVersionChannelReconciler) createSyncerPod(ctx context.Context,
 				Command: []string{},
 				Args:    []string{"display", "--file", sync.GetOutputFile()},
 			}},
+			ImagePullSecrets: pullSecrets,
 		},
 	}
 
