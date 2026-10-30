@@ -27,7 +27,6 @@ import (
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	"github.com/rancher/wrangler/v3/pkg/name"
-	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 )
 
 var _ = Describe("reconcile managed os image", func() {
@@ -139,19 +139,29 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(bundleResources[2].Name).To(Equal("ServiceAccount-cattle-system-os-upgrader-test-name-8a5f5287871a.yaml"))
 		Expect(bundleResources[3].Name).To(Equal("Secret-cattle-system-os-upgrader-test-name-5a9dadd40061.yaml"))
 		Expect(bundleResources[4].Name).To(Equal("Plan-cattle-system-os-upgrader-test-name-33afae47ddbc.yaml"))
+		plan := &upgradev1.Plan{}
+		Expect(yaml.Unmarshal([]byte(bundleResources[4].Content), plan)).To(Succeed())
+		Expect(plan.Spec.ImagePullSecrets).To(BeEmpty())
 	})
 
 	It("should create fleet bundle when managedOSVersion exists", func() {
 		Expect(r.Create(ctx, managedOSVersion)).To(Succeed())
+		r.PullSecrets = []string{"registry-auth-secret"}
 
 		managedOSImage.Spec.ManagedOSVersionName = "test"
+		managedOSImage.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: "registry-auth-secret"}, {Name: "additional-secret"},
+		}
 		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(bundleResources).To(HaveLen(5))
-		plan := &upgradev1.Plan{}
-		Expect(yaml.Unmarshal([]byte(bundleResources[4].Content), plan)).To(Succeed())
+		plan := upgradev1.Plan{}
+		Expect(yaml.Unmarshal([]byte(bundleResources[4].Content), &plan)).To(Succeed())
+
 		Expect(plan.Spec.Upgrade.Image).To(Equal("foo/bar:image"))
+		Expect(len(plan.Spec.ImagePullSecrets)).To(Equal(2))
+		Expect(plan.Spec.ImagePullSecrets[0].Name).To(Equal("registry-auth-secret"))
 	})
 
 	It("return error of managedOSVersion doesn't exist", func() {

@@ -65,6 +65,8 @@ type SeedImageSpec struct {
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type Platform string
