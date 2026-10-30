@@ -22,10 +22,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -49,6 +50,7 @@ type SeedImageReconciler struct {
 	client.Client
 	SeedImageImage           string
 	SeedImageImagePullPolicy corev1.PullPolicy
+	PullSecrets              []string
 }
 
 const (
@@ -260,7 +262,7 @@ func (r *SeedImageReconciler) reconcileBuildImagePod(ctx context.Context, seedIm
 
 	logger.V(5).Info("Creating pod")
 
-	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy)
+	pod := fillBuildImagePod(seedImg, r.SeedImageImage, r.SeedImageImagePullPolicy, r.PullSecrets...)
 	if err := controllerutil.SetControllerReference(seedImg, pod, r.Scheme()); err != nil {
 		meta.SetStatusCondition(&seedImg.Status.Conditions, metav1.Condition{
 			Type:    elementalv1.SeedImageConditionReady,
@@ -567,7 +569,7 @@ func (r *SeedImageReconciler) getRancherServerAddress(ctx context.Context) (stri
 	return strings.TrimPrefix(setting.Value, "https://"), nil
 }
 
-func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy) *corev1.Pod {
+func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPolicy corev1.PullPolicy, secrets ...string) *corev1.Pod {
 	name := seedImg.Name
 	namespace := seedImg.Namespace
 	baseImg := seedImg.Spec.BaseImage
@@ -580,6 +582,15 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 	} else {
 		initContainers = userDefinedInitContainers(seedImg)
 	}
+
+	var pullSecrets []corev1.LocalObjectReference
+	for _, s := range secrets {
+		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
+	}
+	pullSecrets = append(pullSecrets, seedImg.Spec.ImagePullSecrets...)
+	pullSecrets = slices.CompactFunc(pullSecrets, func(fst, snd corev1.LocalObjectReference) bool {
+		return fst.Name == snd.Name
+	})
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -625,7 +636,8 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 					},
 				},
 			},
-			RestartPolicy: corev1.RestartPolicyNever,
+			ImagePullSecrets: pullSecrets,
+			RestartPolicy:    corev1.RestartPolicyNever,
 			Volumes: []corev1.Volume{
 				{
 					Name: "iso-storage",

@@ -18,6 +18,7 @@ spec:
         runAsUser: {{ .Values.securityContext.runAsUser }}
         runAsGroup: {{ .Values.securityContext.runAsGroup }}
         fsGroup: {{ .Values.securityContext.fsGroup }}
+      {{- include "elemental-operator.imagePullSecrets" . | nindent 6 }}
       containers:
       - env:
         - name: NO_PROXY
@@ -45,6 +46,7 @@ spec:
         - {{ template "registry_url" . }}{{ .Values.seedImage.repository }}:{{ .Values.seedImage.tag | default .Chart.AppVersion }}
         - --seedimage-image-pullpolicy
         - {{ .Values.seedImage.imagePullPolicy}}
+        {{- include "elemental-operator.imagePullSecretFlags" . | nindent 8 }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

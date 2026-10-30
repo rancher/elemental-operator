@@ -807,9 +807,10 @@ var _ = Describe("fillBuildImagePod", func() {
 		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
 		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
+		Expect(pod.Spec.ImagePullSecrets).To(BeEmpty())
 	})
 
-	It("should use user-provided build container", func() {
+	It("should use user-provided build container and the given pull secrets", func() {
 		buildImg := "custom-image:latest"
 
 		quantity10M := *resource.NewQuantity(10*1024*1024, resource.BinarySI)
@@ -820,15 +821,20 @@ var _ = Describe("fillBuildImagePod", func() {
 					Image:           buildImg,
 					ImagePullPolicy: corev1.PullNever,
 				},
-				Size: quantity10M,
+				Size:             quantity10M,
+				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "secret3"}},
 			},
 		}
 
-		pod := fillBuildImagePod(seedImg, "", corev1.PullNever)
+		pod := fillBuildImagePod(seedImg, "", corev1.PullNever, "secret1", "secret2")
 
 		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(buildImg))
 		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
+		Expect(len(pod.Spec.ImagePullSecrets)).To(Equal(3))
+		Expect(pod.Spec.ImagePullSecrets[0].Name).To(Equal("secret1"))
+		Expect(pod.Spec.ImagePullSecrets[1].Name).To(Equal("secret2"))
+		Expect(pod.Spec.ImagePullSecrets[2].Name).To(Equal("secret3"))
 	})
 
 	It("should use targetPlatform when provided", func() {
@@ -845,6 +851,6 @@ var _ = Describe("fillBuildImagePod", func() {
 		Expect(len(pod.Spec.InitContainers)).To(Equal(2))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(defaultBuildImg))
 		Expect(pod.Spec.InitContainers[0].Args[0]).To(ContainSubstring("elemental pull-image --platform=linux/riscv64"))
-
+		Expect(pod.Spec.ImagePullSecrets).To(BeEmpty())
 	})
 })

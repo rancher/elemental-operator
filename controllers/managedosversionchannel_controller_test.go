@@ -621,6 +621,8 @@ var _ = Describe("managed os version channel controller integration tests", func
 
 	It("should reconcile and sync managed os version channel object and apply channel updates", func() {
 		ch.Spec.Type = "json"
+		r.PullSecrets = []string{"my-secret"}
+		ch.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "my-other-secret"}}
 
 		Expect(cl.Create(ctx, ch)).To(Succeed())
 
@@ -632,6 +634,9 @@ var _ = Describe("managed os version channel controller integration tests", func
 			}, pod)
 			return err == nil
 		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		Expect(len(pod.Spec.ImagePullSecrets)).To(Equal(2))
+		Expect(pod.Spec.ImagePullSecrets[0].Name).To(Equal("my-secret"))
+		Expect(pod.Spec.ImagePullSecrets[1].Name).To(Equal("my-other-secret"))
 		setPodPhase(pod, corev1.PodSucceeded)
 
 		Eventually(func() bool {
@@ -753,6 +758,7 @@ var _ = Describe("managed os version channel controller integration tests", func
 			}, pod)
 			return err == nil
 		}, 12*time.Second, 2*time.Second).Should(BeTrue())
+		Expect(pod.Spec.ImagePullSecrets).To(BeEmpty())
 		setPodPhase(pod, corev1.PodSucceeded)
 
 		Eventually(func() bool {
