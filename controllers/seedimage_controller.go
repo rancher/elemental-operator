@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -586,6 +587,10 @@ func fillBuildImagePod(seedImg *elementalv1.SeedImage, buildImg string, pullPoli
 	for _, s := range secrets {
 		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
 	}
+	pullSecrets = append(pullSecrets, seedImg.Spec.ImagePullSecrets...)
+	pullSecrets = slices.CompactFunc(pullSecrets, func(fst, snd corev1.LocalObjectReference) bool {
+		return fst.Name == snd.Name
+	})
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
