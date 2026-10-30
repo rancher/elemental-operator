@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	upgradev1 "github.com/rancher/system-upgrade-controller/pkg/apis/upgrade.cattle.io/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -57,6 +58,8 @@ type ManagedOSVersionChannelSpec struct {
 	Options map[string]runtime.RawExtension `json:"options,omitempty"`
 	// +optional
 	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 type ManagedOSVersionChannelStatus struct {
