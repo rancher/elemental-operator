@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -265,6 +266,10 @@ func (r *ManagedOSImageReconciler) newFleetBundleResources(ctx context.Context, 
 	for _, s := range r.PullSecrets {
 		pullSecrets = append(pullSecrets, corev1.LocalObjectReference{Name: s})
 	}
+	pullSecrets = append(pullSecrets, managedOSImage.Spec.ImagePullSecrets...)
+	pullSecrets = slices.CompactFunc(pullSecrets, func(fst, snd corev1.LocalObjectReference) bool {
+		return fst.Name == snd.Name
+	})
 
 	objs := []runtime.Object{
 		&rbacv1.ClusterRole{
