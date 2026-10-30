@@ -821,7 +821,8 @@ var _ = Describe("fillBuildImagePod", func() {
 					Image:           buildImg,
 					ImagePullPolicy: corev1.PullNever,
 				},
-				Size: quantity10M,
+				Size:             quantity10M,
+				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "secret3"}},
 			},
 		}
 
@@ -830,9 +831,10 @@ var _ = Describe("fillBuildImagePod", func() {
 		Expect(len(pod.Spec.InitContainers)).To(Equal(1))
 		Expect(pod.Spec.InitContainers[0].Image).To(Equal(buildImg))
 		Expect(pod.Spec.InitContainers[0].ImagePullPolicy).To(Equal(corev1.PullNever))
-		Expect(len(pod.Spec.ImagePullSecrets)).To(Equal(2))
+		Expect(len(pod.Spec.ImagePullSecrets)).To(Equal(3))
 		Expect(pod.Spec.ImagePullSecrets[0].Name).To(Equal("secret1"))
 		Expect(pod.Spec.ImagePullSecrets[1].Name).To(Equal("secret2"))
+		Expect(pod.Spec.ImagePullSecrets[2].Name).To(Equal("secret3"))
 	})
 
 	It("should use targetPlatform when provided", func() {

@@ -149,6 +149,9 @@ var _ = Describe("newFleetBundleResources", func() {
 		r.PullSecrets = []string{"registry-auth-secret"}
 
 		managedOSImage.Spec.ManagedOSVersionName = "test"
+		managedOSImage.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: "registry-auth-secret"}, {Name: "additional-secret"},
+		}
 		bundleResources, err := r.newFleetBundleResources(ctx, managedOSImage)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -157,7 +160,7 @@ var _ = Describe("newFleetBundleResources", func() {
 		Expect(yaml.Unmarshal([]byte(bundleResources[4].Content), &plan)).To(Succeed())
 
 		Expect(plan.Spec.Upgrade.Image).To(Equal("foo/bar:image"))
-		Expect(plan.Spec.ImagePullSecrets).NotTo(BeEmpty())
+		Expect(len(plan.Spec.ImagePullSecrets)).To(Equal(2))
 		Expect(plan.Spec.ImagePullSecrets[0].Name).To(Equal("registry-auth-secret"))
 	})
 
