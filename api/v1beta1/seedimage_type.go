@@ -65,6 +65,8 @@ type SeedImageSpec struct {
 	// +kubebuilder:validation:XPreserveUnknownFields
 	// +optional
 	CloudConfig map[string]runtime.RawExtension `json:"cloud-config,omitempty" yaml:"cloud-config,omitempty"`
+	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use
+	// for pulling the images required by the seed image builder pod.
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }

@@ -80,6 +80,9 @@ spec:
                   generated iso.
                 x-kubernetes-preserve-unknown-fields: true
               imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets in the same namespace to use
+                  for pulling the images required by the seed image builder pod.
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
