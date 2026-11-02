@@ -753,6 +753,9 @@ spec:
                     type: integer
                 type: object
               imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets that will be included into the
+                  upgrade plan. Those will be used by the pod running the upgrade plan in the downstream cluster.
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
