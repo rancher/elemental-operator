@@ -58,6 +58,8 @@ type ManagedOSVersionChannelSpec struct {
 	Options map[string]runtime.RawExtension `json:"options,omitempty"`
 	// +optional
 	UpgradeContainer *upgradev1.ContainerSpec `json:"upgradeContainer,omitempty"`
+	// ImagePullSecrets is an optional list of references to secrets in the same namespace to use
+	// for pulling the images required by channel synchronization pod.
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
