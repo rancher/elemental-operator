@@ -64,6 +64,8 @@ type ManagedOSImageSpec struct {
 	ClusterRolloutStrategy *fleet.RolloutStrategy `json:"clusterRolloutStrategy,omitempty"`
 	// +optional
 	Targets []fleet.BundleTarget `json:"clusterTargets,omitempty"`
+	// ImagePullSecrets is an optional list of references to secrets that will be included into the
+	// upgrade plan. Those will be used by the pod running the upgrade plan in the downstream cluster.
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }

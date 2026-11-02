@@ -1874,6 +1874,9 @@ spec:
                     type: integer
                 type: object
               imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets that will be included into the
+                  upgrade plan. Those will be used by the pod running the upgrade plan in the downstream cluster.
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
@@ -2913,6 +2916,9 @@ spec:
                 default: true
                 type: boolean
               imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets in the same namespace to use
+                  for pulling the images required by channel synchronization pod.
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
@@ -4079,6 +4085,9 @@ spec:
                   generated iso.
                 x-kubernetes-preserve-unknown-fields: true
               imagePullSecrets:
+                description: |-
+                  ImagePullSecrets is an optional list of references to secrets in the same namespace to use
+                  for pulling the images required by the seed image builder pod.
                 items:
                   description: |-
                     LocalObjectReference contains enough information to let you locate the
