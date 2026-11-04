@@ -71,23 +71,32 @@ type SnapshotterConfig struct {
 
 type Reset struct {
 	// +optional
+	// +kubebuilder:default:=false
+	// MachineInventories created from this MachineRegistration will have reset functionality enabled. Defaults to false.
 	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
 	// +optional
 	// +kubebuilder:default:=true
+	// Format the COS_PERSISTENT partition. Defaults to true.
 	ResetPersistent bool `json:"reset-persistent,omitempty" yaml:"reset-persistent,omitempty" mapstructure:"reset-persistent"`
 	// +optional
 	// +kubebuilder:default:=true
+	// Format the COS_OEM partition. Defaults to true.
 	ResetOEM bool `json:"reset-oem,omitempty" yaml:"reset-oem,omitempty" mapstructure:"reset-oem"`
 	// +optional
+	// Cloud-init config files
 	ConfigURLs []string `json:"config-urls,omitempty" yaml:"config-urls,omitempty" mapstructure:"config-urls"`
 	// +optional
+	// Sets the system image source and its type (e.g. 'docker:registry.org/image:tag') instead of using the running ISO
 	SystemURI string `json:"system-uri,omitempty" yaml:"system-uri,omitempty" mapstructure:"system-uri"`
 	// +optional
+	// Enable debug output
 	Debug bool `json:"debug,omitempty" yaml:"debug,omitempty" mapstructure:"debug"`
 	// +optional
+	// Shutdown the system after reset
 	PowerOff bool `json:"poweroff,omitempty" yaml:"poweroff,omitempty" mapstructure:"poweroff"`
 	// +optional
 	// +kubebuilder:default:=true
+	// Reboot the system after reset. Defaults to true.
 	Reboot bool `json:"reboot,omitempty" yaml:"reboot,omitempty" mapstructure:"reboot"`
 	// +optional
 	DisableBootEntry bool `json:"disable-boot-entry,omitempty" yaml:"disable-boot-entry,omitempty"`
@@ -130,7 +139,8 @@ type Elemental struct {
 	// +optional
 	Install Install `json:"install,omitempty" yaml:"install,omitempty"`
 	// +optional
-	// +kubebuilder:default:={"reset-persistent":true,"reset-oem":true,"reboot":true}
+	// +kubebuilder:default:={"enabled":false,"reset-persistent":true,"reset-oem":true,"reboot":true}
+	// Contains the reset configuration that would be applied via elemental-register --reset, when booted from the recovery partition and passed to elemental reset
 	Reset Reset `json:"reset,omitempty" yaml:"reset,omitempty"`
 	// +optional
 	Registration Registration `json:"registration,omitempty" yaml:"registration,omitempty"`
@@ -164,8 +174,10 @@ type DeviceSelectorRequirement struct {
 	Values []string `json:"values,omitempty"`
 }
 
-type DeviceSelectorKey string
-type DeviceSelectorOperator string
+type (
+	DeviceSelectorKey      string
+	DeviceSelectorOperator string
+)
 
 const (
 	DeviceSelectorOpIn    DeviceSelectorOperator = "In"
