@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -270,8 +271,7 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 
 	networkNeedsReset := mInventory.Spec.Network.Configurator != network.ConfiguratorNone
 
-	unmanaged, unmanagedFound := mInventory.Annotations[elementalv1.MachineInventoryOSUnmanagedAnnotation]
-	if unmanagedFound && unmanaged == "true" {
+	if isUnmanaged(mInventory) {
 		checksum, resetPlan, err = r.newUnmanagedResetPlan(ctx)
 	} else {
 		checksum, resetPlan, err = r.newResetPlan(ctx, networkNeedsReset)
@@ -302,6 +302,24 @@ func (r *MachineInventoryReconciler) updatePlanSecretWithReset(ctx context.Conte
 	}
 
 	return nil
+}
+
+// isUnmanaged checks whether the MachineInventory was registered with --no-toolkit.
+// Older operators applied the MachineRegistration labelPrefix to the os.unmanaged
+// annotation too, so inventories registered with a custom or empty ("-") prefix may
+// carry it as "<prefix>/os.unmanaged" or "os.unmanaged". Those keys are still honored
+// until the hosts re-register and get the well-known annotation.
+func isUnmanaged(mInventory *elementalv1.MachineInventory) bool {
+	for key, val := range mInventory.Annotations {
+		if val != "true" {
+			continue
+		}
+		if key == elementalv1.MachineInventoryOSUnmanagedAnnotation ||
+			key == "os.unmanaged" || strings.HasSuffix(key, "/os.unmanaged") {
+			return true
+		}
+	}
+	return false
 }
 
 // networkNeedsReconcile checks if there is an IPAddress for each IPPool referenced by the MachineInventory.

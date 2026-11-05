@@ -173,7 +173,15 @@ func mergeInventoryAnnotations(data []byte, mInventory *elementalv1.MachineInven
 		mInventory.Annotations = map[string]string{}
 	}
 	for key, val := range annotations {
-		mInventory.Annotations[prefix+sanitizeUserInput(key)] = sanitizeUserInput(val)
+		// os.unmanaged is an operator-internal signal that the reset controller
+		// uses to decide unmanaged vs toolkit reset plan. It must always be stored
+		// under the well-known elemental.cattle.io/os.unmanaged key, regardless of
+		// the configured labelPrefix.
+		targetKey := prefix + sanitizeUserInput(key)
+		if key == "os.unmanaged" {
+			targetKey = elementalv1.MachineInventoryOSUnmanagedAnnotation
+		}
+		mInventory.Annotations[targetKey] = sanitizeUserInput(val)
 	}
 	return nil
 }
