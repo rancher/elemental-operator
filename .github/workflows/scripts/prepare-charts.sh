@@ -8,26 +8,30 @@
 # catalog has: elemental and elemental-crd. The action stamps, checks, packages and
 # pushes the copies to the staging registry of Rancher.
 #
-# Usage: prepare-charts.sh <tag> <output dir>
-#   e.g. prepare-charts.sh v1.9.3 "$RUNNER_TEMP/charts"
+# Usage: prepare-charts.sh <tag> <rancher minor> <output dir>
+#   e.g. prepare-charts.sh v1.9.3 2.16 "$RUNNER_TEMP/charts"
 #
 # The tag is a release, vX.Y.Z: it is the version of the charts that OBS published.
+# The Rancher minor version is to define the target Rancher minor the generated
+# chart is targeting. It defines the rancher-version annotation.
+#
 # Environment:
 #   OBS_REGISTRY  where OBS published the charts (default registry.suse.com)
 #
 # It changes the names, the chart that is installed first and the version
-# placeholder, and nothing else: the annotations of the chart are the ones OBS
-# published, and they have to be right there. In particular catalog.cattle.io/
-# rancher-version and catalog.cattle.io/kube-version must give the Rancher version
-# the release is for and the Kubernetes versions it supports, both bounds, as in
-# ">= 2.16.0-0 < 2.17.0-0": the chart major of the catalog is worked out from the
-# first one, and the checks of cargueiro refuse a chart without them.
+# placeholder, rancher-version annotation and nothing else: oter annotations of the
+# chart are the ones OBS published, and they have to be right there. In particular
+# catalog.cattle.io/kube-version must give the Kubernetes versions it supports, both bounds,
+# as in ">= 1.35.0-0 < 1.37.0-0". The chart major of the catalog is worked out from the
+# rancher-version annotations and the checks of cargueiro refuse a chart without
+# catalog.cattle.io/kube-version and catalog.cattle.io/rancher-version annotations.
 #
 # Requires helm on PATH.
 set -euo pipefail
 
-TAG=${1:?usage: $0 <tag> <output dir>}
-OUT_DIR=${2:?usage: $0 <tag> <output dir>}
+TAG=${1:?usage: $0 <tag> <rancher minor> <output dir>}
+RANCHER_MINOR=${2:?usage: $0 <tag> <rancher minor> <output dir>}
+OUT_DIR=${3:?usage: $0 <tag> <rancher minor> <output dir>}
 OBS_REGISTRY=${OBS_REGISTRY:-registry.suse.com}
 
 if ! [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
@@ -35,6 +39,13 @@ if ! [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
   exit 1
 fi
 APP_VERSION="${BASH_REMATCH[1]}"
+
+if ! [[ "$RANCHER_MINOR" =~ ^2\.([0-9]+)$ ]]; then
+  echo "Error: Rancher minor $RANCHER_MINOR} must look like 2.X: rancher-version is required" >&2
+  exit 1
+fi
+R_VER_NEXT="${BASH_REMATCH[1]}"
+R_VER=$((R_VER_NEXT++))
 
 # The two charts of the release: the repository OBS published each to, the name it has
 # there, and the name it has in the Rancher catalog.
@@ -62,5 +73,6 @@ for i in "${!OBS_CHARTS[@]}"; do
     -e "s|^name: ${OBS_NAMES[$i]}\$|name: ${NAMES[$i]}|" \
     -e "s|^version:.*|version: \"0\"|" \
     -e "s|catalog.cattle.io/auto-install: ${OBS_NAMES[1]}=match|catalog.cattle.io/auto-install: ${NAMES[1]}=match|" \
+    -e "s|catalog.cattle.io/rancher-version: .*$|catalog.cattle.io/rancher-version: '>= 2.${R_VER}.0-0 < 2.${R_VER_NEXT}.0-0'|" \
     "$dir/Chart.yaml"
 done
