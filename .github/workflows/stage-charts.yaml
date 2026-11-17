@@ -1,0 +1,63 @@
+name: Stage the charts in the Rancher catalog
+
+# Sends the charts of a release to the staging registry of the Rancher catalog and has
+# rancher/charts ship them: the two charts that OBS published to registry.suse.com are
+# pulled, named elemental and elemental-crd as the catalog does, stamped with their
+# final version, checked, packaged and pushed to stgregistry.suse.com/rancher/catalog,
+# and rancher/charts opens a pull request with them against its staging branch.
+#
+# Run it by hand, after OBS has published the charts of the release:
+#
+#   gh workflow run stage-charts.yaml --repo rancher/elemental-operator -f tag=v1.9.3
+#
+# The charts are the ones of OBS as they are. The checks of the catalog need two
+# annotations in them that this workflow does not change: catalog.cattle.io/rancher-version
+# and catalog.cattle.io/kube-version, with both bounds. They belong in the chart sources
+# of the release, .obs/chartfile/elemental-operator-helm/Chart.yaml. Until they are there,
+# the action fails before it pushes anything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release to stage, such as v1.9.3. OBS must have published its charts."
+        required: true
+        type: string
+
+permissions: {}
+
+# Two runs of the same release could push at the same time, and the check that the
+# version is not in the registry yet and the push are two calls. A second run waits.
+concurrency:
+  group: stage-elemental-charts-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  stage-charts:
+    name: Stage the charts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # to log in to Vault with the OIDC token
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      # The tag is data, not trusted input: it goes through the environment and the
+      # script checks it.
+      - name: Prepare the charts
+        env:
+          TAG: ${{ inputs.tag }}
+        run: .github/workflows/scripts/prepare-charts.sh "$TAG" "$RUNNER_TEMP/charts"
+
+      # The version is worked out by cargueiro from the appVersion and the versions
+      # that are already released.
+      - name: Stamp, check, package and push the charts, and start the shipping
+        uses: rancher/charts/.github/actions/ship-family-staged@chart-owners
+        with:
+          family: elemental
+          chart-dirs: |
+            ${{ runner.temp }}/charts/elemental
+            ${{ runner.temp }}/charts/elemental-crd
