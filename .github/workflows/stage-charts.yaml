@@ -23,6 +23,10 @@ on:
         description: "The release to stage, such as v1.9.3. OBS must have published its charts."
         required: true
         type: string
+      rancher-minor:
+        description: "The target rancher minor version, such as 2.16."
+        required: true
+        type: string
 
 permissions: {}
 
@@ -45,12 +49,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # The tag is data, not trusted input: it goes through the environment and the
+      # The tag and rancher-minor is data, not trusted input: it goes through the environment and the
       # script checks it.
       - name: Prepare the charts
         env:
           TAG: ${{ inputs.tag }}
-        run: .github/workflows/scripts/prepare-charts.sh "$TAG" "$RUNNER_TEMP/charts"
+          RANCHER_MINOR: ${{ inputs.rancher-minor }}
+        run: .github/workflows/scripts/prepare-charts.sh "$TAG" "$RANCHER_MINOR" "$RUNNER_TEMP/charts"
 
       # The version is worked out by cargueiro from the appVersion and the versions
       # that are already released.
