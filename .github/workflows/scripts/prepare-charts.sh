@@ -75,4 +75,11 @@ for i in "${!OBS_CHARTS[@]}"; do
     -e "s|catalog.cattle.io/auto-install: ${OBS_NAMES[1]}=match|catalog.cattle.io/auto-install: ${NAMES[1]}=match|" \
     -e "s|catalog.cattle.io/rancher-version: .*$|catalog.cattle.io/rancher-version: '>= 2.${R_VER}.0-0 < 2.${R_VER_NEXT}.0-0'|" \
     "$dir/Chart.yaml"
+
+  # HACK: this replaces the kube-version annotation that was used in old chart releases which was not matching the current
+  # cargueiro checks. This is only required for version v1.9.3 or older. In newer versions the regex does not match and
+  # no substitution is applied.
+  sed -i \
+    -e "s|catalog.cattle.io/kube-version: '>= 1.23.0-0'|catalog.cattle.io/kube-version: '>= 1.33.0-0 < 1.38.0-0'|" \
+    "$dir/Chart.yaml"
 done
