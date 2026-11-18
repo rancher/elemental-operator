@@ -47,6 +47,15 @@ fi
 R_VER_NEXT="${BASH_REMATCH[1]}"
 R_VER=$((R_VER_NEXT++))
 
+# The Kubernetes versions that Elemental supports on this Rancher minor, which the Elemental
+# team decides in rancher-versions.yaml, next to this script.
+CONFIG="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rancher-versions.yaml"
+KUBE_VERSION=$(RM="$RANCHER_MINOR" yq e '.rancher-versions[strenv(RM)].kube-version // ""' "$CONFIG")
+if [ -z "$KUBE_VERSION" ]; then
+  echo "Error: ${CONFIG##*/} has no kube-version for Rancher $RANCHER_MINOR: add its entry, with the Kubernetes versions that Elemental supports on it, before staging for it" >&2
+  exit 1
+fi
+
 # The two charts of the release: the repository OBS published each to, the name it has
 # there, and the name it has in the Rancher catalog.
 OBS_CHARTS=(rancher/elemental-operator-chart rancher/elemental-operator-crds-chart)
@@ -74,12 +83,14 @@ for i in "${!OBS_CHARTS[@]}"; do
     -e "s|^version:.*|version: \"0\"|" \
     -e "s|catalog.cattle.io/auto-install: ${OBS_NAMES[1]}=match|catalog.cattle.io/auto-install: ${NAMES[1]}=match|" \
     -e "s|catalog.cattle.io/rancher-version: .*$|catalog.cattle.io/rancher-version: '>= 2.${R_VER}.0-0 < 2.${R_VER_NEXT}.0-0'|" \
+    -e "s|catalog.cattle.io/kube-version: .*$|catalog.cattle.io/kube-version: '${KUBE_VERSION}'|" \
     "$dir/Chart.yaml"
 
-  # HACK: this replaces the kube-version annotation that was used in old chart releases which was not matching the current
-  # cargueiro checks. This is only required for version v1.9.3 or older. In newer versions the regex does not match and
-  # no substitution is applied.
-  sed -i \
-    -e "s|catalog.cattle.io/kube-version: '>= 1.23.0-0'|catalog.cattle.io/kube-version: '>= 1.33.0-0 < 1.38.0-0'|" \
-    "$dir/Chart.yaml"
+  # The catalog needs the Kubernetes versions on the main chart only, not on the CRD chart. A main
+  # chart without the annotation would be left without it, and the catalog check would only say
+  # that later: say it here.
+  if [ "$i" -eq 0 ] && ! grep -q "catalog.cattle.io/kube-version: '${KUBE_VERSION}'" "$dir/Chart.yaml"; then
+    echo "Error: ${OBS_CHARTS[$i]}:${APP_VERSION} has no catalog.cattle.io/kube-version annotation to set" >&2
+    exit 1
+  fi
 done
