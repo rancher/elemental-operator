@@ -1,0 +1,18 @@
+# The Rancher minors that the Elemental charts are staged for in the Rancher catalog, and the
+# Kubernetes versions that Elemental supports on each of them.
+#
+# ELEMENTAL TEAM: you decide these values and you maintain them. They are not defaults of the
+# catalog, and nobody else tests them: put here the Kubernetes versions that you have tested
+# the release with on that Rancher minor. The catalog requires both bounds, as in
+# ">= 1.33.0-0 < 1.38.0-0".
+#
+# prepare-charts.sh sets catalog.cattle.io/kube-version of the charts from this file, for the
+# Rancher minor it is given, so the range of a release does not depend on what OBS published,
+# and the same OBS chart can be staged for more than one minor with the range of each.
+# A Rancher minor that is not listed here is refused: add its entry before you stage for it.
+# The new catalog is for Rancher 2.16 and later, so there is no entry before 2.16.
+rancher-versions:
+  "2.16":
+    # To be confirmed by the Elemental team. It is the range that was in the chart source when
+    # this file was added.
+    kube-version: ">= 1.33.0-0 < 1.38.0-0"
