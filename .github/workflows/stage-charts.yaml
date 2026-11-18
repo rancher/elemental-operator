@@ -8,13 +8,14 @@ name: Stage the charts in the Rancher catalog
 #
 # Run it by hand, after OBS has published the charts of the release:
 #
-#   gh workflow run stage-charts.yaml --repo rancher/elemental-operator -f tag=v1.9.3
+#   gh workflow run stage-charts.yaml --repo rancher/elemental-operator -f tag=v1.9.3 -f rancher-minor=2.16
 #
-# The charts are the ones of OBS as they are. The checks of the catalog need two
-# annotations in them that this workflow does not change: catalog.cattle.io/rancher-version
-# and catalog.cattle.io/kube-version, with both bounds. They belong in the chart sources
-# of the release, .obs/chartfile/elemental-operator-helm/Chart.yaml. Until they are there,
-# the action fails before it pushes anything.
+# The charts are the ones of OBS, with the names above and two annotations that the catalog
+# checks need, with both bounds: catalog.cattle.io/rancher-version, which is set for the
+# Rancher minor given, and catalog.cattle.io/kube-version, which is the range that
+# .github/workflows/scripts/rancher-versions.yaml gives for that minor. The Elemental team
+# decides and maintains those ranges. A Rancher minor with no entry there is refused, before
+# anything is pulled or pushed. Run it once for each Rancher minor, 2.16 or later.
 
 on:
   workflow_dispatch:
