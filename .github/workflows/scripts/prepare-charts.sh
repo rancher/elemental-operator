@@ -13,20 +13,20 @@
 #
 # The tag is a release, vX.Y.Z: it is the version of the charts that OBS published.
 # The Rancher minor version is to define the target Rancher minor the generated
-# chart is targeting. It defines the rancher-version annotation.
+# chart is targeting. It defines the rancher-version annotation, and the kube-version
+# annotation, which is the one that rancher-versions.yaml (next to this script) gives for
+# that minor. A minor with no entry there is refused.
 #
 # Environment:
 #   OBS_REGISTRY  where OBS published the charts (default registry.suse.com)
 #
-# It changes the names, the chart that is installed first and the version
-# placeholder, rancher-version annotation and nothing else: oter annotations of the
-# chart are the ones OBS published, and they have to be right there. In particular
-# catalog.cattle.io/kube-version must give the Kubernetes versions it supports, both bounds,
-# as in ">= 1.35.0-0 < 1.37.0-0". The chart major of the catalog is worked out from the
-# rancher-version annotations and the checks of cargueiro refuse a chart without
-# catalog.cattle.io/kube-version and catalog.cattle.io/rancher-version annotations.
+# It changes the names, the chart that is installed first, the version placeholder, and
+# the rancher-version and kube-version annotations, and nothing else: the other annotations of
+# the chart are the ones OBS published. The catalog needs both bounds in each of the two, as in
+# ">= 1.33.0-0 < 1.38.0-0", and the chart major of the catalog is worked out from the
+# rancher-version. The checks of cargueiro refuse a chart without them.
 #
-# Requires helm on PATH.
+# Requires helm and yq on PATH.
 set -euo pipefail
 
 TAG=${1:?usage: $0 <tag> <rancher minor> <output dir>}
