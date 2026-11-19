@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}
 spec:
   appVersion: {{ .Chart.AppVersion }}
+  {{- if .Chart.Annotations }}
   annotations:
-  {{- range $key, $value := .Chart.Annotations }}
-    {{ $key }}: {{ toYaml $value }}
+    {{- toYaml .Chart.Annotations | nindent 4 }}
   {{- end }}
