@@ -71,9 +71,10 @@ jobs:
           chart-dirs: |
             ${{ runner.temp }}/charts/elemental
             ${{ runner.temp }}/charts/elemental-crd
-  
+
   stage-images:
-    needs: 
+    name: Stage the images
+    needs:
       - stage-charts
     runs-on: ubuntu-latest
     permissions:
@@ -108,8 +109,8 @@ jobs:
         for i in "${!OBS_IMAGES[@]}"; do
           skopeo copy --all --preserve-digests \
             --dest-creds "${TARGET_USERNAME}:${TARGET_PASSWORD}" \
-            "docker://${OBS_REG}/${OBS_CHARTS[$i]}" "docker://${STAGING_REG}/${OBS_CHARTS[$i]}"
+            "docker://${OBS_REG}/${OBS_IMAGES[$i]}" "docker://${STAGING_REG}/${OBS_IMAGES[$i]}"
 
-          skopeo inspect --raw --creds "${TARGET_USERNAME}:${TARGET_PASSWORD}" "docker://${STAGING_REG}/${OBS_CHARTS[$i]}" | sha256sum
-          skopeo inspect --raw "docker://${OBS_REG}/${OBS_CHARTS[$i]}" | sha256sum
+          skopeo inspect --raw --creds "${TARGET_USERNAME}:${TARGET_PASSWORD}" "docker://${STAGING_REG}/${OBS_IMAGES[$i]}" | sha256sum
+          skopeo inspect --raw "docker://${OBS_REG}/${OBS_IMAGES[$i]}" | sha256sum
         done
