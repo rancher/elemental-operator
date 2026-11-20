@@ -1,4 +1,4 @@
-name: Stage the charts in the Rancher catalog
+name: Stage the charts and images in the Rancher staging registry
 
 # Sends the charts of a release to the staging registry of the Rancher catalog and has
 # rancher/charts ship them: the two charts that OBS published to registry.suse.com are
@@ -16,6 +16,10 @@ name: Stage the charts in the Rancher catalog
 # .github/workflows/scripts/rancher-versions.yaml gives for that minor. The Elemental team
 # decides and maintains those ranges. A Rancher minor with no entry there is refused, before
 # anything is pulled or pushed. Run it once for each Rancher minor, 2.16 or later.
+#
+# In addition it also pushes the images to the staging registry, OBS does not publish them to the
+# staging registry, so the final job here is to copy images over the staging registry too.
+
 
 on:
   workflow_dispatch:
@@ -71,3 +75,46 @@ jobs:
           chart-dirs: |
             ${{ runner.temp }}/charts/elemental
             ${{ runner.temp }}/charts/elemental-crd
+
+  stage-images:
+    name: Stage the images
+    needs:
+      - stage-charts
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # to log in to Vault
+    steps:
+    # Only the staging registry needs credentials, to write. The source is read anonymously.
+    - name: Load the staging registry credentials from Vault
+      uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # main
+      with:
+        secrets: |
+          secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | TARGET_USERNAME ;
+          secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | TARGET_PASSWORD
+
+    - name: Copy the image
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -e
+
+        command -v skopeo || { sudo apt-get update -q && sudo apt-get install -y -q skopeo; }
+
+        if ! [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          echo "Error: tag $TAG must look like vX.Y.Z: only releases are staged" >&2
+          exit 1
+        fi
+        VERSION="${BASH_REMATCH[1]}"
+
+        OBS_IMAGES=(rancher/elemental-operator rancher/seedimage-builder)
+        STAGING_REG="stgregistry.suse.com"
+        OBS_REG="registry.suse.com"
+
+        for i in "${!OBS_IMAGES[@]}"; do
+          skopeo copy --all --preserve-digests \
+            --dest-creds "${TARGET_USERNAME}:${TARGET_PASSWORD}" \
+            "docker://${OBS_REG}/${OBS_IMAGES[$i]}" "docker://${STAGING_REG}/${OBS_IMAGES[$i]}"
+
+          skopeo inspect --raw --creds "${TARGET_USERNAME}:${TARGET_PASSWORD}" "docker://${STAGING_REG}/${OBS_IMAGES[$i]}" | sha256sum
+          skopeo inspect --raw "docker://${OBS_REG}/${OBS_IMAGES[$i]}" | sha256sum
+        done
