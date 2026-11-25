@@ -1,0 +1,49 @@
+name: Push images to the DockerHub registry
+
+# This is meant to be used only once to push the images missing in the DockerHub registry
+# In the future this will happen as part of the staging charts and images workflow so this
+# workflow will be deleted.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: missing-elemental-images
+  cancel-in-progress: false
+
+jobs:
+  push-images:
+    name: Stage the images
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # to log in to Vault
+    steps:
+    - name: Load the docker credentials from Vault
+      uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # main
+      with:
+        secrets: |
+          secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+          secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
+
+    - name: Copy the images
+      run: |
+        set -e
+
+        command -v skopeo || { sudo apt-get update -q && sudo apt-get install -y -q skopeo; }
+
+        VERSION="1.9.3"
+
+        OBS_IMAGES=(rancher/elemental-operator rancher/seedimage-builder)
+        DOCKER_REG="docker.io"
+        OBS_REG="registry.suse.com"
+
+        for i in "${!OBS_IMAGES[@]}"; do
+          skopeo copy --all --preserve-digests \
+            --dest-creds "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+            "docker://${OBS_REG}/${OBS_IMAGES[$i]}:${VERSION}" "docker://${DOCKER_REG}/${OBS_IMAGES[$i]}:${VERSION}"
+
+          skopeo inspect --raw --creds "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" "docker://${DOCKER_REG}/${OBS_IMAGES[$i]}:${VERSION}" | sha256sum
+          skopeo inspect --raw "docker://${OBS_REG}/${OBS_IMAGES[$i]}:${VERSION}" | sha256sum
+        done
