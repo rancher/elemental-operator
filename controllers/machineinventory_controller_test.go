@@ -754,6 +754,42 @@ var _ = Describe("handle unmanaged finalizer", func() {
 		}, mInventory)).To(Succeed())
 	})
 
+	It("should update secret with reset plan when unprefixed os.unmanaged annotation is true", func() {
+		// Remove the prefixed annotation so the test only passes if the
+		// controller also checks the unprefixed key.
+		delete(mInventory.Annotations, elementalv1.MachineInventoryOSUnmanagedAnnotation)
+
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      planSecret.Name,
+			Namespace: planSecret.Namespace,
+		}, planSecret)).To(Succeed())
+		Expect(cl.Get(ctx, client.ObjectKey{
+			Name:      mInventory.Name,
+			Namespace: mInventory.Namespace,
+		}, mInventory)).To(Succeed())
+
+		delete(mInventory.Annotations, elementalv1.MachineInventoryOSUnmanagedAnnotation)
+		mInventory.Annotations["os.unmanaged"] = "true"
+		Expect(cl.Update(ctx, mInventory)).To(Succeed())
+
+		_, wantPlan, err := r.newUnmanagedResetPlan(ctx)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Check we are holding on the MachineInventory (preventing actual deletion)
+		_, err = r.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: mInventory.Namespace,
+				Name:      mInventory.Name,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(planSecret.Annotations[elementalv1.PlanTypeAnnotation]).To(Equal(elementalv1.PlanTypeReset))
+		Expect(string(planSecret.Data["plan"])).To(Equal(string(wantPlan)))
+		Expect(string(planSecret.Data["applied-checksum"])).To(Equal(""))
+		Expect(string(planSecret.Data["failed-checksum"])).To(Equal(""))
+	})
+
 	It("should remove finalizer on unmanaged reset plan applied", func() {
 		// 6. Mark the reset plan as applied
 		Expect(cl.Get(ctx, client.ObjectKey{
