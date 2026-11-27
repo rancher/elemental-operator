@@ -379,6 +379,13 @@ func TestMergeInventoryAnnotations(t *testing.T) {
 			false,
 			map[string]string{"key1": "val1", "custom.prefix/key2": "val2"},
 		},
+		{
+			[]byte(`{"os.unmanaged":"true"}`),
+			nil,
+			"",
+			false,
+			map[string]string{"elemental.cattle.io/os.unmanaged": "true"},
+		},
 	}
 
 	for _, test := range testCase {
